@@ -2,14 +2,14 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
-ALPHA = 1 / 16
-C = 5  # NUM_CLASS
-D = 768
-
 
 class ChannelWiseAttention(layers.Layer):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
+
+        D = 768
+        ALPHA = 1 / 16
+
         # squeeze
         self.gap = layers.GlobalAveragePooling2D()
         # excitation
@@ -28,8 +28,10 @@ class ChannelWiseAttention(layers.Layer):
 
 
 class ElementWiseAttention(layers.Layer):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
+
+        C = config.dataset.num_classes
 
         self.conv0 = layers.Conv2D(512, kernel_size=1, strides=1, padding="same", use_bias=True, activation=tf.nn.relu)
         self.conv1 = layers.Conv2D(512, kernel_size=3, strides=1, padding="same", use_bias=True, activation=tf.nn.relu)

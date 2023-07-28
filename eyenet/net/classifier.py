@@ -3,19 +3,32 @@ from layers import GradientAccumulator
 from tensorflow import keras
 from tensorflow.keras import applications
 
-input_shape = (224, 224)
-num_of_class = 5
-accumulate_gradient = True
 
-image_net_model = applications.EfficientNetB0()
-func_model = FunctionalModel(input_shape)
-input, base_maps, attn_maps = func_model(image_net_model)
+def get_model(config):
+    image_size = config.dataset.image_size
+    num_classes = config.dataset.num_classes
+    grad_accumulation = config.trainer.gradient_accumulation
 
-if accumulate_gradient:
-    model = GradientAccumulator(
-        n_gradients=10,
-        inputs=[input],
-        outputs=[base_maps, attn_maps],
+    # TODO: Update and make general
+    backbone = applications.EfficientNetB0(
+        include_top=False,
+        weights=config.model.weight,
+        input_shape=(image_size, image_size, 3)
     )
-else:
-    model = keras.Model(inputs=[input], outputs=[base_maps, attn_maps])
+
+    func_model = FunctionalModel(config)
+    input, base_maps, attn_maps = func_model(backbone)
+
+    if grad_accumulation:
+        model = GradientAccumulator(
+            n_gradients=grad_accumulation,
+            inputs=[input],
+            outputs=[base_maps, attn_maps],
+        )
+    else:
+        model = keras.Model(
+            inputs=[input], outputs=[base_maps, attn_maps]
+        )
+    
+    return model
+

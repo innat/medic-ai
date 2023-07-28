@@ -1,10 +1,9 @@
 
-import yaml
 
-def yaml_load(file='default.yaml', append_filename=False):
-    with open(file, errors='ignore', encoding='utf-8') as f:
-        s = f.read() 
-        return {
-            **yaml.safe_load(s), 
-            'yaml_file': str(file)
-        } if append_filename else yaml.safe_load(s)
+from omegaconf import DictConfig, ListConfig, OmegaConf
+from pathlib import Path
+
+def get_config(config_path:Path):
+    config = OmegaConf.load(config_path)
+    config_original: DictConfig = config.copy()
+    return config
