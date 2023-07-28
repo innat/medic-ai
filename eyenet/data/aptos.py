@@ -1,5 +1,5 @@
 import tensorflow as tf
-from common import augment
+from .common import augment
 
 IMG_SIZE = 224
 AUTOTUNE = tf.data.AUTOTUNE
