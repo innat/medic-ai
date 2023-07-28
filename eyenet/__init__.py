@@ -17,7 +17,7 @@ from omegaconf import OmegaConf
 config_path='eyenet/cfg/default.yml'
 config = get_config(config_path=config_path)
 
-project_path = Path(config.project.path) / config.model.name / config.dataset.name / "run"
+project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
 (project_path / 'weights').mkdir(parents=True, exist_ok=True)
 (project_path / 'images').mkdir(parents=True, exist_ok=True)
 config.project.path = str(project_path)
