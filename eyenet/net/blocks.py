@@ -1,26 +1,23 @@
-from layers import ChannelWiseAttention, ElementWiseAttention
+from eyenet.layers import ChannelWiseAttention, ElementWiseAttention
 from tensorflow import keras
 from tensorflow.keras import layers
 
-
 def FunctionalModel(config):
 
-    input_shape = (
-        config.dataset.image_size,
-        config.dataset.image_size,
-    )
+    input_shape = (config.dataset.image_size,) * 2
     num_classes = config.dataset.num_classes
-
     input = keras.Input(shape=(*input_shape, 3))
 
     def apply(entity):
-        model_x = entity[0](weight=entity[1], include_top=False, input_tensor=input)
+        model_x = entity(
+            weights=config.model.weight, include_top=False, input_tensor=input
+        )
         feat_x = layers.Dense(num_classes, activation="relu")(model_x.output)
 
-        channel_x = ChannelWiseAttention()(
-            model_x.get_layer("block5a_expand_conv").output
+        channel_x = ChannelWiseAttention(config)(
+            model_x.get_layer(config.model.layers[0]).output
         )
-        element_x = ElementWiseAttention()(channel_x)
+        element_x = ElementWiseAttention(config)(channel_x)
 
         feat_x = layers.GlobalAveragePooling2D()(feat_x)
         element_x = layers.GlobalAveragePooling2D()(element_x)

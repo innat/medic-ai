@@ -1,2 +1,2 @@
-from attention import ChannelWiseAttention, ElementWiseAttention
-from grad_accumulator import GradientAccumulator
+from .attention import ChannelWiseAttention, ElementWiseAttention
+from .grad_accumulator import GradientAccumulator

@@ -7,7 +7,7 @@ class ChannelWiseAttention(layers.Layer):
     def __init__(self, config):
         super().__init__()
 
-        D = 768
+        D = 480
         ALPHA = 1 / 16
 
         # squeeze

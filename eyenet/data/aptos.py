@@ -23,12 +23,13 @@ def get_dataloader(config):
         os.path.join(config.dataset.path, 'df.csv')
     )
     df = df.sample(frac=1).reset_index(drop=True)
-    df['id_code'] = df['id_code'].apply(lambda x: f'{config.dataset.path}{x}.png')
+    df['id_code'] = df['id_code'].apply(lambda x: f'{config.dataset.path}/{x}.png')
 
     reader_method = data_reader(config.dataset.image_size)
-    dataset = tf.data.Dataset.from_tensor_slices(
-        df["id_code"].values, df["diagnosis"].values
-    )
+    dataset = tf.data.Dataset.from_tensor_slices((
+        df["id_code"].values, 
+        df["diagnosis"].values
+    ))
     dataset = dataset.map(reader_method, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.shuffle(8 * config.dataset.batch_size)
     dataset = dataset.batch(config.dataset.batch_size, drop_remainder=True)
