@@ -12,29 +12,25 @@ model:
     - block5a_expand_conv
 
 metrics:
-  image:
-    primary:
-      - cohen_kappa
-    auxilary:
-      - accuracy
+  primary: cohen_kappa
+  auxilary: accuracy
     
 losses:
-  image:
-    primary:
-      - cohen_kappa_loss
-    auxilary:
-      - categorical_crossentropy
+  primary: cohen_kappa_loss
+  auxilary: categorical_crossentropy
+  label_smoothing: 0.01
 
 trainer:
   workers: -1
   epochs: 3
-  verbosity: 0
+  verbosity: 1
   multi_processing: False
   gradient_accumulation: null
   mixed_precision: True
   xla_accelerate: False
   accelerator: gpu
   learning_rate: 0.001
+  optimizer: adam
 
 visualization:
   save_images: False

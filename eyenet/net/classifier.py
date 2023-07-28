@@ -20,9 +20,6 @@ def get_model(config):
             outputs=[base_maps, attn_maps],
         )
     else:
-        model = keras.Model(
-            inputs=[input], outputs=[base_maps, attn_maps]
-        )
-    
-    return model
+        model = keras.Model(inputs=[input], outputs=[base_maps, attn_maps])
 
+    return model
