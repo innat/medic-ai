@@ -18,7 +18,7 @@ def data_reader():
     return labels_reader
 
 
-def create_dataset(df, batch_size, augment, shuffle):
+def get_dataloader(df, batch_size, augment, shuffle):
     dataset = tf.data.Dataset.from_tensor_slices(df["id_code"].values, df["diagnosis"].values)
     decode_fn = data_reader()
     dataset = dataset.map(decode_fn, num_parallel_calls=AUTOTUNE)
