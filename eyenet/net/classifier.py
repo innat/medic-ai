@@ -1,5 +1,5 @@
 from .blocks import FunctionalModel
-from .layers import GradientAccumulator
+from layers import GradientAccumulator
 from tensorflow import keras
 from tensorflow.keras import applications
 

@@ -1,6 +1,6 @@
 dataset:
   name: aptos
-  path: ./dataset/aptos
+  path: dataset
   batch_size: 32
   image_size: 224
   num_classes: 5

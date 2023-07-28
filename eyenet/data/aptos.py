@@ -1,15 +1,15 @@
+
+import os
+import pandas as pd
 import tensorflow as tf
 from .common import augment
 
-IMG_SIZE = 224
-AUTOTUNE = tf.data.AUTOTUNE
 
-
-def data_reader():
+def data_reader(image_size):
     def image_reader(path):
         file_bytes = tf.io.read_file(path)
         img = tf.image.decode_jpeg(file_bytes, channels=3)
-        img = tf.image.resize(img, (IMG_SIZE, IMG_SIZE))
+        img = tf.image.resize(img, (image_size, image_size))
         return img
 
     def labels_reader(path, label):
@@ -18,12 +18,19 @@ def data_reader():
     return labels_reader
 
 
-def get_dataloader(df, batch_size, augment, shuffle):
-    dataset = tf.data.Dataset.from_tensor_slices(df["id_code"].values, df["diagnosis"].values)
-    decode_fn = data_reader()
-    dataset = dataset.map(decode_fn, num_parallel_calls=AUTOTUNE)
-    dataset = dataset.repeat() if shuffle else dataset
-    dataset = dataset.shuffle(1024, reshuffle_each_iteration=True) if shuffle else dataset
-    dataset = dataset.batch(batch_size, drop_remainder=shuffle)
-    dataset = dataset.prefetch(AUTOTUNE)
+def get_dataloader(config):
+    df = pd.read_csv(
+        os.path.join(config.dataset.path, 'df.csv')
+    )
+    df = df.sample(frac=1).reset_index(drop=True)
+    df['id_code'] = df['id_code'].apply(lambda x: f'{config.dataset.path}{x}.png')
+
+    reader_method = data_reader(config.dataset.image_size)
+    dataset = tf.data.Dataset.from_tensor_slices(
+        df["id_code"].values, df["diagnosis"].values
+    )
+    dataset = dataset.map(reader_method, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.shuffle(8 * config.dataset.batch_size)
+    dataset = dataset.batch(config.dataset.batch_size, drop_remainder=True)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
     return dataset
