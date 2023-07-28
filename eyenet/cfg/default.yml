@@ -1,0 +1,14 @@
+# parameters
+mixed_precision: True
+xla_accelerate: False
+num_classes: 5
+epochs: 20
+tta: 1
+folds: 5
+verbosity: 0
+workers: -1
+gradient_accumulation: 10
+debugging: False
+multi_processing: False
+mixup: False
+cutmix: False
