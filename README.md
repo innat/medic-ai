@@ -1,1 +1,6 @@
-# eye-net
+# EyeNet
+
+```python
+
+import eyenet
+```
