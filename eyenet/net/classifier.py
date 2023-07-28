@@ -1,11 +1,9 @@
-
-from tensorflow import keras
-from tensorflow.keras import applications
 from blocks import FunctionalModel
 from layers import GradientAccumulator
+from tensorflow import keras
+from tensorflow.keras import applications
 
-
-input_shape=(224, 224)
+input_shape = (224, 224)
 num_of_class = 5
 accumulate_gradient = True
 
@@ -20,7 +18,4 @@ if accumulate_gradient:
         outputs=[base_maps, attn_maps],
     )
 else:
-    model = keras.Model(
-        inputs=[input],
-        outputs=[base_maps, attn_maps]
-    )
+    model = keras.Model(inputs=[input], outputs=[base_maps, attn_maps])

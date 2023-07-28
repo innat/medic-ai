@@ -1,5 +1,5 @@
-
 import tensorflow as tf
+
 
 def augment(image, target_shape):
     image = tf.image.resize(image, *target_shape)
