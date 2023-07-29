@@ -1,8 +1,7 @@
 import os
 import pandas as pd
 import tensorflow as tf
-from .common import augment
-
+from eyenet.data.common import augment
 
 def data_reader(image_size):
     def image_reader(path):

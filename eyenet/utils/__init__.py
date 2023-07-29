@@ -17,7 +17,7 @@ def get_config(config_path: Path):
             "Supported backbone model is efficientnet ",
             f"Got: {config.model.name}",
         )
-    elif config.model.layers != "block5a_expand_conv":
+    elif config.model.layers[0] != "block5a_expand_conv":
         raise ValueError(
             "Supported intermediate layer of efficientnet is  block5a_expand_conv ",
             f"Got: {config.model.layers}",

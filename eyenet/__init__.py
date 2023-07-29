@@ -1,6 +1,7 @@
 import os
 import warnings
 
+__version__ = "0.0.1"
 
 def warn(*args, **kwargs):
     pass
@@ -31,11 +32,14 @@ config.project.path = str(project_path)
 dataloader = get_dataloader(config)
 model = get_model(config)
 
+model.trainable = False
+
 x, y = next(iter(dataloader))
 print(model.summary())
 print(x.shape, y.shape)
 print(config)
 
-model.trainable = False
+
+
 his = model.fit(dataloader, epochs=config.trainer.epochs)
 print(his)
