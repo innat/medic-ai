@@ -23,15 +23,11 @@ config_path = "eyenet/cfg/default.yml"
 config = get_configured(config_path=config_path)
 dataloader = get_dataloader(config)
 model = get_model(config)
-
 model.trainable = False
 
 x, y = next(iter(dataloader))
 print(model.summary())
 print(x.shape, y.shape)
 print(config)
-
-
-
 his = model.fit(dataloader, epochs=config.trainer.epochs)
 print(his)
