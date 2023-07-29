@@ -69,3 +69,7 @@ model.compile(
     loss_weights={"primary": 1.0, "auxilary": 0.3},
     optimizer=optim,
 )
+
+model.trainable = False
+his = model.fit(dataloader, epochs=config.trainer.epochs)
+print(his)
