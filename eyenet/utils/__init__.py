@@ -2,7 +2,7 @@ from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 
 
-def get_config(config_path: Path):
+def get_configured(config_path: Path):
     config = OmegaConf.load(config_path)
     config_original: DictConfig = config.copy()  # noqa: F841
 
@@ -43,5 +43,14 @@ def get_config(config_path: Path):
 
     if config.trainer.optimizer != "adam":
         raise ValueError("not supported")
+
+
+    project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
+    (project_path / "weights").mkdir(parents=True, exist_ok=True)
+    (project_path / "images").mkdir(parents=True, exist_ok=True)
+    config.project.path = str(project_path)
+
+    # (project_path / "config.yaml").write_text(OmegaConf.to_yaml(config))
+    # (project_path / "config_original.yaml").write_text(OmegaConf.to_yaml(config_path))
 
     return config
