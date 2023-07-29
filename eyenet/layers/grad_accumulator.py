@@ -7,7 +7,10 @@ class GradientAccumulator(keras.Model):
         super().__init__(*args, **kwargs)
         self.n_gradients = tf.constant(n_gradients, dtype=tf.int32)
         self.n_acum_step = tf.Variable(0, dtype=tf.int32, trainable=False)
-        self.gradient_accumulation = [tf.Variable(tf.zeros_like(v, dtype=tf.float32), trainable=False) for v in self.trainable_variables]
+        self.gradient_accumulation = [
+            tf.Variable(tf.zeros_like(v, dtype=tf.float32), trainable=False)
+            for v in self.trainable_variables
+        ]
 
     def train_step(self, data):
         self.n_acum_step.assign_add(1)
@@ -21,7 +24,11 @@ class GradientAccumulator(keras.Model):
             # Run the forward pass of the layer.
             prim_logit, aux_logit = self(images, training=True)
             # Compute the loss value for this minibatch.
-            loss = self.compiled_loss(labels, [prim_logit, aux_logit], regularization_losses=self.losses)
+            loss = self.compiled_loss(
+                labels,
+                [prim_logit, aux_logit],
+                regularization_losses=self.losses,
+            )
 
         # Use the gradient tape to automatically retrieve
         # the gradients of the trainable variables with respect to the loss.
@@ -33,7 +40,11 @@ class GradientAccumulator(keras.Model):
 
         # If n_acum_step reach the n_gradients then we apply accumulated gradients
         # to update the variables otherwise do nothing
-        tf.cond(tf.equal(self.n_acum_step, self.n_gradients), self.apply_accu_gradients, lambda: None)
+        tf.cond(
+            tf.equal(self.n_acum_step, self.n_gradients),
+            self.apply_accu_gradients,
+            lambda: None,
+        )
         # update metrics
         self.compiled_metrics.update_state(labels, [prim_logit, aux_logit])
 
@@ -46,7 +57,9 @@ class GradientAccumulator(keras.Model):
         # reset
         self.n_acum_step.assign(0)
         for i in range(len(self.gradient_accumulation)):
-            self.gradient_accumulation[i].assign(tf.zeros_like(self.trainable_variables[i], dtype=tf.float32))
+            self.gradient_accumulation[i].assign(
+                tf.zeros_like(self.trainable_variables[i], dtype=tf.float32)
+            )
 
     def test_step(self, data):
         # unpack data
@@ -54,7 +67,9 @@ class GradientAccumulator(keras.Model):
         # inference mode
         prim_logit, aux_logit = self(images, training=False)
         # Compute the loss
-        loss = self.compiled_loss(labels, [prim_logit, aux_logit], regularization_losses=self.losses)
+        loss = self.compiled_loss(
+            labels, [prim_logit, aux_logit], regularization_losses=self.losses
+        )
         # update metrics
         self.compiled_metrics.update_state(labels, [prim_logit, aux_logit])
 

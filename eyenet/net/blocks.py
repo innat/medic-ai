@@ -20,8 +20,12 @@ def FunctionalModel(config):
         element_x = layers.GlobalAveragePooling2D()(element_x)
         feat_element_x = layers.concatenate([feat_x, element_x])
 
-        feat_element_x = layers.Dense(num_classes, activation="softmax", name="primary", dtype="float32")(feat_element_x)
-        element_x = layers.Dense(num_classes, activation="softmax", name="auxilary", dtype="float32")(element_x)
+        feat_element_x = layers.Dense(
+            num_classes, activation="softmax", name="primary", dtype="float32"
+        )(feat_element_x)
+        element_x = layers.Dense(
+            num_classes, activation="softmax", name="auxilary", dtype="float32"
+        )(element_x)
         return input, feat_element_x, element_x
 
     return apply

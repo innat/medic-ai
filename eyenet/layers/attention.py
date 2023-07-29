@@ -33,12 +33,40 @@ class ElementWiseAttention(layers.Layer):
 
         C = config.dataset.num_classes
 
-        self.conv0 = layers.Conv2D(512, kernel_size=1, strides=1, padding="same", use_bias=True, activation=tf.nn.relu)
-        self.conv1 = layers.Conv2D(512, kernel_size=3, strides=1, padding="same", use_bias=True, activation=tf.nn.relu)
-        self.conv2 = layers.Conv2D(C, kernel_size=1, strides=1, padding="same", use_bias=False, activation=tf.nn.softmax)
+        self.conv0 = layers.Conv2D(
+            512,
+            kernel_size=1,
+            strides=1,
+            padding="same",
+            use_bias=True,
+            activation=tf.nn.relu,
+        )
+        self.conv1 = layers.Conv2D(
+            512,
+            kernel_size=3,
+            strides=1,
+            padding="same",
+            use_bias=True,
+            activation=tf.nn.relu,
+        )
+        self.conv2 = layers.Conv2D(
+            C,
+            kernel_size=1,
+            strides=1,
+            padding="same",
+            use_bias=False,
+            activation=tf.nn.softmax,
+        )
 
         # linear classifier
-        self.linear = layers.Conv2D(C, kernel_size=1, strides=1, padding="same", use_bias=True, activation=None)
+        self.linear = layers.Conv2D(
+            C,
+            kernel_size=1,
+            strides=1,
+            padding="same",
+            use_bias=True,
+            activation=None,
+        )
 
     def call(self, inputs):
         # f(att)

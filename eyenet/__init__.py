@@ -38,9 +38,15 @@ print(x.shape, y.shape)
 print(config)
 
 if config.losses.primary == "cohen_kappa_loss":
-    primary_loss = tfa.losses.WeightedKappaLoss(num_classes=config.dataset.num_classes, weightage="quadratic", name="primary_loss")
+    primary_loss = tfa.losses.WeightedKappaLoss(
+        num_classes=config.dataset.num_classes,
+        weightage="quadratic",
+        name="primary_loss",
+    )
 if config.losses.auxilary == "categorical_crossentropy":
-    auxilary_loss = keras.losses.CategoricalCrossentropy(label_smoothing=config.losses.label_smoothing, name="aux_loss")
+    auxilary_loss = keras.losses.CategoricalCrossentropy(
+        label_smoothing=config.losses.label_smoothing, name="aux_loss"
+    )
 
 if config.metrics.primary == "cohen_kappa":
     primary_metrics = tfa.metrics.CohenKappa(

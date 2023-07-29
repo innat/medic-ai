@@ -1,6 +1,6 @@
 # Black formatting
 [tool.black]
-line-length = 150
+line-length = 100
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -20,7 +20,7 @@ exclude = '''
 # iSort
 [tool.isort]
 profile = "black"
-line_length = 79
+line_length = 100
 multi_line_output = 3
 include_trailing_comma = true
 virtual_env = "venv"

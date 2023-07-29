@@ -5,7 +5,7 @@ from tensorflow.keras import applications
 
 
 def get_model(config):
-    image_size = config.dataset.image_size
+    image_size = config.dataset.image_size  # noqa: F841
     grad_accumulation = config.trainer.gradient_accumulation
 
     # TODO: Update and make general
