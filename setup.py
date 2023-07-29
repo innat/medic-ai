@@ -28,7 +28,6 @@ setup(
     author="innat",
     author_email = 'innat.dev@gmail.com',
     url="https://github.com/innat/eye-net",
-    # package_dir=get_package_dir(),
     packages=find_packages(exclude=("test", "dataset", "docker", "notebooks")),
     python_requires=">=3.6",
     install_requires=get_install_requirements(),
