@@ -29,4 +29,19 @@ def get_config(config_path: Path):
             f"Got: {config.model.weight}",
         )
 
+    if config.losses.primary not in ("categorical_crossentropy", "cohen_kappa_loss"):
+        raise ValueError("not supported")
+
+    if config.losses.auxilary not in ("categorical_crossentropy", "cohen_kappa_loss"):
+        raise ValueError("not supported")
+
+    if config.metrics.primary not in ("cohen_kappa", "accuracy"):
+        raise ValueError("not supported")
+
+    if config.metrics.auxilary not in ("cohen_kappa", "accuracy"):
+        raise ValueError("not supported")
+
+    if config.trainer.optimizer != "adam":
+        raise ValueError("not supported")
+
     return config

@@ -17,7 +17,6 @@ from .data import get_dataloader
 from pathlib import Path
 from omegaconf import OmegaConf
 from tensorflow import keras
-import tensorflow_addons as tfa
 
 config_path = "eyenet/cfg/default.yml"
 config = get_config(config_path=config_path)
@@ -36,45 +35,6 @@ x, y = next(iter(dataloader))
 print(model.summary())
 print(x.shape, y.shape)
 print(config)
-
-if config.losses.primary == "cohen_kappa_loss":
-    primary_loss = tfa.losses.WeightedKappaLoss(
-        num_classes=config.dataset.num_classes,
-        weightage="quadratic",
-        name="primary_loss",
-    )
-if config.losses.auxilary == "categorical_crossentropy":
-    auxilary_loss = keras.losses.CategoricalCrossentropy(
-        label_smoothing=config.losses.label_smoothing, name="aux_loss"
-    )
-
-if config.metrics.primary == "cohen_kappa":
-    primary_metrics = tfa.metrics.CohenKappa(
-        num_classes=config.dataset.num_classes,
-        weightage="quadratic",
-        name="primary_metrics",
-    )
-if config.metrics.auxilary == "accuracy":
-    auxilary_metrics = keras.metrics.CategoricalAccuracy(name="auxilary_metrics")
-
-if config.trainer.optimizer == "adam":
-    optim = keras.optimizers.Adam(learning_rate=config.trainer.learning_rate)
-
-model.compile(
-    loss={
-        "primary": primary_loss,
-        "auxilary": auxilary_loss,
-    },
-    metrics={
-        "primary": [
-            "accuracy",
-            primary_metrics,
-        ],
-        "auxilary": [auxilary_metrics],
-    },
-    loss_weights={"primary": 1.0, "auxilary": 0.3},
-    optimizer=optim,
-)
 
 model.trainable = False
 his = model.fit(dataloader, epochs=config.trainer.epochs)
