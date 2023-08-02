@@ -1,0 +1,4 @@
+model:
+  name: efficientnetv2
+  weight: imagenet
+  task: segmentation

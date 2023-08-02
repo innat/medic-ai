@@ -14,7 +14,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from .net import get_model
 from .utils import get_configured
-from .data import get_dataloader
+from .dataloader import get_dataloader
 from pathlib import Path
 from omegaconf import OmegaConf
 from tensorflow import keras

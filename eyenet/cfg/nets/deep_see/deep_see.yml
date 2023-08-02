@@ -1,0 +1,4 @@
+model:
+  name: resnet18
+  weight: imagenet
+  task: classification
