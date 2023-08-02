@@ -1,0 +1,6 @@
+model:
+  name: efficientnet
+  weight: imagenet
+  task: classification
+  layers:
+    - block5a_expand_conv
