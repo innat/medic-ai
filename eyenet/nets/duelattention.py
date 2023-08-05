@@ -12,9 +12,8 @@ model_instance = {"efficientnet": keras.applications.EfficientNetB0}
 
 
 def AttentionBlocks(config):
-    input_shape = (config.dataset.image_size,) * 2
     num_classes = config.dataset.num_classes
-    
+
     def apply(incoming):
         feat_x = layers.Dense(num_classes, activation="relu")(incoming.output)
         channel_x = ChannelWiseAttention(config)(incoming.get_layer(config.model.layers[0]).output)
