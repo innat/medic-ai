@@ -51,3 +51,7 @@ def inference(image_path:str, config:str):
     model = get_model(cfg)
     y_pred = model.predict(db)
     return y_pred
+
+
+if __name__ == "__main__":
+    cli()

@@ -6,6 +6,8 @@ cd eye-net
 pip install -e . 
 ```
 
+Using python API,
+
 ```python
 
 from eyenet import get_configured
@@ -26,4 +28,11 @@ hist = model.fit(db)
     'primary_primary_metrics': [-0.17293238639831543], 
     'auxilary_auxilary_metrics': [0.625]
 }
+```
+
+Using CLI,
+
+```python
+eyenet train --config "eyenet/cfg/default.yml" 
+eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
 ```

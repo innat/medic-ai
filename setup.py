@@ -39,4 +39,7 @@ setup(
         "Programming Language :: Python :: 3", "Operating System :: OS Independent",
         "License :: OSI Approved :: Apache Software License",
     ],
+    entry_points={
+        'console_scripts': ['eyenet = eyenet.cli:cli']
+        }
 )
