@@ -27,15 +27,11 @@ ENV PATH="/app/venv/bin:$PATH"
 # Upgrade pip
 RUN /app/venv/bin/python -m pip install --upgrade pip
 
-# Copy the requirements.txt file into the Docker image
-# COPY requirements.txt ./
-
-# Install any needed packages specified in requirements.txt
-# RUN pip3 install --no-cache-dir -r requirements.txt
+# Copy source code from the host to local image filesystem.
+COPY . .
 
 # Install the application in editable mode
 RUN pip3 install -e .
 
-# Copy source code from the host to local image filesystem.
-COPY eyenet/ .
 
+CMD ["/bin/bash"]

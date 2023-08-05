@@ -40,5 +40,6 @@ eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
 Docker [cpu]
 
 ```python
-docker build --no-cache -f Dockerfile -t eyenet-app:cpu .
+docker build -f docker/Dockerfile-cpu -t eyenetapp:cpu .
+docker run -it --rm eyenetapp:cpu
 ```
