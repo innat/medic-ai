@@ -1,0 +1,41 @@
+# Start with a base image of Ubuntu
+FROM ubuntu:20.04
+
+# Prevents prompts during installations
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Set the working directory in the Docker image
+ENV APP_HOME /app
+WORKDIR $APP_HOME
+
+# # Install Python and pip
+RUN apt-get update && apt-get -yq install --no-install-recommends -y \
+    git \
+    apt-utils \
+    python3.9 \
+    python3.9-dev \
+    python3-venv \
+    python3.9-distutils \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Create a virtual environment and activate it
+RUN python3 -m venv venv
+ENV PATH="/app/venv/bin:$PATH"
+
+# Upgrade pip
+RUN /app/venv/bin/python -m pip install --upgrade pip
+
+# Copy the requirements.txt file into the Docker image
+# COPY requirements.txt ./
+
+# Install any needed packages specified in requirements.txt
+# RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Install the application in editable mode
+RUN pip3 install -e .
+
+# Copy source code from the host to local image filesystem.
+COPY eyenet/ .
+

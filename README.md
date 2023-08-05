@@ -36,3 +36,9 @@ Using CLI,
 eyenet train --config "eyenet/cfg/default.yml" 
 eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
 ```
+
+Docker [cpu]
+
+```python
+docker build --no-cache -f Dockerfile -t eyenet-app:cpu .
+```
