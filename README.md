@@ -12,11 +12,11 @@ Using python API,
 
 from eyenet import get_configured
 from eyenet import get_dataloader
-from eyenet import get_model
+from eyenet import DuelAttentionNet
 
 cfg = get_configured('eyenet/cfg/default.yml')
 db = get_dataloader(cfg)
-model = get_model(cfg)
+model = DuelAttentionNet(cfg)
 hist = model.fit(db)
 
 >>> hist.history

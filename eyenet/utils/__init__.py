@@ -1,5 +1,6 @@
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
+from .grad_accumulator import GradientAccumulator
 
 
 def get_configured(config_path: Path):
@@ -43,7 +44,6 @@ def get_configured(config_path: Path):
 
     if config.trainer.optimizer != "adam":
         raise ValueError("not supported")
-
 
     project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
     (project_path / "weights").mkdir(parents=True, exist_ok=True)

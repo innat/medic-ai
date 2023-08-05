@@ -2,8 +2,10 @@ import click
 import os
 import warnings
 
+
 def warn(*args, **kwargs):
     pass
+
 
 warnings.warn = warn
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -19,16 +21,21 @@ from .dataloader import get_dataloader
 def cli():
     pass
 
+
 @cli.command()
 @click.option(
-    '--config', type=str, default='eyenet/cfg/default.yml', 
-    help='config for training',
+    "--config",
+    type=str,
+    default="eyenet/cfg/default.yml",
+    help="config for training",
 )
 @click.option(
-    '--task-type', type=click.Choice(('classification', 'segmentation')), default='classification', 
-    help='task type for training',
+    "--task-type",
+    type=click.Choice(("classification", "segmentation")),
+    default="classification",
+    help="task type for training",
 )
-def train(config:str, task_type:str):
+def train(config: str, task_type: str):
     cfg = get_configured(config)
     db = get_dataloader(cfg)
     model = get_model(cfg)
@@ -38,14 +45,18 @@ def train(config:str, task_type:str):
 
 @cli.command()
 @click.option(
-    '--image-path', type=click.Path(exists=True), required=True,
-    help='path of image for inference',
+    "--image-path",
+    type=click.Path(exists=True),
+    required=True,
+    help="path of image for inference",
 )
 @click.option(
-    '--config', type=str, default='eyenet/cfg/default.yml', 
-    help='config for training',
+    "--config",
+    type=str,
+    default="eyenet/cfg/default.yml",
+    help="config for training",
 )
-def inference(image_path:str, config:str):
+def inference(image_path: str, config: str):
     cfg = get_configured(config)
     db = get_dataloader(cfg)
     model = get_model(cfg)

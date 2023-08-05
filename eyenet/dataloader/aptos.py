@@ -3,6 +3,7 @@ import pandas as pd
 import tensorflow as tf
 from eyenet.dataloader.common import augment
 
+
 def data_reader(image_size):
     def image_reader(path):
         file_bytes = tf.io.read_file(path)
@@ -19,7 +20,9 @@ def data_reader(image_size):
 def get_dataloader(config):
     df = pd.read_csv(os.path.join(config.dataset.path, config.dataset.name, "df.csv"))
     df = df.sample(frac=1).reset_index(drop=True)
-    df["id_code"] = df["id_code"].apply(lambda x: f"{config.dataset.path}/{config.dataset.name}/{x}.png")
+    df["id_code"] = df["id_code"].apply(
+        lambda x: f"{config.dataset.path}/{config.dataset.name}/{x}.png"
+    )
 
     reader_method = data_reader(config.dataset.image_size)
     dataset = tf.data.Dataset.from_tensor_slices((df["id_code"].values, df["diagnosis"].values))

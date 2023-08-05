@@ -3,9 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# data-related stuff
 dataset/
 results/
 .python-version
+
+# ignore large file
+*.h5
 
 # C extensions
 *.so
