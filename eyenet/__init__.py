@@ -15,6 +15,11 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from .nets import DuelAttentionNet, UNet
 from .utils import get_configured
-from .dataloader import get_dataloader
+from .dataloader import APTOSDataloader
 
-__all__ = ["DuelAttentionNet", "UNet", "get_configured", "get_dataloader"]
+__all__ = [
+    "DuelAttentionNet", 
+    "UNet", 
+    "get_configured", 
+    "APTOSDataloader"
+]

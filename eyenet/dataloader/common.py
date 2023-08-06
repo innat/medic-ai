@@ -1,9 +1,19 @@
 import tensorflow as tf
 
+def data_reader(config):
+    image_size = config.dataset.image_size
+    class_label = config.dataset.num_classes
 
-def augment(image, target_shape):
-    image = tf.image.resize(image, *target_shape)
-    image = tf.image.random_flip_left_right(image)
-    image = tf.image.random_saturation(image, 0.5, 2.0)
-    image = tf.image.random_brightness(image, 0.5)
-    return image
+    def image_reader(path):
+        file_bytes = tf.io.read_file(path)
+        img = tf.image.decode_jpeg(file_bytes, channels=3)
+        img = tf.image.resize(img, (image_size, image_size))
+        return img
+
+    def labels_reader(path, label):
+        return (
+            image_reader(path), tf.one_hot(label, depth=class_label)
+        )
+
+    return labels_reader
+

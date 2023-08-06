@@ -1,1 +1,1 @@
-from .aptos import get_dataloader  # noqa: F401
+from .aptos import APTOSDataloader # noqa: F401

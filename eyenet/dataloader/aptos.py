@@ -1,33 +1,50 @@
 import os
 import pandas as pd
 import tensorflow as tf
-from eyenet.dataloader.common import augment
+from tensorflow import keras
+from tensorflow.data import Dataset
+from eyenet.dataloader.common import data_reader
 
 
-def data_reader(image_size):
-    def image_reader(path):
-        file_bytes = tf.io.read_file(path)
-        img = tf.image.decode_jpeg(file_bytes, channels=3)
-        img = tf.image.resize(img, (image_size, image_size))
-        return img
+class APTOSDataloader:
+    def __init__(self, config: str) -> None:
+        super().__init__()
+        self.train_df = self.prepare_dataframe(config)
+        self.dataset = Dataset.from_tensor_slices(
+            (self.train_df["id_code"].values, self.train_df["diagnosis"].values)
+        )
+        self.reader_method = data_reader(config.dataset.image_size)
+        self.config = config
 
-    def labels_reader(path, label):
-        return image_reader(path), tf.one_hot(label, depth=5)
+    def prepare_dataframe(self, config):
+        train_df = pd.read_csv(
+            os.path.join(config.dataset.path, config.dataset.name, "train_images", "df.csv")
+        )
+        train_df = train_df.sample(frac=1).reset_index(drop=True)
+        train_df["id_code"] = train_df["id_code"].apply(
+            lambda x: f"{config.dataset.path}/{config.dataset.name}/train_images/{x}.png"
+        )
 
-    return labels_reader
+    def process(self):
+        dataset = dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = dataset.shuffle(8 * self.config.dataset.batch_size)
+        return dataset
 
+    def augment(self, config):
+        augmentation = keras.Sequential(
+            [
+                keras.layers.RandomFlip("horizontal"),
+            ]
+        )
+        return augmentation
 
-def get_dataloader(config):
-    df = pd.read_csv(os.path.join(config.dataset.path, config.dataset.name, "df.csv"))
-    df = df.sample(frac=1).reset_index(drop=True)
-    df["id_code"] = df["id_code"].apply(
-        lambda x: f"{config.dataset.path}/{config.dataset.name}/{x}.png"
-    )
-
-    reader_method = data_reader(config.dataset.image_size)
-    dataset = tf.data.Dataset.from_tensor_slices((df["id_code"].values, df["diagnosis"].values))
-    dataset = dataset.map(reader_method, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.shuffle(8 * config.dataset.batch_size)
-    dataset = dataset.batch(config.dataset.batch_size, drop_remainder=True)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
-    return dataset
+    def load(self):
+        dataset = self.process(self.config)
+        dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=True)
+        
+        # TODO : Make it customizable.
+        if 'augment' in self.config.dataset:
+            dataset = self.augment(self.config)(dataset)
+        
+        dataset = dataset.prefetch(tf.data.AUTOTUNE)
+        return dataset
