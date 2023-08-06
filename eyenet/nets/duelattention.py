@@ -27,9 +27,9 @@ def AttentionBlocks(config):
         feat_element_x = nn.Dense(
             num_classes, activation="softmax", name="primary", dtype="float32"
         )(feat_element_x)
-        element_x = nn.Dense(
-            num_classes, activation="softmax", name="auxilary", dtype="float32"
-        )(element_x)
+        element_x = nn.Dense(num_classes, activation="softmax", name="auxilary", dtype="float32")(
+            element_x
+        )
 
         return feat_element_x, element_x
 
