@@ -13,24 +13,25 @@ class APTOSDataloader:
         self.dataset = Dataset.from_tensor_slices(
             (self.train_df["id_code"].values, self.train_df["diagnosis"].values)
         )
-        self.reader_method = data_reader(config.dataset.image_size)
         self.config = config
+        self.reader_method = data_reader(self.config)
 
     def prepare_dataframe(self, config):
         train_df = pd.read_csv(
-            os.path.join(config.dataset.path, config.dataset.name, "train_images", "df.csv")
+            os.path.join(config.dataset.path, config.dataset.name, "df.csv")
         )
         train_df = train_df.sample(frac=1).reset_index(drop=True)
         train_df["id_code"] = train_df["id_code"].apply(
             lambda x: f"{config.dataset.path}/{config.dataset.name}/train_images/{x}.png"
         )
+        return train_df
 
     def process(self):
-        dataset = dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
         dataset = dataset.shuffle(8 * self.config.dataset.batch_size)
         return dataset
 
-    def augment(self, config):
+    def augment(self):
         augmentation = keras.Sequential(
             [
                 keras.layers.RandomFlip("horizontal"),
@@ -39,7 +40,7 @@ class APTOSDataloader:
         return augmentation
 
     def load(self):
-        dataset = self.process(self.config)
+        dataset = self.process()
         dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=True)
         
         # TODO : Make it customizable.

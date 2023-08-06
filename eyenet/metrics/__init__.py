@@ -1,1 +1,1 @@
-from .cohen_kappa import CohenKappa  # noqa: F401
+from .cohens_kappa import CohenKappa  # noqa: F401
