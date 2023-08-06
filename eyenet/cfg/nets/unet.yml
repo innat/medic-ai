@@ -1,0 +1,5 @@
+model:
+  name: unet
+  weight: null
+  backbone: efficientnetb0
+  decoder_filters: [256, 128, 64, 32, 16]
