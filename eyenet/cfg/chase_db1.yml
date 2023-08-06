@@ -1,0 +1,42 @@
+dataset:
+  name: chase_db1
+  path: dataset
+  batch_size: 16
+  image_size: 224
+  num_classes: 1
+  
+model:
+  name: unet
+  backbone: efficientnetb0
+  encoder_weight: imagenet
+
+metrics:
+  accuracy
+    
+losses:
+  binary_crossentropy
+
+trainer:
+  workers: -1
+  epochs: 3
+  verbosity: 1
+  multi_processing: False
+  gradient_accumulation: null
+  mixed_precision: True
+  xla_accelerate: False
+  accelerator: gpu
+  learning_rate: 0.001
+  optimizer: adam
+
+visualization:
+  save_images: False
+  log_images: False 
+  save_path: null 
+
+project:
+  seed: 1337
+  path: ./results
+
+logging:
+  logger: []
+

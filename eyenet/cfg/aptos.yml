@@ -1,0 +1,46 @@
+dataset:
+  name: aptos
+  path: dataset
+  batch_size: 16
+  image_size: 224
+  num_classes: 5
+  
+model:
+  name: efficientnet
+  weight: imagenet
+  layers:
+    - block5a_expand_conv
+
+metrics:
+  primary: cohen_kappa
+  auxilary: accuracy
+    
+losses:
+  primary: cohen_kappa_loss
+  auxilary: categorical_crossentropy
+  label_smoothing: 0.01
+
+trainer:
+  workers: -1
+  epochs: 3
+  verbosity: 1
+  multi_processing: False
+  gradient_accumulation: null
+  mixed_precision: True
+  xla_accelerate: False
+  accelerator: gpu
+  learning_rate: 0.001
+  optimizer: adam
+
+visualization:
+  save_images: False
+  log_images: False 
+  save_path: null 
+
+project:
+  seed: 1337
+  path: ./results
+
+logging:
+  logger: []
+

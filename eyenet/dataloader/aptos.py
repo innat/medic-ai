@@ -7,7 +7,7 @@ from eyenet.dataloader.common import data_reader
 
 
 class APTOSDataloader:
-    def __init__(self, config: str) -> None:
+    def __init__(self, config) -> None:
         super().__init__()
         self.train_df = self.prepare_dataframe(config)
         self.dataset = Dataset.from_tensor_slices(
@@ -17,9 +17,7 @@ class APTOSDataloader:
         self.reader_method = data_reader(self.config)
 
     def prepare_dataframe(self, config):
-        train_df = pd.read_csv(
-            os.path.join(config.dataset.path, config.dataset.name, "df.csv")
-        )
+        train_df = pd.read_csv(os.path.join(config.dataset.path, config.dataset.name, "df.csv"))
         train_df = train_df.sample(frac=1).reset_index(drop=True)
         train_df["id_code"] = train_df["id_code"].apply(
             lambda x: f"{config.dataset.path}/{config.dataset.name}/train_images/{x}.png"
@@ -42,10 +40,10 @@ class APTOSDataloader:
     def load(self):
         dataset = self.process()
         dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=True)
-        
+
         # TODO : Make it customizable.
-        if 'augment' in self.config.dataset:
+        if "augment" in self.config.dataset:
             dataset = self.augment(self.config)(dataset)
-        
+
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset

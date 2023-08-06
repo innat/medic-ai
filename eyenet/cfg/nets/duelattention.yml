@@ -1,5 +1,0 @@
-model:
-  name: efficientnet
-  weight: imagenet
-  layers:
-    - block5a_expand_conv
