@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow import keras
 from tensorflow.keras import layers
 
 
@@ -7,17 +6,17 @@ class ChannelWiseAttention(layers.Layer):
     def __init__(self, config):
         super().__init__()
 
-        D = 480
-        ALPHA = 1 / 16
+    def build(self, input_shape):
+        dims = input_shape.shape[-1]
+        alpha = 1 / 16
 
         # squeeze
         self.gap = layers.GlobalAveragePooling2D()
         # excitation
-        self.fc0 = layers.Dense(int(ALPHA * D), use_bias=False, activation=tf.nn.relu)
-        self.fc1 = layers.Dense(D, use_bias=False, activation=tf.nn.sigmoid)
-        # reshape so we can do channel-wise multiplication
-        self.rs = layers.Reshape((1, 1, D))
-
+        self.fc0 = layers.Dense(int(alpha * dims), use_bias=False, activation=tf.nn.relu)
+        self.fc1 = layers.Dense(dims, use_bias=False, activation=tf.nn.sigmoid)
+        self.rs = layers.Reshape((1, 1, dims))
+        
     def call(self, inputs):
         # calculate channel-wise attention vector
         z = self.gap(inputs)
