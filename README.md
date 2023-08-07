@@ -19,8 +19,8 @@ from eyenet import APTOSDataloader
 from eyenet import DuelAttentionNet
 from eyenet import MasterConfigurator
 
-cfg = MasterConfigurator('eyenet/cfg/aptos.yml')
-cls_cfg = get_cls_cfg(
+master_cfg = MasterConfigurator('eyenet/cfg/aptos.yml')
+cls_cfg = master_cfg.get_cls_cfg(
     model_name='efficientnetb0',
     input_size=224,
     num_classes=5,
