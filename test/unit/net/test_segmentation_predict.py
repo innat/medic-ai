@@ -1,4 +1,5 @@
 import pytest
+
 from eyenet.utils import MasterConfigurator
 from eyenet.dataloader import CHASE_DB1
 from eyenet.nets import UNet

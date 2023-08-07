@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+
 from eyenet.utils import MasterConfigurator
 from eyenet.nets import UNet
 
