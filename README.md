@@ -30,17 +30,10 @@ cls_cfg = master_cfg.get_cls_cfg(
 
 dataloader = APTOSDataloader(cls_cfg)
 model = DuelAttentionNet(cls_cfg)
-hist = model.fit(db)
+hist = model.fit(dataloader.load())
 
 >>> hist.history
-{
-    'loss': [0.4282873570919037], 
-    'primary_loss': [-0.018353674560785294], 
-    'auxilary_loss': [1.4888033866882324], 
-    'primary_accuracy': [0.375], 
-    'primary_primary_metrics': [-0.17293238639831543], 
-    'auxilary_auxilary_metrics': [0.625]
-}
+{'loss': [-0.09087201207876205], 'cohen_kappa': [0.0476190447807312]}
 ```
 
 Using **CLI**,
