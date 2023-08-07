@@ -1,5 +1,3 @@
-__version__ = "0.0.1"
-
 import os
 import warnings
 
@@ -22,3 +20,5 @@ __all__ = [
     "dataloader",
     "utils",
 ]
+
+__version__ = "0.0.1"
