@@ -43,3 +43,10 @@ Docker [cpu]
 docker build -f docker/Dockerfile-cpu -t eyenetapp:cpu .
 docker run -it --rm eyenetapp:cpu
 ```
+
+Test 
+
+```python
+python -m pytest test/unit/config/test_config.py
+python -m pytest test/unit/net/test_segmentation_predict.py
+```

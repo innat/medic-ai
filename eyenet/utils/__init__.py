@@ -31,13 +31,19 @@ class MasterConfigurator:
         metrics = kwargs.get('metrics', self.config.metrics)
         losses = kwargs.get('losses', self.config.losses)
 
-        if model_name is not self.config.model.name:
+        if model_name != self.config.model.name:
             raise ValueError(
                 "Supported backbone model is efficientnetb0 ",
                 f"Got: {self.config.model.name}",
             )
         
-        if metrics and losses is not 'cohen_kappa':
+        if metrics not in ['cohen_kappa']:
+            raise ValueError(
+                "Supported loss and metrics is cohen_kappa ",
+                f"Got: {metrics}",
+            )
+        
+        if losses not in ['cohen_kappa']:
             raise ValueError(
                 "Supported loss and metrics is cohen_kappa ",
                 f"Got: {losses}",
@@ -60,25 +66,25 @@ class MasterConfigurator:
         metrics = kwargs.get('metrics', self.config.metrics)
         losses = kwargs.get('losses', self.config.losses)
 
-        if model_name is not self.config.model.name:
+        if model_name != self.config.model.name:
             raise ValueError(
                 "Supported model is UNet ",
                 f"Got: {self.config.model.name}",
             )
     
-        if backbone is not self.config.model.backbone:
+        if backbone != self.config.model.backbone:
             raise ValueError(
                 "Supported backbone model of UNet is efficientnetb0 ",
                 f"Got: {self.config.model.backbone}",
             )
         
-        if metrics == 'accuracy':
+        if metrics != 'accuracy':
             raise ValueError(
                 "Supported metrics is accuracy ",
                 f"Got: {metrics}",
             )
         
-        if losses == 'binary_crossentropy':
+        if losses != 'binary_crossentropy':
             raise ValueError(
                 "Supported metrics is binary_crossentropy ",
                 f"Got: {losses}",
