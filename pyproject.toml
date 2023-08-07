@@ -25,6 +25,7 @@ multi_line_output = 3
 include_trailing_comma = true
 virtual_env = "venv"
 
+
 [tool.flake8]
 exclude = "venv"
 ignore = ["E501", "W503", "E226"]
