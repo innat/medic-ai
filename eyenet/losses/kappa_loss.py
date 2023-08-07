@@ -22,37 +22,8 @@ Number = Union[
 ]
 
 
+# ref. This CohanKappa layer is ported from TensorFlow Addons
 class WeightedKappaLoss(keras.losses.Loss):
-    r"""Implements the Weighted Kappa loss function.
-
-    Weighted Kappa loss was introduced in the
-    [Weighted kappa loss function for multi-class classification
-    of ordinal data in deep learning]
-    (https://www.sciencedirect.com/science/article/abs/pii/S0167865517301666).
-    Weighted Kappa is widely used in Ordinal Classification Problems.
-    The loss value lies in $ [-\infty, \log 2] $, where $ \log 2 $
-    means the random prediction.
-
-    Usage:
-
-    >>> kappa_loss = WeightedKappaLoss(num_classes=4)
-    >>> y_true = tf.constant([[0, 0, 1, 0], [0, 1, 0, 0],
-    ...                  [1, 0, 0, 0], [0, 0, 0, 1]])
-    >>> y_pred = tf.constant([[0.1, 0.2, 0.6, 0.1], [0.1, 0.5, 0.3, 0.1],
-    ...                  [0.8, 0.05, 0.05, 0.1], [0.01, 0.09, 0.1, 0.8]])
-    >>> loss = kappa_loss(y_true, y_pred)
-    >>> loss
-    <tf.Tensor: shape=(), dtype=float32, numpy=-1.1611925>
-
-    >>> model = keras.Model()
-    >>> model.compile('sgd', loss=WeightedKappaLoss(num_classes=4))
-
-    <... outputs should be softmax results
-    if you want to weight the samples, just multiply the outputs
-    by the sample weight ...>
-
-    """
-
     @typechecked
     def __init__(
         self,
@@ -62,22 +33,6 @@ class WeightedKappaLoss(keras.losses.Loss):
         epsilon: Optional[Number] = 1e-6,
         reduction: str = keras.losses.Reduction.NONE,
     ):
-        r"""Creates a `WeightedKappaLoss` instance.
-
-        Args:
-          num_classes: Number of unique classes in your dataset.
-          weightage: (Optional) Weighting to be considered for calculating
-            kappa statistics. A valid value is one of
-            ['linear', 'quadratic']. Defaults to 'quadratic'.
-          name: (Optional) String name of the metric instance.
-          epsilon: (Optional) increment to avoid log zero,
-            so the loss will be $ \log(1 - k + \epsilon) $, where $ k $ lies
-            in $ [-1, 1] $. Defaults to 1e-6.
-        Raises:
-          ValueError: If the value passed for `weightage` is invalid
-            i.e. not any one of ['linear', 'quadratic']
-        """
-
         super().__init__(name=name, reduction=reduction)
 
         if weightage not in ("linear", "quadratic"):

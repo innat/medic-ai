@@ -16,7 +16,7 @@ class ChannelWiseAttention(layers.Layer):
         self.fc0 = layers.Dense(int(alpha * dims), use_bias=False, activation=tf.nn.relu)
         self.fc1 = layers.Dense(dims, use_bias=False, activation=tf.nn.sigmoid)
         self.rs = layers.Reshape((1, 1, dims))
-        
+
     def call(self, inputs):
         # calculate channel-wise attention vector
         z = self.gap(inputs)

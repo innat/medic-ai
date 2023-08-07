@@ -12,74 +12,8 @@ FloatTensorLike = Union[tf.Tensor, float, np.float16, np.float32, np.float64]
 AcceptableDTypes = Union[tf.DType, np.dtype, type, int, str, None]
 
 
+# ref. This CohanKappa layer is ported from TensorFlow Addons
 class CohenKappa(Metric):
-    """Computes Kappa score between two raters.
-
-    The score lies in the range `[-1, 1]`. A score of -1 represents
-    complete disagreement between two raters whereas a score of 1
-    represents complete agreement between the two raters.
-    A score of 0 means agreement by chance.
-
-    Note: As of now, this implementation considers all labels
-    while calculating the Cohen's Kappa score.
-
-    Args:
-        num_classes: Number of unique classes in your dataset.
-        weightage: (optional) Weighting to be considered for calculating
-            kappa statistics. A valid value is one of
-            [None, 'linear', 'quadratic']. Defaults to `None`
-        sparse_labels: (bool) Valid only for multi-class scenario.
-            If True, ground truth labels are expected to be integers
-            and not one-hot encoded.
-        regression: (bool) If set, that means the problem is being treated
-            as a regression problem where you are regressing the predictions.
-            **Note:** If you are regressing for the values, the the output layer
-            should contain a single unit.
-        name: (optional) String name of the metric instance
-        dtype: (optional) Data type of the metric result. Defaults to `None`.
-
-    Raises:
-        ValueError: If the value passed for `weightage` is invalid
-        i.e. not any one of [None, 'linear', 'quadratic'].
-
-    Usage:
-
-    >>> y_true = np.array([4, 4, 3, 4, 2, 4, 1, 1], dtype=np.int32)
-    >>> y_pred = np.array([4, 4, 3, 4, 4, 2, 1, 1], dtype=np.int32)
-    >>> weights = np.array([1, 1, 2, 5, 10, 2, 3, 3], dtype=np.int32)
-    >>> metric = CohenKappa(num_classes=5, sparse_labels=True)
-    >>> metric.update_state(y_true , y_pred)
-    <tf.Tensor: shape=(5, 5), dtype=float32, numpy=
-     array([[0., 0., 0., 0., 0.],
-            [0., 2., 0., 0., 0.],
-            [0., 0., 0., 0., 1.],
-            [0., 0., 0., 1., 0.],
-            [0., 0., 1., 0., 3.]], dtype=float32)>
-    >>> result = metric.result()
-    >>> result.numpy()
-    0.61904764
-    >>> # To use this with weights, sample_weight argument can be used.
-    >>> metric = CohenKappa(num_classes=5, sparse_labels=True)
-    >>> metric.update_state(y_true , y_pred , sample_weight=weights)
-    <tf.Tensor: shape=(5, 5), dtype=float32, numpy=
-     array([[ 0.,  0.,  0.,  0.,  0.],
-            [ 0.,  6.,  0.,  0.,  0.],
-            [ 0.,  0.,  0.,  0., 10.],
-            [ 0.,  0.,  0.,  2.,  0.],
-            [ 0.,  0.,  2.,  0.,  7.]], dtype=float32)>
-    >>> result = metric.result()
-    >>> result.numpy()
-     0.37209308
-
-    Usage with `keras` API:
-
-    >>> inputs = keras.Input(shape=(10,))
-    >>> x = keras.layers.Dense(10)(inputs)
-    >>> outputs = keras.layers.Dense(1)(x)
-    >>> model = keras.models.Model(inputs=inputs, outputs=outputs)
-    >>> model.compile('sgd', loss='mse', metrics=[CohenKappa(num_classes=3, sparse_labels=True)])
-    """
-
     @typechecked
     def __init__(
         self,
@@ -118,22 +52,6 @@ class CohenKappa(Metric):
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        """Accumulates the confusion matrix condition statistics.
-
-        Args:
-          y_true: Labels assigned by the first annotator with shape
-            `[num_samples,]`.
-          y_pred: Labels assigned by the second annotator with shape
-            `[num_samples,]`. The kappa statistic is symmetric,
-            so swapping `y_true` and `y_pred` doesn't change the value.
-          sample_weight (optional): for weighting labels in confusion matrix
-            Defaults to `None`. The dtype for weights should be the same
-            as the dtype for confusion matrix. For more details,
-            please check `tf.math.confusion_matrix`.
-
-        Returns:
-          Update op.
-        """
         return self._update(y_true, y_pred, sample_weight)
 
     def _update_binary_class_model(self, y_true, y_pred, sample_weight=None):

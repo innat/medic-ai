@@ -1,4 +1,3 @@
-from eyenet.utils import GradientAccumulator
 from eyenet.layers.attention import ChannelWiseAttention
 from eyenet.layers.attention import ElementWiseAttention
 from eyenet.losses import WeightedKappaLoss
@@ -9,7 +8,12 @@ from tensorflow import keras
 from tensorflow.keras import layers as nn
 
 
-model_instance = {"efficientnetb0": keras.applications.EfficientNetB0}
+model_instance = {
+    "efficientnetb0": keras.applications.EfficientNetB0,
+    "efficientnetb1": keras.applications.EfficientNetB1,
+    "efficientnetb2": keras.applications.EfficientNetB2,
+    "efficientnetb3": keras.applications.EfficientNetB3,
+}
 
 
 def AttentionBlocks(config):
