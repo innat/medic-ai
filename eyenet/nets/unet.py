@@ -50,7 +50,7 @@ def UpsampleBlock(filters):
 
 
 def UNet(backbone, input_size, num_classes, activation, decoder_filters=[256, 128, 64, 32, 16]):
-    inputs = keras.Input(input_size)
+    inputs = keras.Input(shape=(input_size,input_size,3))
 
     base_model = BACKBONE[backbone](weights=None, include_top=False, input_tensor=inputs)
     selected_layers = BACKBONE_ARGS[backbone]
@@ -73,6 +73,6 @@ def UNet(backbone, input_size, num_classes, activation, decoder_filters=[256, 12
     # Final layer
     x = nn.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)
     final = nn.Activation(activation, dtype="float32")(x)
-    model = keras.Model(inputs=inputs, outputs=final, name=f"UNet[{backbone}]")
+    model = keras.Model(inputs=inputs, outputs=final, name=f"UNet")
 
     return model

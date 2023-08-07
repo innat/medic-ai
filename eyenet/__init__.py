@@ -13,8 +13,8 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-from .nets import DuelAttentionNet, UNet
-from .utils import get_configured
-from .dataloader import APTOSDataloader, CHASE_DB1
+from eyenet.nets import DuelAttentionNet, UNet
+from eyenet.utils import get_configured
+from eyenet.dataloader import APTOSDataloader, CHASE_DB1
 
 __all__ = ["DuelAttentionNet", "UNet", "get_configured", "APTOSDataloader" "CHASE_DB1"]

@@ -1,7 +1,5 @@
-import pytest
 
-import sys
-import os
+
 from eyenet import get_configured
 
 
