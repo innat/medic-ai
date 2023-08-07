@@ -4,7 +4,7 @@ EyeNet serves as a sophisticated Python-based library, fundamentally conceived t
 
 # Installation
 
-```python
+```bash
 git clone https://github.com/innat/eye-net
 cd eye-net
 pip install -e . 
@@ -37,25 +37,18 @@ hist = model.fit(dataloader.load())
 
 Using **CLI**,
 
+The eyenet can be run on command line interface.
+
 ```python
 eyenet train --config "eyenet/cfg/aptos.yml" 
 eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
 ```
 
+# Docker 
 
-# Docker [cpu]
+To run eyenet with container:
 
 ```python
 docker build -f docker/Dockerfile-cpu -t eyenetapp:cpu .
 docker run -it --rm eyenetapp:cpu
-```
-
-# Test 
-
-```python
-python -m pytest test/unit/config/test_config.py
-python -m pytest test/unit/net/test_segmentation_predict.py
-
-python -m pytest test/integration/training/test_cls_training.py
-python -m pytest test/integration/training/test_seg_training.py
 ```
