@@ -6,19 +6,11 @@ dataset:
   num_classes: 5
   
 model:
-  name: efficientnet
+  name: efficientnetb0
   weight: imagenet
-  layers:
-    - block5a_expand_conv
 
-metrics:
-  primary: cohen_kappa
-  auxilary: accuracy
-    
-losses:
-  primary: cohen_kappa_loss
-  auxilary: categorical_crossentropy
-  label_smoothing: 0.01
+metrics: cohen_kappa
+losses: cohen_kappa
 
 trainer:
   workers: -1

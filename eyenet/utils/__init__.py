@@ -3,55 +3,92 @@ from pathlib import Path
 from .grad_accumulator import GradientAccumulator
 
 
-def get_configured(config_path: Path):
-    config = OmegaConf.load(config_path)
-    config_original: DictConfig = config.copy()  # noqa: F841
 
-    if config.dataset.name not in ("aptos", "chase_db1"):
-        raise ValueError(
-            "Supported data sets are aptos and chase_db1 ",
-            f"Got: {config.dataset.name}",
-        )
+class MasterConfigurator:
+    def __init__(self, config_path: Path) -> None:
+        config = OmegaConf.load(config_path)
+        config_original: DictConfig = config.copy()
 
-    if config.model.name not in ("efficientnet", "unet"):
-        raise ValueError(
-            "Supported backbone model is efficientnet ",
-            f"Got: {config.model.name}",
-        )
+        project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
+        (project_path / "weights").mkdir(parents=True, exist_ok=True)
+        (project_path / "images").mkdir(parents=True, exist_ok=True)
+        config.project.path = str(project_path)
 
-    # if config.model.layers[0] != "block5a_expand_conv":
-    #     raise ValueError(
-    #         "Supported intermediate layer of efficientnet is  block5a_expand_conv ",
-    #         f"Got: {config.model.layers}",
-    #     )
+        if config.dataset.name not in ("aptos", "chase_db1"):
+            raise ValueError(
+                "Supported data sets are aptos and chase_db1 ",
+                f"Got: {config.dataset.name}",
+            )
+        
+        self.config_original = config_original
+        self.config = config
 
-    if config.model.weight not in ("imagenet", None):
-        raise ValueError(
-            "Supported weight can be imagenet or None ",
-            f"Got: {config.model.weight}",
-        )
+    def get_cls_cfg(self, **kwargs):
 
-    # if config.losses.primary not in ("categorical_crossentropy", "cohen_kappa_loss"):
-    #     raise ValueError("not supported")
+        model_name = kwargs.get('model_name', self.config.model.name)
+        input_size = kwargs.get('image_size', self.config.dataset.image_size)
+        num_classes = kwargs.get('num_classes', self.config.dataset.num_classes)
+        metrics = kwargs.get('metrics', self.config.metrics)
+        losses = kwargs.get('losses', self.config.losses)
 
-    # if config.losses.auxilary not in ("categorical_crossentropy", "cohen_kappa_loss"):
-    #     raise ValueError("not supported")
+        if model_name is not self.config.model.name:
+            raise ValueError(
+                "Supported backbone model is efficientnetb0 ",
+                f"Got: {self.config.model.name}",
+            )
+        
+        if metrics and losses is not 'cohen_kappa':
+            raise ValueError(
+                "Supported loss and metrics is cohen_kappa ",
+                f"Got: {losses}",
+            )
+        
+        self.config.model.name = model_name
+        self.config.dataset.image_size = input_size
+        self.config.dataset.num_classes = num_classes
+        self.config.metrics = metrics
+        self.config.losses = losses
 
-    # if config.metrics.primary not in ("cohen_kappa", "accuracy"):
-    #     raise ValueError("not supported")
+        return self.config
 
-    # if config.metrics.auxilary not in ("cohen_kappa", "accuracy"):
-    #     raise ValueError("not supported")
+    def get_seg_cfg(self, **kwargs):
 
-    # if config.trainer.optimizer != "adam":
-    #     raise ValueError("not supported")
+        model_name = kwargs.get('model_name', self.config.model.name)
+        backbone = kwargs.get('backbone', self.config.model.backbone)
+        input_size = kwargs.get('image_size', self.config.dataset.image_size)
+        num_classes = kwargs.get('num_classes', self.config.dataset.num_classes)
+        metrics = kwargs.get('metrics', self.config.metrics)
+        losses = kwargs.get('losses', self.config.losses)
 
-    project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
-    (project_path / "weights").mkdir(parents=True, exist_ok=True)
-    (project_path / "images").mkdir(parents=True, exist_ok=True)
-    config.project.path = str(project_path)
+        if model_name is not self.config.model.name:
+            raise ValueError(
+                "Supported model is UNet ",
+                f"Got: {self.config.model.name}",
+            )
+    
+        if backbone is not self.config.model.backbone:
+            raise ValueError(
+                "Supported backbone model of UNet is efficientnetb0 ",
+                f"Got: {self.config.model.backbone}",
+            )
+        
+        if metrics == 'accuracy':
+            raise ValueError(
+                "Supported metrics is accuracy ",
+                f"Got: {metrics}",
+            )
+        
+        if losses == 'binary_crossentropy':
+            raise ValueError(
+                "Supported metrics is binary_crossentropy ",
+                f"Got: {losses}",
+            )
+        
+        self.config.model.name = model_name
+        self.config.model.backbone = backbone
+        self.config.dataset.image_size = input_size
+        self.config.dataset.num_classes = num_classes
+        self.config.metrics = metrics
+        self.config.losses = losses
 
-    # (project_path / "config.yaml").write_text(OmegaConf.to_yaml(config))
-    # (project_path / "config_original.yaml").write_text(OmegaConf.to_yaml(config_path))
-
-    return config
+        return self.config

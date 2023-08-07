@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from eyenet.nets import DuelAttentionNet, UNet
-from eyenet.utils import get_configured
+from eyenet.utils import MasterConfigurator
 from eyenet.dataloader import APTOSDataloader, CHASE_DB1
 
-__all__ = ["DuelAttentionNet", "UNet", "get_configured", "APTOSDataloader" "CHASE_DB1"]
+__all__ = ["DuelAttentionNet", "UNet", "MasterConfigurator", "APTOSDataloader" "CHASE_DB1"]
