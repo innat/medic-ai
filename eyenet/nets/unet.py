@@ -51,13 +51,13 @@ def UpsampleBlock(filters):
 
 
 def UNet(config):
-    input_size=config.dataset.image_size
-    backbone=config.model.backbone
-    decoder_filters=config.model.decoder_filters
-    num_classes=config.dataset.num_classes
-    activation=config.dataset.cls_act
+    input_size = config.dataset.image_size
+    backbone = config.model.backbone
+    decoder_filters = config.model.decoder_filters
+    num_classes = config.dataset.num_classes
+    activation = config.dataset.cls_act
 
-    inputs = keras.Input(shape=(input_size,input_size,3))
+    inputs = keras.Input(shape=(input_size, input_size, 3))
 
     base_model = BACKBONE[backbone](weights=None, include_top=False, input_tensor=inputs)
     selected_layers = BACKBONE_ARGS[backbone]
@@ -86,7 +86,6 @@ def UNet(config):
 
 
 def get_compiled(model, config):
-
     if config.dataset.num_classes == 1:
         if config.losses == "binary_crossentropy":
             loss_fn = losses.BinaryCrossentropy(
@@ -94,13 +93,10 @@ def get_compiled(model, config):
             )
         if config.metrics == "accuracy":
             metrics_fn = metrics.BinaryAccuracy()
-        
 
     if config.trainer.optimizer == "adam":
-        optim = keras.optimizers.Adam(
-            learning_rate=config.trainer.learning_rate
-        )
-    
+        optim = keras.optimizers.Adam(learning_rate=config.trainer.learning_rate)
+
     model.compile(
         loss=loss_fn,
         metrics=metrics_fn,

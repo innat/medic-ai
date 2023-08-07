@@ -1,23 +1,19 @@
 import pytest
 import numpy as np
 import pandas as pd
-from eyenet import MasterConfigurator
-from eyenet import DuelAttentionNet
+from eyenet.utils import MasterConfigurator
+from eyenet.nets import DuelAttentionNet
 
 
-@pytest.mark.parametrize("config_path", [
-    "eyenet/cfg/aptos.yml"
-])
+@pytest.mark.parametrize("config_path", ["eyenet/cfg/aptos.yml"])
 class TestModelTraining:
     def test_model_fit(self, config_path):
-        config = MasterConfigurator(
-            config_path=config_path
-        ).get_cls_cfg(
-            model_name='efficientnetb0',
+        config = MasterConfigurator(config_path=config_path).get_cls_cfg(
+            model_name="efficientnetb0",
             input_size=100,
             num_classes=5,
-            metrics='cohen_kappa',
-            losses='cohen_kappa',
+            metrics="cohen_kappa",
+            losses="cohen_kappa",
         )
 
         model = DuelAttentionNet(config)

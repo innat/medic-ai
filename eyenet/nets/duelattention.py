@@ -60,7 +60,7 @@ def get_compiled(model, config):
             num_classes=config.dataset.num_classes,
             weightage="quadratic",
         )
-   
+
     if config.trainer.optimizer == "adam":
         optim = keras.optimizers.Adam(learning_rate=config.trainer.learning_rate)
 

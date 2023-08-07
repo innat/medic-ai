@@ -15,9 +15,9 @@ pip install -e .
 Using **Python API**,
 
 ```python
-from eyenet import APTOSDataloader
-from eyenet import DuelAttentionNet
-from eyenet import MasterConfigurator
+from eyenet.dataloader import APTOSDataloader
+from eyenet.nets import DuelAttentionNet
+from eyenet.utils import MasterConfigurator
 
 master_cfg = MasterConfigurator('eyenet/cfg/aptos.yml')
 cls_cfg = master_cfg.get_cls_cfg(
@@ -27,7 +27,6 @@ cls_cfg = master_cfg.get_cls_cfg(
     metrics='cohen_kappa',
     losses='cohen_kappa',
 )
-
 dataloader = APTOSDataloader(cls_cfg)
 model = DuelAttentionNet(cls_cfg)
 hist = model.fit(dataloader.load())

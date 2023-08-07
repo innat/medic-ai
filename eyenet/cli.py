@@ -12,9 +12,9 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-from .nets import get_model
-from .utils import get_configured
-from .dataloader import get_dataloader
+from eyenet import nets
+from eyenet import dataloader
+from eyenet import utils
 
 
 @click.group()
@@ -36,10 +36,17 @@ def cli():
     help="task type for training",
 )
 def train(config: str, task_type: str):
-    cfg = get_configured(config)
-    db = get_dataloader(cfg)
-    model = get_model(cfg)
-    hist = model.fit(db)
+    master_cfg = utils.MasterConfigurator("eyenet/cfg/aptos.yml")
+    cls_cfg = master_cfg.get_cls_cfg(
+        model_name="efficientnetb0",
+        input_size=224,
+        num_classes=5,
+        metrics="cohen_kappa",
+        losses="cohen_kappa",
+    )
+    data = dataloader.APTOSDataloader(cls_cfg)
+    model = nets.DuelAttentionNet(cls_cfg)
+    hist = model.fit(data.load())
     return hist
 
 
@@ -57,10 +64,17 @@ def train(config: str, task_type: str):
     help="config for training",
 )
 def inference(image_path: str, config: str):
-    cfg = get_configured(config)
-    db = get_dataloader(cfg)
-    model = get_model(cfg)
-    y_pred = model.predict(db)
+    master_cfg = utils.MasterConfigurator("eyenet/cfg/aptos.yml")
+    cls_cfg = master_cfg.get_cls_cfg(
+        model_name="efficientnetb0",
+        input_size=224,
+        num_classes=5,
+        metrics="cohen_kappa",
+        losses="cohen_kappa",
+    )
+    data = dataloader.APTOSDataloader(cls_cfg)
+    model = nets.DuelAttentionNet(cls_cfg)
+    y_pred = model.predict(data)
     return y_pred
 
 
