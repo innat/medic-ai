@@ -1,0 +1,12 @@
+# Ignore directory
+dataset/
+venv/
+notebooks/
+docker/
+test/
+
+# Ignore specific file
+.python-version
+
+# Ignore files with .x extension
+*.h5

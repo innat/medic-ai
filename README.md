@@ -46,9 +46,21 @@ eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
 
 # Docker 
 
-To run eyenet with container:
+EyeNet can be run with container. First build the docker image.
 
-```python
+```bash
 docker build -f docker/Dockerfile-cpu -t eyenetapp:cpu .
-docker run -it --rm eyenetapp:cpu
 ```
+
+Next, run the container.
+
+```bash
+docker run 
+-it \
+--rm \
+-v {absoluate_path}/dataset:/app/dataset \
+-v {absoluate_path}/results:/app/results \
+eyenetapp:cpu
+```
+
+It will give an interactive python session which enable running the Python SDK.
