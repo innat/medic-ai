@@ -1,8 +1,8 @@
 import pytest
 
-from eyenet.utils import MasterConfigurator
-from eyenet.dataloader import CHASE_DB1
-from eyenet.nets import UNet
+from medic.utils import MasterConfigurator
+from medic.dataloader import CHASE_DB1
+from medic.nets import UNet
 
 
 def get_configured(config_path):

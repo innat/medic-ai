@@ -1,4 +1,4 @@
-from eyenet.utils import MasterConfigurator
+from medic.utils import MasterConfigurator
 import pytest
 
 
