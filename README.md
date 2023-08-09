@@ -1,6 +1,6 @@
 # MEDIC
 
-MEDIC serves as a Python-based library.
+MEDIC serves as a python-based library for medical image analysis.
 
 # Installation
 
