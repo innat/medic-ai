@@ -15,11 +15,11 @@ pip install -e .
 Using **Python API**,
 
 ```python
-from eyenet.dataloader import APTOSDataloader
-from eyenet.nets import DuelAttentionNet
-from eyenet.utils import MasterConfigurator
+from medic.dataloader import APTOSDataloader
+from medic.nets import DuelAttentionNet
+from medic.utils import MasterConfigurator
 
-master_cfg = MasterConfigurator('eyenet/cfg/aptos.yml')
+master_cfg = MasterConfigurator('medic/cfg/aptos.yml')
 cls_cfg = master_cfg.get_cls_cfg(
     model_name='efficientnetb0',
     input_size=224,
