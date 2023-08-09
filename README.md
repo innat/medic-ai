@@ -1,12 +1,12 @@
-# EyeNet
+# MEDIC
 
-EyeNet serves as a sophisticated Python-based library, fundamentally conceived to cater to the domain of ophthalmic diseases. Primarily, this toolset aims to provide a comprehensive platform to unravel, investigate, and interpret complexities related to various eye diseases.
+MEDIC serves as a Python-based library.
 
 # Installation
 
 ```bash
-git clone https://github.com/innat/eye-net
-cd eye-net
+git clone https://github.com/innat/medic
+cd medic
 pip install -e . 
 ```
 
@@ -37,19 +37,19 @@ hist = model.fit(dataloader.load())
 
 Using **CLI**,
 
-The eyenet can be run on command line interface.
+The medic can be run on command line interface.
 
 ```python
-eyenet train --config "eyenet/cfg/aptos.yml" 
-eyenet inference --image-path "dataset/aptos/00a8624548a9.png"
+medic train --config "medic/cfg/aptos.yml" 
+medic inference --image-path "dataset/aptos/00a8624548a9.png"
 ```
 
 # Docker 
 
-EyeNet can be run with container. First build the docker image.
+MEDIC can be run with container. First build the docker image.
 
 ```bash
-docker build -f docker/Dockerfile-cpu -t eyenetapp:cpu .
+docker build -f docker/Dockerfile -t medicapp:cpu .
 ```
 
 Next, run the container.
