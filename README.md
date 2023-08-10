@@ -27,9 +27,9 @@ cls_cfg = master_cfg.get_cls_cfg(
     metrics='cohen_kappa',
     losses='cohen_kappa',
 )
-dataloader = APTOSDataloader(cls_cfg)
+dataloader = APTOSDataloader(cls_cfg).load()
 model = DuelAttentionNet(cls_cfg)
-hist = model.fit(dataloader.load())
+hist = model.fit(dataloader)
 
 >>> hist.history
 {'loss': [-0.09087201207876205], 'cohen_kappa': [0.0476190447807312]}
