@@ -4,9 +4,9 @@ from .grad_accumulator import GradientAccumulator
 
 
 valid_values = {
-    "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50'],
-    "metrics": ['cohen_kappa'],
-    "losses": ['cohen_kappa', 'mse']
+    "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50', 'unet'],
+    "metrics": ['cohen_kappa', 'accuracy'],
+    "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
 }
 
 class Configurator:
@@ -28,7 +28,7 @@ class Configurator:
         self.config_original = config_original
         self.config = config
 
-    def update_cls_cfg(self, model_name, input_size, num_classes, metrics, losses, **kwargs):
+    def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None, metrics=None, losses=None):
         model_name = model_name or self.config.model.name
         input_size = input_size or self.config.dataset.image_size
         num_classes = num_classes or self.config.dataset.num_classes
@@ -40,7 +40,6 @@ class Configurator:
             "metrics": metrics,
             "losses": losses
         }
-
         for param_name, value in params.items():
             self._validate_param(param_name, value, valid_values[param_name])
 
@@ -52,37 +51,23 @@ class Configurator:
 
         return self.config
 
-    def update_seg_cfg(self, **kwargs):
-        model_name = kwargs.get("model_name", self.config.model.name)
-        backbone = kwargs.get("backbone", self.config.model.backbone)
-        input_size = kwargs.get("image_size", self.config.dataset.image_size)
-        num_classes = kwargs.get("num_classes", self.config.dataset.num_classes)
-        metrics = kwargs.get("metrics", self.config.metrics)
-        losses = kwargs.get("losses", self.config.losses)
-
-        if model_name != self.config.model.name:
-            raise ValueError(
-                "Supported model is UNet ",
-                f"Got: {self.config.model.name}",
-            )
-
-        if backbone != self.config.model.backbone:
-            raise ValueError(
-                "Supported backbone model of UNet is efficientnetb0 ",
-                f"Got: {self.config.model.backbone}",
-            )
-
-        if metrics != "accuracy":
-            raise ValueError(
-                "Supported metrics is accuracy ",
-                f"Got: {metrics}",
-            )
-
-        if losses != "binary_crossentropy":
-            raise ValueError(
-                "Supported metrics is binary_crossentropy ",
-                f"Got: {losses}",
-            )
+    def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None, metrics=None, losses=None):
+        
+        model_name = model_name or self.config.model.name
+        backbone = backbone or self.config.model.backbone
+        input_size = input_size or self.config.dataset.image_size
+        num_classes = num_classes or self.config.dataset.num_classes
+        metrics = metrics or self.config.metrics
+        losses = losses or self.config.losses
+        
+        params = {
+            "model_name": model_name,
+            "metrics": metrics,
+            "losses": losses,
+            "backbone": backbone
+        }
+        for param_name, value in params.items():
+            self._validate_param(param_name, value, valid_values[param_name])
 
         self.config.model.name = model_name
         self.config.model.backbone = backbone
@@ -97,5 +82,5 @@ class Configurator:
         if value not in valid_values_list:
             valid_str = ', '.join(valid_values_list)
             raise ValueError(
-                f"Supported {name} are {valid_str}. Got: {value}"
+                f"The {name} '{value}' is not supported. Allowed values are: {valid_str}."
             )
