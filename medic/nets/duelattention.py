@@ -47,31 +47,6 @@ def DuelAttentionNet2D(config):
     base_maps = attnblock(backbone)
 
     model = keras.Model(inputs=[input_tensor], outputs=[base_maps])
-    model = get_compiled(model, config)
 
     return model
 
-
-def get_compiled(model, config):
-    if config.losses == "cohen_kappa":
-        loss_fn = WeightedKappaLoss(
-            num_classes=config.dataset.num_classes,
-            weightage="quadratic",
-        )
-
-    if config.metrics == "cohen_kappa":
-        metrics_fn = CohenKappa(
-            num_classes=config.dataset.num_classes,
-            weightage="quadratic",
-        )
-
-    if config.trainer.optimizer == "adam":
-        optim = keras.optimizers.Adam(learning_rate=config.trainer.learning_rate)
-
-    model.compile(
-        loss=loss_fn,
-        metrics=metrics_fn,
-        optimizer=optim,
-    )
-
-    return model

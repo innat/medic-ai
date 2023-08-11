@@ -19,9 +19,6 @@ model:
   weight: imagenet
   task: classification
 
-metrics: cohen_kappa
-losses: cohen_kappa
-
 trainer:
   workers: -1
   epochs: 3

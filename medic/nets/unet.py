@@ -38,26 +38,6 @@ def UNet2D(config):
     x = nn.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)
     final = nn.Activation(activation, dtype="float32")(x)
     model = keras.Model(inputs=inputs, outputs=final, name=f"UNet")
-    model = get_compiled(model, config)
     return model
 
 
-def get_compiled(model, config):
-    if config.dataset.num_classes == 1:
-        if config.losses == "binary_crossentropy":
-            loss_fn = losses.BinaryCrossentropy(
-                from_logits=False if config.dataset.cls_act else True
-            )
-        if config.metrics == "accuracy":
-            metrics_fn = metrics.BinaryAccuracy()
-
-    if config.trainer.optimizer == "adam":
-        optim = keras.optimizers.Adam(learning_rate=config.trainer.learning_rate)
-
-    model.compile(
-        loss=loss_fn,
-        metrics=metrics_fn,
-        optimizer=optim,
-    )
-
-    return model

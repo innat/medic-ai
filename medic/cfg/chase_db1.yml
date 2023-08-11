@@ -13,12 +13,6 @@ model:
   decoder_filters: [256, 128, 64, 32, 16]
   task: segmentation 
 
-metrics:
-  accuracy
-    
-losses:
-  binary_crossentropy
-
 trainer:
   workers: -1
   epochs: 3

@@ -33,13 +33,9 @@ class Configurator:
         model_name = model_name or self.config.model.name
         input_size = input_size or self.config.dataset.image_size
         num_classes = num_classes or self.config.dataset.num_classes
-        metrics = metrics or self.config.metrics
-        losses = losses or self.config.losses
             
         params = {
             "model_name": model_name,
-            "metrics": metrics,
-            "losses": losses
         }
         for param_name, value in params.items():
             self._validate_param(param_name, value, valid_values[param_name])
@@ -47,31 +43,23 @@ class Configurator:
         self.config.model.name = model_name
         self.config.dataset.image_size = input_size
         self.config.dataset.num_classes = num_classes
-        self.config.metrics = metrics
-        self.config.losses = losses
 
         return self.config
 
-    def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None, metrics=None, losses=None):
+    def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None):
         
         valid_values = {
             "model_name": ['unet'],
             "backbone": ["efficientnetb0"],
-            "metrics": ['accuracy'],
-            "losses": ['binary_crossentropy']
         }
 
         model_name = model_name or self.config.model.name
         backbone = backbone or self.config.model.backbone
         input_size = input_size or self.config.dataset.image_size
         num_classes = num_classes or self.config.dataset.num_classes
-        metrics = metrics or self.config.metrics
-        losses = losses or self.config.losses
         
         params = {
             "model_name": model_name,
-            "metrics": metrics,
-            "losses": losses,
             "backbone": backbone
         }
         for param_name, value in params.items():
@@ -81,8 +69,6 @@ class Configurator:
         self.config.model.backbone = backbone
         self.config.dataset.image_size = input_size
         self.config.dataset.num_classes = num_classes
-        self.config.metrics = metrics
-        self.config.losses = losses
 
         return self.config
     
