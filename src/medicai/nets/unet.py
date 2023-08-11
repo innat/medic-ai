@@ -3,8 +3,8 @@ from tensorflow.keras import losses, metrics
 from tensorflow.keras import layers as nn
 
 
-from medic.utils.model_utils import BACKBONE, BACKBONE_ARGS
-from medic.layers.conv import UpsampleBlock2D
+from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
+from medicai.layers.conv import UpsampleBlock2D
 
 
 def UNet2D(config):
