@@ -1,6 +1,6 @@
-# MEDIC
+# Medic-AI
 
-MEDIC serves as a python-based library for medical image analysis.
+**Medic-AI** serves as a python-based library for medical image analysis with AI techniques.
 
 # Installation
 
@@ -41,7 +41,7 @@ Using **CLI**,
 The medic can be run on command line interface.
 
 ```python
-medic train --config "medic/cfg/aptos.yml" 
+medic train --config "medicai/cfg/aptos.yml" 
 medic inference --image-path "dataset/aptos/00a8624548a9.png"
 ```
 
@@ -50,7 +50,7 @@ medic inference --image-path "dataset/aptos/00a8624548a9.png"
 MEDIC can be run with container. First build the docker image.
 
 ```bash
-docker build -f docker/Dockerfile -t medicapp:cpu .
+docker build -f docker/Dockerfile -t medicai:cpu .
 ```
 
 Next, run the container.
@@ -61,7 +61,7 @@ docker run
 --rm \
 -v {absoluate_path}/dataset:/app/dataset \
 -v {absoluate_path}/results:/app/results \
-eyenetapp:cpu
+medicai:cpu
 ```
 
 It will give an interactive python session which enable running the Python SDK.
