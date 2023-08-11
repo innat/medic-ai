@@ -50,16 +50,19 @@ class APTOSDataloader:
         )
 
         df = df.sample(frac=1).reset_index(drop=True)
-        train_df, valid_df = self.prepare_kfold(df, config)
 
-        train_df[config.dataset.meta_columns.x] = train_df[config.dataset.meta_columns.x].apply(
-            lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
-        )
-        valid_df[config.dataset.meta_columns.x] = valid_df[config.dataset.meta_columns.x].apply(
-            lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
-        )
+        if "kfold" in self.config.dataset:
+            train_df, valid_df = self.prepare_kfold(df, config)
 
-        return (train_df, valid_df)
+            train_df[config.dataset.meta_columns.x] = train_df[config.dataset.meta_columns.x].apply(
+                lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
+            )
+            valid_df[config.dataset.meta_columns.x] = valid_df[config.dataset.meta_columns.x].apply(
+                lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
+            )
+            return (train_df, valid_df)
+        
+        return df
 
     def preprocess(self):
         dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
