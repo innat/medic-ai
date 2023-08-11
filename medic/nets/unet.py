@@ -3,51 +3,8 @@ from tensorflow.keras import losses, metrics
 from tensorflow.keras import layers as nn
 from tensorflow.keras import applications
 
-
-BACKBONE = {
-    "efficientnetb0": applications.EfficientNetB0,
-    "resnet50": applications.ResNet50,
-    "densenet121": applications.DenseNet121,
-    "convnextsmall": applications.ConvNeXtSmall,
-}
-
-BACKBONE_ARGS = {
-    "efficientnetb0": [
-        "block6a_expand_activation",
-        "block4a_expand_activation",
-        "block3a_expand_activation",
-        "block2a_expand_activation",
-    ],
-    "resnet50": ["conv4_block6_2_relu", "conv3_block4_2_relu", "conv2_block3_2_relu", "conv1_relu"],
-    "densenet121": [311, 139, 51, 4],
-    "convnextsmall": [268, 51, 26],
-}
-
-
-def Conv3x3BNReLU(filters):
-    def apply(input):
-        x = nn.Conv2D(
-            filters,
-            kernel_size=(3, 3),
-            activation="relu",
-            padding="same",
-        )(input)
-        x = nn.BatchNormalization()(x)
-        x = nn.ReLU()(x)
-        return x
-
-    return apply
-
-
-def UpsampleBlock(filters):
-    def apply(x, skip=None):
-        x = nn.UpSampling2D((2, 2))(x)
-        x = nn.Concatenate(axis=3)([skip, x]) if skip is not None else x
-        x = Conv3x3BNReLU(filters)(x)
-        x = Conv3x3BNReLU(filters)(x)
-        return x
-
-    return apply
+from medic.utils.model_utils import BACKBONE, BACKBONE_ARGS
+from medic.layers.conv import UpsampleBlock
 
 
 def UNet(config):
