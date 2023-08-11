@@ -7,20 +7,15 @@ class Configurator:
     def __init__(self, config_path: Path) -> None:
         config = OmegaConf.load(config_path)
         config_original: DictConfig = config.copy()
-
-        project_path = Path(config.project.path) / config.dataset.name / config.model.name / "run"
-        (project_path / "weights").mkdir(parents=True, exist_ok=True)
-        (project_path / "images").mkdir(parents=True, exist_ok=True)
-        config.project.path = str(project_path)
-
-        if config.dataset.name not in ("aptos", "chase_db1"):
-            raise ValueError(
-                "Supported data sets are aptos and chase_db1 ",
-                f"Got: {config.dataset.name}",
-            )
-
         self.config_original = config_original
         self.config = config
+    
+    def setup(self):
+        project_path = Path(self.config.project.path) / self.config.dataset.name / self.config.model.name / "run"
+        (project_path / "weights").mkdir(parents=True, exist_ok=True)
+        (project_path / "images").mkdir(parents=True, exist_ok=True)
+        self.config.project.path = str(project_path)
+
 
     def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None):
 

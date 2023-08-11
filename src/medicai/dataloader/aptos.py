@@ -19,6 +19,7 @@ class APTOSDataloader:
             )
         )
         self.reader_method = self.data_reader(self.config)
+        self._preprocessed = False
 
 
     def prepare_dataframe(self, config: Union[DictConfig, ListConfig]):
@@ -37,11 +38,20 @@ class APTOSDataloader:
         return df
 
     def preprocess(self):
-        dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
-        return dataset
+        if self._preprocessed:
+            return self.dataset
+        
+        self.dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
+        self._preprocessed = True
 
-    def generator(self) -> tf.data.Dataset:
-        dataset = self.preprocess()
+        return self.dataset
+
+    def prepare_batches(self) -> tf.data.Dataset:
+
+        if not self._preprocessed:
+            self.preprocess()
+
+        dataset = self.dataset
         dataset = dataset.shuffle(8 * self.config.dataset.batch_size) if self.config.dataset.shuffle else dataset
         dataset = dataset.batch(
             self.config.dataset.batch_size, 
