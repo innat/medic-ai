@@ -4,13 +4,14 @@ dataset:
   batch_size: 16
   image_size: 224
   num_classes: 1
-  cls_act: 'sigmoid'
+  class_activation: 'sigmoid'
   
 model:
   name: unet
   backbone: efficientnetb0
   weight: imagenet
   decoder_filters: [256, 128, 64, 32, 16]
+  task: segmentation 
 
 metrics:
   accuracy

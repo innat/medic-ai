@@ -1,13 +1,30 @@
 dataset:
   name: aptos
   path: dataset
+  sub_folder: train_images
+  meta_file: df.csv
+  meta_columns:
+    x: id_code
+    y: diagnosis
+  image_extention: png
   batch_size: 16
   image_size: 224
   num_classes: 5
+  class_activation: 'softmax'
+  stratified_kfold: 
+    total: 4
+    training_fold: 0
+  augment:
+    random_resize_and_crop:
+      width: 256
+      height: 256
+    random_flip: True
+
   
 model:
   name: efficientnetb0
   weight: imagenet
+  task: classification
 
 metrics: cohen_kappa
 losses: cohen_kappa
