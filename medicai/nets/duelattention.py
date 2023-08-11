@@ -1,7 +1,7 @@
-from medic.layers.attention import ChannelWiseAttention2D
-from medic.layers.attention import ElementWiseAttention2D
-from medic.losses import WeightedKappaLoss
-from medic.metrics import CohenKappa
+from medicai.layers.attention import ChannelWiseAttention2D
+from medicai.layers.attention import ElementWiseAttention2D
+from medicai.losses import WeightedKappaLoss
+from medicai.metrics import CohenKappa
 
 
 from tensorflow import keras

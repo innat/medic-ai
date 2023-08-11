@@ -12,9 +12,9 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-from eyenet import nets
-from eyenet import dataloader
-from eyenet import utils
+from medicai import nets
+from medicai import dataloader
+from medicai import utils
 
 
 @click.group()
@@ -26,7 +26,7 @@ def cli():
 @click.option(
     "--config",
     type=str,
-    default="eyenet/cfg/default.yml",
+    default="medicai/cfg/default.yml",
     help="config for training",
 )
 @click.option(
@@ -36,7 +36,7 @@ def cli():
     help="task type for training",
 )
 def train(config: str, task_type: str):
-    master_cfg = utils.MasterConfigurator("eyenet/cfg/aptos.yml")
+    master_cfg = utils.MasterConfigurator("medicai/cfg/aptos.yml")
     cls_cfg = master_cfg.get_cls_cfg(
         model_name="efficientnetb0",
         input_size=224,
@@ -60,11 +60,11 @@ def train(config: str, task_type: str):
 @click.option(
     "--config",
     type=str,
-    default="eyenet/cfg/default.yml",
+    default="medicai/cfg/default.yml",
     help="config for training",
 )
 def inference(image_path: str, config: str):
-    master_cfg = utils.MasterConfigurator("eyenet/cfg/aptos.yml")
+    master_cfg = utils.MasterConfigurator("medicai/cfg/aptos.yml")
     cls_cfg = master_cfg.get_cls_cfg(
         model_name="efficientnetb0",
         input_size=224,
