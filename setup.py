@@ -18,7 +18,7 @@ def get_eyenet_version():
 
 
 def get_long_description():
-    with open("src/medicai/README.md", "r", encoding="utf-8") as f:
+    with open("README.md", "r", encoding="utf-8") as f:
         long_description = f.read()
     return long_description
 
