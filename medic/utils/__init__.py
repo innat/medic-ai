@@ -3,12 +3,6 @@ from pathlib import Path
 from .grad_accumulator import GradientAccumulator
 
 
-valid_values = {
-    "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50', 'unet'],
-    "metrics": ['cohen_kappa', 'accuracy'],
-    "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
-}
-
 class Configurator:
     def __init__(self, config_path: Path) -> None:
         config = OmegaConf.load(config_path)
@@ -29,6 +23,13 @@ class Configurator:
         self.config = config
 
     def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None, metrics=None, losses=None):
+
+        valid_values = {
+            "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50',],
+            "metrics": ['cohen_kappa', 'accuracy',],
+            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy',]
+        }
+
         model_name = model_name or self.config.model.name
         input_size = input_size or self.config.dataset.image_size
         num_classes = num_classes or self.config.dataset.num_classes
@@ -53,6 +54,13 @@ class Configurator:
 
     def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None, metrics=None, losses=None):
         
+        valid_values = {
+            "model_name": ['unet'],
+            "backbone": ["efficientnetb0"],
+            "metrics": ['cohen_kappa', 'accuracy'],
+            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
+        }
+
         model_name = model_name or self.config.model.name
         backbone = backbone or self.config.model.backbone
         input_size = input_size or self.config.dataset.image_size
