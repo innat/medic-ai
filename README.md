@@ -19,13 +19,15 @@ from medicai.dataloader import APTOSDataloader
 from medicai.nets import DuelAttentionNet
 from medicai.utils import Configurator
 
-master_cfg = Configurator('medicai/cfg/aptos.yml')
+master_cfg = Configurator('src/medicai/cfg/aptos.yml')
 cls_cfg = master_cfg.update_cls_cfg(
     model_name='efficientnetb0',
     input_size=224,
     num_classes=5,
 )
-dataloader = APTOSDataloader(cls_cfg).load()
+cls_cfg.dataset.path = "/mnt/c/projects/dataset"
+
+dataloader = APTOSDataloader(cls_cfg).generator()
 model = DuelAttentionNet(cls_cfg)
 model.compile(...)
 hist = model.fit(dataloader)

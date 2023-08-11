@@ -11,11 +11,11 @@ from omegaconf import DictConfig, ListConfig
 class APTOSDataloader:
     def __init__(self, config: Union[DictConfig, ListConfig]) -> None:
         self.config = config
-        self.train_df, self.valid_df = self.prepare_dataframe(self.config)
+        self.df = self.prepare_dataframe(self.config)
         self.dataset = Dataset.from_tensor_slices(
             (
-                self.train_df[config.dataset.meta_columns.x].values,
-                self.train_df[config.dataset.meta_columns.y].values,
+                self.df[self.config.dataset.meta_columns.x].values,
+                self.df[self.config.dataset.meta_columns.y].values,
             )
         )
         self.reader_method = self.data_reader(self.config)
@@ -50,7 +50,8 @@ class APTOSDataloader:
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 
-    def data_reader(config: Union[DictConfig, ListConfig]):
+    @staticmethod
+    def data_reader(config: DictConfig):
         image_size = config.dataset.image_size
         num_classes = config.dataset.num_classes
         class_activation = config.dataset.class_activation
