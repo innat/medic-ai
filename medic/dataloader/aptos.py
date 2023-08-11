@@ -1,11 +1,9 @@
 import os
 import pandas as pd
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.data import Dataset
 from medic.dataloader.common import data_reader
-from sklearn.model_selection import StratifiedKFold
 
 from typing import Union
 from omegaconf import DictConfig, ListConfig
@@ -25,43 +23,15 @@ class APTOSDataloader:
         )
         self.reader_method = data_reader(self.config)
 
-    def prepare_kfold(self, dataframe, config):
-
-        skf = StratifiedKFold(
-            n_splits=config.dataset.kfold.fold_size,
-            shuffle=True,
-            random_state=config.project.seed,
-        )
-        for fold, (_, val_idx) in enumerate(
-            skf.split(
-                np.arange(dataframe.shape[0]), dataframe[f"{config.dataset.meta_columns.y}"].values
-            )
-        ):
-            dataframe.loc[dataframe.iloc[val_idx].index, "fold"] = fold
-
-        train_df = dataframe[dataframe.fold == config.dataset.kfold.train_fold]
-        valid_df = dataframe[dataframe.fold != config.dataset.kfold.train_fold]
-
-        return (train_df, valid_df)
 
     def prepare_dataframe(self, config: Union[DictConfig, ListConfig]):
         df = pd.read_csv(
             os.path.join(config.dataset.path, config.dataset.name, config.dataset.meta_file)
         )
-
         df = df.sample(frac=1).reset_index(drop=True)
-
-        if "kfold" in self.config.dataset:
-            train_df, valid_df = self.prepare_kfold(df, config)
-
-            train_df[config.dataset.meta_columns.x] = train_df[config.dataset.meta_columns.x].apply(
-                lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
-            )
-            valid_df[config.dataset.meta_columns.x] = valid_df[config.dataset.meta_columns.x].apply(
-                lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
-            )
-            return (train_df, valid_df)
-        
+        df[config.dataset.meta_columns.x] = df[config.dataset.meta_columns.x].apply(
+            lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
+        )
         return df
 
     def preprocess(self):
@@ -98,7 +68,7 @@ class APTOSDataloader:
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 
-    def data_reader(config: Union[DictConfig, ListConfig]) -> Union[pd.DataFrame, pd.DataFrame]:
+    def data_reader(config: Union[DictConfig, ListConfig]):
         image_size = config.dataset.image_size
         num_classes = config.dataset.num_classes
         class_activation = config.dataset.class_activation
