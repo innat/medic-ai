@@ -9,7 +9,7 @@ def get_install_requirements():
     return reqs
 
 
-def get_eyenet_version():
+def get_medicai_version():
     with open("src/medicai/__init__.py", "r") as f:
         version = re.search(
             r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE
@@ -24,12 +24,17 @@ def get_long_description():
 
 
 setup(
-    name="eyenet",
-    version=get_eyenet_version(),
+    name="medicai",
+    version=get_medicai_version(),
     author="innat",
     author_email="innat.dev@gmail.com",
     url="https://github.com/innat/medic-ai",
-    packages=find_packages(exclude=("test", "dataset", "docker", "notebooks")),
+    package_dir={"": "src"},
+    packages=find_packages(
+        where="src", 
+        include=["medicai", "medicai.*"],
+        exclude=("test", "dataset", "docker", "notebooks")
+    ),
     python_requires=">=3.6",
     install_requires=get_install_requirements(),
     setup_requires=["wheel"],  # avoid building error when pip is not updated
