@@ -40,42 +40,10 @@ class APTOSDataloader:
         dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
         return dataset
 
-    def augment(self, augment_config: Union[DictConfig, ListConfig]) -> keras.Sequential:
-
-        augmentation = keras.Sequential(
-            name="augmentation"
-        )
-
-        if 'random_resize_and_crop' in augment_config:
-            width = augment_config['random_resize_and_crop']['width']
-            height = augment_config['random_resize_and_crop']['height']
-            augmentation.add(
-                keras.layers.Resizing(
-                    height,
-                    width,
-                )
-            )
-            augmentation.add(
-                keras.layers.RandomCrop(
-                    self.config.dataset.image_size, 
-                    self.config.dataset.image_size
-                )
-            )
-
-        if augment_config.get('random_flip', False):
-            augmentation.add(keras.layers.RandomFlip("horizontal"))
-
-        return augmentation
-
     def generate(self, shuffle: bool, drop_reminder: bool) -> tf.data.Dataset:
         dataset = self.preprocess()
         dataset = dataset.shuffle(8 * self.config.dataset.batch_size) if shuffle else dataset
         dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=drop_reminder)
-
-        if shuffle:
-            augment_config = self.config.get('augment', {}).get('training', {})
-            dataset = self.augment(augment_config)(dataset)
-
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 

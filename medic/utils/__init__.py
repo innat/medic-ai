@@ -3,7 +3,13 @@ from pathlib import Path
 from .grad_accumulator import GradientAccumulator
 
 
-class MasterConfigurator:
+valid_values = {
+    "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50'],
+    "metrics": ['cohen_kappa'],
+    "losses": ['cohen_kappa', 'mse']
+}
+
+class Configurator:
     def __init__(self, config_path: Path) -> None:
         config = OmegaConf.load(config_path)
         config_original: DictConfig = config.copy()
@@ -22,30 +28,21 @@ class MasterConfigurator:
         self.config_original = config_original
         self.config = config
 
-    def get_cls_cfg(self, **kwargs):
-        model_name = kwargs.get("model_name", self.config.model.name)
-        input_size = kwargs.get("image_size", self.config.dataset.image_size)
-        num_classes = kwargs.get("num_classes", self.config.dataset.num_classes)
-        metrics = kwargs.get("metrics", self.config.metrics)
-        losses = kwargs.get("losses", self.config.losses)
+    def update_cls_cfg(self, model_name, input_size, num_classes, metrics, losses, **kwargs):
+        model_name = model_name or self.config.model.name
+        input_size = input_size or self.config.dataset.image_size
+        num_classes = num_classes or self.config.dataset.num_classes
+        metrics = metrics or self.config.metrics
+        losses = losses or self.config.losses
+            
+        params = {
+            "model_name": model_name,
+            "metrics": metrics,
+            "losses": losses
+        }
 
-        if model_name != self.config.model.name:
-            raise ValueError(
-                "Supported backbone model is efficientnetb0 ",
-                f"Got: {self.config.model.name}",
-            )
-
-        if metrics not in ["cohen_kappa"]:
-            raise ValueError(
-                "Supported loss and metrics is cohen_kappa ",
-                f"Got: {metrics}",
-            )
-
-        if losses not in ["cohen_kappa"]:
-            raise ValueError(
-                "Supported loss and metrics is cohen_kappa ",
-                f"Got: {losses}",
-            )
+        for param_name, value in params.items():
+            self._validate_param(param_name, value, valid_values[param_name])
 
         self.config.model.name = model_name
         self.config.dataset.image_size = input_size
@@ -55,7 +52,7 @@ class MasterConfigurator:
 
         return self.config
 
-    def get_seg_cfg(self, **kwargs):
+    def update_seg_cfg(self, **kwargs):
         model_name = kwargs.get("model_name", self.config.model.name)
         backbone = kwargs.get("backbone", self.config.model.backbone)
         input_size = kwargs.get("image_size", self.config.dataset.image_size)
@@ -95,3 +92,10 @@ class MasterConfigurator:
         self.config.losses = losses
 
         return self.config
+    
+    def _validate_param(self, name, value, valid_values_list):
+        if value not in valid_values_list:
+            valid_str = ', '.join(valid_values_list)
+            raise ValueError(
+                f"Supported {name} are {valid_str}. Got: {value}"
+            )

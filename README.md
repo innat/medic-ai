@@ -17,9 +17,9 @@ Using **Python API**,
 ```python
 from medic.dataloader import APTOSDataloader
 from medic.nets import DuelAttentionNet
-from medic.utils import MasterConfigurator
+from medic.utils import Configurator
 
-master_cfg = MasterConfigurator('medic/cfg/aptos.yml')
+master_cfg = Configurator('medic/cfg/aptos.yml')
 cls_cfg = master_cfg.get_cls_cfg(
     model_name='efficientnetb0',
     input_size=224,

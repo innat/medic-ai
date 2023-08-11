@@ -1,7 +1,3 @@
-dataset:
-  batch_size: 16
-  image_size: 224
-
 trainer:
   workers: -1
   epochs: 3

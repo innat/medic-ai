@@ -10,14 +10,8 @@ dataset:
   batch_size: 16
   image_size: 224
   num_classes: 5
-  class_activation: 'softmax'
-  augment:
-    training:
-      random_resize_and_crop:
-        width: 256
-        height: 256
-      random_flip: True
-    validation: {}
+  class_activation: softmax
+  label_mode: categorical
 
   
 model:
