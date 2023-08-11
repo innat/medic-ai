@@ -40,10 +40,13 @@ class APTOSDataloader:
         dataset = self.dataset.map(self.reader_method, num_parallel_calls=tf.data.AUTOTUNE)
         return dataset
 
-    def generate(self, shuffle: bool, drop_reminder: bool) -> tf.data.Dataset:
+    def generator(self) -> tf.data.Dataset:
         dataset = self.preprocess()
-        dataset = dataset.shuffle(8 * self.config.dataset.batch_size) if shuffle else dataset
-        dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=drop_reminder)
+        dataset = dataset.shuffle(8 * self.config.dataset.batch_size) if self.config.dataset.shuffle else dataset
+        dataset = dataset.batch(
+            self.config.dataset.batch_size, 
+            drop_remainder=True
+        )
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 

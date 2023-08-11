@@ -44,7 +44,7 @@ class Configurator:
 
         return self.config
 
-    def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None):
+    def update_seg_cfg(self, model_name=None, backbone=None, input_size=None, num_classes=None, shuffle=False):
         
         valid_values = {
             "model_name": ['unet'],
@@ -55,6 +55,7 @@ class Configurator:
         backbone = backbone or self.config.model.backbone
         input_size = input_size or self.config.dataset.image_size
         num_classes = num_classes or self.config.dataset.num_classes
+        shuffle = shuffle or self.config.dataset.shuffle
         
         params = {
             "model_name": model_name,
@@ -67,6 +68,7 @@ class Configurator:
         self.config.model.backbone = backbone
         self.config.dataset.image_size = input_size
         self.config.dataset.num_classes = num_classes
+        self.config.dataset.shuffle = shuffle
 
         return self.config
     

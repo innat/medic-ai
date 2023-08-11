@@ -10,6 +10,7 @@ dataset:
   batch_size: 16
   image_size: 224
   num_classes: 5
+  shuffle: False
   class_activation: softmax
   label_mode: categorical
 
