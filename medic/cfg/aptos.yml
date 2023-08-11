@@ -12,10 +12,12 @@ dataset:
   num_classes: 5
   class_activation: 'softmax'
   augment:
-    random_resize_and_crop:
-      width: 256
-      height: 256
-    random_flip: True
+    training:
+      random_resize_and_crop:
+        width: 256
+        height: 256
+      random_flip: True
+    validation: {}
 
   
 model:
