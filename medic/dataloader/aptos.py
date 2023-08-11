@@ -13,7 +13,6 @@ class APTOSDataloader:
     def __init__(self, config: Union[DictConfig, ListConfig]) -> None:
         super().__init__()
         self.config = config
-
         self.train_df, self.valid_df = self.prepare_dataframe(self.config)
         self.dataset = Dataset.from_tensor_slices(
             (
@@ -30,7 +29,12 @@ class APTOSDataloader:
         )
         df = df.sample(frac=1).reset_index(drop=True)
         df[config.dataset.meta_columns.x] = df[config.dataset.meta_columns.x].apply(
-            lambda x: f"{config.dataset.path}/{config.dataset.name}/{config.dataset.sub_folder}/{x}.{config.dataset.image_extention}"
+            lambda x: (
+                f"{config.dataset.path}/"
+                f"{config.dataset.name}/"
+                f"{config.dataset.sub_folder}/"
+                f"{x}.{config.dataset.image_extention}"
+            )
         )
         return df
 
@@ -47,7 +51,6 @@ class APTOSDataloader:
         if 'random_resize_and_crop' in augment_config:
             width = augment_config['random_resize_and_crop']['width']
             height = augment_config['random_resize_and_crop']['height']
-
             augmentation.add(
                 keras.layers.Resizing(
                     height,
@@ -94,7 +97,6 @@ class APTOSDataloader:
                 target_array = tf.one_hot(label, depth=num_classes)
             elif class_activation is None:
                 target_array = label
-
             return (image_reader(path), target_array)
 
         return labels_reader
