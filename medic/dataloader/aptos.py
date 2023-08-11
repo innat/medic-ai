@@ -3,7 +3,6 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.data import Dataset
-from medic.dataloader.common import data_reader
 
 from typing import Union
 from omegaconf import DictConfig, ListConfig
@@ -11,7 +10,6 @@ from omegaconf import DictConfig, ListConfig
 
 class APTOSDataloader:
     def __init__(self, config: Union[DictConfig, ListConfig]) -> None:
-        super().__init__()
         self.config = config
         self.train_df, self.valid_df = self.prepare_dataframe(self.config)
         self.dataset = Dataset.from_tensor_slices(
@@ -20,7 +18,7 @@ class APTOSDataloader:
                 self.train_df[config.dataset.meta_columns.y].values,
             )
         )
-        self.reader_method = data_reader(self.config)
+        self.reader_method = self.data_reader(self.config)
 
 
     def prepare_dataframe(self, config: Union[DictConfig, ListConfig]):
