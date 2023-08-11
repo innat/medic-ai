@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 
 
-class ChannelWiseAttention(layers.Layer):
+class ChannelWiseAttention2D(layers.Layer):
     def __init__(self, config):
         super().__init__()
 
@@ -26,7 +26,7 @@ class ChannelWiseAttention(layers.Layer):
         return u * inputs
 
 
-class ElementWiseAttention(layers.Layer):
+class ElementWiseAttention2D(layers.Layer):
     def __init__(self, config):
         super().__init__()
 

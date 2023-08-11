@@ -1,7 +1,7 @@
-from eyenet.layers.attention import ChannelWiseAttention
-from eyenet.layers.attention import ElementWiseAttention
-from eyenet.losses import WeightedKappaLoss
-from eyenet.metrics import CohenKappa
+from medic.layers.attention import ChannelWiseAttention2D
+from medic.layers.attention import ElementWiseAttention2D
+from medic.losses import WeightedKappaLoss
+from medic.metrics import CohenKappa
 
 
 from tensorflow import keras
@@ -16,13 +16,13 @@ model_instance = {
 }
 
 
-def AttentionBlocks(config):
+def AttentionBlocks2D(config):
     num_classes = config.dataset.num_classes
 
     def apply(incoming):
         feat_x = nn.Dense(num_classes, activation="relu")(incoming.output)
-        channel_x = ChannelWiseAttention(config)(incoming.get_layer("block5a_expand_conv").output)
-        element_x = ElementWiseAttention(config)(channel_x)
+        channel_x = ChannelWiseAttention2D(config)(incoming.get_layer("block5a_expand_conv").output)
+        element_x = ElementWiseAttention2D(config)(channel_x)
 
         feat_x = nn.GlobalAveragePooling2D()(feat_x)
         element_x = nn.GlobalAveragePooling2D()(element_x)
@@ -37,8 +37,8 @@ def AttentionBlocks(config):
     return apply
 
 
-def DuelAttentionNet(config):
-    attnblock = AttentionBlocks(config)
+def DuelAttentionNet2D(config):
+    attnblock = AttentionBlocks2D(config)
     backbone = model_instance[config.model.name]
 
     input_shape = (config.dataset.image_size,) * 2

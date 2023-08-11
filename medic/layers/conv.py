@@ -1,7 +1,7 @@
 
 from tensorflow.keras import layers
 
-def Conv3x3BNReLU(filters):
+def Conv3x3BNReLU2D(filters):
     def apply(input):
         x = layers.Conv2D(
             filters,
@@ -16,12 +16,12 @@ def Conv3x3BNReLU(filters):
     return apply
 
 
-def UpsampleBlock(filters):
+def UpsampleBlock2D(filters):
     def apply(x, skip=None):
         x = layers.UpSampling2D((2, 2))(x)
         x = layers.Concatenate(axis=3)([skip, x]) if skip is not None else x
-        x = Conv3x3BNReLU(filters)(x)
-        x = Conv3x3BNReLU(filters)(x)
+        x = Conv3x3BNReLU2D(filters)(x)
+        x = Conv3x3BNReLU2D(filters)(x)
         return x
 
     return apply

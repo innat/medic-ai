@@ -1,13 +1,13 @@
 from tensorflow import keras
 from tensorflow.keras import losses, metrics
 from tensorflow.keras import layers as nn
-from tensorflow.keras import applications
+
 
 from medic.utils.model_utils import BACKBONE, BACKBONE_ARGS
-from medic.layers.conv import UpsampleBlock
+from medic.layers.conv import UpsampleBlock2D
 
 
-def UNet(config):
+def UNet2D(config):
     input_size = config.dataset.image_size
     backbone = config.model.backbone
     decoder_filters = config.model.decoder_filters
@@ -32,7 +32,7 @@ def UNet(config):
             skip = skip_layers[i]
         else:
             skip = None
-        x = UpsampleBlock(decoder_filters[i])(x, skip)
+        x = UpsampleBlock2D(decoder_filters[i])(x, skip)
 
     # Final layer
     x = nn.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)

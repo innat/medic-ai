@@ -1,2 +1,2 @@
-from .duelattention import DuelAttentionNet
-from .unet import UNet
+from .duelattention import DuelAttentionNet2D
+from .unet import UNet2D
