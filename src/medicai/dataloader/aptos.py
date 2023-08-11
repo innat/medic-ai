@@ -37,7 +37,7 @@ class APTOSDataloader:
         )
         return df
 
-    def preprocess(self):
+    def preprocess(self) -> tf.data.Dataset:
         if self._preprocessed:
             return self.dataset
         
@@ -76,7 +76,7 @@ class APTOSDataloader:
             if class_activation == "softmax":
                 target_array = tf.one_hot(label, depth=num_classes)
             elif class_activation is None:
-                target_array = label
+                target_array = tf.cast(label, dtype=tf.flaot32)
             return (image_reader(path), target_array)
 
         return labels_reader
