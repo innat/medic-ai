@@ -25,9 +25,9 @@ class Configurator:
     def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None, metrics=None, losses=None):
 
         valid_values = {
-            "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50',],
-            "metrics": ['cohen_kappa', 'accuracy',],
-            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy',]
+            "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50'],
+            "metrics": ['cohen_kappa', 'accuracy'],
+            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
         }
 
         model_name = model_name or self.config.model.name
@@ -57,8 +57,8 @@ class Configurator:
         valid_values = {
             "model_name": ['unet'],
             "backbone": ["efficientnetb0"],
-            "metrics": ['cohen_kappa', 'accuracy'],
-            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
+            "metrics": ['accuracy'],
+            "losses": ['binary_crossentropy']
         }
 
         model_name = model_name or self.config.model.name
