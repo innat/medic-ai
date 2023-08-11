@@ -5,8 +5,8 @@
 # Installation
 
 ```bash
-git clone https://github.com/innat/medic
-cd medic
+git clone https://github.com/innat/medic-ai
+cd medic-ai
 pip install -e . 
 ```
 
