@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 def get_install_requirements():
-    with open("src/requirements.txt", "r", encoding="utf-8") as f:
+    with open("src/medicai/requirements.txt", "r", encoding="utf-8") as f:
         reqs = [x.strip() for x in f.read().splitlines()]
     reqs = [x for x in reqs if not x.startswith("#")]
     return reqs
@@ -18,7 +18,7 @@ def get_eyenet_version():
 
 
 def get_long_description():
-    with open("src/README.md", "r", encoding="utf-8") as f:
+    with open("src/medicai/README.md", "r", encoding="utf-8") as f:
         long_description = f.read()
     return long_description
 
