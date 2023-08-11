@@ -15,20 +15,19 @@ pip install -e .
 Using **Python API**,
 
 ```python
-from medic.dataloader import APTOSDataloader
-from medic.nets import DuelAttentionNet
-from medic.utils import Configurator
+from medicai.dataloader import APTOSDataloader
+from medicai.nets import DuelAttentionNet
+from medicai.utils import Configurator
 
-master_cfg = Configurator('medic/cfg/aptos.yml')
-cls_cfg = master_cfg.get_cls_cfg(
+master_cfg = Configurator('medicai/cfg/aptos.yml')
+cls_cfg = master_cfg.update_cls_cfg(
     model_name='efficientnetb0',
     input_size=224,
     num_classes=5,
-    metrics='cohen_kappa',
-    losses='cohen_kappa',
 )
 dataloader = APTOSDataloader(cls_cfg).load()
 model = DuelAttentionNet(cls_cfg)
+model.compile(...)
 hist = model.fit(dataloader)
 
 >>> hist.history

@@ -22,12 +22,10 @@ class Configurator:
         self.config_original = config_original
         self.config = config
 
-    def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None, metrics=None, losses=None):
+    def update_cls_cfg(self, model_name=None, input_size=None, num_classes=None):
 
         valid_values = {
             "model_name": ['efficientnetb0', 'efficientnetb1', 'resnet50'],
-            "metrics": ['cohen_kappa', 'accuracy'],
-            "losses": ['cohen_kappa', 'mse', 'binary_crossentropy']
         }
 
         model_name = model_name or self.config.model.name
