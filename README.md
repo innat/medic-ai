@@ -16,7 +16,7 @@ Using **Python API**,
 
 ```python
 from tensorflow import keras
-from medicai.dataloader import APTOSDataloader
+from medicai.datasets import APTOSDataloader
 from medicai.nets import DuelAttentionNet
 from medicai.utils import Configurator
 from medicai.losses import WeightedKappaLoss
