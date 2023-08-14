@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from medic.utils import MasterConfigurator
-from medic.nets import UNet
+from src.medicai.utils import MasterConfigurator
+from src.medicai.nets import UNet
 
 
 @pytest.mark.parametrize("config_path", ["eyenet/cfg/chase_db1.yml"])

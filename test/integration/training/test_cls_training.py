@@ -2,8 +2,8 @@ import pytest
 import numpy as np
 import pandas as pd
 
-from medic.utils import MasterConfigurator
-from medic.nets import DuelAttentionNet
+from src.medicai.utils import MasterConfigurator
+from src.medicai.nets import DuelAttentionNet
 
 
 @pytest.mark.parametrize("config_path", ["eyenet/cfg/aptos.yml"])

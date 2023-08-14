@@ -1,4 +1,5 @@
-from medic.utils import MasterConfigurator
+
+from src.medicai.utils import MasterConfigurator
 import pytest
 
 

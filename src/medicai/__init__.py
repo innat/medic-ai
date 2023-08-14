@@ -12,12 +12,12 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 from medicai import nets
-from medicai import dataloader
+from medicai import dataset
 from medicai import utils
 
 __all__ = [
     "nets",
-    "dataloader",
+    "dataset",
     "utils",
 ]
 
