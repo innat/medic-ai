@@ -12,9 +12,11 @@ class APTOSDataloader:
     def __init__(
         self,
         dataset_path: str,
-        data_directory: str,
+        subfolder: str,
         meta_file: str,
         meta_columns: List[str, str],
+        num_classes: int,
+        shuffle:bool,
         batch_size: int = 32,
         image_size: int = 224,
         label_mode: str = "int",
@@ -23,23 +25,23 @@ class APTOSDataloader:
     ):
         self.dataset_path = dataset_path
         self.dataframe = meta_file
-        self.data_directory = data_directory
+        self.subfolder = subfolder
         self.x, self.y = meta_columns
+        self.shuffle=shuffle
+        self.num_classes=num_classes
         self.batch_size = batch_size
         self.image_size = image_size
         self.label_mode = label_mode
         self.image_extention = image_extention
 
-        self.df = self.prepare_dataframe(
-            self.dataset_path,
-        )
+        self.df = self.prepare_dataframe()
         self.dataset = Dataset.from_tensor_slices(
             (
-                self.df[self.config.dataset.meta_columns.x].values,
-                self.df[self.config.dataset.meta_columns.y].values,
+                self.df[self.x].values,
+                self.df[self.y].values,
             )
         )
-        self.reader_method = self.data_reader(self.config)
+        self.reader_method = self.data_reader()
         self._preprocessed = False
 
     def prepare_dataframe(self):
@@ -47,12 +49,12 @@ class APTOSDataloader:
         df = df.sample(frac=1).reset_index(drop=True)
         df[self.x] = df[self.x].apply(
             lambda x: (
-                f"{self.dataset_path}/" f"{self.data_directory}/" f"{x}.{self.image_extention}"
+                f"{self.dataset_path}/" f"{self.subfolder}/" f"{x}.{self.image_extention}"
             )
         )
         return df
 
-    def preprocess(self) -> tf.data.Dataset:
+    def prepare_sample(self) -> tf.data.Dataset:
         if self._preprocessed:
             return self.dataset
 
@@ -61,26 +63,24 @@ class APTOSDataloader:
 
         return self.dataset
 
-    def prepare_batches(self) -> tf.data.Dataset:
+    def prepare_samples(self) -> tf.data.Dataset:
         if not self._preprocessed:
-            self.preprocess()
+            self.prepare_sample()
 
         dataset = self.dataset
         dataset = (
-            dataset.shuffle(8 * self.config.dataset.batch_size)
-            if self.config.dataset.shuffle
+            dataset.shuffle(8 * self.batch_size)
+            if self.shuffle
             else dataset
         )
-        dataset = dataset.batch(self.config.dataset.batch_size, drop_remainder=True)
+        dataset = dataset.batch(self.batch_size, drop_remainder=self.shuffle)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 
-    @staticmethod
-    def data_reader(config: DictConfig):
-        image_size = config.dataset.image_size
-        num_classes = config.dataset.num_classes
-        class_activation = config.dataset.class_activation
-
+    def data_reader(self):
+        image_size = self.image_size
+        num_classes = self.num_classes
+ 
         def image_reader(path):
             file_bytes = tf.io.read_file(path)
             img = tf.image.decode_jpeg(file_bytes, channels=3)
@@ -88,9 +88,9 @@ class APTOSDataloader:
             return img
 
         def labels_reader(path, label):
-            if class_activation == "softmax":
+            if self.label_mode == "categorical":
                 target_array = tf.one_hot(label, depth=num_classes)
-            elif class_activation is None:
+            else:
                 target_array = tf.cast(label, dtype=tf.flaot32)
             return (image_reader(path), target_array)
 
