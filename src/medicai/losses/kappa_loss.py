@@ -1,9 +1,9 @@
 from typing import Optional, Union
-from typeguard import typechecked
 
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+from typeguard import typechecked
 
 Number = Union[
     float,

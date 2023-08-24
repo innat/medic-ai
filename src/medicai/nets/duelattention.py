@@ -1,12 +1,9 @@
-from medicai.layers.attention import ChannelWiseAttention2D
-from medicai.layers.attention import ElementWiseAttention2D
-from medicai.losses import WeightedKappaLoss
-from medicai.metrics import CohenKappa
-
-
 from tensorflow import keras
 from tensorflow.keras import layers as nn
 
+from medicai.layers.attention import ChannelWiseAttention2D, ElementWiseAttention2D
+from medicai.losses import WeightedKappaLoss
+from medicai.metrics import CohenKappa
 
 model_instance = {
     "efficientnetb0": keras.applications.EfficientNetB0,
@@ -49,4 +46,3 @@ def DuelAttentionNet2D(config):
     model = keras.Model(inputs=[input_tensor], outputs=[base_maps])
 
     return model
-

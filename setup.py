@@ -1,5 +1,6 @@
 import re
-from setuptools import setup, find_packages
+
+from setuptools import find_packages, setup
 
 
 def get_install_requirements():
@@ -31,9 +32,9 @@ setup(
     url="https://github.com/innat/medic-ai",
     package_dir={"": "src"},
     packages=find_packages(
-        where="src", 
+        where="src",
         include=["medicai", "medicai.*"],
-        exclude=("test", "dataset", "docker", "notebooks")
+        exclude=("test", "dataset", "docker", "notebooks"),
     ),
     python_requires=">=3.6",
     install_requires=get_install_requirements(),

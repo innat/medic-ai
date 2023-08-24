@@ -1,5 +1,5 @@
-
 from tensorflow.keras import layers
+
 
 def Conv3x3BNReLU2D(filters):
     def apply(input):

@@ -1,6 +1,8 @@
 import os
+
 import tensorflow as tf
 from tensorflow.data import Dataset
+
 from medicai.dataloader.common import load_data
 
 exts = ("jpg", "JPG", "png", "PNG", "tif", "gif", "ppm")

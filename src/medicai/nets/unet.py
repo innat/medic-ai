@@ -1,10 +1,9 @@
 from tensorflow import keras
-from tensorflow.keras import losses, metrics
 from tensorflow.keras import layers as nn
+from tensorflow.keras import losses, metrics
 
-
-from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
 from medicai.layers.conv import UpsampleBlock2D
+from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
 
 
 def UNet2D(config):
@@ -39,5 +38,3 @@ def UNet2D(config):
     final = nn.Activation(activation, dtype="float32")(x)
     model = keras.Model(inputs=inputs, outputs=final, name=f"UNet")
     return model
-
-

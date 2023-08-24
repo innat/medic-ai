@@ -1,6 +1,6 @@
+import pytest
 
 from src.medicai.utils import MasterConfigurator
-import pytest
 
 
 def get_cls_config(config_path, **kwargs):

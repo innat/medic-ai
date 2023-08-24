@@ -11,9 +11,7 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-from medicai import nets
-from medicai import datasets
-from medicai import utils
+from medicai import datasets, nets, utils
 
 __all__ = [
     "nets",

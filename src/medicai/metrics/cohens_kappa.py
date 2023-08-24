@@ -1,12 +1,12 @@
 """Implements Cohen's Kappa."""
 
+from typing import Optional, Union
+
+import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.metrics import Metric
-
-import numpy as np
 from typeguard import typechecked
-from typing import Optional, Union
 
 FloatTensorLike = Union[tf.Tensor, float, np.float16, np.float32, np.float64]
 AcceptableDTypes = Union[tf.DType, np.dtype, type, int, str, None]

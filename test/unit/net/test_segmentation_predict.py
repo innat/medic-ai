@@ -1,8 +1,8 @@
 import pytest
 
-from src.medicai.utils import MasterConfigurator
 from src.medicai.dataset import CHASE_DB1
 from src.medicai.nets import UNet
+from src.medicai.utils import MasterConfigurator
 
 
 def get_configured(config_path):
