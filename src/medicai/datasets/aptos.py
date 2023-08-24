@@ -4,14 +4,35 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.data import Dataset
 
-from typing import Union
+from typing import Union, List
 from omegaconf import DictConfig, ListConfig
 
 
 class APTOSDataloader:
-    def __init__(self, config: Union[DictConfig, ListConfig]) -> None:
-        self.config = config
-        self.df = self.prepare_dataframe(self.config)
+    def __init__(
+            self, 
+            dataset_path:str,
+            data_directory:str,
+            meta_file:str,
+            meta_columns:List[str, str],
+            batch_size:int=32,
+            image_size:int=224,
+            label_mode:str='int',
+            image_extention:str='png',
+            **kwargs,
+        ):
+        self.dataset_path=dataset_path
+        self.dataframe=meta_file
+        self.data_directory=data_directory
+        self.x, self.y = meta_columns
+        self.batch_size=batch_size
+        self.image_size=image_size
+        self.label_mode=label_mode
+        self.image_extention=image_extention
+
+        self.df = self.prepare_dataframe(
+            self.dataset_path,
+        )
         self.dataset = Dataset.from_tensor_slices(
             (
                 self.df[self.config.dataset.meta_columns.x].values,
@@ -21,18 +42,16 @@ class APTOSDataloader:
         self.reader_method = self.data_reader(self.config)
         self._preprocessed = False
 
-
-    def prepare_dataframe(self, config: Union[DictConfig, ListConfig]):
+    def prepare_dataframe(self):
         df = pd.read_csv(
-            os.path.join(config.dataset.path, config.dataset.name, config.dataset.meta_file)
+            os.path.join(self.dataset_path, self.dataframe)
         )
         df = df.sample(frac=1).reset_index(drop=True)
-        df[config.dataset.meta_columns.x] = df[config.dataset.meta_columns.x].apply(
+        df[self.x] = df[self.x].apply(
             lambda x: (
-                f"{config.dataset.path}/"
-                f"{config.dataset.name}/"
-                f"{config.dataset.sub_folder}/"
-                f"{x}.{config.dataset.image_extention}"
+                f"{self.dataset_path}/"
+                f"{self.data_directory}/"
+                f"{x}.{self.image_extention}"
             )
         )
         return df
