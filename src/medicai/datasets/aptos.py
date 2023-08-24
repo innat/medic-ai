@@ -16,7 +16,7 @@ class APTOSDataloader:
         meta_file: str,
         meta_columns: List[str, str],
         num_classes: int,
-        shuffle:bool,
+        shuffle: bool = True,
         batch_size: int = 32,
         image_size: int = 224,
         label_mode: str = "int",
@@ -27,8 +27,8 @@ class APTOSDataloader:
         self.dataframe = meta_file
         self.subfolder = subfolder
         self.x, self.y = meta_columns
-        self.shuffle=shuffle
-        self.num_classes=num_classes
+        self.shuffle = shuffle
+        self.num_classes = num_classes
         self.batch_size = batch_size
         self.image_size = image_size
         self.label_mode = label_mode
@@ -48,9 +48,7 @@ class APTOSDataloader:
         df = pd.read_csv(os.path.join(self.dataset_path, self.dataframe))
         df = df.sample(frac=1).reset_index(drop=True)
         df[self.x] = df[self.x].apply(
-            lambda x: (
-                f"{self.dataset_path}/" f"{self.subfolder}/" f"{x}.{self.image_extention}"
-            )
+            lambda x: (f"{self.dataset_path}/" f"{self.subfolder}/" f"{x}.{self.image_extention}")
         )
         return df
 
@@ -68,11 +66,7 @@ class APTOSDataloader:
             self.prepare_sample()
 
         dataset = self.dataset
-        dataset = (
-            dataset.shuffle(8 * self.batch_size)
-            if self.shuffle
-            else dataset
-        )
+        dataset = dataset.shuffle(8 * self.batch_size) if self.shuffle else dataset
         dataset = dataset.batch(self.batch_size, drop_remainder=self.shuffle)
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
@@ -80,7 +74,7 @@ class APTOSDataloader:
     def data_reader(self):
         image_size = self.image_size
         num_classes = self.num_classes
- 
+
         def image_reader(path):
             file_bytes = tf.io.read_file(path)
             img = tf.image.decode_jpeg(file_bytes, channels=3)
