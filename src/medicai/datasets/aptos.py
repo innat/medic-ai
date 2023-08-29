@@ -1,5 +1,6 @@
 import os
-from typing import List, Union
+from pathlib import Path
+from typing import List, Tuple
 
 import pandas as pd
 import tensorflow as tf
@@ -11,10 +12,10 @@ from tensorflow.data import Dataset
 class APTOSDataloader:
     def __init__(
         self,
-        dataset_path: str,
+        dataset_path: Path,
         subfolder: str,
         meta_file: str,
-        meta_columns: List[str, str],
+        meta_columns: List[Tuple[str, str]],
         num_classes: int,
         shuffle: bool = True,
         batch_size: int = 32,
@@ -45,10 +46,10 @@ class APTOSDataloader:
         self._preprocessed = False
 
     def prepare_dataframe(self):
-        df = pd.read_csv(os.path.join(self.dataset_path, self.dataframe))
+        df = pd.read_csv(self.dataset_path / self.dataframe)
         df = df.sample(frac=1).reset_index(drop=True)
         df[self.x] = df[self.x].apply(
-            lambda x: (f"{self.dataset_path}/" f"{self.subfolder}/" f"{x}.{self.image_extention}")
+            lambda x: str(self.dataset_path / self.subfolder / f"{x}.{self.image_extention}")
         )
         return df
 
@@ -85,7 +86,7 @@ class APTOSDataloader:
             if self.label_mode == "categorical":
                 target_array = tf.one_hot(label, depth=num_classes)
             else:
-                target_array = tf.cast(label, dtype=tf.flaot32)
+                target_array = tf.cast(label, dtype=tf.float32)
             return (image_reader(path), target_array)
 
         return labels_reader
