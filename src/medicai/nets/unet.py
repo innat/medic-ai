@@ -1,22 +1,24 @@
 from tensorflow import keras
 from tensorflow.keras import layers as nn
-from tensorflow.keras import losses, metrics
 
 from medicai.layers.conv import UpsampleBlock2D
 from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
 
 
-def UNet2D(config):
-    input_size = config.dataset.image_size
-    backbone = config.model.backbone
-    decoder_filters = config.model.decoder_filters
-    num_classes = config.dataset.num_classes
-    activation = config.dataset.cls_act
-
+def UNet2D(
+    backbone,
+    input_size,
+    num_classes,
+    class_activation,
+    backbone_weight=None,
+    freeze_backbone=False,
+    decoder_filters=[256, 128, 64, 32, 16],
+):
     inputs = keras.Input(shape=(input_size, input_size, 3))
-
-    base_model = BACKBONE[backbone](weights=None, include_top=False, input_tensor=inputs)
+    base_model = BACKBONE[backbone](weights=backbone_weight, include_top=False, input_tensor=inputs)
+    base_model.trainable = freeze_backbone
     selected_layers = BACKBONE_ARGS[backbone]
+
     skip_layers = [
         base_model.get_layer(name=sl).output
         if isinstance(sl, str)
@@ -35,6 +37,6 @@ def UNet2D(config):
 
     # Final layer
     x = nn.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)
-    final = nn.Activation(activation, dtype="float32")(x)
+    final = nn.Activation(class_activation, dtype="float32")(x)
     model = keras.Model(inputs=inputs, outputs=final, name=f"UNet")
     return model

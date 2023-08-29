@@ -1,11 +1,8 @@
-import os
 from pathlib import Path
 from typing import List, Tuple
 
 import pandas as pd
 import tensorflow as tf
-from omegaconf import DictConfig, ListConfig
-from tensorflow import keras
 from tensorflow.data import Dataset
 
 
@@ -22,7 +19,6 @@ class APTOSDataloader:
         image_size: int = 224,
         label_mode: str = "int",
         image_extention: str = "png",
-        **kwargs,
     ):
         self.dataset_path = dataset_path
         self.dataframe = meta_file
@@ -35,17 +31,17 @@ class APTOSDataloader:
         self.label_mode = label_mode
         self.image_extention = image_extention
 
-        self.df = self.prepare_dataframe()
+        self.df = self._prepare_dataframe()
         self.dataset = Dataset.from_tensor_slices(
             (
                 self.df[self.x].values,
                 self.df[self.y].values,
             )
         )
-        self.reader_method = self.data_reader()
+        self.reader_method = self._data_reader()
         self._preprocessed = False
 
-    def prepare_dataframe(self):
+    def _prepare_dataframe(self):
         df = pd.read_csv(self.dataset_path / self.dataframe)
         df = df.sample(frac=1).reset_index(drop=True)
         df[self.x] = df[self.x].apply(
@@ -72,7 +68,7 @@ class APTOSDataloader:
         dataset = dataset.prefetch(tf.data.AUTOTUNE)
         return dataset
 
-    def data_reader(self):
+    def _data_reader(self):
         image_size = self.image_size
         num_classes = self.num_classes
 
