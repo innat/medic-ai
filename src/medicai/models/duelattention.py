@@ -1,5 +1,5 @@
-from tensorflow import keras
-from tensorflow.keras import layers as nn
+import keras
+from keras import layers as nn
 
 from medicai.layers.attention import ChannelWiseAttention2D, ElementWiseAttention2D
 from medicai.losses import WeightedKappaLoss
