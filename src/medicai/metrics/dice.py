@@ -1,7 +1,7 @@
 from keras import ops
 from keras.metrics import Metric
 
-class DiceCoefficient3D(Metric):
+class DiceMetric(Metric):
 
     reduction_map = {
         'mean': ops.mean,
