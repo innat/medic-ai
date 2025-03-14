@@ -26,7 +26,7 @@ num_classes=4
 # build the model, compile
 model = SwinUNETR(
     input_shape=(96, 96, 96, 1),
-    out_channels=4,
+    num_classes=4,
 )
 model.compile(
     loss=DiceCELoss(to_onehot_y=True, softmax=True),
