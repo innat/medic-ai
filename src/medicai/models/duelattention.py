@@ -1,9 +1,8 @@
 import keras
-from keras import layers as nn
+from keras import layers
 
-from medicai.layers.attention import ChannelWiseAttention2D, ElementWiseAttention2D
-from medicai.losses import WeightedKappaLoss
-from medicai.metrics import CohenKappa
+from medicai.layers import ChannelWiseAttention
+from medicai.layers import ElementWiseAttention
 
 model_instance = {
     "efficientnetb0": keras.applications.EfficientNetB0,
@@ -13,19 +12,17 @@ model_instance = {
 }
 
 
-def AttentionBlocks2D(config):
-    num_classes = config.dataset.num_classes
-
+def AttentionBlocks(num_classes):
     def apply(incoming):
-        feat_x = nn.Dense(num_classes, activation="relu")(incoming.output)
-        channel_x = ChannelWiseAttention2D(config)(incoming.get_layer("block5a_expand_conv").output)
-        element_x = ElementWiseAttention2D(config)(channel_x)
+        feat_x = layers.Dense(num_classes, activation="relu")(incoming.output)
+        channel_x = ChannelWiseAttention(config)(incoming.get_layer("block5a_expand_conv").output)
+        element_x = ElementWiseAttention(config)(channel_x)
 
-        feat_x = nn.GlobalAveragePooling2D()(feat_x)
-        element_x = nn.GlobalAveragePooling2D()(element_x)
-        feat_element_x = nn.concatenate([feat_x, element_x])
+        feat_x = layers.GlobalAveragePooling2D()(feat_x)
+        element_x = layers.GlobalAveragePooling2D()(element_x)
+        feat_element_x = layers.concatenate([feat_x, element_x])
 
-        feat_element_x = nn.Dense(
+        feat_element_x = layers.Dense(
             num_classes, activation="softmax", name="primary", dtype="float32"
         )(feat_element_x)
 
@@ -34,8 +31,8 @@ def AttentionBlocks2D(config):
     return apply
 
 
-def DuelAttentionNet2D(config):
-    attnblock = AttentionBlocks2D(config)
+def DuelAttentionNet(config):
+    attnblock = AttentionBlocks(config)
     backbone = model_instance[config.model.name]
 
     input_shape = (config.dataset.image_size,) * 2

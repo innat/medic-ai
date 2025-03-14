@@ -1,23 +1,22 @@
-import tensorflow as tf
 import numpy as np
 from typing import Sequence, Tuple, List
 from typing import Any, Callable, Sequence, Mapping, Optional, Tuple, Union
 
 def sliding_window_inference(
-    inputs: tf.Tensor,
+    inputs,
     num_classes: int,
     roi_size: Sequence[int],
     sw_batch_size: int,
-    predictor: Callable[..., tf.Tensor],
+    predictor: Callable[...],
     overlap: Union[Sequence[float], float] = 0.25,
     mode: str = "constant",
     sigma_scale: Union[Sequence[float], float] = 0.125,
     padding_mode: str = "constant",
     cval: float = 0.0,
-    roi_weight_map: Optional[tf.Tensor] = None,
-) -> tf.Tensor:
+    roi_weight_map: Optional = None,
+):
     """
-    Sliding window inference in TensorFlow, mimicking MONAI's implementation.
+    Sliding window inference, mimicking MONAI's implementation.
 
     Args:
         inputs: Input tensor with shape (batch_size, *spatial_dims, channels).
@@ -58,7 +57,9 @@ def sliding_window_inference(
     pad_size = [[0, 0]] + pad_size + [[0, 0]]  # Add padding for batch and channel dimensions
 
     if any(p for pair in pad_size for p in pair):
-        inputs = tf.pad(inputs, pad_size, mode=padding_mode.upper(), constant_values=cval)
+        inputs = np.pad(
+            inputs, pad_size, mode=padding_mode.lower(), constant_values=cval
+            )
 
     # Compute scan intervals
     scan_interval = _get_scan_interval(image_size, roi_size, num_spatial_dims, overlap)
@@ -73,7 +74,7 @@ def sliding_window_inference(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
         if len(importance_map.shape) == num_spatial_dims:
-            importance_map = tf.expand_dims(tf.expand_dims(importance_map, -1), 0)  # Add batch and channel dims
+            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)  # Add batch and channel dims
 
     # Initialize output and count maps as NumPy arrays
     output_shape = [batch_size] + list(image_size) + [num_classes]
@@ -88,18 +89,19 @@ def sliding_window_inference(
             full_slice = (slice(None),) + slice_idx + (slice(None),)
             patch = inputs[full_slice]
             patch_list.append(patch)
-        patches = tf.concat(patch_list, axis=0)  # Stack patches along batch dimension
+        patches = np.concatenate(patch_list, axis=0)  # Stack patches along batch dimension
 
         # Predict on the batch of patches
         pred = predictor(patches).numpy()  # Convert predictions to NumPy
 
         # Resize importance map if necessary
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
+            import tensorflow as tf # remove for backend agnostic alternate
             importance_map_resized = tf.image.resize(
                 importance_map, pred.shape[1:-1], method="nearest"
                 ).numpy()
         else:
-            importance_map_resized = importance_map.numpy()
+            importance_map_resized = importance_map
 
         # Accumulate predictions using NumPy
         for j, slice_idx in enumerate(batch_slices):
@@ -114,8 +116,8 @@ def sliding_window_inference(
     if any(p for pair in pad_size for p in pair):
         output_image = _crop_output(output_image, pad_size, image_size_)
 
-    # Convert the final output back to a TensorFlow tensor
-    return tf.convert_to_tensor(output_image)
+    
+    return output_image
 
 
 def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:

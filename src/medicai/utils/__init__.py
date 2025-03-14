@@ -2,8 +2,10 @@ from pathlib import Path
 
 from omegaconf import DictConfig, OmegaConf
 
-from .grad_accumulator import GradientAccumulator
-
+from medicai.utils.grad_accumulator import GradientAccumulator
+from medicai.utils.model_utils import get_act_layer
+from medicai.utils.model_utils import get_norm_layer
+from medicai.utils.sliding_window_inference import sliding_window_inference
 
 class Configurator:
     def __init__(self, config_path: Path) -> None:

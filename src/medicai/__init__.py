@@ -10,10 +10,10 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-from medicai import datasets, nets, utils
+# from medicai import datasets, models, utils
 
 __all__ = [
-    "nets",
+    "models",
     "datasets",
     "utils",
 ]

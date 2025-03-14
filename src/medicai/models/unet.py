@@ -1,11 +1,11 @@
-from tensorflow import keras
-from tensorflow.keras import layers as nn
+import keras
+from keras import layers
 
-from medicai.layers.conv import UpsampleBlock2D
+from medicai.blocks import UpsampleBlock2D
 from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
 
 
-def UNet2D(
+def UNet(
     backbone,
     input_size,
     num_classes,
@@ -36,7 +36,7 @@ def UNet2D(
         x = UpsampleBlock2D(decoder_filters[i])(x, skip)
 
     # Final layer
-    x = nn.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)
-    final = nn.Activation(class_activation, dtype="float32")(x)
-    model = keras.Model(inputs=inputs, outputs=final, name=f"UNet")
+    x = layers.Conv2D(filters=num_classes, kernel_size=(3, 3), padding="same")(x)
+    final = layers.Activation(class_activation, dtype="float32")(x)
+    model = keras.Model(inputs=inputs, outputs=final, name="UNet")
     return model
