@@ -1,11 +1,8 @@
 import keras
 import numpy as np
-from keras import ops
 from functools import partial
-
-import keras
-import numpy as np
-from keras import layers
+from keras import layers, ops
+from keras import initializers
 
 def window_partition(x, window_size):
     input_shape = ops.shape(x)
@@ -106,8 +103,6 @@ def compute_mask(depth, height, width, window_size, shift_size):
     return attn_mask
 
 
-from keras import layers
-
 
 class MLP(layers.Layer):
     def __init__(
@@ -149,11 +144,7 @@ class MLP(layers.Layer):
         return config
 
 
-import keras
-from keras import layers, ops
-
-
-class VideoSwinPatchingAndEmbedding(keras.Model):
+class SwinPatchingAndEmbedding(keras.Model):
     def __init__(self, patch_size=(2, 4, 4), embed_dim=96, norm_layer=None, **kwargs):
         super().__init__(**kwargs)
         self.patch_size = patch_size
@@ -206,9 +197,7 @@ class VideoSwinPatchingAndEmbedding(keras.Model):
         return config
 
 
-from keras import layers, ops
-
-class VideoSwinPatchMerging(layers.Layer):
+class SwinPatchMerging(layers.Layer):
     def __init__(self, input_dim, norm_layer=None, **kwargs):
         super().__init__(**kwargs)
         self.input_dim = input_dim
@@ -265,10 +254,6 @@ class VideoSwinPatchMerging(layers.Layer):
         return config
 
 
-import keras
-from keras import layers, ops
-
-
 class DropPath(layers.Layer):
     def __init__(self, rate=0.5, seed=None, **kwargs):
         super().__init__(**kwargs)
@@ -296,11 +281,7 @@ class DropPath(layers.Layer):
         return config
 
 
-import keras
-from keras import initializers
-from keras import layers, ops
-
-class VideoSwinWindowAttention(keras.Model):
+class SwinWindowAttention(keras.Model):
 
     def __init__(
         self,
@@ -443,7 +424,7 @@ class VideoSwinWindowAttention(keras.Model):
         return config
 
 
-class VideoSwinTransformerBlock(keras.Model):
+class SwinTransformerBlock(keras.Model):
     def __init__(
         self,
         input_dim,
@@ -651,7 +632,7 @@ class VideoSwinTransformerBlock(keras.Model):
         return config
 
 
-class VideoSwinBasicLayer(keras.Model):
+class SwinBasicLayer(keras.Model):
     def __init__(
         self,
         input_dim,
@@ -792,7 +773,7 @@ def parse_model_inputs(input_shape, input_tensor, **kwargs):
         else:
             return input_tensor
 
-class VideoSwinBackboneV2(keras.Model):
+class SwinBackbone(keras.Model):
     def __init__(
         self,
         *,
@@ -1130,61 +1111,3 @@ def UnetrHead(
         logits = UnetOutBlock(out_channels)(out)
         return logits
     return wrapper
-
-
-
-class SwinUNETR(keras.Model):
-    def __init__(
-        self,
-        *,
-        input_shape=(96,96,96,1),
-        out_channels=4, 
-        feature_size=48, 
-        res_block=True, 
-        norm_name="instance",
-        **kwargs
-    ):
-        encoder = VideoSwinBackbone(
-            input_shape=input_shape,
-            patch_size=[2, 2, 2],
-            depths=[2, 2, 2, 2],
-            window_size=[7, 7, 7],
-            num_heads=[3, 6, 12, 24],
-            embed_dim=48,
-            attn_drop_rate=0.0,
-            drop_path_rate=0.0,
-            patch_norm=False
-        )
-        inputs = encoder.input
-        skips = [
-            encoder.get_layer("patching_and_embedding").output,
-            encoder.get_layer("swin_feature1").output,
-            encoder.get_layer("swin_feature2").output,
-            encoder.get_layer("swin_feature3").output,
-            encoder.get_layer("swin_feature4").output,
-        ]
-        unetr_head = UnetrHead(
-            out_channels=out_channels,
-            feature_size=feature_size, 
-            res_block=True, 
-            norm_name=norm_name, 
-        )
-        
-        # Combine encoder and decoder
-        outputs = unetr_head([inputs] + skips)
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
-
-        self.out_channels = out_channels
-        self.feature_size = feature_size
-        self.res_block = res_block
-        self.norm_name = norm_name
-
-    def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "out_channels": self.out_channels,
-            "feature_size": self.feature_size,
-            "res_block": self.res_block,
-            "norm_name": self.norm_name
-        }
-        return config
