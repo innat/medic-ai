@@ -13,6 +13,51 @@ from medicai.utils.general import (
     _crop_output
 )
 
+from typing import Sequence, Union, Optional
+
+class SlidingWindowInference:
+    def __init__(
+        self,
+        num_classes: int,
+        roi_size: Sequence[int],
+        sw_batch_size: int,
+        predictor,
+        overlap: Union[Sequence[float], float] = 0.25,
+        mode: str = "constant",
+        sigma_scale: Union[Sequence[float], float] = 0.125,
+        padding_mode: str = "constant",
+        cval: float = 0.0,
+        roi_weight_map: Optional = None,
+    ):
+        self.num_classes = num_classes
+        self.roi_size = roi_size
+        self.sw_batch_size = sw_batch_size
+        self.predictor = predictor
+        self.overlap = overlap
+        self.mode = mode
+        self.sigma_scale = sigma_scale
+        self.padding_mode = padding_mode
+        self.cval = cval
+        self.roi_weight_map = roi_weight_map
+
+    def __call__(self, inputs):
+        """Call method to perform sliding window inference."""
+        return sliding_window_inference(
+            inputs=inputs,
+            num_classes=self.num_classes,
+            roi_size=self.roi_size,
+            sw_batch_size=self.sw_batch_size,
+            predictor=self.predictor,
+            overlap=self.overlap,
+            mode=self.mode,
+            sigma_scale=self.sigma_scale,
+            padding_mode=self.padding_mode,
+            cval=self.cval,
+            roi_weight_map=self.roi_weight_map,
+        )
+
+
+
 def sliding_window_inference(
     inputs,
     num_classes: int,
