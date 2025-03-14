@@ -68,6 +68,7 @@ dice_metric = DiceCoefficient3D(
 dice_metric.update_state(y, output)
 dice_score = dice_metric.result()
 print(f"Dice Score: {dice_score.numpy()}")
+Dice Score: 0.73
 ```
 
 ![](src/medicai/assets/sample_predict.png)
