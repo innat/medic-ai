@@ -14,17 +14,6 @@ class RandRotate90:
         self.spatial_axes = spatial_axes
 
     def rot90(array, k=1, axes=(0, 1)):
-        """Rotate an array by 90 degrees in the specified plane.
-    
-        Args:
-            array: Input tensor
-            k: Number of 90-degree rotations (default=1)
-            axes: Tuple of two axes that define the plane of rotation.
-            Defaults to (0, 1).
-    
-        Returns:
-            Rotated tensor with correct shape transformation
-        """
         array = tf.convert_to_tensor(array, dtype=array.dtype)
     
         if array.shape.rank < 2:
