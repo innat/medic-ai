@@ -69,3 +69,5 @@ dice_metric.update_state(y, output)
 dice_score = dice_metric.result()
 print(f"Dice Score: {dice_score.numpy()}")
 ```
+
+![](src\medicai\assets\sample_predict.png)
