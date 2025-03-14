@@ -31,7 +31,7 @@ model = SwinUNETR(
 model.compile(
     loss=DiceCELoss(to_onehot_y=True, softmax=True),
     metrics=[
-        DiceCoefficient3D(
+        DiceMetric(
             num_classes,
             include_background=True,
             reduction="mean",
@@ -57,7 +57,7 @@ swi = SlidingWindowInference(
     overlap=0.8
 )
 pred = swi(input)
-dice_metric = DiceCoefficient3D(
+dice_metric = DiceMetric(
     num_classes=num_classes,
     include_background=True,
     reduction="mean",
