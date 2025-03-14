@@ -16,26 +16,56 @@ pip install -e .
 import keras
 from medicai.nets import SwinUNETR
 from medicai.losses import DiceCELoss
-from medicai.metrics import DiceCoefficient
+from medicai.metrics import DiceMetric
 from medicai.utils import SlidingWindowInference
 
 # build dataloader
-db = ...
+dataloader = ...
+num_classes=4
 
-# build the model, compile and train
+# build the model, compile
 model = SwinUNETR(
     input_shape=(96, 96, 96, 1),
-    num_classes=4,
-    class_activation='sigmoid'
+    out_channels=4,
 )
 model.compile(
-    loss=DiceCELoss(),
-    metrics=DiceCoefficient(),
+    loss=DiceCELoss(to_onehot_y=True, softmax=True),
+    metrics=[
+        DiceCoefficient3D(
+            num_classes,
+            include_background=True,
+            reduction="mean",
+            ignore_empty=True,
+            smooth=1e-6,
+            name='dice_score'
+        )
+    ],
     optimizer='adamw'
 )
-hist = model.fit(data, epochs=cls_cfg.trainer.epochs)
 
+# train the model
+hist = model.fit(dataloader, epochs=10)
+
+# evaluation
 val_ds = ...
-swi = SlidingWindowInference()
-pred = swi(model, val_ds, roi_size, sw_batch_size)
+input, label = next(iter(val_dataloader))
+swi = SlidingWindowInference(
+    model
+    num_classes=num_classes, 
+    roi_size=(96, 96, 96), 
+    sw_batch_size=4, 
+    overlap=0.8
+)
+pred = swi(input)
+dice_metric = DiceCoefficient3D(
+    num_classes=num_classes,
+    include_background=True,
+    reduction="mean",
+    ignore_empty=True,
+    smooth=1e-6,
+    name='dice_score'
+)
+dice_metric.update_state(y, output)
+dice_score = dice_metric.result()
+print(f"Dice Score: {dice_score.numpy()}")
 ```

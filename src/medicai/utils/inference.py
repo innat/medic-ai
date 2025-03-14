@@ -18,10 +18,10 @@ from typing import Sequence, Union, Optional
 class SlidingWindowInference:
     def __init__(
         self,
+        predictor,
         num_classes: int,
         roi_size: Sequence[int],
         sw_batch_size: int,
-        predictor,
         overlap: Union[Sequence[float], float] = 0.25,
         mode: str = "constant",
         sigma_scale: Union[Sequence[float], float] = 0.125,
@@ -29,10 +29,10 @@ class SlidingWindowInference:
         cval: float = 0.0,
         roi_weight_map: Optional = None,
     ):
+        self.predictor = predictor
         self.num_classes = num_classes
         self.roi_size = roi_size
         self.sw_batch_size = sw_batch_size
-        self.predictor = predictor
         self.overlap = overlap
         self.mode = mode
         self.sigma_scale = sigma_scale
@@ -44,10 +44,10 @@ class SlidingWindowInference:
         """Call method to perform sliding window inference."""
         return sliding_window_inference(
             inputs=inputs,
+            predictor=self.predictor,
             num_classes=self.num_classes,
             roi_size=self.roi_size,
             sw_batch_size=self.sw_batch_size,
-            predictor=self.predictor,
             overlap=self.overlap,
             mode=self.mode,
             sigma_scale=self.sigma_scale,
@@ -60,10 +60,10 @@ class SlidingWindowInference:
 
 def sliding_window_inference(
     inputs,
+    predictor,
     num_classes: int,
     roi_size: Sequence[int],
     sw_batch_size: int,
-    predictor,
     overlap: Union[Sequence[float], float] = 0.25,
     mode: str = "constant",
     sigma_scale: Union[Sequence[float], float] = 0.125,
