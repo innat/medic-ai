@@ -40,13 +40,13 @@ class SwinUNETR(keras.Model):
             encoder.get_layer("swin_feature3").output,
             encoder.get_layer("swin_feature4").output,
         ]
-        unetr_head = UnetrHead(
+        unetr_head = build_unet(
             out_channels=out_channels,
             feature_size=feature_size, 
             res_block=True, 
             norm_name=norm_name, 
         )
-        
+
         # Combine encoder and decoder
         outputs = unetr_head([inputs] + skips)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
@@ -55,6 +55,107 @@ class SwinUNETR(keras.Model):
         self.feature_size = feature_size
         self.res_block = res_block
         self.norm_name = norm_name
+
+    def build_unet(
+        self, out_channels=4, feature_size=16, res_block=True, norm_name="instance"
+    ):
+        def apply(inputs):
+            enc_input = inputs[0]
+            hidden_states_out = inputs[1:]
+
+            # Encoder 1 (process raw input)
+            enc0 = UnetrBasicBlock(
+                feature_size, 
+                kernel_size=3, 
+                stride=1, 
+                norm_name=norm_name, 
+                res_block=res_block
+            )(enc_input)
+
+            # Encoder 2 (process hidden_states_out[0])
+            enc1 = UnetrBasicBlock(
+                feature_size, 
+                kernel_size=3, 
+                stride=1, 
+                norm_name=norm_name, 
+                res_block=res_block
+            )(hidden_states_out[0])
+
+            # Encoder 3 (process hidden_states_out[1])
+            enc2 = UnetrBasicBlock(
+                feature_size * 2, 
+                kernel_size=3, 
+                stride=1, 
+                norm_name=norm_name, 
+                res_block=res_block
+            )(hidden_states_out[1])
+
+            # Encoder 4 (process hidden_states_out[2])
+            enc3 = UnetrBasicBlock(
+                feature_size * 4, 
+                kernel_size=3, 
+                stride=1, 
+                norm_name=norm_name, 
+                res_block=res_block
+            )(hidden_states_out[2])
+
+            # Encoder 5 (process hidden_states_out[4] as bottleneck)
+            dec4 = UnetrBasicBlock(
+                feature_size * 16, 
+                kernel_size=3, 
+                stride=1, 
+                norm_name=norm_name, 
+                res_block=res_block
+            )(hidden_states_out[4])
+
+            # Decoder 5 (upsample dec4 and concatenate with hidden_states_out[3])
+            dec3 = UnetrUpBlock(
+                feature_size * 8, 
+                kernel_size=3, 
+                upsample_kernel_size=2,
+                norm_name=norm_name, 
+                res_block=res_block
+            )(dec4, hidden_states_out[3])
+
+            # Decoder 4 (upsample dec3 and concatenate with enc3)
+            dec2 = UnetrUpBlock(
+                feature_size * 4, 
+                kernel_size=3, 
+                upsample_kernel_size=2,
+                norm_name=norm_name, 
+                res_block=res_block
+            )(dec3, enc3)
+
+            # Decoder 3 (upsample dec2 and concatenate with enc2)
+            dec1 = UnetrUpBlock(
+                feature_size * 2, 
+                kernel_size=3, 
+                upsample_kernel_size=2,
+                norm_name=norm_name, 
+                res_block=res_block
+            )(dec2, enc2)
+
+            # Decoder 2 (upsample dec1 and concatenate with enc1)
+            dec0 = UnetrUpBlock(
+                feature_size, 
+                kernel_size=3,
+                upsample_kernel_size=2,
+                norm_name=norm_name, 
+                res_block=res_block
+            )(dec1, enc1)
+
+            out = UnetrUpBlock(
+                feature_size, 
+                kernel_size=3,
+                upsample_kernel_size=2,
+                norm_name=norm_name, 
+                res_block=res_block
+            )(dec0, enc0)
+
+            # Final output (process dec0 and produce logits)
+            logits = UnetOutBlock(out_channels)(out)
+            return logits
+        return apply
 
     def get_config(self):
         config = {

@@ -1,10 +1,9 @@
-import tensorflow as tf
-from tensorflow.keras import layers
+from keras import layers
+from keras import ops
 
-
-class ChannelWiseAttention2D(layers.Layer):
-    def __init__(self, config):
-        super().__init__()
+class ChannelWiseAttention(layers.Layer):
+    def __init__(self, config, **kwargs):
+        super().__init__(**kwargs)
 
     def build(self, input_shape):
         dims = input_shape.shape[-1]
@@ -26,11 +25,11 @@ class ChannelWiseAttention2D(layers.Layer):
         return u * inputs
 
 
-class ElementWiseAttention2D(layers.Layer):
-    def __init__(self, config):
-        super().__init__()
+class ElementWiseAttention(layers.Layer):
+    def __init__(self, num_classes, **kwargs):
+        super().__init__(**kwargs)
 
-        C = config.dataset.num_classes
+        self.num_classes = num_classes
 
         self.conv0 = layers.Conv2D(
             512,
@@ -38,7 +37,7 @@ class ElementWiseAttention2D(layers.Layer):
             strides=1,
             padding="same",
             use_bias=True,
-            activation=tf.nn.relu,
+            activation=ops.relu,
         )
         self.conv1 = layers.Conv2D(
             512,
@@ -46,20 +45,20 @@ class ElementWiseAttention2D(layers.Layer):
             strides=1,
             padding="same",
             use_bias=True,
-            activation=tf.nn.relu,
+            activation=ops.relu,
         )
         self.conv2 = layers.Conv2D(
-            C,
+            self.num_classes,
             kernel_size=1,
             strides=1,
             padding="same",
             use_bias=False,
-            activation=tf.nn.softmax,
+            activation=ops.softmax,
         )
 
         # linear classifier
         self.linear = layers.Conv2D(
-            C,
+            self.num_classes,
             kernel_size=1,
             strides=1,
             padding="same",
