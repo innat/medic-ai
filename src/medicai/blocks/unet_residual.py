@@ -1,4 +1,6 @@
 
+import numpy as np
+
 from keras import layers
 from medicai.utils import get_act_layer, get_norm_layer
 

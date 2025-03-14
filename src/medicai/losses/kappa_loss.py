@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
+from keras import ops
+import keras
 from typeguard import typechecked
 
 Number = Union[
@@ -40,36 +40,36 @@ class WeightedKappaLoss(keras.losses.Loss):
 
         self.weightage = weightage
         self.num_classes = num_classes
-        self.epsilon = epsilon or tf.keras.backend.epsilon()
-        label_vec = tf.range(num_classes, dtype=tf.keras.backend.floatx())
-        self.row_label_vec = tf.reshape(label_vec, [1, num_classes])
-        self.col_label_vec = tf.reshape(label_vec, [num_classes, 1])
-        col_mat = tf.tile(self.col_label_vec, [1, num_classes])
-        row_mat = tf.tile(self.row_label_vec, [num_classes, 1])
+        self.epsilon = epsilon or keras.backend.epsilon()
+        label_vec = ops.range(num_classes, dtype=keras.backend.floatx())
+        self.row_label_vec = ops.reshape(label_vec, [1, num_classes])
+        self.col_label_vec = ops.reshape(label_vec, [num_classes, 1])
+        col_mat = ops.tile(self.col_label_vec, [1, num_classes])
+        row_mat = ops.tile(self.row_label_vec, [num_classes, 1])
         if weightage == "linear":
-            self.weight_mat = tf.abs(col_mat - row_mat)
+            self.weight_mat = ops.abs(col_mat - row_mat)
         else:
             self.weight_mat = (col_mat - row_mat) ** 2
 
     def call(self, y_true, y_pred):
-        y_true = tf.cast(y_true, dtype=self.col_label_vec.dtype)
-        y_pred = tf.cast(y_pred, dtype=self.weight_mat.dtype)
-        batch_size = tf.shape(y_true)[0]
-        cat_labels = tf.matmul(y_true, self.col_label_vec)
-        cat_label_mat = tf.tile(cat_labels, [1, self.num_classes])
-        row_label_mat = tf.tile(self.row_label_vec, [batch_size, 1])
+        y_true = ops.cast(y_true, dtype=self.col_label_vec.dtype)
+        y_pred = ops.cast(y_pred, dtype=self.weight_mat.dtype)
+        batch_size = ops.shape(y_true)[0]
+        cat_labels = ops.matmul(y_true, self.col_label_vec)
+        cat_label_mat = ops.tile(cat_labels, [1, self.num_classes])
+        row_label_mat = ops.tile(self.row_label_vec, [batch_size, 1])
         if self.weightage == "linear":
-            weight = tf.abs(cat_label_mat - row_label_mat)
+            weight = ops.abs(cat_label_mat - row_label_mat)
         else:
             weight = (cat_label_mat - row_label_mat) ** 2
-        numerator = tf.reduce_sum(weight * y_pred)
-        label_dist = tf.reduce_sum(y_true, axis=0, keepdims=True)
-        pred_dist = tf.reduce_sum(y_pred, axis=0, keepdims=True)
-        w_pred_dist = tf.matmul(self.weight_mat, pred_dist, transpose_b=True)
-        denominator = tf.reduce_sum(tf.matmul(label_dist, w_pred_dist))
-        denominator /= tf.cast(batch_size, dtype=denominator.dtype)
-        loss = tf.math.divide_no_nan(numerator, denominator)
-        return tf.math.log(loss + self.epsilon)
+        numerator = ops.sum(weight * y_pred)
+        label_dist = ops.sum(y_true, axis=0, keepdims=True)
+        pred_dist = ops.sum(y_pred, axis=0, keepdims=True)
+        w_pred_dist = ops.matmul(self.weight_mat, pred_dist, transpose_b=True)
+        denominator = ops.sum(ops.matmul(label_dist, w_pred_dist))
+        denominator /= ops.cast(batch_size, dtype=denominator.dtype)
+        loss = ops.math.divide_no_nan(numerator, denominator)
+        return ops.math.log(loss + self.epsilon)
 
     def get_config(self):
         config = {

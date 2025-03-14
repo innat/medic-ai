@@ -481,7 +481,7 @@ class SwinTransformerBlock(keras.Model):
         self.norm1 = self.norm_layer(axis=-1, epsilon=1e-05)
         self.norm1.build(input_shape)
 
-        self.attn = VideoSwinWindowAttention(
+        self.attn = SwinWindowAttention(
             self.input_dim,
             window_size=self.window_size,
             num_heads=self.num_heads,
@@ -674,7 +674,7 @@ class SwinBasicLayer(keras.Model):
     def build(self, input_shape):
         # build blocks
         self.blocks = [
-            VideoSwinTransformerBlock(
+            SwinTransformerBlock(
                 self.input_dim,
                 num_heads=self.num_heads,
                 window_size=self.window_size,
@@ -811,7 +811,7 @@ class SwinBackbone(keras.Model):
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
-        x = VideoSwinPatchingAndEmbedding(
+        x = SwinPatchingAndEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
@@ -822,7 +822,7 @@ class SwinBackbone(keras.Model):
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
         for i in range(num_layers):
-            layer = VideoSwinBasicLayer(
+            layer = SwinBasicLayer(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
@@ -834,7 +834,7 @@ class SwinBackbone(keras.Model):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                downsampling_layer=VideoSwinPatchMerging,
+                downsampling_layer=SwinPatchMerging,
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)

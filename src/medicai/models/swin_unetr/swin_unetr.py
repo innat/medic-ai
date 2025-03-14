@@ -6,7 +6,12 @@ from functools import partial
 import keras
 import numpy as np
 from keras import layers
-from .swin_unetr_layers import *
+from medicai.models.swin_unetr.swin_unetr_layers import *
+from medicai.blocks import UnetBasicBlock
+from medicai.blocks import UnetOutBlock
+from medicai.blocks import UnetResBlock
+from medicai.blocks import UnetrBasicBlock
+from medicai.blocks import UnetrUpBlock
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
@@ -40,7 +45,7 @@ class SwinUNETR(keras.Model):
             encoder.get_layer("swin_feature3").output,
             encoder.get_layer("swin_feature4").output,
         ]
-        unetr_head = build_unet(
+        unetr_head = self.build_unet(
             out_channels=out_channels,
             feature_size=feature_size, 
             res_block=True, 

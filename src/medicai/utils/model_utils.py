@@ -1,4 +1,5 @@
 from keras import applications
+from keras import layers
 
 BACKBONE = {
     "efficientnetb0": applications.EfficientNetB0,

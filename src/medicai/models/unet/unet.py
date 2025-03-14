@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.blocks import UpsampleBlock2D
+from medicai.blocks import UpsampleBlock
 from medicai.utils.model_utils import BACKBONE, BACKBONE_ARGS
 
 

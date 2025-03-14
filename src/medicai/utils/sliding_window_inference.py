@@ -1,13 +1,14 @@
 import numpy as np
 from typing import Sequence, Tuple, List
 from typing import Any, Callable, Sequence, Mapping, Optional, Tuple, Union
+import tensorflow as tf # remove for backend agnostic alternate
 
 def sliding_window_inference(
     inputs,
     num_classes: int,
     roi_size: Sequence[int],
     sw_batch_size: int,
-    predictor: Callable[...],
+    predictor,
     overlap: Union[Sequence[float], float] = 0.25,
     mode: str = "constant",
     sigma_scale: Union[Sequence[float], float] = 0.125,
@@ -96,7 +97,7 @@ def sliding_window_inference(
 
         # Resize importance map if necessary
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
-            import tensorflow as tf # remove for backend agnostic alternate
+            
             importance_map_resized = tf.image.resize(
                 importance_map, pred.shape[1:-1], method="nearest"
                 ).numpy()
@@ -199,7 +200,7 @@ def dense_patch_slices(
 
 
 def compute_importance_map(
-    patch_size: Sequence[int], mode: str = "constant", sigma_scale: Sequence[float] = (0.125,), dtype: tf.DType = tf.float32
+    patch_size: Sequence[int], mode: str = "constant", sigma_scale: Sequence[float] = (0.125,), dtype = tf.float32
 ) -> tf.Tensor:
     """Compute importance map for blending."""
     if mode == "constant":
