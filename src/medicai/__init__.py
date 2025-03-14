@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 __all__ = [
     "models",
+    "transforms",
     "datasets",
     "utils",
 ]
