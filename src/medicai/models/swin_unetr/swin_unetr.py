@@ -20,7 +20,7 @@ class SwinUNETR(keras.Model):
         self,
         *,
         input_shape=(96,96,96,1),
-        out_channels=4, 
+        num_classes=4, 
         feature_size=48, 
         res_block=True, 
         norm_name="instance",
@@ -46,7 +46,7 @@ class SwinUNETR(keras.Model):
             encoder.get_layer("swin_feature4").output,
         ]
         unetr_head = self.build_unet(
-            out_channels=out_channels,
+            num_classes=num_classes,
             feature_size=feature_size, 
             res_block=True, 
             norm_name=norm_name, 
@@ -56,13 +56,13 @@ class SwinUNETR(keras.Model):
         outputs = unetr_head([inputs] + skips)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
-        self.out_channels = out_channels
+        self.num_classes = num_classes
         self.feature_size = feature_size
         self.res_block = res_block
         self.norm_name = norm_name
 
     def build_unet(
-        self, out_channels=4, feature_size=16, res_block=True, norm_name="instance"
+        self, num_classes=4, feature_size=16, res_block=True, norm_name="instance"
     ):
         def apply(inputs):
             enc_input = inputs[0]
@@ -158,14 +158,14 @@ class SwinUNETR(keras.Model):
             )(dec0, enc0)
 
             # Final output (process dec0 and produce logits)
-            logits = UnetOutBlock(out_channels)(out)
+            logits = UnetOutBlock(num_classes)(out)
             return logits
         return apply
 
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "out_channels": self.out_channels,
+            "num_classes": self.num_classes,
             "feature_size": self.feature_size,
             "res_block": self.res_block,
             "norm_name": self.norm_name
