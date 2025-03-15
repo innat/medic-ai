@@ -15,6 +15,7 @@ class Spacingd:
         self.pixdim = pixdim
         self.image_mode = mode[0]
         self.label_mode = mode[1]
+        self.depth_interpolate = DepthInterpolation()
 
     def __call__(self, inputs: Dict[str, tf.Tensor]) -> Dict[str, tf.Tensor]:
         """
@@ -32,7 +33,10 @@ class Spacingd:
         resample_image = self.spacingd_resample(image, (1.0, 1.0, 1.0), self.pixdim, self.image_mode)
         resample_label = self.spacingd_resample(label, (1.0, 1.0, 1.0), self.pixdim, self.label_mode)
         
-        return {'image': resample_image[..., None], 'label': resample_label[..., None]}
+        return {
+            'image': resample_image[..., None], 
+            'label': resample_label[..., None]
+        }
 
     def spacingd_resample(self, image: tf.Tensor, original_spacing: Tuple[float, float, float], desired_spacing: Tuple[float, float, float], mode: str = "bilinear") -> tf.Tensor:
         """
@@ -61,7 +65,10 @@ class Spacingd:
         new_width = tf.cast(original_width * scale_w, tf.int32)
         
         resized_hw = tf.image.resize(image, [new_height, new_width], method=mode)
-        resized_dhw = depth_interpolation(
-            resized_hw, new_depth, depth_axis=0, method='linear' if mode == "bilinear" else mode
-            )
+        resized_dhw = self.depth_interpolate(
+            resized_hw, 
+            target_depth=new_depth, 
+            depth_axis=0, 
+            method='linear' if mode == "bilinear" else mode
+        )
         return resized_image

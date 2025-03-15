@@ -5,18 +5,15 @@ class DepthInterpolation:
 
     SUPPORTED_METHOD = ('linear', 'nearest', 'cubic')
 
-    def __init__(self, target_depth, depth_axis=0, method='linear'):
+    def __call__(self, inputs, target_depth, depth_axis=0, method='linear'):
+
         if method not in self.SUPPORTED_METHOD:
             raise ValuerError(
                 f'Support interplation methods are {self.SUPPORTED_METHOD} '
                 f'But got {method}'
             )
-        
-        self.target_depth=target_depth
-        self.depth_axis=0
-        self.method=method
 
-    def __call__(self, inputs):
+
         ip_methods = {
             self.SUPPORTED_METHOD[0]: self.linear_interpolation,
             self.SUPPORTED_METHOD[1]: self.nearest_interpolation,
