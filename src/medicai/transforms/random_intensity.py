@@ -31,7 +31,7 @@ class RandomIntensity:
         img = inputs['image']
         label = inputs['label']
         
-        if self.channel_wise and len(img.shape) == 4:  # (C, D, H, W)
+        if self.channel_wise and len(img.shape) == 4:  # (D, H, W, C)
             offsets = tf.random.uniform((1, 1, 1, img.shape[-1]), self.offsets[0], self.offsets[1])
         else:
             offsets = tf.random.uniform((), self.offsets[0], self.offsets[1])

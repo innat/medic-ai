@@ -4,3 +4,4 @@ from medicai.transforms.random_crop import RandCropByPosNegLabel
 from medicai.transforms.scaling import ScaleIntensityRanged
 from medicai.transforms.spacingd import Spacingd
 from medicai.transforms.random_intensity import RandomIntensity
+from medicai.transforms.depth_interpolate import DepthInterpolation

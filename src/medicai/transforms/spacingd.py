@@ -1,5 +1,6 @@
 import tensorflow as tf
 from typing import Tuple, Dict
+from medicai.transforms.depth_interpolate import DepthInterpolation
 
 class Spacingd:
     """
@@ -38,7 +39,7 @@ class Spacingd:
         Resizes a 3D tensor to match the desired spatial resolution.
 
         Args:
-            image (tf.Tensor): The input 3D tensor.
+            image (tf.Tensor): The input 3D tensor. Expected shape: (depth, height, width, ...)
             original_spacing (Tuple[float, float, float]): The original voxel spacing.
             desired_spacing (Tuple[float, float, float]): The target voxel spacing.
             mode (str, optional): Interpolation mode for resizing. Defaults to "bilinear".
@@ -59,9 +60,8 @@ class Spacingd:
         new_height = tf.cast(original_height * scale_h, tf.int32)
         new_width = tf.cast(original_width * scale_w, tf.int32)
         
-        resized_image = tf.image.resize(image, [new_height, new_width], method=mode)
-        resized_image = tf.transpose(resized_image[..., 0], perm=[1, 0, 2])  # Transpose to resize depth
-        resized_image = tf.image.resize(resized_image[..., tf.newaxis], [new_depth, new_height], method=mode)
-        resized_image = tf.transpose(resized_image[..., 0], perm=[1, 0, 2])  # Transpose back
-        
+        resized_hw = tf.image.resize(image, [new_height, new_width], method=mode)
+        resized_dhw = depth_interpolation(
+            resized_hw, new_depth, depth_axis=0, method='linear' if mode == "bilinear" else mode
+            )
         return resized_image
