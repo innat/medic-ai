@@ -2,7 +2,7 @@ import tensorflow as tf
 from typing import Tuple, Dict
 from medicai.transforms.depth_interpolate import DepthInterpolation
 
-class Spacingd:
+class Spacing:
     """
     Resamples 3D image and label tensors to a specified spatial resolution.
 

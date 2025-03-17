@@ -1,7 +1,7 @@
 import tensorflow as tf
 from typing import Optional, Dict
 
-class ScaleIntensityRanged:
+class ScaleIntensityRange:
     """
     A TensorFlow transformation class that scales the intensity of an image within a specified range.
 

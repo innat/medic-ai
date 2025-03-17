@@ -1,7 +1,7 @@
 import tensorflow as tf
 from typing import Union, Sequence, Dict
 
-class RandFlipd:
+class RandFlip:
     def __init__(self, prob: float = 0.1, spatial_axis: Union[int, Sequence[int], None] = None):
         """
         TensorFlow implementation of RandFlipd for 3D inputs (d, h, w, 1).
