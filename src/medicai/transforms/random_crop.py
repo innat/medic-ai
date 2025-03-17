@@ -32,7 +32,8 @@ class RandCropByPosNegLabel:
         Applies the random cropping transformation.
         
         Args:
-            inputs (Dict[str, tf.Tensor]): A dictionary with keys 'image' and 'label', both being 4D tensors.
+            inputs (Dict[str, tf.Tensor]): A dictionary with keys 'image' and 'label' 
+            both being 4D tensors.
                 Shape: (depth, height, width, channels).
         
         Returns:
