@@ -71,4 +71,4 @@ class Spacing:
             depth_axis=0, 
             method='linear' if mode == "bilinear" else mode
         )
-        return resized_image
+        return resized_dhw
