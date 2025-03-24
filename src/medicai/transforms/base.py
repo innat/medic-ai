@@ -1,6 +1,6 @@
 from medicai.transforms import MetaTensor
 
-class Pipeline:
+class Compose:
     def __init__(self, transforms):
         self.transforms = transforms
 

@@ -4,3 +4,4 @@ from medicai.transforms.random_crop import RandCropByPosNegLabel
 from medicai.transforms.scaling import ScaleIntensityRange
 from medicai.transforms.random_intensity import RandomIntensity
 from medicai.transforms.meta_tensor import MetaTensor
+from medicai.transforms.base import Compose
