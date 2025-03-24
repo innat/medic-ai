@@ -1,34 +1,18 @@
 import tensorflow as tf
-from typing import Union, Sequence, Dict
+from typing import Union, Sequence
+from medicai.transforms import MetaTensor
 
 class RandFlip:
-    def __init__(self, prob: float = 0.1, spatial_axis: Union[int, Sequence[int], None] = None):
-        """
-        TensorFlow implementation of RandFlipd for 3D inputs (d, h, w, 1).
-
-        Args:
-            prob (float): Probability of flipping. Defaults to 0.1.
-            spatial_axis (Union[int, Sequence[int], None]): Spatial axes along which to flip.
-                Defaults to None (flip along all axes).
-        """
+    def __init__(self, keys: Sequence[str], prob: float = 0.1, spatial_axis: Union[int, Sequence[int], None] = None):
+        self.keys = keys
         self.prob = prob
         self.spatial_axis = spatial_axis
 
-    def __call__(self, inputs: Dict[str, tf.Tensor]) -> Dict[str, tf.Tensor]:
-        """
-        Apply random flipping to the input dictionary.
-
-        Args:
-            inputs (Dict[str, tf.Tensor]): Input dictionary containing 'image' and 'label'.
-
-        Returns:
-            Dict[str, tf.Tensor]: Transformed dictionary.
-        """
-        image = inputs['image']
-        label = inputs['label']
-
-        if tf.random.uniform([]) < self.prob:
-            image = tf.reverse(image, axis=spatial_axis)
-            label = tf.reverse(label, axis=spatial_axis)
-
-        return {'image': image, 'label': label}
+    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+        should_flip = tf.random.uniform([]) < self.prob
+ 
+        for key in self.keys:
+            if key in inputs.data:
+                if should_flip:
+                    inputs.data[key] = tf.reverse(inputs.data[key], axis=self.spatial_axis)
+        return inputs

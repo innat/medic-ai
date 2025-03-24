@@ -1,19 +1,32 @@
 
 import tensorflow as tf
+from medicai.transforms import MetaTensor
 
 class RandRotate90:
-    def __init__(self, prob=0.1, max_k=3, spatial_axes=(1, 2)):
+    def __init__(self, keys, prob=0.1, max_k=3, spatial_axes=(1, 2)):
         """
         Args:
             prob: Probability of applying the 90-degree rotation.
             max_k: Maximum number of 90-degree rotations (1 to max_k).
             spatial_axes: Axes along which to rotate (default: (1,2) for height-width).
         """
+        self.keys = keys
         self.prob = prob
         self.max_k = max_k
         self.spatial_axes = spatial_axes
 
-    def rot90(array, k=1, axes=(0, 1)):
+    def rot90(self, array, k=1, axes=(0, 1)):
+        """Rotate an array by 90 degrees in the specified plane.
+    
+        Args:
+            array: Input tensor
+            k: Number of 90-degree rotations (default=1)
+            axes: Tuple of two axes that define the plane of rotation.
+            Defaults to (0, 1).
+    
+        Returns:
+            Rotated tensor with correct shape transformation
+        """
         array = tf.convert_to_tensor(array, dtype=array.dtype)
     
         if array.shape.rank < 2:
@@ -69,25 +82,19 @@ class RandRotate90:
     
         return array
 
-    def __call__(self, inputs):
-        """
-        Args:
-            inputs: Dictionary with 'image' (3D Tensor) and 'label'.
-        Returns:
-            Dictionary with rotated 'image' and unchanged 'label'.
-        """
-        if tf.random.uniform(()) > self.prob:
-            return inputs
-        
-        img = inputs['image']
-        label = inputs['label']
-        
-        # Sample k (1 to max_k rotations)
-        k = tf.random.uniform((), minval=1, maxval=self.max_k + 1, dtype=tf.int32)
-        
-        # Rotate
+    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+        rand_val = tf.random.uniform(())
 
-        img = rot90(img, k, axes=self.spatial_axes)
-        label = rot90(label, k, axes=self.spatial_axes)
+        def apply_rotation():
+            rotated_data = inputs.data.copy()
+            k = tf.random.uniform((), minval=1, maxval=self.max_k + 1, dtype=tf.int32)
+            for key in self.keys:
+                if key in rotated_data:
+                    rotated_data[key] = self.rot90(rotated_data[key], k, axes=self.spatial_axes)
+            return rotated_data
 
-        return {'image': img, 'label': label}
+        def no_rotation():
+            return inputs.data.copy()
+
+        rotated_data = tf.cond(rand_val <= self.prob, apply_rotation, no_rotation)
+        return MetaTensor(rotated_data, inputs.meta)

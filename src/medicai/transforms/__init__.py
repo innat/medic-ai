@@ -2,6 +2,5 @@ from medicai.transforms.crop_foreground import CropForeground
 from medicai.transforms.rand_flip import RandFlip
 from medicai.transforms.random_crop import RandCropByPosNegLabel
 from medicai.transforms.scaling import ScaleIntensityRange
-from medicai.transforms.spacingd import Spacing
 from medicai.transforms.random_intensity import RandomIntensity
-from medicai.transforms.depth_interpolate import DepthInterpolation
+from medicai.transforms.meta_tensor import MetaTensor

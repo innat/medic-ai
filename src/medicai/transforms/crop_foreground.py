@@ -1,5 +1,6 @@
 import tensorflow as tf
 from typing import Callable, Sequence, Union, Optional
+from medicai.transforms import MetaTensor
 
 class CropForeground:
     def __init__(
@@ -26,17 +27,17 @@ class CropForeground:
         self.end_coord_key=end_coord_key
         self.allow_missing_keys=allow_missing_keys
     
-    def __call__(self, inputs):
+    def __call__(self, inputs: MetaTensor) -> MetaTensor:
         # Extract the source data (used to determine the foreground)
-        if self.source_key not in inputs and self.allow_missing_keys:
+        if self.source_key not in inputs.data and self.allow_missing_keys:
             return inputs
-        source_data = inputs[self.source_key]
+        source_data = inputs.data[self.source_key]
 
         # Validate input shapes
         for key in self.keys:
-            if key not in inputs and self.allow_missing_keys:
+            if key not in inputs.data and self.allow_missing_keys:
                 continue
-            if len(inputs[key].shape) != 4:
+            if len(inputs.data[key].shape) != 4:
                 raise ValueError(f"Input tensor '{key}' must have shape (depth, height, width, channels).")
 
         # Apply channel selection if specified
@@ -55,19 +56,18 @@ class CropForeground:
         min_coords, max_coords = self.make_divisible(min_coords, max_coords, self.k_divisible, tf.shape(source_data)[:3])
 
         # Crop the tensors using the bounding box
-        outputs = {}
         for key in self.keys:
-            if key not in inputs and self.allow_missing_keys:
+            if key not in inputs.data and self.allow_missing_keys:
                 continue
-            outputs[key] = self.crop_tensor(inputs[key], min_coords, max_coords)
+            inputs.data[key] = self.crop_tensor(inputs.data[key], min_coords, max_coords)
 
         # Record the bounding box coordinates if requested
         if self.start_coord_key is not None:
-            outputs[self.start_coord_key] = min_coords
+            inputs.meta[self.start_coord_key] = min_coords
         if self.end_coord_key is not None:
-            outputs[self.end_coord_key] = max_coords
+            inputs.meta[self.end_coord_key] = max_coords
 
-        return outputs
+        return inputs
 
     def find_bounding_box(self, image, select_fn):
         """

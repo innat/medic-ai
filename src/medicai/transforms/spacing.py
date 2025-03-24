@@ -1,56 +1,60 @@
+import warnings
 import tensorflow as tf
-from typing import Tuple, Dict
-from medicai.transforms.depth_interpolate import DepthInterpolation
+from src.medicai.utils import DepthInterpolation
+from medicai.transforms import MetaTensor
+from typing import *
 
 class Spacing:
-    """
-    Resamples 3D image and label tensors to a specified spatial resolution.
-
-    Args:
-        pixdim (Tuple[float, float, float]): The desired voxel spacing in (depth, height, width).
-        mode (Tuple[str, str], optional): The interpolation modes for image and label resizing.
-            Defaults to ("bilinear", "nearest").
-    """
-    def __init__(self, pixdim: Tuple[float, float, float], mode: Tuple[str, str] = ("bilinear", "nearest")):
+    def __init__(
+        self,
+        keys: Sequence[str] = ("image", "label"),
+        pixdim: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        mode: Tuple[str, str] = ("bilinear", "nearest")
+    ):
         self.pixdim = pixdim
+        self.keys = keys
         self.image_mode = mode[0]
         self.label_mode = mode[1]
-        self.depth_interpolate = DepthInterpolation()
+        self.mode = dict(zip(keys, mode))
+        # self.depth_interpolate = DepthInterpolation()
 
-    def __call__(self, inputs: Dict[str, tf.Tensor]) -> Dict[str, tf.Tensor]:
-        """
-        Applies resampling to the input image and label tensors.
+    def get_spacing_from_affine(self, affine):
+        width_spacing = tf.norm(affine[:3, 0])
+        depth_spacing = tf.norm(affine[:3, 1])
+        height_spacing = tf.norm(affine[:3, 2])
+        return (width_spacing, depth_spacing, height_spacing)
 
-        Args:
-            inputs (Dict[str, tf.Tensor]): A dictionary with 'image' and 'label' tensors.
+    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+        for key in self.keys:
+            if key not in inputs.data:
+                continue
 
-        Returns:
-            Dict[str, tf.Tensor]: A dictionary with resampled 'image' and 'label' tensors.
-        """
-        image = inputs['image']
-        label = inputs['label']
-        
-        resample_image = self.spacingd_resample(image, (1.0, 1.0, 1.0), self.pixdim, self.image_mode)
-        resample_label = self.spacingd_resample(label, (1.0, 1.0, 1.0), self.pixdim, self.label_mode)
-        
-        return {
-            'image': resample_image[..., None], 
-            'label': resample_label[..., None]
-        }
+            image = inputs.data[key]
+            affine = inputs.meta.get('affine', None)
+            
+            if affine is not None:
+                original_spacing = self.get_spacing_from_affine(affine)
+            else:
+                original_spacing = (1.0, 1.0, 1.0)
+                warnings.warn("Affine matrix is not provided. Using default spacing (1.0, 1.0, 1.0).")
 
-    def spacingd_resample(self, image: tf.Tensor, original_spacing: Tuple[float, float, float], desired_spacing: Tuple[float, float, float], mode: str = "bilinear") -> tf.Tensor:
-        """
-        Resizes a 3D tensor to match the desired spatial resolution.
+            resample_image = self.spacingd_resample(
+                image, 
+                original_spacing, 
+                self.pixdim, 
+                mode=self.mode.get(key)
+            )
+            inputs.data[key] = resample_image
+        return inputs
 
-        Args:
-            image (tf.Tensor): The input 3D tensor. Expected shape: (depth, height, width, ...)
-            original_spacing (Tuple[float, float, float]): The original voxel spacing.
-            desired_spacing (Tuple[float, float, float]): The target voxel spacing.
-            mode (str, optional): Interpolation mode for resizing. Defaults to "bilinear".
 
-        Returns:
-            tf.Tensor: The resized 3D tensor.
-        """
+    def spacingd_resample(
+        self, 
+        image: tf.Tensor, 
+        original_spacing: Tuple[float, float, float], 
+        desired_spacing: Tuple[float, float, float], 
+        mode: str = "bilinear"
+    ) -> tf.Tensor:
         scale_d = original_spacing[0] / desired_spacing[0]
         scale_h = original_spacing[1] / desired_spacing[1]
         scale_w = original_spacing[2] / desired_spacing[2]
@@ -65,10 +69,15 @@ class Spacing:
         new_width = tf.cast(original_width * scale_w, tf.int32)
         
         resized_hw = tf.image.resize(image, [new_height, new_width], method=mode)
-        resized_dhw = self.depth_interpolate(
-            resized_hw, 
-            target_depth=new_depth, 
-            depth_axis=0, 
-            method='linear' if mode == "bilinear" else mode
-        )
+
+        def nearest_interpolation(volume, target_depth, depth_axis=0):
+            # Generate floating-point indices for the target depth
+            depth_indices = tf.linspace(0.0, tf.cast(tf.shape(volume)[depth_axis] - 1, tf.float32), target_depth)
+            # Round the indices to the nearest integer (nearest-neighbor interpolation)
+            depth_indices = tf.cast(depth_indices, tf.int32)
+            # Gather slices from the original volume using the rounded indices
+            resized_volume = tf.gather(volume, depth_indices, axis=depth_axis)
+            return resized_volume
+
+        resized_dhw = nearest_interpolation(resized_hw, new_depth)
         return resized_dhw

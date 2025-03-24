@@ -8,7 +8,7 @@ class DepthInterpolation:
     def __call__(self, inputs, target_depth, depth_axis=0, method='linear'):
 
         if method not in self.SUPPORTED_METHOD:
-            raise ValuerError(
+            raise ValueError(
                 f'Support interplation methods are {self.SUPPORTED_METHOD} '
                 f'But got {method}'
             )
@@ -20,7 +20,7 @@ class DepthInterpolation:
             self.SUPPORTED_METHOD[2]: self.cubic_interpolation,
         }
         return ip_methods.get(self.method)(
-            inputs, self.target_depth, self.depth_axis
+            inputs, target_depth, depth_axis
         )
 
     @staticmethod

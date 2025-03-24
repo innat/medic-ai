@@ -7,6 +7,8 @@ from medicai.utils.model_utils import get_act_layer
 from medicai.utils.model_utils import get_norm_layer
 from medicai.utils.inference import SlidingWindowInference
 from medicai.utils.inference import sliding_window_inference
+from medicai.utils.depth_interpolate import DepthInterpolation
+
 
 # class Configurator:
 #     def __init__(self, config_path: Path) -> None:
