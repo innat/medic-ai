@@ -1,0 +1,76 @@
+# Project information
+site_name: MedicAI
+site_author: Mohammed Innat
+site_description: >-
+  AI Toolkit for Healthcare Imaging
+
+# Repository
+repo_name: innat/medicai
+repo_url: https://github.com/innat/medic-ai
+
+# Copyright
+copyright: Apache License 2.0
+
+# Theme settings
+theme:
+  name: material
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    logo: material/file-document-multiple
+    logo_tech: material/bash
+    logo_fpv: material/quadcopter
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.expand
+    - navigation.sections
+    - navigation.footer
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+# Pluggins
+plugins:
+  - search
+
+
+
+# Navigaiton panel
+nav:
+  - Home: index.md
+  - General: general.md
+  - Model: ./models/manage-models.md
+  - Transformation: ./transformations/manage-transformations.md
+  - Training: ./training/manage-training.md
+  - Inference: ./inference/manage-inference.md
+
+# Code syntax highlighter
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
