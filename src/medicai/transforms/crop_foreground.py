@@ -1,6 +1,9 @@
+from typing import Callable, Optional, Sequence, Union
+
 import tensorflow as tf
-from typing import Callable, Sequence, Union, Optional
-from medicai.transforms import MetaTensor
+
+from medicai.transforms.meta_tensor import MetaTensor
+
 
 class CropForeground:
     def __init__(
@@ -16,17 +19,17 @@ class CropForeground:
         end_coord_key: Optional[str] = "foreground_end_coord",
         allow_missing_keys: bool = False,
     ):
-        self.keys=keys
-        self.source_key=source_key
-        self.select_fn=select_fn
-        self.channel_indices=channel_indices
-        self.margin=margin
-        self.allow_smaller=allow_smaller
-        self.k_divisible=k_divisible
-        self.start_coord_key=start_coord_key
-        self.end_coord_key=end_coord_key
-        self.allow_missing_keys=allow_missing_keys
-    
+        self.keys = keys
+        self.source_key = source_key
+        self.select_fn = select_fn
+        self.channel_indices = channel_indices
+        self.margin = margin
+        self.allow_smaller = allow_smaller
+        self.k_divisible = k_divisible
+        self.start_coord_key = start_coord_key
+        self.end_coord_key = end_coord_key
+        self.allow_missing_keys = allow_missing_keys
+
     def __call__(self, inputs: MetaTensor) -> MetaTensor:
         # Extract the source data (used to determine the foreground)
         if self.source_key not in inputs.data and self.allow_missing_keys:
@@ -38,7 +41,9 @@ class CropForeground:
             if key not in inputs.data and self.allow_missing_keys:
                 continue
             if len(inputs.data[key].shape) != 4:
-                raise ValueError(f"Input tensor '{key}' must have shape (depth, height, width, channels).")
+                raise ValueError(
+                    f"Input tensor '{key}' must have shape (depth, height, width, channels)."
+                )
 
         # Apply channel selection if specified
         if self.channel_indices is not None:
@@ -53,7 +58,9 @@ class CropForeground:
         )
 
         # Ensure the bounding box is divisible by k_divisible
-        min_coords, max_coords = self.make_divisible(min_coords, max_coords, self.k_divisible, tf.shape(source_data)[:3])
+        min_coords, max_coords = self.make_divisible(
+            min_coords, max_coords, self.k_divisible, tf.shape(source_data)[:3]
+        )
 
         # Crop the tensors using the bounding box
         for key in self.keys:
@@ -92,22 +99,22 @@ class CropForeground:
             margin = [margin] * 3  # Apply the same margin to all dimensions
         elif len(margin) != 3:
             raise ValueError("Margin must be an int or a sequence of length 3.")
-    
+
         # Ensure all tensors have the same data type (e.g., int32)
         min_coords = tf.cast(min_coords, tf.int32)
         max_coords = tf.cast(max_coords, tf.int32)
         image_shape = tf.cast(image_shape, tf.int32)
         margin = tf.cast(margin, tf.int32)
-    
+
         # Subtract margin from min_coords and add to max_coords
         min_coords = tf.maximum(min_coords - margin, 0)
         max_coords = tf.minimum(max_coords + margin + 1, image_shape)
-    
+
         if not allow_smaller:
             # Ensure the bounding box is at least as large as the margin
             min_coords = tf.minimum(min_coords, image_shape - margin)
             max_coords = tf.maximum(max_coords, margin)
-    
+
         return min_coords, max_coords
 
     def make_divisible(self, min_coords, max_coords, k_divisible, image_shape):
@@ -118,34 +125,37 @@ class CropForeground:
             k_divisible = [k_divisible] * 3  # Apply the same value to all dimensions
         elif len(k_divisible) != 3:
             raise ValueError("k_divisible must be an int or a sequence of length 3.")
-    
+
         # Ensure all tensors have the same data type (e.g., int32)
         min_coords = tf.cast(min_coords, tf.int32)
         max_coords = tf.cast(max_coords, tf.int32)
         image_shape = tf.cast(image_shape, tf.int32)
         k_divisible = tf.cast(k_divisible, tf.int32)
-    
+
         # Calculate the size of the bounding box
         size = max_coords - min_coords
-    
+
         # Calculate the remainder when dividing by k_divisible
         remainder = size % k_divisible
-    
+
         # Calculate the padding needed to make the size divisible by k_divisible
         padding = tf.where(remainder != 0, k_divisible - remainder, 0)
-    
+
         # Adjust max_coords by adding the padding
         max_coords = max_coords + padding
-    
+
         # Ensure the bounding box stays within the image bounds
         max_coords = tf.minimum(max_coords, image_shape)
-    
+
         return min_coords, max_coords
 
     def crop_tensor(self, tensor, min_coords, max_coords):
         """
         Crop a tensor using the bounding box coordinates.
         """
-        return tensor[min_coords[0]:max_coords[0],
-                      min_coords[1]:max_coords[1],
-                      min_coords[2]:max_coords[2], :]
+        return tensor[
+            min_coords[0] : max_coords[0],
+            min_coords[1] : max_coords[1],
+            min_coords[2] : max_coords[2],
+            :,
+        ]

@@ -1,8 +1,9 @@
+from functools import partial
+
 import keras
 import numpy as np
-from functools import partial
-from keras import layers, ops
-from keras import initializers
+from keras import initializers, layers, ops
+
 
 def window_partition(x, window_size):
     input_shape = ops.shape(x)
@@ -29,9 +30,7 @@ def window_partition(x, window_size):
     )
 
     x = ops.transpose(x, [0, 1, 3, 5, 2, 4, 6, 7])
-    windows = ops.reshape(
-        x, [-1, window_size[0] * window_size[1] * window_size[2], channel]
-    )
+    windows = ops.reshape(x, [-1, window_size[0] * window_size[1] * window_size[2], channel])
 
     return windows
 
@@ -95,19 +94,14 @@ def compute_mask(depth, height, width, window_size, shift_size):
                 cnt = cnt + 1
     mask_windows = window_partition(img_mask, window_size)
     mask_windows = ops.squeeze(mask_windows, axis=-1)
-    attn_mask = ops.expand_dims(mask_windows, axis=1) - ops.expand_dims(
-        mask_windows, axis=2
-    )
+    attn_mask = ops.expand_dims(mask_windows, axis=1) - ops.expand_dims(mask_windows, axis=2)
     attn_mask = ops.where(attn_mask != 0, -100.0, attn_mask)
     attn_mask = ops.where(attn_mask == 0, 0.0, attn_mask)
     return attn_mask
 
 
-
 class MLP(layers.Layer):
-    def __init__(
-        self, hidden_dim, output_dim, drop_rate=0.0, activation="gelu", **kwargs
-    ):
+    def __init__(self, hidden_dim, output_dim, drop_rate=0.0, activation="gelu", **kwargs):
         super().__init__(**kwargs)
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
@@ -301,7 +295,7 @@ class SwinWindowAttention(keras.Model):
         self.num_heads = num_heads
         head_dim = input_dim // num_heads
         self.qk_scale = qk_scale
-        self.scale = head_dim**-0.5 #qk_scale or head_dim**-0.5
+        self.scale = head_dim**-0.5  # qk_scale or head_dim**-0.5
         self.qkv_bias = qkv_bias
         self.attn_drop_rate = attn_drop_rate
         self.proj_drop_rate = proj_drop_rate
@@ -311,7 +305,7 @@ class SwinWindowAttention(keras.Model):
             ops.arange(window_width),
             ops.arange(window_depth),
             ops.arange(window_height),
-            indexing="ij"
+            indexing="ij",
         )
         coords = ops.stack([z_z, y_y, x_x], axis=0)
         coords_flatten = ops.reshape(coords, [3, -1])
@@ -335,7 +329,7 @@ class SwinWindowAttention(keras.Model):
                 * (2 * self.window_size[2] - 1),
                 self.num_heads,
             ),
-            initializer=initializers.RandomNormal(stddev=0.02), 
+            initializer=initializers.RandomNormal(stddev=0.02),
             trainable=True,
             name="relative_position_bias_table",
         )
@@ -466,16 +460,14 @@ class SwinTransformerBlock(keras.Model):
                 )
 
     def build(self, input_shape):
-        
+
         self.apply_cyclic_shift = False
         if any(i > 0 for i in self.shift_size):
             self.apply_cyclic_shift = True
 
         # layers
         self.drop_path = (
-            DropPath(self.drop_path_rate)
-            if self.drop_path_rate > 0.0
-            else layers.Identity()
+            DropPath(self.drop_path_rate) if self.drop_path_rate > 0.0 else layers.Identity()
         )
 
         self.norm1 = self.norm_layer(axis=-1, epsilon=1e-05)
@@ -667,9 +659,7 @@ class SwinBasicLayer(keras.Model):
     def _compute_dim_padded(self, input_dim, window_dim_size):
         input_dim = ops.cast(input_dim, dtype="float32")
         window_dim_size = ops.cast(window_dim_size, dtype="float32")
-        return ops.cast(
-            ops.ceil(input_dim / window_dim_size) * window_dim_size, dtype="int32"
-        )
+        return ops.cast(ops.ceil(input_dim / window_dim_size) * window_dim_size, dtype="int32")
 
     def build(self, input_shape):
         # build blocks
@@ -691,7 +681,7 @@ class SwinBasicLayer(keras.Model):
                 ),
                 norm_layer=self.norm_layer,
             )
-            for i in range(self.depth) 
+            for i in range(self.depth)
         ]
 
         if self.downsampling_layer is not None:
@@ -764,6 +754,7 @@ class SwinBasicLayer(keras.Model):
         )
         return config
 
+
 def parse_model_inputs(input_shape, input_tensor, **kwargs):
     if input_tensor is None:
         return keras.layers.Input(shape=input_shape, **kwargs)
@@ -772,6 +763,7 @@ def parse_model_inputs(input_shape, input_tensor, **kwargs):
             return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
         else:
             return input_tensor
+
 
 class SwinBackbone(keras.Model):
     def __init__(
@@ -803,8 +795,7 @@ class SwinBackbone(keras.Model):
             or input_spec.shape[-2] is None
         ):
             raise ValueError(
-                "Depth, height and width of the video must be specified"
-                " in `input_shape`."
+                "Depth, height and width of the video must be specified" " in `input_shape`."
             )
 
         x = input_spec
@@ -859,19 +850,19 @@ class SwinBackbone(keras.Model):
 
     def get_config(self):
         config = {
-                "input_shape": self.input_shape[1:],
-                "input_tensor": self.input_tensor,
-                "embed_dim": self.embed_dim,
-                "patch_norm": self.patch_norm,
-                "window_size": self.window_size,
-                "patch_size": self.patch_size,
-                "mlp_ratio": self.mlp_ratio,
-                "drop_rate": self.drop_rate,
-                "drop_path_rate": self.drop_path_rate,
-                "attn_drop_rate": self.attn_drop_rate,
-                "depths": self.depths,
-                "num_heads": self.num_heads,
-                "qkv_bias": self.qkv_bias,
-                "qk_scale": self.qk_scale,
-            }
+            "input_shape": self.input_shape[1:],
+            "input_tensor": self.input_tensor,
+            "embed_dim": self.embed_dim,
+            "patch_norm": self.patch_norm,
+            "window_size": self.window_size,
+            "patch_size": self.patch_size,
+            "mlp_ratio": self.mlp_ratio,
+            "drop_rate": self.drop_rate,
+            "drop_path_rate": self.drop_path_rate,
+            "attn_drop_rate": self.attn_drop_rate,
+            "depths": self.depths,
+            "num_heads": self.num_heads,
+            "qkv_bias": self.qkv_bias,
+            "qk_scale": self.qk_scale,
+        }
         return config

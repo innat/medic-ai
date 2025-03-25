@@ -1,6 +1,7 @@
+from typing import *
 
 import tensorflow as tf
-from typing import *
+
 
 class MetaTensor:
     def __init__(self, data: Dict[str, tf.Tensor], meta: Dict[str, Any] = None):

@@ -1,5 +1,6 @@
 from medicai.transforms import MetaTensor
 
+
 class Compose:
     def __init__(self, transforms):
         self.transforms = transforms

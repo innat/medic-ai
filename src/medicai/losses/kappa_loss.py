@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
+import keras
 import numpy as np
 from keras import ops
-import keras
 from typeguard import typechecked
 
 Number = Union[

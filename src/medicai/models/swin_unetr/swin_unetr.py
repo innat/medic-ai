@@ -1,17 +1,11 @@
-import keras
-import numpy as np
-from keras import ops
 from functools import partial
 
 import keras
 import numpy as np
-from keras import layers
+from keras import layers, ops
+
+from medicai.blocks import UnetBasicBlock, UnetOutBlock, UnetrBasicBlock, UnetResBlock, UnetrUpBlock
 from medicai.models.swin_unetr.swin_unetr_layers import *
-from medicai.blocks import UnetBasicBlock
-from medicai.blocks import UnetOutBlock
-from medicai.blocks import UnetResBlock
-from medicai.blocks import UnetrBasicBlock
-from medicai.blocks import UnetrUpBlock
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
@@ -19,10 +13,11 @@ class SwinUNETR(keras.Model):
     def __init__(
         self,
         *,
-        input_shape=(96,96,96,1),
-        num_classes=4, 
-        feature_size=48, 
-        res_block=True, 
+        input_shape=(96, 96, 96, 1),
+        num_classes=4,
+        classifier_activation=None,
+        feature_size=48,
+        res_block=True,
         norm_name="instance",
         **kwargs
     ):
@@ -35,7 +30,7 @@ class SwinUNETR(keras.Model):
             embed_dim=48,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
-            patch_norm=False
+            patch_norm=False,
         )
         inputs = encoder.input
         skips = [
@@ -47,9 +42,10 @@ class SwinUNETR(keras.Model):
         ]
         unetr_head = self.build_unet(
             num_classes=num_classes,
-            feature_size=feature_size, 
-            res_block=True, 
-            norm_name=norm_name, 
+            feature_size=feature_size,
+            res_block=True,
+            norm_name=norm_name,
+            classifier_activation=classifier_activation,
         )
 
         # Combine encoder and decoder
@@ -62,7 +58,12 @@ class SwinUNETR(keras.Model):
         self.norm_name = norm_name
 
     def build_unet(
-        self, num_classes=4, feature_size=16, res_block=True, norm_name="instance"
+        self,
+        num_classes=4,
+        feature_size=16,
+        res_block=True,
+        norm_name="instance",
+        classifier_activation=None,
     ):
         def apply(inputs):
             enc_input = inputs[0]
@@ -70,96 +71,77 @@ class SwinUNETR(keras.Model):
 
             # Encoder 1 (process raw input)
             enc0 = UnetrBasicBlock(
-                feature_size, 
-                kernel_size=3, 
-                stride=1, 
-                norm_name=norm_name, 
-                res_block=res_block
+                feature_size, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
             )(enc_input)
 
             # Encoder 2 (process hidden_states_out[0])
             enc1 = UnetrBasicBlock(
-                feature_size, 
-                kernel_size=3, 
-                stride=1, 
-                norm_name=norm_name, 
-                res_block=res_block
+                feature_size, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
             )(hidden_states_out[0])
 
             # Encoder 3 (process hidden_states_out[1])
             enc2 = UnetrBasicBlock(
-                feature_size * 2, 
-                kernel_size=3, 
-                stride=1, 
-                norm_name=norm_name, 
-                res_block=res_block
+                feature_size * 2, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
             )(hidden_states_out[1])
 
             # Encoder 4 (process hidden_states_out[2])
             enc3 = UnetrBasicBlock(
-                feature_size * 4, 
-                kernel_size=3, 
-                stride=1, 
-                norm_name=norm_name, 
-                res_block=res_block
+                feature_size * 4, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
             )(hidden_states_out[2])
 
             # Encoder 5 (process hidden_states_out[4] as bottleneck)
             dec4 = UnetrBasicBlock(
-                feature_size * 16, 
-                kernel_size=3, 
-                stride=1, 
-                norm_name=norm_name, 
-                res_block=res_block
+                feature_size * 16, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
             )(hidden_states_out[4])
 
             # Decoder 5 (upsample dec4 and concatenate with hidden_states_out[3])
             dec3 = UnetrUpBlock(
-                feature_size * 8, 
-                kernel_size=3, 
+                feature_size * 8,
+                kernel_size=3,
                 upsample_kernel_size=2,
-                norm_name=norm_name, 
-                res_block=res_block
+                norm_name=norm_name,
+                res_block=res_block,
             )(dec4, hidden_states_out[3])
 
             # Decoder 4 (upsample dec3 and concatenate with enc3)
             dec2 = UnetrUpBlock(
-                feature_size * 4, 
-                kernel_size=3, 
+                feature_size * 4,
+                kernel_size=3,
                 upsample_kernel_size=2,
-                norm_name=norm_name, 
-                res_block=res_block
+                norm_name=norm_name,
+                res_block=res_block,
             )(dec3, enc3)
 
             # Decoder 3 (upsample dec2 and concatenate with enc2)
             dec1 = UnetrUpBlock(
-                feature_size * 2, 
-                kernel_size=3, 
+                feature_size * 2,
+                kernel_size=3,
                 upsample_kernel_size=2,
-                norm_name=norm_name, 
-                res_block=res_block
+                norm_name=norm_name,
+                res_block=res_block,
             )(dec2, enc2)
 
             # Decoder 2 (upsample dec1 and concatenate with enc1)
             dec0 = UnetrUpBlock(
-                feature_size, 
+                feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
-                norm_name=norm_name, 
-                res_block=res_block
+                norm_name=norm_name,
+                res_block=res_block,
             )(dec1, enc1)
 
             out = UnetrUpBlock(
-                feature_size, 
+                feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
-                norm_name=norm_name, 
-                res_block=res_block
+                norm_name=norm_name,
+                res_block=res_block,
             )(dec0, enc0)
 
             # Final output (process dec0 and produce logits)
-            logits = UnetOutBlock(num_classes)(out)
+            logits = UnetOutBlock(num_classes, activation=classifier_activation)(out)
             return logits
+
         return apply
 
     def get_config(self):
@@ -168,6 +150,6 @@ class SwinUNETR(keras.Model):
             "num_classes": self.num_classes,
             "feature_size": self.feature_size,
             "res_block": self.res_block,
-            "norm_name": self.norm_name
+            "norm_name": self.norm_name,
         }
         return config

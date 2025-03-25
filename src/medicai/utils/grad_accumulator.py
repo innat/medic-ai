@@ -1,5 +1,5 @@
-import tensorflow as tf
 import keras
+import tensorflow as tf
 
 
 class GradientAccumulator(keras.Model):

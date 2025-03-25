@@ -1,19 +1,14 @@
-
 from keras.callbacks import Callback
+
 from medicai.metrics import DiceMetric
 from medicai.utils.inference import SlidingWindowInference
 
+
 class SlidingWindowInferenceCallback(Callback):
-    def __init__(
-            self, 
-            dataset, 
-            num_classes,
-            interval=5, 
-            save_path="best_model.weights.h5"
-        ):
+    def __init__(self, dataset, num_classes, interval=5, save_path="best_model.weights.h5"):
         """
         Custom Keras callback to perform inference on a dataset periodically and save best model.
-        
+
         Args:
             dataset (tf.data.Dataset or tuple): Dataset to perform inference on. If tuple, should be (X, y).
             interval (int): Number of epochs between each inference run.
@@ -31,19 +26,18 @@ class SlidingWindowInferenceCallback(Callback):
             reduction="mean",
             ignore_empty=True,
             smooth=1e-6,
-            name='dice_score'
+            name="dice_score",
         )
-        self.roi_size=(96, 96, 96)
-        self.sw_batch_size=4
-        self.num_classes=4
-
+        self.roi_size = (96, 96, 96)
+        self.sw_batch_size = 4
+        self.num_classes = 4
 
     def on_epoch_end(self, epoch, logs=None):
         if (epoch + 1) % self.interval == 0:
             print(f"\nEpoch {epoch+1}: Running inference...")
 
             self.dice_metric.reset_state()  # Reset metric before evaluation
-            
+
             for x, y in self.dataset:  # (bs, d, h, w, channel)
                 y_pred = output = sliding_window_inference(
                     x, self.roi_size, self.sw_batch_size, self.model, overlap=0.8
@@ -60,5 +54,5 @@ class SlidingWindowInferenceCallback(Callback):
                 print(f"New best Dice score! Model saved to {self.save_path}")
 
     def sliding_window_inference(self, x):
-        """ Apply sliding window inference (modify as needed) """
+        """Apply sliding window inference (modify as needed)"""
         return self.model.predict(x, batch_size=1)  # Change batch size as needed

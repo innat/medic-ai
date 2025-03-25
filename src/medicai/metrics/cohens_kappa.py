@@ -2,9 +2,9 @@
 
 from typing import Optional, Union
 
+import keras.backend as K
 import numpy as np
 import tensorflow as tf
-import keras.backend as K
 from keras import ops
 from keras.metrics import Metric
 from typeguard import typechecked
@@ -49,22 +49,22 @@ class CohenKappa(Metric):
             "conf_mtx",
             shape=(self.num_classes, self.num_classes),
             initializer=keras.initializers.zeros,
-            dtype='float32',
+            dtype="float32",
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         return self._update(y_true, y_pred, sample_weight)
 
     def _update_binary_class_model(self, y_true, y_pred, sample_weight=None):
-        y_true = ops.cast(y_true, dtype='int64')
-        y_pred = ops.cast(y_pred, dtype='float32')
-        y_pred = ops.cast(y_pred > 0.5, dtype='int64')
+        y_true = ops.cast(y_true, dtype="int64")
+        y_pred = ops.cast(y_pred, dtype="float32")
+        y_pred = ops.cast(y_pred > 0.5, dtype="int64")
         return self._update_confusion_matrix(y_true, y_pred, sample_weight)
 
     @tf.function
     def _update_multi_class_model(self, y_true, y_pred, sample_weight=None):
         v = ops.argmax(y_true, axis=1) if not self.sparse_labels else y_true
-        y_true = ops.cast(v, dtype='int64')
+        y_true = ops.cast(v, dtype="int64")
 
         y_pred = self._cast_ypred(y_pred)
 
@@ -74,12 +74,12 @@ class CohenKappa(Metric):
     def _cast_ypred(self, y_pred):
         if ops.rank(y_pred) > 1:
             if not self.regression:
-                y_pred = ops.cast(ops.argmax(y_pred, axis=-1), dtype='int64')
+                y_pred = ops.cast(ops.argmax(y_pred, axis=-1), dtype="int64")
             else:
                 y_pred = ops.math.round(ops.math.abs(y_pred))
-                y_pred = ops.cast(y_pred, dtype='int64')
+                y_pred = ops.cast(y_pred, dtype="int64")
         else:
-            y_pred = ops.cast(y_pred, dtype='int64')
+            y_pred = ops.cast(y_pred, dtype="int64")
         return y_pred
 
     @tf.function
@@ -101,7 +101,7 @@ class CohenKappa(Metric):
             predictions=y_pred,
             num_classes=self.num_classes,
             weights=sample_weight,
-            dtype='float32',
+            dtype="float32",
         )
 
         return self.conf_mtx.assign_add(new_conf_mtx)
@@ -112,10 +112,10 @@ class CohenKappa(Metric):
 
         # 2. Create a weight matrix
         if self.weightage is None:
-            diagonal = ops.zeros([nb_ratings], dtype='float32')
+            diagonal = ops.zeros([nb_ratings], dtype="float32")
             weight_mtx = ops.linalg.set_diag(weight_mtx, diagonal=diagonal)
         else:
-            weight_mtx += ops.cast(ops.range(nb_ratings), dtype='float32')
+            weight_mtx += ops.cast(ops.range(nb_ratings), dtype="float32")
             weight_mtx = ops.cast(weight_mtx, dtype=self.dtype)
 
             if self.weightage == "linear":

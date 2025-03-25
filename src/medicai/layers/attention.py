@@ -1,5 +1,5 @@
-from keras import layers
-from keras import ops
+from keras import layers, ops
+
 
 class ChannelWiseAttention(layers.Layer):
     def __init__(self, config, **kwargs):

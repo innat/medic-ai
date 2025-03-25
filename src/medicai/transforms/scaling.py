@@ -1,6 +1,9 @@
-import tensorflow as tf
-from medicai.transforms import MetaTensor
 from typing import *
+
+import tensorflow as tf
+
+from medicai.transforms.meta_tensor import MetaTensor
+
 
 class ScaleIntensityRange:
     def __init__(

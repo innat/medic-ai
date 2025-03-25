@@ -1,5 +1,7 @@
+from typing import Any, List, Sequence, Tuple
 
-from typing import Any, Tuple, Sequence
+import numpy as np
+
 
 def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:
     """Ensure `val` is a tuple of length `rep`."""
@@ -8,6 +10,7 @@ def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:
     if len(val) == rep:
         return tuple(val)
     raise ValueError(f"Length of `val` ({len(val)}) must match `rep` ({rep}).")
+
 
 def fall_back_tuple(val: Any, fallback: Sequence[int]) -> Tuple[int, ...]:
     """Ensure `val` is a tuple of the same length as `fallback`."""
@@ -19,8 +22,12 @@ def fall_back_tuple(val: Any, fallback: Sequence[int]) -> Tuple[int, ...]:
         raise ValueError(f"Length of `val` ({len(val)}) must match `fallback` ({len(fallback)}).")
     return tuple(val)
 
+
 def _get_scan_interval(
-    image_size: Sequence[int], roi_size: Sequence[int], num_spatial_dims: int, overlap: Sequence[float]
+    image_size: Sequence[int],
+    roi_size: Sequence[int],
+    num_spatial_dims: int,
+    overlap: Sequence[float],
 ) -> Tuple[int, ...]:
     """Compute scan intervals based on image size, roi size, and overlap."""
     scan_interval = []
@@ -32,11 +39,12 @@ def _get_scan_interval(
             scan_interval.append(interval if interval > 0 else 1)
     return tuple(scan_interval)
 
+
 def dense_patch_slices(
-    image_size: Sequence[int], 
-    patch_size: Sequence[int], 
-    scan_interval: Sequence[int], 
-    return_slice: bool = True
+    image_size: Sequence[int],
+    patch_size: Sequence[int],
+    scan_interval: Sequence[int],
+    return_slice: bool = True,
 ) -> List[Tuple[slice, ...]]:
     num_spatial_dims = len(image_size)
 
@@ -46,10 +54,12 @@ def dense_patch_slices(
         if scan_interval[i] == 0:
             scan_num.append(1)
         else:
-            num = (image_size[i] + scan_interval[i] - 1) // scan_interval[i]  # Equivalent to math.ceil
+            num = (image_size[i] + scan_interval[i] - 1) // scan_interval[
+                i
+            ]  # Equivalent to math.ceil
             scan_dim = next(
                 (d for d in range(num) if d * scan_interval[i] + patch_size[i] >= image_size[i]),
-                None
+                None,
             )
             scan_num.append(scan_dim + 1 if scan_dim is not None else 1)
 
@@ -66,33 +76,37 @@ def dense_patch_slices(
     # Generate all combinations of start indices
     out = []
     from itertools import product
+
     for start_indices in product(*starts):
         if return_slice:
-            out.append(tuple(
-                slice(start, start + patch_size[d]) for d, start in enumerate(start_indices)
-            ))
+            out.append(
+                tuple(slice(start, start + patch_size[d]) for d, start in enumerate(start_indices))
+            )
         else:
-            out.append(tuple(
-                (start, start + patch_size[d]) for d, start in enumerate(start_indices)
-            ))
+            out.append(
+                tuple((start, start + patch_size[d]) for d, start in enumerate(start_indices))
+            )
 
     return out
 
 
 def compute_importance_map(
-    patch_size: Sequence[int], mode: str = "constant", sigma_scale: Sequence[float] = (0.125,), dtype=np.float32
+    patch_size: Sequence[int],
+    mode: str = "constant",
+    sigma_scale: Sequence[float] = (0.125,),
+    dtype=np.float32,
 ) -> np.ndarray:
     """Compute importance map for blending."""
     if mode == "constant":
         return np.ones(patch_size, dtype=dtype)
-    
+
     elif mode == "gaussian":
         sigma = [s * p for s, p in zip(sigma_scale, patch_size)]
         grid = np.meshgrid(*[np.arange(p, dtype=dtype) for p in patch_size], indexing="ij")
         center = [(p - 1) / 2 for p in patch_size]
         dist = np.sqrt(sum((g - c) ** 2 for g, c in zip(grid, center)))
         return np.exp(-0.5 * (dist / sigma) ** 2)
-    
+
     else:
         raise ValueError(f"Unsupported mode: {mode}")
 
@@ -104,7 +118,9 @@ def get_valid_patch_size(image_size: Sequence[int], patch_size: Sequence[int]) -
     return tuple(min(p, i) for p, i in zip(patch_size, image_size))
 
 
-def _crop_output(output: np.ndarray, pad_size: Sequence[Sequence[int]], original_size: Sequence[int]) -> np.ndarray:
+def _crop_output(
+    output: np.ndarray, pad_size: Sequence[Sequence[int]], original_size: Sequence[int]
+) -> np.ndarray:
     """
     Crop the output to remove padding.
 
