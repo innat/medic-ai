@@ -1,8 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.layers import ChannelWiseAttention
-from medicai.layers import ElementWiseAttention
+from medicai.layers import ChannelWiseAttention, ElementWiseAttention
 
 model_instance = {
     "efficientnetb0": keras.applications.EfficientNetB0,

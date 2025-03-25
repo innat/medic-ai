@@ -1,17 +1,23 @@
-
 from keras import layers
+
+from medicai.blocks import UnetBasicBlock, UnetResBlock
 from medicai.utils import get_act_layer, get_norm_layer
-from medicai.blocks import UnetResBlock, UnetBasicBlock
+
 
 def UnetrUpBlock(
-    out_channels, kernel_size=3, stride=1, upsample_kernel_size=2, norm_name="instance", res_block=True
+    out_channels,
+    kernel_size=3,
+    stride=1,
+    upsample_kernel_size=2,
+    norm_name="instance",
+    res_block=True,
 ):
     def wrapper(inputs, skip):
         x = layers.Conv3DTranspose(
             out_channels,
             kernel_size=upsample_kernel_size,
             strides=upsample_kernel_size,
-            use_bias=False
+            use_bias=False,
         )(inputs)
 
         # Concatenate with skip connection
@@ -34,4 +40,5 @@ def UnetrUpBlock(
                 norm_name=norm_name,
             )(x)
         return x
+
     return wrapper

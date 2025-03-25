@@ -1,11 +1,18 @@
+from typing import Sequence, Tuple, Union
 
 import tensorflow as tf
-from typing import Tuple, Union, Sequence
-from medicai.transforms import MetaTensor
+
+from medicai.transforms.meta_tensor import MetaTensor
+
 
 class RandShiftIntensity:
-    def __init__(self, keys: Sequence[str], offsets: Union[float, Tuple[float, float]], 
-                 prob: float = 0.1, channel_wise: bool = False):
+    def __init__(
+        self,
+        keys: Sequence[str],
+        offsets: Union[float, Tuple[float, float]],
+        prob: float = 0.1,
+        channel_wise: bool = False,
+    ):
         """
         Args:
             keys: list of keys to apply the transform to.
@@ -31,7 +38,9 @@ class RandShiftIntensity:
                 if key in shifted_data:
                     img = shifted_data[key]
                     if self.channel_wise and len(img.shape) == 4:
-                        offsets = tf.random.uniform((1, 1, 1, img.shape[-1]), self.offsets[0], self.offsets[1])
+                        offsets = tf.random.uniform(
+                            (1, 1, 1, img.shape[-1]), self.offsets[0], self.offsets[1]
+                        )
                     else:
                         offsets = tf.random.uniform((), self.offsets[0], self.offsets[1])
                     shifted_data[key] = img + offsets

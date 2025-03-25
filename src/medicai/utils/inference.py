@@ -1,19 +1,18 @@
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
-from scipy.ndimage import zoom
 import numpy as np
-from typing import Sequence, Tuple, List
-from typing import Any, Callable, Sequence, Mapping, Optional, Tuple, Union
+from scipy.ndimage import zoom
+
 from medicai.utils.general import (
+    _crop_output,
+    _get_scan_interval,
+    compute_importance_map,
+    dense_patch_slices,
     ensure_tuple_rep,
     fall_back_tuple,
-    _get_scan_interval,
-    dense_patch_slices,
-    compute_importance_map,
     get_valid_patch_size,
-    _crop_output
 )
 
-from typing import Sequence, Union, Optional
 
 class SlidingWindowInference:
     def __init__(
@@ -55,7 +54,6 @@ class SlidingWindowInference:
             cval=self.cval,
             roi_weight_map=self.roi_weight_map,
         )
-
 
 
 def sliding_window_inference(
@@ -113,9 +111,7 @@ def sliding_window_inference(
     pad_size = [[0, 0]] + pad_size + [[0, 0]]  # Add padding for batch and channel dimensions
 
     if any(p for pair in pad_size for p in pair):
-        inputs = np.pad(
-            inputs, pad_size, mode=padding_mode.lower(), constant_values=cval
-            )
+        inputs = np.pad(inputs, pad_size, mode=padding_mode.lower(), constant_values=cval)
 
     # Compute scan intervals
     scan_interval = _get_scan_interval(image_size, roi_size, num_spatial_dims, overlap)
@@ -130,16 +126,18 @@ def sliding_window_inference(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
         if len(importance_map.shape) == num_spatial_dims:
-            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)  # Add batch and channel dims
+            importance_map = np.expand_dims(
+                np.expand_dims(importance_map, -1), 0
+            )  # Add batch and channel dims
 
     # Initialize output and count maps as NumPy arrays
     output_shape = [batch_size] + list(image_size) + [num_classes]
-    output_image = np.zeros(output_shape, dtype='float32')
-    count_map = np.zeros([1] + list(image_size) + [1], dtype='float32')
+    output_image = np.zeros(output_shape, dtype="float32")
+    count_map = np.zeros([1] + list(image_size) + [1], dtype="float32")
 
     # Apply sliding window inference in batches
     for i in range(0, len(slices), sw_batch_size):
-        batch_slices = slices[i:i + sw_batch_size]
+        batch_slices = slices[i : i + sw_batch_size]
         patch_list = []
         for slice_idx in batch_slices:
             full_slice = (slice(None),) + slice_idx + (slice(None),)
@@ -154,7 +152,7 @@ def sliding_window_inference(
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
             bs, d, h, w, c = importance_map.shape
             scale_factors = (1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1)
-            importance_map_resized = zoom(importance_map, scale_factors, order=0) 
+            importance_map_resized = zoom(importance_map, scale_factors, order=0)
         else:
             importance_map_resized = importance_map
 
@@ -171,7 +169,4 @@ def sliding_window_inference(
     if any(p for pair in pad_size for p in pair):
         output_image = _crop_output(output_image, pad_size, image_size_)
 
-    
     return output_image
-
-

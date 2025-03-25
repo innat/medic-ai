@@ -20,9 +20,11 @@ def UNet(
     selected_layers = BACKBONE_ARGS[backbone]
 
     skip_layers = [
-        base_model.get_layer(name=sl).output
-        if isinstance(sl, str)
-        else base_model.get_layer(index=sl).output
+        (
+            base_model.get_layer(name=sl).output
+            if isinstance(sl, str)
+            else base_model.get_layer(index=sl).output
+        )
         for sl in selected_layers
     ]
 

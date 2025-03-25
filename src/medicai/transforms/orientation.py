@@ -1,6 +1,9 @@
-import tensorflow as tf
 from typing import Sequence
-from medicai.transforms import MetaTensor
+
+import tensorflow as tf
+
+from medicai.transforms.meta_tensor import MetaTensor
+
 
 class Orientation:
     """
@@ -12,17 +15,19 @@ class Orientation:
         self.axcodes = axcodes.upper()
 
     def __call__(self, inputs: MetaTensor) -> MetaTensor:
-        affine = inputs.meta.get('affine')
+        affine = inputs.meta.get("affine")
         if affine is None:
             raise ValueError("Affine matrix is required for orientation transformation.")
 
         oriented_data = inputs.data.copy()
         for key in self.keys:
             if key in oriented_data:
-                oriented_data[key] = self.apply_orientation(oriented_data[key], affine, self.axcodes)
+                oriented_data[key] = self.apply_orientation(
+                    oriented_data[key], affine, self.axcodes
+                )
 
         return MetaTensor(oriented_data, inputs.meta)
-    
+
     # def __call__(self, inputs: MetaTensor) -> MetaTensor:
     #     affine = inputs.meta.get('affine')
     #     if affine is None:
@@ -88,8 +93,9 @@ class Orientation:
 
         return tf.strings.reduce_join([get_code(axis_int)])
 
-
-    def calculate_permutation(self, current_orientation: str, target_orientation: str) -> Sequence[int]:
+    def calculate_permutation(
+        self, current_orientation: str, target_orientation: str
+    ) -> Sequence[int]:
         """Calculates the permutation needed to change from current to target orientation."""
         permutation = []
         axis_map = {"R": 0, "A": 1, "S": 2, "L": 0, "P": 1, "I": 2}
@@ -98,11 +104,19 @@ class Orientation:
             permutation.append(axis_map[target_axis])
         return permutation
 
-
-    def calculate_flip_flags(self, current_orientation: str, target_orientation: str) -> Sequence[bool]:
+    def calculate_flip_flags(
+        self, current_orientation: str, target_orientation: str
+    ) -> Sequence[bool]:
         flip_flags = []
         for i in range(3):
             current_axis = tf.strings.substr(current_orientation, i, 1)
             target_axis = tf.strings.substr(target_orientation, i, 1)
-            flip_flags.append(tf.logical_not(tf.equal(tf.strings.regex_full_match(current_axis, r"[RAS]"), tf.strings.regex_full_match(target_axis, r"[RAS]"))))
+            flip_flags.append(
+                tf.logical_not(
+                    tf.equal(
+                        tf.strings.regex_full_match(current_axis, r"[RAS]"),
+                        tf.strings.regex_full_match(target_axis, r"[RAS]"),
+                    )
+                )
+            )
         return flip_flags
