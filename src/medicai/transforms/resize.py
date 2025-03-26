@@ -16,7 +16,6 @@ class Resize:
         self.keys = keys
         self.mode = dict(zip(keys, mode))
         self.spatial_shape = spatial_shape
-        self.only_image = only_image
 
     def __call__(self, inputs: MetaTensor) -> MetaTensor:
         for key in self.keys:
