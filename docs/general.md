@@ -1,0 +1,71 @@
+# Medic-AI
+
+```python
+import keras
+from medicai.nets import SwinUNETR
+from medicai.losses import DiceCELoss
+from medicai.metrics import DiceMetric
+from medicai.utils import SlidingWindowInference
+
+import keras
+import tensorflow as tf
+
+from medicai.losses import SparseDiceCELoss
+from medicai.metrics import DiceMetric
+from medicai.models import SwinUNETR
+from medicai.transforms import (
+    Compose,
+    ScaleIntensityRange,
+)
+
+# build dataloader
+dataloader = ...
+num_classes=4
+
+# build the model, compile
+model = SwinUNETR(
+    input_shape=(96, 96, 96, 1),
+    num_classes=4,
+)
+model.compile(
+    loss=DiceCELoss(to_onehot_y=True, softmax=True),
+    metrics=[
+        DiceMetric(
+            num_classes,
+            include_background=True,
+            reduction="mean",
+            ignore_empty=True,
+            smooth=1e-6,
+            name='dice_score'
+        )
+    ],
+    optimizer='adamw'
+)
+
+# train the model
+hist = model.fit(dataloader, epochs=10)
+
+# evaluation
+val_ds = ...
+input, label = next(iter(val_dataloader))
+swi = SlidingWindowInference(
+    model
+    num_classes=num_classes, 
+    roi_size=(96, 96, 96), 
+    sw_batch_size=4, 
+    overlap=0.8
+)
+pred = swi(input)
+dice_metric = DiceMetric(
+    num_classes=num_classes,
+    include_background=True,
+    reduction="mean",
+    ignore_empty=True,
+    smooth=1e-6,
+    name='dice_score'
+)
+dice_metric.update_state(y, output)
+dice_score = dice_metric.result()
+print(f"Dice Score: {dice_score.numpy()}")
+Dice Score: 0.73
+```

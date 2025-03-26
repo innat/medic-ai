@@ -49,7 +49,7 @@ class SwinUNETR(keras.Model):
             encoder.get_layer("swin_feature3").output,
             encoder.get_layer("swin_feature4").output,
         ]
-        unetr_head = self.build_unet(
+        unetr_head = self.build_decoder(
             num_classes=num_classes,
             feature_size=feature_size,
             res_block=True,
@@ -66,7 +66,7 @@ class SwinUNETR(keras.Model):
         self.res_block = res_block
         self.norm_name = norm_name
 
-    def build_unet(
+    def build_decoder(
         self,
         num_classes=4,
         feature_size=16,
@@ -157,6 +157,7 @@ class SwinUNETR(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
+            "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
             "res_block": self.res_block,
             "norm_name": self.norm_name,
