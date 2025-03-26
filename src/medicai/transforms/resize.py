@@ -8,7 +8,7 @@ from medicai.transforms.depth_interpolate import DepthInterpolation as depth_int
 class Resize:
     def __init__(
             self,
-            keys: Sequence[str] = ("image", "label"),
+            keys: Sequence[str],
             mode: Tuple[str, str] = ("bilinear", "nearest"),
             spatial_shape: Tuple[int, ...] = (96,96,96),
             only_image: bool = False,
