@@ -15,9 +15,11 @@ class DepthInterpolation:
 
     def __call__(self, inputs, target_depth, depth_axis=0, method="linear"):
 
-        if method not in self.SUPPORTED_METHOD:
+        normalized_method = method.replace('bi', '') if method.startswith('bi') else method
+
+        if normalized_method not in self.SUPPORTED_METHOD:
             raise ValueError(
-                f"Support interplation methods are {self.SUPPORTED_METHOD} " f"But got {method}"
+                f"Supported depth interplation methods are {self.SUPPORTED_METHOD} " f"But got {method}"
             )
 
         ip_methods = {
@@ -25,10 +27,9 @@ class DepthInterpolation:
             self.SUPPORTED_METHOD[1]: self.nearest_interpolation,
             self.SUPPORTED_METHOD[2]: self.cubic_interpolation,
         }
-        return ip_methods.get(self.method)(inputs, target_depth, depth_axis)
+        return ip_methods.get(normalized_method)(inputs, target_depth, depth_axis)
 
-    @staticmethod
-    def nearest_interpolation(volume, target_depth, depth_axis=0):
+    def nearest_interpolation(self, volume, target_depth, depth_axis=0):
         # Generate floating-point indices for the target depth
         depth_indices = tf.linspace(
             0.0, tf.cast(tf.shape(volume)[depth_axis] - 1, tf.float32), target_depth
@@ -39,8 +40,7 @@ class DepthInterpolation:
         resized_volume = tf.gather(volume, depth_indices, axis=depth_axis)
         return resized_volume
 
-    @staticmethod
-    def linear_interpolation(volume, target_depth, depth_axis=0):
+    def linear_interpolation(self, volume, target_depth, depth_axis=0):
         # Get the original depth size along the specified axis
         original_depth = tf.shape(volume)[depth_axis]
 
@@ -72,8 +72,7 @@ class DepthInterpolation:
 
         return interpolated_volume
 
-    @staticmethod
-    def cubic_interpolation(volume, target_depth, depth_axis=0):
+    def cubic_interpolation(self, volume, target_depth, depth_axis=0):
         # Get the original depth size along the specified axis
         original_depth = tf.shape(volume)[depth_axis]
 

@@ -8,3 +8,5 @@ typeguard
 typing_extensions
 tzdata
 urllib3
+scipy
+tqdm

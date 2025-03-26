@@ -8,7 +8,7 @@ from typing import *
 import tensorflow as tf
 
 from medicai.transforms.meta_tensor import MetaTensor
-from medicai.utils import DepthInterpolation
+from medicai.transforms.resize import Resize
 
 
 class Spacing:
@@ -23,7 +23,7 @@ class Spacing:
         self.image_mode = mode[0]
         self.label_mode = mode[1]
         self.mode = dict(zip(keys, mode))
-        # self.depth_interpolate = DepthInterpolation()
+
 
     def get_spacing_from_affine(self, affine):
         width_spacing = tf.norm(affine[:3, 0])
@@ -73,18 +73,7 @@ class Spacing:
         new_height = tf.cast(original_height * scale_h, tf.int32)
         new_width = tf.cast(original_width * scale_w, tf.int32)
 
-        resized_hw = tf.image.resize(image, [new_height, new_width], method=mode)
-
-        def nearest_interpolation(volume, target_depth, depth_axis=0):
-            # Generate floating-point indices for the target depth
-            depth_indices = tf.linspace(
-                0.0, tf.cast(tf.shape(volume)[depth_axis] - 1, tf.float32), target_depth
-            )
-            # Round the indices to the nearest integer (nearest-neighbor interpolation)
-            depth_indices = tf.cast(depth_indices, tf.int32)
-            # Gather slices from the original volume using the rounded indices
-            resized_volume = tf.gather(volume, depth_indices, axis=depth_axis)
-            return resized_volume
-
-        resized_dhw = nearest_interpolation(resized_hw, new_depth)
+        spatial_shape = (new_depth, new_height, new_width)
+        inputs = MetaTensor({'image': image})
+        resized_dhw = Resize(keys = ['image'], mode = [mode], spatial_shape = spatial_shape)(inputs).data['image']
         return resized_dhw

@@ -2,7 +2,7 @@
 from medicai.utils import hide_warnings
 hide_warnings()
 
-import kreas
+import keras
 from medicai.models.swin_unetr.swin_unetr_layers import *
 
 @keras.saving.register_keras_serializable(package="swin.transformer")
@@ -27,7 +27,6 @@ class SwinTransformer(keras.Model):
             drop_path_rate=0.0,
             patch_norm=False,
         )(inputs)
-        inputs = encoder.input
 
         x = keras.layers.GlobalAveragePooling3D()(encoder)
         outputs = keras.layers.Dense(

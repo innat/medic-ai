@@ -8,3 +8,5 @@ from medicai.transforms.random_rot90 import RandRotate90
 from medicai.transforms.random_shift_intensity import RandShiftIntensity
 from medicai.transforms.scaling import ScaleIntensityRange
 from medicai.transforms.spacing import Spacing
+from medicai.transforms.depth_interpolate import DepthInterpolation
+from medicai.transforms.resize import Resize

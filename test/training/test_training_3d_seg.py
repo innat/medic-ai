@@ -39,7 +39,7 @@ def train_and_assert(model, dataset):
 def create_model_and_compile(num_classes):
     model = SwinUNETR(
         input_shape=(96, 96, 96, 1),
-        out_channels=num_classes,
+        num_classes=num_classes,
         classifier_activation=None,
     )
     model.compile(
