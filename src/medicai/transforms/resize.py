@@ -11,7 +11,6 @@ class Resize:
             keys: Sequence[str],
             mode: Tuple[str, str] = ("bilinear", "nearest"),
             spatial_shape: Tuple[int, ...] = (96,96,96),
-            only_image: bool = False,
         ):
         self.keys = keys
         self.mode = dict(zip(keys, mode))
@@ -21,9 +20,6 @@ class Resize:
     def __call__(self, inputs: MetaTensor) -> MetaTensor:
         for key in self.keys:
             if key not in inputs.data:
-                continue
-
-            if self.only_image:
                 continue
 
             image = inputs.data[key]

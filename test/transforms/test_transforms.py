@@ -22,7 +22,7 @@ def test_resize_transform():
     inputs = MetaTensor({"image": image, "label": label})
 
     # check 2D resize
-    resize_transform = Resize(spatial_shape=(96,96))
+    resize_transform = Resize(keys=["image", "label"], spatial_shape=(96,96))
     resized_2d = resize_transform(inputs)
     assert resized_2d.data["image"].shape == (1, 96, 96, 1)
     assert resized_2d.data["label"].shape == (1, 96, 96, 1)
@@ -31,7 +31,7 @@ def test_resize_transform():
     image_3d = tf.random.normal((128, 128, 128, 1))
     label_3d = tf.random.uniform((128, 128, 128, 1), maxval=4, dtype=tf.int32)
     inputs_3d = MetaTensor({"image": image_3d, "label": label_3d})
-    resize_transform = Resize(spatial_shape=(64,96,96))
+    resize_transform = Resize(keys=["image", "label"], spatial_shape=(64,96,96))
     resized_3d = resize_transform(inputs)
     assert resized_3d.data["image"].shape == (64, 96, 96, 1)
     assert resized_3d.data["label"].shape == (64, 96, 96, 1)
@@ -39,7 +39,7 @@ def test_resize_transform():
     # check only one key (image)
     image_only = tf.random.normal((128, 128, 128, 1))
     inputs_image_only = MetaTensor({"image": image_only})
-    resize_transform = Resize(spatial_shape=(64,96,64))
+    resize_transform = Resize(keys=["image"], spatial_shape=(64,96,64), only_image=True)
     resized_image_only = resize_transform(inputs)
     assert resized_image_only.data["image"].shape == (64, 96, 64, 1)
 
