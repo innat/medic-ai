@@ -1,7 +1,7 @@
 import tensorflow as tf
 
-from src.medicai.models import SwinUNETR
-from src.medicai.models import SwinTransformer
+from src.medicai.models import SwinTransformer, SwinUNETR
+
 
 def test_swin_unetr():
     num_classes = 4
@@ -11,6 +11,7 @@ def test_swin_unetr():
     dummy_input = tf.random.normal((1, 96, 96, 96, 1))
     output = model(dummy_input)
     assert output.shape == (1, 96, 96, 96, num_classes)
+
 
 def test_swin_transformer():
     num_classes = 4

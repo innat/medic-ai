@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union, Optional
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scipy.ndimage import zoom
@@ -60,7 +60,7 @@ class SlidingWindowInference:
 def sliding_window_inference(
     inputs,
     model,
-    num_classes:Optional[int],
+    num_classes: Optional[int],
     roi_size: Sequence[int],
     sw_batch_size: int,
     overlap: Union[Sequence[float], float] = 0.25,
@@ -68,7 +68,7 @@ def sliding_window_inference(
     sigma_scale: Union[Sequence[float], float] = 0.125,
     padding_mode: str = "constant",
     cval: float = 0.0,
-    roi_weight_map = None,
+    roi_weight_map=None,
 ):
     """
     Sliding window inference in TensorFlow, mimicking MONAI's implementation.
@@ -128,17 +128,19 @@ def sliding_window_inference(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
         if len(importance_map.shape) == num_spatial_dims:
-            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)  # Add batch and channel dims
+            importance_map = np.expand_dims(
+                np.expand_dims(importance_map, -1), 0
+            )  # Add batch and channel dims
 
     # Initialize output and count maps as NumPy arrays
     num_classes = num_classes or model.output_shape[-1]
     output_shape = [batch_size] + list(image_size) + [num_classes]
-    output_image = np.zeros(output_shape, dtype='float32')
-    count_map = np.zeros([1] + list(image_size) + [1], dtype='float32')
+    output_image = np.zeros(output_shape, dtype="float32")
+    count_map = np.zeros([1] + list(image_size) + [1], dtype="float32")
 
     # Apply sliding window inference in batches
     for i in tqdm(range(0, len(slices), sw_batch_size), desc=f"Total patch {len(slices)}"):
-        batch_slices = slices[i:i + sw_batch_size]
+        batch_slices = slices[i : i + sw_batch_size]
         patch_list = []
         for slice_idx in batch_slices:
             full_slice = (slice(None),) + slice_idx + (slice(None),)
@@ -153,9 +155,7 @@ def sliding_window_inference(
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
             _, d, h, w, _ = importance_map.shape
             target_shape = pred.shape[1:-1]
-            scale_factors = (
-                1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1
-            )
+            scale_factors = (1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1)
             importance_map_resized = zoom(importance_map, scale_factors, order=0)
         else:
             importance_map_resized = importance_map

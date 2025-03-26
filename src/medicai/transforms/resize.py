@@ -1,17 +1,18 @@
 from typing import Sequence, Tuple
 
 import tensorflow as tf
-from medicai.transforms.meta_tensor import MetaTensor
+
 from medicai.transforms.depth_interpolate import DepthInterpolation as depth_interpolate
+from medicai.transforms.meta_tensor import MetaTensor
 
 
 class Resize:
     def __init__(
-            self,
-            keys: Sequence[str],
-            mode: Tuple[str, str] = ("bilinear", "nearest"),
-            spatial_shape: Tuple[int, ...] = (96,96,96),
-        ):
+        self,
+        keys: Sequence[str],
+        mode: Tuple[str, str] = ("bilinear", "nearest"),
+        spatial_shape: Tuple[int, ...] = (96, 96, 96),
+    ):
         self.keys = keys
         self.mode = dict(zip(keys, mode))
         self.spatial_shape = spatial_shape
@@ -41,5 +42,7 @@ class Resize:
     def _resize_3d(self, image: tf.Tensor, key: str) -> tf.Tensor:
         new_depth, new_height, new_width = self.spatial_shape
         resized_hw = tf.image.resize(image, [new_height, new_width], method=self.mode.get(key))
-        resized_dhw = depth_interpolate()(resized_hw, new_depth, depth_axis=0, method=self.mode.get(key))
+        resized_dhw = depth_interpolate()(
+            resized_hw, new_depth, depth_axis=0, method=self.mode.get(key)
+        )
         return resized_dhw

@@ -2,15 +2,12 @@ import keras
 import tensorflow as tf
 
 from src.medicai.models import SwinTransformer
-from src.medicai.transforms import (
-    Compose,
-    ScaleIntensityRange,
-    RandRotate90,
-    Resize
-)
+from src.medicai.transforms import Compose, RandRotate90, Resize, ScaleIntensityRange
+
 
 def create_sample_dict(image, label):
     return {"image": image, "label": label}
+
 
 def transformation(sample):
     data = {"image": sample["image"], "label": sample["label"]}
@@ -19,8 +16,8 @@ def transformation(sample):
             ScaleIntensityRange(
                 keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True
             ),
-            Resize(keys=["image"], mode=['bilinear'], spatial_shape=(96,96,96), only_image=True),
-            RandRotate90(keys=["image"], prob=0.1, max_k=3, spatial_axes=(1, 2))
+            Resize(keys=["image"], mode=["bilinear"], spatial_shape=(96, 96, 96), only_image=True),
+            RandRotate90(keys=["image"], prob=0.1, max_k=3, spatial_axes=(1, 2)),
         ]
     )
     result = pipeline(data)
@@ -47,15 +44,10 @@ def create_model_and_compile(num_classes):
             weight_decay=1e-5,
         ),
         loss=keras.losses.BinaryCrossentropy(from_logits=True),
-        metrics=[
-            keras.metrics.BinaryAccuracy(
-                threshold=0.5
-            )
-        ],
+        metrics=[keras.metrics.BinaryAccuracy(threshold=0.5)],
         jit_compile=False,
     )
     return model
-
 
 
 def create_dummy_dataset(batch_size, num_classes):

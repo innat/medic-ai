@@ -1,7 +1,8 @@
+import os
 from functools import partial
-import  os
 
 from medicai.utils import hide_warnings
+
 hide_warnings()
 
 
@@ -9,8 +10,7 @@ import keras
 import numpy as np
 from keras import layers, ops
 
-
-if keras.backend.backend() == 'tensorflow':
+if keras.backend.backend() == "tensorflow":
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 from medicai.blocks import UnetBasicBlock, UnetOutBlock, UnetrBasicBlock, UnetResBlock, UnetrUpBlock

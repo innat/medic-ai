@@ -1,9 +1,12 @@
 import os
+
 from medicai.utils.general import hide_warnings
+
 hide_warnings()
 
 import keras
-if keras.backend.backend() == 'tensorflow':
+
+if keras.backend.backend() == "tensorflow":
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
@@ -15,11 +18,12 @@ class DepthInterpolation:
 
     def __call__(self, inputs, target_depth, depth_axis=0, method="linear"):
 
-        normalized_method = method.replace('bi', '') if method.startswith('bi') else method
+        normalized_method = method.replace("bi", "") if method.startswith("bi") else method
 
         if normalized_method not in self.SUPPORTED_METHOD:
             raise ValueError(
-                f"Supported depth interplation methods are {self.SUPPORTED_METHOD} " f"But got {method}"
+                f"Supported depth interplation methods are {self.SUPPORTED_METHOD} "
+                f"But got {method}"
             )
 
         ip_methods = {

@@ -1,5 +1,5 @@
-
 from medicai.utils.general import hide_warnings
+
 hide_warnings()
 
 import warnings
@@ -23,7 +23,6 @@ class Spacing:
         self.image_mode = mode[0]
         self.label_mode = mode[1]
         self.mode = dict(zip(keys, mode))
-
 
     def get_spacing_from_affine(self, affine):
         width_spacing = tf.norm(affine[:3, 0])
@@ -74,6 +73,8 @@ class Spacing:
         new_width = tf.cast(original_width * scale_w, tf.int32)
 
         spatial_shape = (new_depth, new_height, new_width)
-        inputs = MetaTensor({'image': image})
-        resized_dhw = Resize(keys = ['image'], mode = [mode], spatial_shape = spatial_shape)(inputs).data['image']
+        inputs = MetaTensor({"image": image})
+        resized_dhw = Resize(keys=["image"], mode=[mode], spatial_shape=spatial_shape)(inputs).data[
+            "image"
+        ]
         return resized_dhw
