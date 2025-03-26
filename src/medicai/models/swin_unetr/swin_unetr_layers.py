@@ -1,4 +1,6 @@
 from functools import partial
+from medicai.utils import hide_warnings
+hide_warnings()
 
 import keras
 import numpy as np

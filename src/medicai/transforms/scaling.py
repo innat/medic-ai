@@ -1,3 +1,6 @@
+from medicai.utils.general import hide_warnings
+hide_warnings()
+
 from typing import *
 
 import tensorflow as tf

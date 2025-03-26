@@ -1,5 +1,7 @@
-from typing import Sequence, Tuple, Union
+from medicai.utils.general import hide_warnings
+hide_warnings()
 
+from typing import Sequence, Tuple, Union
 import tensorflow as tf
 
 from medicai.transforms.meta_tensor import MetaTensor

@@ -1,7 +1,8 @@
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union, Optional
 
 import numpy as np
 from scipy.ndimage import zoom
+from tqdm import tqdm
 
 from medicai.utils.general import (
     _crop_output,
@@ -17,7 +18,7 @@ from medicai.utils.general import (
 class SlidingWindowInference:
     def __init__(
         self,
-        predictor,
+        model,
         num_classes: int,
         roi_size: Sequence[int],
         sw_batch_size: int,
@@ -28,7 +29,7 @@ class SlidingWindowInference:
         cval: float = 0.0,
         roi_weight_map: Optional = None,
     ):
-        self.predictor = predictor
+        self.model = model
         self.num_classes = num_classes
         self.roi_size = roi_size
         self.sw_batch_size = sw_batch_size
@@ -43,7 +44,7 @@ class SlidingWindowInference:
         """Call method to perform sliding window inference."""
         return sliding_window_inference(
             inputs=inputs,
-            predictor=self.predictor,
+            model=self.model,
             num_classes=self.num_classes,
             roi_size=self.roi_size,
             sw_batch_size=self.sw_batch_size,
@@ -58,8 +59,8 @@ class SlidingWindowInference:
 
 def sliding_window_inference(
     inputs,
-    predictor,
-    num_classes: int,
+    model,
+    num_classes:Optional[int],
     roi_size: Sequence[int],
     sw_batch_size: int,
     overlap: Union[Sequence[float], float] = 0.25,
@@ -67,16 +68,16 @@ def sliding_window_inference(
     sigma_scale: Union[Sequence[float], float] = 0.125,
     padding_mode: str = "constant",
     cval: float = 0.0,
-    roi_weight_map: Optional = None,
+    roi_weight_map = None,
 ):
     """
-    Sliding window inference, mimicking MONAI's implementation.
+    Sliding window inference in TensorFlow, mimicking MONAI's implementation.
 
     Args:
         inputs: Input tensor with shape (batch_size, *spatial_dims, channels).
         roi_size: Spatial window size for inferences.
         sw_batch_size: Batch size for sliding window inference.
-        predictor: Callable that takes a patch of input and returns predictions.
+        model: Callable that takes a patch of input and returns predictions.
         overlap: Overlap ratio between windows (default: 0.25).
         mode: Blending mode for overlapping windows ("constant" or "gaussian").
         sigma_scale: Standard deviation coefficient for Gaussian blending.
@@ -88,6 +89,7 @@ def sliding_window_inference(
         The output tensor.
     """
     # Ensure overlap and sigma_scale are sequences
+    inputs = np.array(inputs) if not isinstance(inputs, np.ndarray) else inputs
     num_spatial_dims = len(inputs.shape) - 2  # Exclude batch and channel dimensions
     overlap = ensure_tuple_rep(overlap, num_spatial_dims)
     sigma_scale = ensure_tuple_rep(sigma_scale, num_spatial_dims)
@@ -126,18 +128,17 @@ def sliding_window_inference(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
         if len(importance_map.shape) == num_spatial_dims:
-            importance_map = np.expand_dims(
-                np.expand_dims(importance_map, -1), 0
-            )  # Add batch and channel dims
+            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)  # Add batch and channel dims
 
     # Initialize output and count maps as NumPy arrays
+    num_classes = num_classes or model.output_shape[-1]
     output_shape = [batch_size] + list(image_size) + [num_classes]
-    output_image = np.zeros(output_shape, dtype="float32")
-    count_map = np.zeros([1] + list(image_size) + [1], dtype="float32")
+    output_image = np.zeros(output_shape, dtype='float32')
+    count_map = np.zeros([1] + list(image_size) + [1], dtype='float32')
 
     # Apply sliding window inference in batches
-    for i in range(0, len(slices), sw_batch_size):
-        batch_slices = slices[i : i + sw_batch_size]
+    for i in tqdm(range(0, len(slices), sw_batch_size), desc=f"Total patch {len(slices)}"):
+        batch_slices = slices[i:i + sw_batch_size]
         patch_list = []
         for slice_idx in batch_slices:
             full_slice = (slice(None),) + slice_idx + (slice(None),)
@@ -146,12 +147,15 @@ def sliding_window_inference(
         patches = np.concatenate(patch_list, axis=0)  # Stack patches along batch dimension
 
         # Predict on the batch of patches
-        pred = predictor(patches).numpy()  # Convert predictions to NumPy
+        pred = model.predict(patches, verbose=0)
 
         # Resize importance map if necessary
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
-            bs, d, h, w, c = importance_map.shape
-            scale_factors = (1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1)
+            _, d, h, w, _ = importance_map.shape
+            target_shape = pred.shape[1:-1]
+            scale_factors = (
+                1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1
+            )
             importance_map_resized = zoom(importance_map, scale_factors, order=0)
         else:
             importance_map_resized = importance_map

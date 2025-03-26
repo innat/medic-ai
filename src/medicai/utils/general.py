@@ -1,7 +1,15 @@
 from typing import Any, List, Sequence, Tuple
-
 import numpy as np
+import warnings
 
+
+def hide_warnings():
+    def warn(*args, **kwargs):
+        pass
+
+    warnings.warn = warn
+    warnings.simplefilter(action="ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:
     """Ensure `val` is a tuple of length `rep`."""

@@ -1,3 +1,11 @@
+import os
+from medicai.utils.general import hide_warnings
+hide_warnings()
+
+import keras
+if keras.backend.backend() == 'tensorflow':
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import tensorflow as tf
 
 

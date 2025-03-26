@@ -1,5 +1,8 @@
 from typing import Callable, Optional, Sequence, Union
 
+from medicai.utils.general import hide_warnings
+hide_warnings()
+
 import tensorflow as tf
 
 from medicai.transforms.meta_tensor import MetaTensor
