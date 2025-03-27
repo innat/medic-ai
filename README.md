@@ -1,5 +1,5 @@
 
-![](src/medicai/assets/logo.jpg)
+![](assets/logo.jpg)
 
 # Medic-AI
 
@@ -85,7 +85,7 @@ print(f"Dice Score: {dice_score.numpy()}")
 Dice Score: 0.73
 ```
 
-![](src/medicai/assets/sample_predict.png)
+![](assets/sample_predict.png)
 
 
 # Acknowledgements
