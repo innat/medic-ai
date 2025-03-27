@@ -1,5 +1,7 @@
 # Medic-AI
 
+![](src/medicai/assets/logo.jpg)
+
 **Medic-AI** is a [Keras 3](https://keras.io/keras_3/) based library for medical image analysis with machine learning methods. It is currently in its early stages and will undergo multiple iterations before reaching a stable release.
 
 # Installation
@@ -83,3 +85,11 @@ Dice Score: 0.73
 ```
 
 ![](src/medicai/assets/sample_predict.png)
+
+
+# Acknowledgements
+
+This project is greatly inspired by [MONAI](https://monai.io/).
+
+# Citing
+
