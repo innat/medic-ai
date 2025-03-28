@@ -6,7 +6,7 @@ hide_warnings()
 
 import tensorflow as tf
 
-from src.medicai.transforms.tensor_bundle import MetaTensor
+from .tensor_bundle import MetaTensor
 
 
 class CropForeground:
