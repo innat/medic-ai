@@ -1,5 +1,9 @@
-import json
 
+from medicai.utils.general import hide_warnings
+
+hide_warnings()
+
+import json
 import keras
 import nibabel as nib
 import numpy as np
