@@ -1,4 +1,4 @@
-from typing import *
+from typing import Dict, Any, Optional
 
 from medicai.utils.general import hide_warnings
 
@@ -21,6 +21,18 @@ class MetaTensor:
             self.data[key] = value
         else:
             self.meta[key] = value
+
+    def get_data(self, key: str) -> Optional[tf.Tensor]:
+        return self.data.get(key)
+
+    def get_meta(self, key: str) -> Optional[Any]:
+        return self.meta.get(key)
+
+    def set_data(self, key: str, value: tf.Tensor):
+        self.data[key] = value
+
+    def set_meta(self, key: str, value: Any):
+        self.meta[key] = value
 
     def __repr__(self) -> str:
         return f"MetaTensor(data={ {k: v.shape for k, v in self.data.items()} }, meta={self.meta})"
