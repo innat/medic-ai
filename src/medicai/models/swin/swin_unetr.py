@@ -7,14 +7,8 @@ hide_warnings()
 
 
 import keras
-import numpy as np
-from keras import layers, ops
-
-if keras.backend.backend() == "tensorflow":
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
-from medicai.blocks import UnetBasicBlock, UnetOutBlock, UnetrBasicBlock, UnetResBlock, UnetrUpBlock
-from medicai.models.swin_unetr.swin_unetr_layers import *
+from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
+from .swin_backbone import SwinBackbone
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")

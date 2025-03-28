@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 from scipy.ndimage import zoom
@@ -27,7 +27,7 @@ class SlidingWindowInference:
         sigma_scale: Union[Sequence[float], float] = 0.125,
         padding_mode: str = "constant",
         cval: float = 0.0,
-        roi_weight_map: Optional = None,
+        roi_weight_map = None,
     ):
         self.model = model
         self.num_classes = num_classes

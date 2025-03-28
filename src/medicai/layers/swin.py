@@ -1,4 +1,3 @@
-from functools import partial
 
 from medicai.utils import hide_warnings
 
@@ -8,6 +7,8 @@ import keras
 import numpy as np
 from keras import initializers, layers, ops
 
+from .drop_path import DropPath
+from .mlp import SwinMLP
 
 def window_partition(x, window_size):
     input_shape = ops.shape(x)
@@ -38,7 +39,6 @@ def window_partition(x, window_size):
 
     return windows
 
-
 def window_reverse(windows, window_size, batch_size, depth, height, width):
     x = ops.reshape(
         windows,
@@ -57,7 +57,6 @@ def window_reverse(windows, window_size, batch_size, depth, height, width):
     x = ops.reshape(x, [batch_size, depth, height, width, -1])
     return x
 
-
 def get_window_size(x_size, window_size, shift_size=None):
     use_window_size = list(window_size)
 
@@ -74,8 +73,7 @@ def get_window_size(x_size, window_size, shift_size=None):
         return tuple(use_window_size)
     else:
         return tuple(use_window_size), tuple(use_shift_size)
-
-
+    
 def compute_mask(depth, height, width, window_size, shift_size):
     img_mask = np.zeros((1, depth, height, width, 1))
     cnt = 0
@@ -102,45 +100,6 @@ def compute_mask(depth, height, width, window_size, shift_size):
     attn_mask = ops.where(attn_mask != 0, -100.0, attn_mask)
     attn_mask = ops.where(attn_mask == 0, 0.0, attn_mask)
     return attn_mask
-
-
-class MLP(layers.Layer):
-    def __init__(self, hidden_dim, output_dim, drop_rate=0.0, activation="gelu", **kwargs):
-        super().__init__(**kwargs)
-        self.output_dim = output_dim
-        self.hidden_dim = hidden_dim
-        self._activation_identifier = activation
-        self.drop_rate = drop_rate
-        self.activation = layers.Activation(self._activation_identifier)
-        self.fc1 = layers.Dense(self.hidden_dim)
-        self.fc2 = layers.Dense(self.output_dim)
-        self.dropout = layers.Dropout(self.drop_rate)
-
-    def build(self, input_shape):
-        self.fc1.build(input_shape)
-        self.fc2.build((*input_shape[:-1], self.hidden_dim))
-        self.built = True
-
-    def call(self, x, training=None):
-        x = self.fc1(x)
-        x = self.activation(x)
-        x = self.dropout(x, training=training)
-        x = self.fc2(x)
-        x = self.dropout(x, training=training)
-        return x
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "output_dim": self.output_dim,
-                "hidden_dim": self.hidden_dim,
-                "drop_rate": self.drop_rate,
-                "activation": self._activation_identifier,
-            }
-        )
-        return config
-
 
 class SwinPatchingAndEmbedding(keras.Model):
     def __init__(self, patch_size=(2, 4, 4), embed_dim=96, norm_layer=None, **kwargs):
@@ -193,7 +152,7 @@ class SwinPatchingAndEmbedding(keras.Model):
             }
         )
         return config
-
+    
 
 class SwinPatchMerging(layers.Layer):
     def __init__(self, input_dim, norm_layer=None, **kwargs):
@@ -250,35 +209,7 @@ class SwinPatchMerging(layers.Layer):
             }
         )
         return config
-
-
-class DropPath(layers.Layer):
-    def __init__(self, rate=0.5, seed=None, **kwargs):
-        super().__init__(**kwargs)
-        self.rate = rate
-        self._seed_val = seed
-        self.seed = keras.random.SeedGenerator(seed)
-
-    def call(self, x, training=None):
-        if self.rate == 0.0 or not training:
-            return x
-        else:
-            batch_size = x.shape[0] or ops.shape(x)[0]
-            drop_map_shape = (batch_size,) + (1,) * (len(x.shape) - 1)
-            drop_map = ops.cast(
-                keras.random.uniform(drop_map_shape, seed=self.seed) > self.rate,
-                x.dtype,
-            )
-            x = x / (1.0 - self.rate)
-            x = x * drop_map
-            return x
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({"rate": self.rate, "seed": self._seed_val})
-        return config
-
-
+    
 class SwinWindowAttention(keras.Model):
 
     def __init__(
@@ -420,7 +351,7 @@ class SwinWindowAttention(keras.Model):
             }
         )
         return config
-
+    
 
 class SwinTransformerBlock(keras.Model):
     def __init__(
@@ -491,7 +422,7 @@ class SwinTransformerBlock(keras.Model):
         self.norm2 = self.norm_layer(axis=-1, epsilon=1e-05)
         self.norm2.build((*input_shape[:-1], self.input_dim))
 
-        self.mlp = MLP(
+        self.mlp = SwinMLP(
             output_dim=self.input_dim,
             hidden_dim=self.mlp_hidden_dim,
             activation=self._activation_identifier,
@@ -626,7 +557,7 @@ class SwinTransformerBlock(keras.Model):
             }
         )
         return config
-
+    
 
 class SwinBasicLayer(keras.Model):
     def __init__(
@@ -756,117 +687,4 @@ class SwinBasicLayer(keras.Model):
                 "drop_path_rate": self.drop_path_rate,
             }
         )
-        return config
-
-
-def parse_model_inputs(input_shape, input_tensor, **kwargs):
-    if input_tensor is None:
-        return keras.layers.Input(shape=input_shape, **kwargs)
-    else:
-        if not keras.backend.is_keras_tensor(input_tensor):
-            return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
-        else:
-            return input_tensor
-
-
-class SwinBackbone(keras.Model):
-    def __init__(
-        self,
-        *,
-        input_shape=(32, 224, 224, 3),
-        input_tensor=None,
-        embed_dim=96,
-        patch_size=[2, 4, 4],
-        window_size=[8, 7, 7],
-        mlp_ratio=4.0,
-        patch_norm=True,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.2,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
-        qkv_bias=True,
-        qk_scale=None,
-        **kwargs,
-    ):
-        # Parse input specification.
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-
-        # Check that the input video is well specified.
-        if (
-            input_spec.shape[-4] is None
-            or input_spec.shape[-3] is None
-            or input_spec.shape[-2] is None
-        ):
-            raise ValueError(
-                "Depth, height and width of the video must be specified" " in `input_shape`."
-            )
-
-        x = input_spec
-
-        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
-
-        x = SwinPatchingAndEmbedding(
-            patch_size=patch_size,
-            embed_dim=embed_dim,
-            norm_layer=norm_layer if patch_norm else None,
-            name="patching_and_embedding",
-        )(x)
-        x = layers.Dropout(drop_rate, name="pos_drop")(x)
-
-        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
-        num_layers = len(depths)
-        for i in range(num_layers):
-            layer = SwinBasicLayer(
-                input_dim=int(embed_dim * 2**i),
-                depth=depths[i],
-                num_heads=num_heads[i],
-                window_size=window_size,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop_rate=drop_rate,
-                attn_drop_rate=attn_drop_rate,
-                drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
-                norm_layer=norm_layer,
-                downsampling_layer=SwinPatchMerging,
-                name=f"swin_feature{i + 1}",
-            )
-            x = layer(x)
-
-        super().__init__(inputs=input_spec, outputs=x, **kwargs)
-
-        self.input_tensor = input_tensor
-        self.embed_dim = embed_dim
-        self.patch_size = patch_size
-        self.window_size = window_size
-        self.mlp_ratio = mlp_ratio
-        self.norm_layer = norm_layer
-        self.patch_norm = patch_norm
-        self.drop_rate = drop_rate
-        self.attn_drop_rate = attn_drop_rate
-        self.drop_path_rate = drop_path_rate
-        self.num_layers = len(depths)
-        self.num_heads = num_heads
-        self.qkv_bias = qkv_bias
-        self.qk_scale = qk_scale
-        self.depths = depths
-
-    def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
-            "embed_dim": self.embed_dim,
-            "patch_norm": self.patch_norm,
-            "window_size": self.window_size,
-            "patch_size": self.patch_size,
-            "mlp_ratio": self.mlp_ratio,
-            "drop_rate": self.drop_rate,
-            "drop_path_rate": self.drop_path_rate,
-            "attn_drop_rate": self.attn_drop_rate,
-            "depths": self.depths,
-            "num_heads": self.num_heads,
-            "qkv_bias": self.qkv_bias,
-            "qk_scale": self.qk_scale,
-        }
         return config

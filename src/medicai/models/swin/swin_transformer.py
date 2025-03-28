@@ -3,9 +3,7 @@ from medicai.utils import hide_warnings
 hide_warnings()
 
 import keras
-
-from medicai.models.swin_unetr.swin_unetr_layers import *
-
+from .swin_backbone import SwinBackbone
 
 @keras.saving.register_keras_serializable(package="swin.transformer")
 class SwinTransformer(keras.Model):

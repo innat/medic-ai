@@ -3,7 +3,7 @@ from typing import Sequence, Tuple
 import tensorflow as tf
 
 from medicai.transforms.depth_interpolate import DepthInterpolation as depth_interpolate
-from medicai.transforms.meta_tensor import MetaTensor
+from src.medicai.transforms.tensor_bundle import MetaTensor
 
 
 class Resize:

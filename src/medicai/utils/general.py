@@ -1,6 +1,7 @@
 import warnings
 from typing import Any, List, Sequence, Tuple
 
+import os
 import numpy as np
 
 
@@ -11,6 +12,8 @@ def hide_warnings():
     warnings.warn = warn
     warnings.simplefilter(action="ignore", category=FutureWarning)
     warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 
 def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:
