@@ -1,4 +1,4 @@
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class Compose:
@@ -6,7 +6,7 @@ class Compose:
         self.transforms = transforms
 
     def __call__(self, image_data, meta_data=None):
-        x = MetaTensor(image_data, meta_data)
+        x = TensorBundle(image_data, meta_data)
         for transform in self.transforms:
             x = transform(x)
         return x
