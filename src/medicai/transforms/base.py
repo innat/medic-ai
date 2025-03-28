@@ -1,4 +1,4 @@
-from src.medicai.transforms.tensor_bundle import MetaTensor
+from .tensor_bundle import MetaTensor
 
 
 class Compose:
