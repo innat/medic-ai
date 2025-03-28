@@ -17,11 +17,11 @@ label = nib_y.get_fdata().transpose(2, 0, 1)[...,None] # (301, 512, 512, 1)
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     Resize,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = Resize(
     keys=["image", "label"], 
     spatial_shape=(96, 96, 96)
@@ -38,11 +38,11 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     ScaleIntensityRange,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = ScaleIntensityRange(
     keys=["image"], 
     a_min=-175,
@@ -69,10 +69,10 @@ array([0., 1., 2., 3.])
 ```python
 from medicai.transforms import (
     CropForeground,
-    MetaTensor,
+    TensorBundle,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = CropForeground(
     keys=("image", "label"), 
     source_key="image"
@@ -88,7 +88,7 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     Spacing,
 )
 
@@ -96,7 +96,7 @@ affine = nib_x.affine
 affine[:, [0, 1, 2]] = affine[:, [2, 0, 1]]  # (H, W, D) -> (D, H, W)
 trans_affine = affine.astype(np.float32)
 
-inputs = MetaTensor(
+inputs = TensorBundle(
     {
         "image": image, 
         "label": label
@@ -121,7 +121,7 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     Orientation,
 )
 
@@ -129,7 +129,7 @@ affine = nib_x.affine
 affine[:, [0, 1, 2]] = affine[:, [2, 0, 1]]  # (H, W, D) -> (D, H, W)
 trans_affine = affine.astype(np.float32)
 
-inputs = MetaTensor(
+inputs = TensorBundle(
     {
         "image": image, 
         "label": label
@@ -156,11 +156,11 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     RandRotate90,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = RandRotate90(
     keys=["image", "label"], 
     prob=1.0, 
@@ -178,11 +178,11 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     RandShiftIntensity,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = RandShiftIntensity(
     keys=["image", "label"], 
     offsets=(-0.2, 0.8), 
@@ -200,11 +200,11 @@ transform_image.shape, transform_label.shape
 
 ```python
 from medicai.transforms import (
-    MetaTensor,
+    TensorBundle,
     RandCropByPosNegLabel,
 )
 
-inputs = MetaTensor({"image": image, "label": label})
+inputs = TensorBundle({"image": image, "label": label})
 transform = RandCropByPosNegLabel(
     keys=["image", "label"], 
     spatial_size=(96, 96, 96), 
