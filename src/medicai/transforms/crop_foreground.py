@@ -6,7 +6,7 @@ hide_warnings()
 
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class CropForeground:
@@ -34,7 +34,7 @@ class CropForeground:
         self.end_coord_key = end_coord_key
         self.allow_missing_keys = allow_missing_keys
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         # Extract the source data (used to determine the foreground)
         if self.source_key not in inputs.data and self.allow_missing_keys:
             return inputs

@@ -5,7 +5,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class Orientation:
@@ -17,7 +17,7 @@ class Orientation:
         self.keys = keys
         self.axcodes = axcodes.upper()
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         affine = inputs.meta.get("affine")
         if affine is None:
             raise ValueError("Affine matrix is required for orientation transformation.")
@@ -29,18 +29,8 @@ class Orientation:
                     oriented_data[key], affine, self.axcodes
                 )
 
-        return MetaTensor(oriented_data, inputs.meta)
+        return TensorBundle(oriented_data, inputs.meta)
 
-    # def __call__(self, inputs: MetaTensor) -> MetaTensor:
-    #     affine = inputs.meta.get('affine')
-    #     if affine is None:
-    #         raise ValueError("Affine matrix is required for orientation transformation.")
-
-    #     for key in self.keys:
-    #         if key in inputs.data:
-    #             inputs.data[key] = self.apply_orientation(inputs.data[key], affine, self.axcodes)
-
-    #     return inputs
 
     def apply_orientation(self, image: tf.Tensor, affine: tf.Tensor, axcodes: str) -> tf.Tensor:
         """

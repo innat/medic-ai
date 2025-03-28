@@ -3,11 +3,11 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 
 import warnings
-from typing import *
+from typing import Sequence, Tuple
 
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 from medicai.transforms.resize import Resize
 
 
@@ -30,7 +30,7 @@ class Spacing:
         height_spacing = tf.norm(affine[:3, 2])
         return (width_spacing, depth_spacing, height_spacing)
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         for key in self.keys:
             if key not in inputs.data:
                 continue
@@ -73,7 +73,7 @@ class Spacing:
         new_width = tf.cast(original_width * scale_w, tf.int32)
 
         spatial_shape = (new_depth, new_height, new_width)
-        inputs = MetaTensor({"image": image})
+        inputs = TensorBundle({"image": image})
         resized_dhw = Resize(keys=["image"], mode=[mode], spatial_shape=spatial_shape)(inputs).data[
             "image"
         ]

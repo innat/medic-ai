@@ -3,7 +3,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class RandRotate90:
@@ -83,7 +83,7 @@ class RandRotate90:
 
         return array
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         rand_val = tf.random.uniform(())
 
         def apply_rotation():
@@ -98,4 +98,4 @@ class RandRotate90:
             return inputs.data.copy()
 
         rotated_data = tf.cond(rand_val <= self.prob, apply_rotation, no_rotation)
-        return MetaTensor(rotated_data, inputs.meta)
+        return TensorBundle(rotated_data, inputs.meta)

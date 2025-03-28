@@ -6,7 +6,7 @@ from typing import Sequence, Tuple, Union
 
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class RandShiftIntensity:
@@ -33,7 +33,7 @@ class RandShiftIntensity:
         self.prob = prob
         self.channel_wise = channel_wise
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         rand_val = tf.random.uniform(())
 
         def apply_shift():
@@ -54,4 +54,4 @@ class RandShiftIntensity:
             return inputs.data.copy()
 
         shifted_data = tf.cond(rand_val <= self.prob, apply_shift, no_shift)
-        return MetaTensor(shifted_data, inputs.meta)
+        return TensorBundle(shifted_data, inputs.meta)

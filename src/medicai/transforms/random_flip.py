@@ -5,7 +5,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class RandFlip:
@@ -19,7 +19,7 @@ class RandFlip:
         self.prob = prob
         self.spatial_axis = spatial_axis
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         should_flip = tf.random.uniform([]) < self.prob
 
         for key in self.keys:

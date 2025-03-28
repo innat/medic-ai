@@ -2,11 +2,11 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-from typing import *
+from typing import Sequence, Optional
 
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class ScaleIntensityRange:
@@ -28,7 +28,7 @@ class ScaleIntensityRange:
         self.clip = clip
         self.dtype = dtype
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         for key in self.keys:
             if key in inputs.data:
                 inputs.data[key] = self.scale_intensity_range(inputs.data[key])

@@ -5,7 +5,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 import tensorflow as tf
 
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class RandCropByPosNegLabel:
@@ -38,7 +38,7 @@ class RandCropByPosNegLabel:
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         """
         Applies the random cropping transformation.
 

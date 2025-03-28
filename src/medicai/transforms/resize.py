@@ -3,7 +3,7 @@ from typing import Sequence, Tuple
 import tensorflow as tf
 
 from medicai.transforms.depth_interpolate import DepthInterpolation as depth_interpolate
-from .tensor_bundle import MetaTensor
+from .tensor_bundle import TensorBundle
 
 
 class Resize:
@@ -17,7 +17,7 @@ class Resize:
         self.mode = dict(zip(keys, mode))
         self.spatial_shape = spatial_shape
 
-    def __call__(self, inputs: MetaTensor) -> MetaTensor:
+    def __call__(self, inputs: TensorBundle) -> TensorBundle:
         for key in self.keys:
             if key not in inputs.data:
                 continue
