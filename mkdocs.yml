@@ -53,11 +53,11 @@ plugins:
 # Navigaiton panel
 nav:
   - Home: index.md
-  - General: general.md
   - Model: ./models/manage-models.md
   - Transformation: ./transformations/manage-transformations.md
   - Training: ./training/manage-training.md
   - Inference: ./inference/manage-inference.md
+  - General: general.md
 
 # Code syntax highlighter
 markdown_extensions:
