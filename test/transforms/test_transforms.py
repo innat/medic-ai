@@ -4,7 +4,7 @@ import tensorflow as tf
 from src.medicai.transforms import (
     Compose,
     CropForeground,
-    MetaTensor,
+    TensorBundle,
     Orientation,
     RandCropByPosNegLabel,
     RandRotate90,
@@ -19,7 +19,7 @@ def test_resize_transform():
     # Create dummy data
     image = tf.random.normal((1, 128, 128, 1))
     label = tf.random.uniform((1, 128, 128, 1), maxval=4, dtype=tf.int32)
-    inputs = MetaTensor({"image": image, "label": label})
+    inputs = TensorBundle({"image": image, "label": label})
 
     # check 2D resize
     resize_transform = Resize(keys=["image", "label"], spatial_shape=(96, 96))
@@ -30,7 +30,7 @@ def test_resize_transform():
     # check 3D resize
     image_3d = tf.random.normal((128, 128, 128, 1))
     label_3d = tf.random.uniform((128, 128, 128, 1), maxval=4, dtype=tf.int32)
-    inputs_3d = MetaTensor({"image": image_3d, "label": label_3d})
+    inputs_3d = TensorBundle({"image": image_3d, "label": label_3d})
     resize_transform = Resize(keys=["image", "label"], spatial_shape=(64, 96, 96))
     resized_3d = resize_transform(inputs)
     assert resized_3d.data["image"].shape == (64, 96, 96, 1)
@@ -38,7 +38,7 @@ def test_resize_transform():
 
     # check only one key (image)
     image_only = tf.random.normal((128, 128, 128, 1))
-    inputs_image_only = MetaTensor({"image": image_only})
+    inputs_image_only = TensorBundle({"image": image_only})
     resize_transform = Resize(keys=["image"], spatial_shape=(64, 96, 64), only_image=True)
     resized_image_only = resize_transform(inputs)
     assert resized_image_only.data["image"].shape == (64, 96, 64, 1)
@@ -46,7 +46,7 @@ def test_resize_transform():
 
 def test_scale_intensity():
     image = tf.constant([[[5.0, 5.0], [5.0, 5.0]]], dtype=tf.float32)
-    inputs = MetaTensor({"image": image})
+    inputs = TensorBundle({"image": image})
     scale = ScaleIntensityRange(keys=["image"], a_min=5.0, a_max=5.0, b_min=0.0, b_max=1.0)
     output = scale(inputs)
     expected = tf.constant([[[0.0, 0.0], [0.0, 0.0]]], dtype=tf.float32)
@@ -55,7 +55,7 @@ def test_scale_intensity():
 
 def test_rand_shift_intensity():
     image = tf.constant([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=tf.float32)
-    inputs = MetaTensor({"image": image})
+    inputs = TensorBundle({"image": image})
     shift = RandShiftIntensity(keys=["image"], offsets=(-0.2, 0.8), prob=1.0)
     output = shift(inputs)
     assert output.data["image"].shape == (1, 2, 2, 1)
@@ -67,7 +67,7 @@ def test_rand_shift_intensity():
 
 def test_rand_rotate90():
     image = tf.constant([[[[1, 2], [3, 4]], [[5, 6], [7, 8]]]], dtype=tf.float32)
-    inputs = MetaTensor({"image": image})
+    inputs = TensorBundle({"image": image})
     rotate = RandRotate90(keys=["image"], prob=1.0, max_k=3)
     output = rotate(inputs)
     assert output.data["image"].shape == (1, 2, 2, 2)
@@ -78,7 +78,7 @@ def test_rand_crop_by_pos_neg_label():
         [[[[0.1], [0.5], [0.9]], [[0.2], [0.6], [0.8]], [[0.3], [0.7], [0.4]]]], dtype=tf.float32
     )
     label = tf.constant([[[[0], [1], [0]], [[1], [0], [1]], [[0], [1], [0]]]], dtype=tf.float32)
-    inputs = MetaTensor({"image": image, "label": label})
+    inputs = TensorBundle({"image": image, "label": label})
     crop = RandCropByPosNegLabel(
         keys=["image", "label"], spatial_size=(2, 2, 2), pos=1, neg=1, num_samples=1
     )
@@ -90,7 +90,7 @@ def test_rand_crop_by_pos_neg_label():
 def test_crop_foreground():
     image = tf.constant([[[[0], [1], [0]], [[1], [1], [1]], [[0], [0], [1]]]], dtype=tf.float32)
     label = tf.constant([[[[0], [2], [0]], [[2], [2], [2]], [[0], [0], [2]]]], dtype=tf.int32)
-    inputs = MetaTensor({"image": image, "label": label})
+    inputs = TensorBundle({"image": image, "label": label})
     crop = CropForeground(keys=("image", "label"), source_key="image")
     output = crop(inputs)
     assert output.data["image"].shape == (1, 3, 3, 1)
@@ -105,7 +105,7 @@ def test_meta_tensor():
     )
     meta = {"affine": affine, "pixdim": [1.0, 1.0, 1.0]}
     inputs = {"image": image, "label": label}
-    inputs = MetaTensor({"image": image, "label": label}, meta)
+    inputs = TensorBundle({"image": image, "label": label}, meta)
 
 
 def test_compose():
@@ -132,7 +132,7 @@ def test_orientation_ras_image_label():
     label = tf.random.uniform((10, 10, 10, 1), maxval=5, dtype=tf.int32)
     affine = tf.constant([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=tf.float32)
     meta = {"affine": affine}
-    inputs = MetaTensor({"image": image, "label": label}, meta)
+    inputs = TensorBundle({"image": image, "label": label}, meta)
     transform = Orientation(keys=["image", "label"], axcodes="RAS")
     output = transform(inputs)
     assert tf.reduce_all(tf.equal(output.data["image"], image))
@@ -143,7 +143,7 @@ def test_spacing_upsample_image_label():
     image = tf.random.normal((10, 10, 10, 1))
     segmentation = tf.random.uniform((10, 10, 10, 1), maxval=5, dtype=tf.int32)
     meta = {"pixdim": [1.0, 1.0, 1.0]}
-    inputs = MetaTensor({"my_image": image, "my_segmentation": segmentation}, meta)
+    inputs = TensorBundle({"my_image": image, "my_segmentation": segmentation}, meta)
     transform = Spacing(keys=["my_image", "my_segmentation"], pixdim=[2.0, 2.0, 2.0])
     output = transform(inputs)
     assert output.data["my_image"].shape == (5, 5, 5, 1)

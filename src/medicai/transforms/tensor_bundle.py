@@ -3,10 +3,9 @@ from typing import Dict, Any, Optional
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
-import tensorflow as tf
 
 
-class MetaTensor:
+class TensorBundle:
     def __init__(self, data: Dict[str, tf.Tensor], meta: Dict[str, Any] = None):
         self.data = data
         self.meta = meta or {}
@@ -28,7 +27,7 @@ class MetaTensor:
     def get_meta(self, key: str) -> Optional[Any]:
         return self.meta.get(key)
 
-    def set_data(self, key: str, value: tf.Tensor):
+    def set_data(self, key: str, value: Any):
         self.data[key] = value
 
     def set_meta(self, key: str, value: Any):
