@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
+import tensorflow as tf
 
 
 class TensorBundle:
@@ -27,7 +28,7 @@ class TensorBundle:
     def get_meta(self, key: str) -> Optional[Any]:
         return self.meta.get(key)
 
-    def set_data(self, key: str, value: Any):
+    def set_data(self, key: str, value: tf.Tensor):
         self.data[key] = value
 
     def set_meta(self, key: str, value: Any):
