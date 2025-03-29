@@ -56,7 +56,6 @@ nav:
   - Model: ./models/manage-models.md
   - Transformation: ./transformations/manage-transformations.md
   - Training: ./training/manage-training.md
-  - Inference: ./inference/manage-inference.md
   - General: general.md
 
 # Code syntax highlighter
