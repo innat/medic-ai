@@ -1,5 +1,8 @@
+from medicai.utils.general import hide_warnings
 
+hide_warnings()
 from keras import layers
+
 
 class SwinMLP(layers.Layer):
     def __init__(self, hidden_dim, output_dim, drop_rate=0.0, activation="gelu", **kwargs):

@@ -1,7 +1,6 @@
 from keras import layers
 
 from medicai.blocks import UnetBasicBlock, UnetResBlock
-from medicai.utils import get_act_layer, get_norm_layer
 
 
 def UnetrUpBlock(
@@ -12,11 +11,13 @@ def UnetrUpBlock(
     norm_name="instance",
     res_block=True,
 ):
+    stride = upsample_kernel_size
+
     def wrapper(inputs, skip):
         x = layers.Conv3DTranspose(
             out_channels,
             kernel_size=upsample_kernel_size,
-            strides=upsample_kernel_size,
+            strides=stride,
             use_bias=False,
         )(inputs)
 

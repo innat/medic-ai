@@ -4,18 +4,19 @@ hide_warnings()
 
 from keras import layers, ops
 
+
 class ChannelWiseAttention(layers.Layer):
     def __init__(self, alpha, **kwargs):
         super().__init__(**kwargs)
-        self.alpha=alpha
+        self.alpha = alpha
 
     def build(self, input_shape):
         dims = input_shape.shape[-1]
         # squeeze
         self.gap = layers.GlobalAveragePooling2D()
         # excitation
-        self.fc0 = layers.Dense(int(self.alpha * dims), use_bias=False, activation='relu')
-        self.fc1 = layers.Dense(dims, use_bias=False, activation='sigmoid')
+        self.fc0 = layers.Dense(int(self.alpha * dims), use_bias=False, activation="relu")
+        self.fc1 = layers.Dense(dims, use_bias=False, activation="sigmoid")
         self.rs = layers.Reshape((1, 1, dims))
 
     def call(self, inputs):

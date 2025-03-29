@@ -1,7 +1,6 @@
 from medicai.transforms.base import Compose
 from medicai.transforms.crop_foreground import CropForeground
 from medicai.transforms.depth_interpolate import DepthInterpolation
-from medicai.transforms.tensor_bundle import TensorBundle
 from medicai.transforms.orientation import Orientation
 from medicai.transforms.random_crop_pos_neg import RandCropByPosNegLabel
 from medicai.transforms.random_flip import RandFlip
@@ -10,3 +9,4 @@ from medicai.transforms.random_shift_intensity import RandShiftIntensity
 from medicai.transforms.resize import Resize
 from medicai.transforms.scaling import ScaleIntensityRange
 from medicai.transforms.spacing import Spacing
+from medicai.transforms.tensor_bundle import TensorBundle

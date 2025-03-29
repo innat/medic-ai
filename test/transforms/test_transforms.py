@@ -4,7 +4,6 @@ import tensorflow as tf
 from src.medicai.transforms import (
     Compose,
     CropForeground,
-    TensorBundle,
     Orientation,
     RandCropByPosNegLabel,
     RandRotate90,
@@ -12,6 +11,7 @@ from src.medicai.transforms import (
     Resize,
     ScaleIntensityRange,
     Spacing,
+    TensorBundle,
 )
 
 

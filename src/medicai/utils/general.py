@@ -1,7 +1,7 @@
+import os
 import warnings
 from typing import Any, List, Sequence, Tuple
 
-import os
 import numpy as np
 
 

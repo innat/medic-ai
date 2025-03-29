@@ -1,8 +1,12 @@
 from typing import Sequence, Tuple
 
+from medicai.utils.general import hide_warnings
+
+hide_warnings()
 import tensorflow as tf
 
 from medicai.transforms.depth_interpolate import DepthInterpolation as depth_interpolate
+
 from .tensor_bundle import TensorBundle
 
 

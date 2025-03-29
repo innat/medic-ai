@@ -1,7 +1,10 @@
+from medicai.utils.general import hide_warnings
+
+hide_warnings()
 
 import keras
-from keras import layers
-from keras import ops
+from keras import layers, ops
+
 
 class DropPath(layers.Layer):
     def __init__(self, rate=0.5, seed=None, **kwargs):

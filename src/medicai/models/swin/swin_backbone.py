@@ -8,9 +8,8 @@ import keras
 import numpy as np
 from keras import layers
 
-from ...layers.swin import SwinPatchingAndEmbedding
-from ...layers.swin import SwinBasicLayer
-from ...layers.swin import SwinPatchMerging
+from ...layers.swin import SwinBasicLayer, SwinPatchingAndEmbedding, SwinPatchMerging
+
 
 def parse_model_inputs(input_shape, input_tensor, **kwargs):
     if input_tensor is None:

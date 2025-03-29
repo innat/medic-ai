@@ -1,4 +1,3 @@
-
 from medicai.utils import hide_warnings
 
 hide_warnings()
@@ -9,6 +8,7 @@ from keras import initializers, layers, ops
 
 from .drop_path import DropPath
 from .mlp import SwinMLP
+
 
 def window_partition(x, window_size):
     input_shape = ops.shape(x)
@@ -39,6 +39,7 @@ def window_partition(x, window_size):
 
     return windows
 
+
 def window_reverse(windows, window_size, batch_size, depth, height, width):
     x = ops.reshape(
         windows,
@@ -57,6 +58,7 @@ def window_reverse(windows, window_size, batch_size, depth, height, width):
     x = ops.reshape(x, [batch_size, depth, height, width, -1])
     return x
 
+
 def get_window_size(x_size, window_size, shift_size=None):
     use_window_size = list(window_size)
 
@@ -73,7 +75,8 @@ def get_window_size(x_size, window_size, shift_size=None):
         return tuple(use_window_size)
     else:
         return tuple(use_window_size), tuple(use_shift_size)
-    
+
+
 def compute_mask(depth, height, width, window_size, shift_size):
     img_mask = np.zeros((1, depth, height, width, 1))
     cnt = 0
@@ -100,6 +103,7 @@ def compute_mask(depth, height, width, window_size, shift_size):
     attn_mask = ops.where(attn_mask != 0, -100.0, attn_mask)
     attn_mask = ops.where(attn_mask == 0, 0.0, attn_mask)
     return attn_mask
+
 
 class SwinPatchingAndEmbedding(keras.Model):
     def __init__(self, patch_size=(2, 4, 4), embed_dim=96, norm_layer=None, **kwargs):
@@ -152,7 +156,7 @@ class SwinPatchingAndEmbedding(keras.Model):
             }
         )
         return config
-    
+
 
 class SwinPatchMerging(layers.Layer):
     def __init__(self, input_dim, norm_layer=None, **kwargs):
@@ -209,7 +213,8 @@ class SwinPatchMerging(layers.Layer):
             }
         )
         return config
-    
+
+
 class SwinWindowAttention(keras.Model):
 
     def __init__(
@@ -351,7 +356,7 @@ class SwinWindowAttention(keras.Model):
             }
         )
         return config
-    
+
 
 class SwinTransformerBlock(keras.Model):
     def __init__(
@@ -557,7 +562,7 @@ class SwinTransformerBlock(keras.Model):
             }
         )
         return config
-    
+
 
 class SwinBasicLayer(keras.Model):
     def __init__(

@@ -2,7 +2,7 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-from typing import Sequence, Optional
+from typing import Optional, Sequence
 
 import tensorflow as tf
 

@@ -31,7 +31,6 @@ class Orientation:
 
         return TensorBundle(oriented_data, inputs.meta)
 
-
     def apply_orientation(self, image: tf.Tensor, affine: tf.Tensor, axcodes: str) -> tf.Tensor:
         """
         Applies orientation transformation to an image, considering the affine matrix.

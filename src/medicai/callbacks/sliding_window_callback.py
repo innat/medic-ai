@@ -1,13 +1,7 @@
-import os
-
 from medicai.utils import hide_warnings
 
 hide_warnings()
 
-import keras
-
-if keras.backend.backend() == "tensorflow":
-    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 from keras import callbacks
 
@@ -70,7 +64,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         )
 
         self.metric = DiceMetric(
-            num_classes=4,
+            num_classes=self.num_classes,
             include_background=True,
             reduction="mean",
             ignore_empty=True,

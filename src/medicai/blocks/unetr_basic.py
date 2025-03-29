@@ -1,7 +1,4 @@
-from keras import layers
-
 from medicai.blocks import UnetBasicBlock, UnetResBlock
-from medicai.utils import get_act_layer, get_norm_layer
 
 
 def UnetrBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance", res_block=True):

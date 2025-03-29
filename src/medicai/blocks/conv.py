@@ -20,8 +20,8 @@ def UpsampleBlock(filters):
     def apply(x, skip=None):
         x = layers.UpSampling2D((2, 2))(x)
         x = layers.Concatenate(axis=3)([skip, x]) if skip is not None else x
-        x = Conv3x3BNReLU2D(filters)(x)
-        x = Conv3x3BNReLU2D(filters)(x)
+        x = Conv3x3BNReLU(filters)(x)
+        x = Conv3x3BNReLU(filters)(x)
         return x
 
     return apply

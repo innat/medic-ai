@@ -7,8 +7,9 @@ from typing import Sequence, Tuple
 
 import tensorflow as tf
 
-from .tensor_bundle import TensorBundle
 from medicai.transforms.resize import Resize
+
+from .tensor_bundle import TensorBundle
 
 
 class Spacing:

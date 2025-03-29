@@ -27,7 +27,7 @@ class SlidingWindowInference:
         sigma_scale: Union[Sequence[float], float] = 0.125,
         padding_mode: str = "constant",
         cval: float = 0.0,
-        roi_weight_map = None,
+        roi_weight_map=None,
     ):
         self.model = model
         self.num_classes = num_classes
