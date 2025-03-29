@@ -1,0 +1,22 @@
+# This CITATION.cff file was generated with cffinit.
+
+cff-version: 1.2.0
+title: medicai
+message: >-
+  If you use this implementation, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Innat
+    family-names: Mohammed
+    email: innat.dev@gmail.com
+identifiers:
+  - type: url
+    value: 'https://github.com/innat/medic-ai'
+repository-code: 'https://github.com/innat/medic-ai'
+abstract: >-
+  Medic-AI is a Keras 3 based library for medical image
+  analysis with machine learning methods.
+keywords:
+  - 'machine learning, medical image processing, keras'
+license: Apache-2.0
