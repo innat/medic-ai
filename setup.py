@@ -34,7 +34,7 @@ setup(
     packages=find_packages(
         where="src",
         include=["medicai", "medicai.*"],
-        exclude=("test", "dataset", "docker", "notebooks"),
+        exclude=("test", "dataloader", "docker", "notebooks"),
     ),
     python_requires=">=3.6",
     install_requires=get_install_requirements(),
