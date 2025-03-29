@@ -4,10 +4,7 @@ __pycache__/
 *$py.class
 
 # data-related stuff
-dataset/
-results/
 .python-version
-.dummy.py
 
 # ignore large file
 *.h5
