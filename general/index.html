@@ -13,10 +13,8 @@
       
       
       
-        <link rel="prev" href="..">
+        <link rel="prev" href="../training/manage-training/">
       
-      
-        <link rel="next" href="../models/manage-models/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>General - MedicAI</title>
+        <title>General - medicai</title>
       
     
     
@@ -75,6 +73,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#generate-3d-nii-to-tfrecord-dataset" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -85,7 +88,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href=".." title="MedicAI" class="md-header__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href=".." title="medicai" class="md-header__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
@@ -99,7 +102,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            MedicAI
+            medicai
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -229,25 +232,6 @@
         
   
   
-    
-  
-  
-    <li class="md-tabs__item md-tabs__item--active">
-      <a href="./" class="md-tabs__link">
-        
-  
-    
-  
-  General
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
   
     <li class="md-tabs__item">
       <a href="../models/manage-models/" class="md-tabs__link">
@@ -299,14 +283,16 @@
         
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../inference/manage-inference/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
     
   
-  Inference
+  General
 
       </a>
     </li>
@@ -337,13 +323,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href=".." title="MedicAI" class="md-nav__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href=".." title="medicai" class="md-nav__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
 
     </a>
-    MedicAI
+    medicai
   </label>
   
     <div class="md-nav__source">
@@ -377,35 +363,6 @@
   
 
       </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  <span class="md-ellipsis">
-    General
-    
-  </span>
-  
-
-      </a>
-      
     </li>
   
 
@@ -477,19 +434,65 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../inference/manage-inference/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    General
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
-    Inference
+    General
     
   </span>
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#generate-3d-nii-to-tfrecord-dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      Generate 3D .nii to TFRecord Dataset
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -515,7 +518,8 @@
 
   <h1>General</h1>
 
-
+<h2 id="generate-3d-nii-to-tfrecord-dataset">Generate 3D <code>.nii</code> to TFRecord Dataset</h2>
+<p>The process is shown <a href="https://www.kaggle.com/code/ipythonx/generate-3d-nii-to-tfrecord-dataset">here</a>.</p>
 
 
 
@@ -545,7 +549,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href=".." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+          <a href="../training/manage-training/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Training">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -555,27 +559,11 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Home
+                Training
               </div>
             </div>
           </a>
         
-        
-          
-          <a href="../models/manage-models/" class="md-footer__link md-footer__link--next" aria-label="Next: Model">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Model
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
         
       </nav>
     

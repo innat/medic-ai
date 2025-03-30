@@ -24,7 +24,7 @@
     
     
       
-        <title>Transformation - MedicAI</title>
+        <title>Transformation - medicai</title>
       
     
     
@@ -75,6 +75,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#preprocessing" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -85,7 +90,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="MedicAI" class="md-header__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="../.." title="medicai" class="md-header__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
@@ -99,7 +104,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            MedicAI
+            medicai
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -231,23 +236,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../general/" class="md-tabs__link">
-        
-  
-    
-  
-  General
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../models/manage-models/" class="md-tabs__link">
         
   
@@ -301,12 +289,12 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../inference/manage-inference/" class="md-tabs__link">
+      <a href="../../general/" class="md-tabs__link">
         
   
     
   
-  Inference
+  General
 
       </a>
     </li>
@@ -337,13 +325,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="MedicAI" class="md-nav__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="../.." title="medicai" class="md-nav__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
 
     </a>
-    MedicAI
+    medicai
   </label>
   
     <div class="md-nav__source">
@@ -388,27 +376,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../general/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    General
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../models/manage-models/" class="md-nav__link">
         
   
@@ -437,6 +404,18 @@
       
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Transformation
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -447,6 +426,50 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Preprocessing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#radnom-preprocessing" class="md-nav__link">
+    <span class="md-ellipsis">
+      Radnom Preprocessing
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compose" class="md-nav__link">
+    <span class="md-ellipsis">
+      Compose
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -480,11 +503,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../../inference/manage-inference/" class="md-nav__link">
+      <a href="../../general/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Inference
+    General
     
   </span>
   
@@ -515,7 +538,229 @@
 
   <h1>Transformation</h1>
 
+<p>Transformation acts as a prprocessing and augmentation layers for model training. For 3D transformation, the expected format is: <code>depth, height, width, channel</code>. The transformation are implemented for a single sample. All the transformations are implemented using <code>tensorflow</code> in order to able to run with <code>tf.data</code> API with <code>keras</code> multi-backend library.</p>
+<div class="highlight"><pre><span></span><code><span class="n">img_path</span> <span class="o">=</span> <span class="s1">&#39;images/coronacases_001.nii.gz&#39;</span>
+<span class="n">mask_path</span> <span class="o">=</span> <span class="s1">&#39;masks/coronacases_001.nii.gz&#39;</span>
 
+<span class="n">nib_x</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">img_path</span><span class="p">)</span> <span class="c1"># (512, 512, 301)</span>
+<span class="n">nib_y</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">mask_path</span><span class="p">)</span> <span class="c1"># (512, 512, 301)</span>
+
+<span class="n">image</span> <span class="o">=</span> <span class="n">nib_x</span><span class="o">.</span><span class="n">get_fdata</span><span class="p">()</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span> <span class="c1"># (301, 512, 512, 1)</span>
+<span class="n">label</span> <span class="o">=</span> <span class="n">nib_y</span><span class="o">.</span><span class="n">get_fdata</span><span class="p">()</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">...</span><span class="p">,</span><span class="kc">None</span><span class="p">]</span> <span class="c1"># (301, 512, 512, 1)</span>
+</code></pre></div>
+<h2 id="preprocessing">Preprocessing</h2>
+<p><strong>Resize</strong></p>
+<p>Resize the input image to given spatial size. Implemented using <code>tf.image.resize</code> and <code>depth_interpolate</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">Resize</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">Resize</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">spatial_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">)</span>
+<span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<p><strong>ScaleIntensityRange</strong></p>
+<p>Scale the intensity of the entire array from the range <code>[a_min, a_max]</code> to <code>[b_min, b_max]</code>, with an optional clipping feature.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">ScaleIntensityRange</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">ScaleIntensityRange</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> 
+    <span class="n">a_min</span><span class="o">=-</span><span class="mi">175</span><span class="p">,</span>
+    <span class="n">a_max</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span>
+    <span class="n">b_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">b_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+    <span class="n">clip</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+
+<span class="n">transform_image</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">transform_image</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+<span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">transform_label</span><span class="p">)</span>
+<span class="n">array</span><span class="p">([</span><span class="mf">0.</span><span class="p">,</span> <span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">,</span> <span class="mf">3.</span><span class="p">])</span>
+</code></pre></div>
+<p><strong>CropForeground</strong></p>
+<p>Crop an image using a bounding box, where the bounding box is generated by selecting the foreground through the <code>select_fn</code> function at the specified channel_indices. A margin is added to each spatial dimension of the bounding box.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CropForeground</span><span class="p">,</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">CropForeground</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span> 
+    <span class="n">source_key</span><span class="o">=</span><span class="s2">&quot;image&quot;</span>
+<span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">((</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">415</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">415</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+</code></pre></div>
+<p><strong>Spacing</strong></p>
+<p>Resample input image into the specified pixdim. It will require <code>affine</code> meta information.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">Spacing</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">affine</span> <span class="o">=</span> <span class="n">nib_x</span><span class="o">.</span><span class="n">affine</span>
+<span class="n">affine</span><span class="p">[:,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]]</span> <span class="o">=</span> <span class="n">affine</span><span class="p">[:,</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]</span>  <span class="c1"># (H, W, D) -&gt; (D, H, W)</span>
+<span class="n">trans_affine</span> <span class="o">=</span> <span class="n">affine</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> 
+        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span>
+    <span class="p">},</span> 
+    <span class="n">meta</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;affine&#39;</span><span class="p">:</span> <span class="n">trans_affine</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">Spacing</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">pixdim</span><span class="o">=</span><span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">]</span>
+<span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">121</span><span class="p">,</span> <span class="mi">276</span><span class="p">,</span> <span class="mi">341</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">121</span><span class="p">,</span> <span class="mi">276</span><span class="p">,</span> <span class="mi">341</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<p><strong>Orientation</strong></p>
+<p>Change the orientation of the input image to the specified one based on the provided <code>axcodes</code>. It will require <code>affine</code> meta information.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">Orientation</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">affine</span> <span class="o">=</span> <span class="n">nib_x</span><span class="o">.</span><span class="n">affine</span>
+<span class="n">affine</span><span class="p">[:,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]]</span> <span class="o">=</span> <span class="n">affine</span><span class="p">[:,</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]</span>  <span class="c1"># (H, W, D) -&gt; (D, H, W)</span>
+<span class="n">trans_affine</span> <span class="o">=</span> <span class="n">affine</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> 
+        <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span>
+    <span class="p">},</span> 
+    <span class="n">meta</span><span class="o">=</span><span class="p">{</span>
+        <span class="s1">&#39;affine&#39;</span><span class="p">:</span> <span class="n">trans_affine</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">Orientation</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">axcodes</span><span class="o">=</span><span class="s2">&quot;RAS&quot;</span>
+<span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<h2 id="radnom-preprocessing">Radnom Preprocessing</h2>
+<p><strong>RandRotate90</strong></p>
+<p>Rotate the input sample 90 degree at random.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">RandRotate90</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">RandRotate90</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> 
+    <span class="n">max_k</span><span class="o">=</span><span class="mi">3</span>
+<span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<p><strong>RandShiftIntensity</strong></p>
+<p>Randomly shift the intensity of the image by applying a randomly selected offset.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">RandShiftIntensity</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">RandShiftIntensity</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">offsets</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">),</span> 
+    <span class="n">prob</span><span class="o">=</span><span class="mf">1.0</span>
+<span class="p">)</span>
+
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">301</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<p><strong>RandCropByPosNegLabel</strong></p>
+<p>Randomly crop fixed-sized regions from the image, with the center of each crop being either a foreground or background voxel based on the specified <strong>Positive-Negative Ratio</strong>. The function will return a list of arrays for all the cropped images.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">TensorBundle</span><span class="p">,</span>
+    <span class="n">RandCropByPosNegLabel</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">inputs</span> <span class="o">=</span> <span class="n">TensorBundle</span><span class="p">({</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">})</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">RandCropByPosNegLabel</span><span class="p">(</span>
+    <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> 
+    <span class="n">spatial_size</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span> 
+    <span class="n">pos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
+    <span class="n">neg</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
+    <span class="n">num_samples</span><span class="o">=</span><span class="mi">1</span>
+<span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
+<h2 id="compose">Compose</h2>
+<p>The <code>Compose</code> api allow to chain a series of callables in a sequential order. Each transform in the sequence must accept a single argument and return a single value, enabling the creation of a pipeline of transformations that are applied one after another. A sample example is shown bleow.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Compose</span><span class="p">,</span>
+    <span class="n">Orientation</span><span class="p">,</span>
+    <span class="n">Spacing</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">transform</span> <span class="o">=</span> <span class="n">Compose</span><span class="p">(</span>
+    <span class="p">[</span>
+        <span class="n">Orientation</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">axcodes</span><span class="o">=</span><span class="s2">&quot;RAS&quot;</span><span class="p">),</span> 
+        <span class="n">Spacing</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">pixdim</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">])</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+<span class="n">inputs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">}</span>
+<span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;affine&#39;</span><span class="p">:</span> <span class="n">trans_affine</span><span class="p">}</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">transform</span><span class="p">(</span><span class="n">inputs</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
+
+<span class="n">transform_image</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">]</span>
+<span class="n">transform_label</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
+<span class="n">transform_image</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">transform_label</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">(</span><span class="n">TensorShape</span><span class="p">([</span><span class="mi">243</span><span class="p">,</span> <span class="mi">345</span><span class="p">,</span> <span class="mi">426</span><span class="p">,</span> <span class="mi">1</span><span class="p">]),</span> <span class="n">TensorShape</span><span class="p">([</span><span class="mi">243</span><span class="p">,</span> <span class="mi">345</span><span class="p">,</span> <span class="mi">426</span><span class="p">,</span> <span class="mi">1</span><span class="p">]))</span>
+</code></pre></div>
 
 
 

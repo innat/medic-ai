@@ -13,7 +13,7 @@
       
       
       
-        <link rel="prev" href="../../general/">
+        <link rel="prev" href="../..">
       
       
         <link rel="next" href="../../transformations/manage-transformations/">
@@ -24,7 +24,7 @@
     
     
       
-        <title>Model - MedicAI</title>
+        <title>Model - medicai</title>
       
     
     
@@ -75,6 +75,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#3d" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -85,7 +90,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="MedicAI" class="md-header__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="../.." title="medicai" class="md-header__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
@@ -99,7 +104,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            MedicAI
+            medicai
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -229,23 +234,6 @@
         
   
   
-  
-    <li class="md-tabs__item">
-      <a href="../../general/" class="md-tabs__link">
-        
-  
-    
-  
-  General
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
     
   
   
@@ -301,12 +289,12 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../inference/manage-inference/" class="md-tabs__link">
+      <a href="../../general/" class="md-tabs__link">
         
   
     
   
-  Inference
+  General
 
       </a>
     </li>
@@ -337,13 +325,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="MedicAI" class="md-nav__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="../.." title="medicai" class="md-nav__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
 
     </a>
-    MedicAI
+    medicai
   </label>
   
     <div class="md-nav__source">
@@ -385,27 +373,6 @@
       
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../../general/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    General
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
     
   
   
@@ -415,6 +382,18 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Model
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
         
@@ -426,6 +405,32 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#3d" class="md-nav__link">
+    <span class="md-ellipsis">
+      3D
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -480,11 +485,11 @@
   
   
     <li class="md-nav__item">
-      <a href="../../inference/manage-inference/" class="md-nav__link">
+      <a href="../../general/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Inference
+    General
     
   </span>
   
@@ -515,7 +520,42 @@
 
   <h1>Model</h1>
 
+<p>Currently only two models are implemented for 3D classification and segmentation task. The workflow can be run with <code>tensorflow</code>, and <code>torch</code> backend.</p>
+<h2 id="3d">3D</h2>
+<p><strong>Classification</strong></p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinTransformer</span>
 
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">SwinTransformer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span> 
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
+
+<span class="n">dummy_input</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">)</span>
+<span class="n">output</span><span class="o">.</span><span class="n">shape</span>
+<span class="n">TensorShape</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+</code></pre></div>
+<p><strong>Segmentation</strong></p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinUNETR</span>
+
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">SwinUNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
+
+<span class="n">dummy_input</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">)</span>
+<span class="n">output</span><span class="o">.</span><span class="n">shape</span>
+<span class="n">TensorShape</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+</code></pre></div>
 
 
 
@@ -545,7 +585,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../general/" class="md-footer__link md-footer__link--prev" aria-label="Previous: General">
+          <a href="../.." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -555,7 +595,7 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                General
+                Home
               </div>
             </div>
           </a>

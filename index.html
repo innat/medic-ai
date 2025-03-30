@@ -14,7 +14,7 @@
       
       
       
-        <link rel="next" href="general/">
+        <link rel="next" href="models/manage-models/">
       
       
       <link rel="icon" href="assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>MedicAI</title>
+        <title>medicai</title>
       
     
     
@@ -73,6 +73,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#medicai" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -83,7 +88,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="MedicAI" class="md-header__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="." title="medicai" class="md-header__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
@@ -97,7 +102,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            MedicAI
+            medicai
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -231,23 +236,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="general/" class="md-tabs__link">
-        
-  
-    
-  
-  General
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="models/manage-models/" class="md-tabs__link">
         
   
@@ -299,12 +287,12 @@
   
   
     <li class="md-tabs__item">
-      <a href="inference/manage-inference/" class="md-tabs__link">
+      <a href="general/" class="md-tabs__link">
         
   
     
   
-  Inference
+  General
 
       </a>
     </li>
@@ -335,13 +323,13 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="MedicAI" class="md-nav__button md-logo" aria-label="MedicAI" data-md-component="logo">
+    <a href="." title="medicai" class="md-nav__button md-logo" aria-label="medicai" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm11 3h5.5L15 1.5zM8 0h8l6 6v12c0 1.11-.89 2-2 2H8a2 2 0 0 1-2-2V2c0-1.11.89-2 2-2m9 16v-2H8v2zm3-4v-2H8v2z"/></svg>
 
     </a>
-    MedicAI
+    medicai
   </label>
   
     <div class="md-nav__source">
@@ -371,6 +359,20 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="." class="md-nav__link md-nav__link--active">
         
@@ -383,27 +385,43 @@
 
       </a>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="general/" class="md-nav__link">
         
-  
-  <span class="md-ellipsis">
-    General
-    
-  </span>
-  
 
-      </a>
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#available-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      Available Features
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -478,11 +496,11 @@
   
   
     <li class="md-nav__item">
-      <a href="inference/manage-inference/" class="md-nav__link">
+      <a href="general/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
-    Inference
+    General
     
   </span>
   
@@ -511,9 +529,58 @@
   
 
 
-  <h1>Home</h1>
-
-
+<h1 id="medicai">Medicai</h1>
+<p><strong>Medic-AI</strong> is a <a href="https://keras.io/keras_3/">Keras</a> based library designed for medical image analysis using machine learning techniques. It provides seamless compatibility with multiple backends, allowing models to run on <code>tensorflow</code>, <code>torch</code>, and <code>jax</code>.</p>
+<p><strong>Note</strong>: It is currently in its early stages and will undergo multiple iterations before reaching a stable release.</p>
+<h2 id="installation">Installation</h2>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/innat/medic-ai
+<span class="nb">cd</span><span class="w"> </span>medic-ai
+pip<span class="w"> </span>install<span class="w"> </span>.<span class="w"> </span>-q
+</code></pre></div>
+<h2 id="available-features">Available Features</h2>
+<p>The <code>medicai</code> library provides a range of features for medical image processing, model training, and inference. Below is an overview of its key functionalities.</p>
+<p><strong>Image Transformations</strong></p>
+<p><code>medicai</code> includes various transformation utilities for preprocessing medical images:</p>
+<ul>
+<li>Basic Transformations:<ul>
+<li><code>Resize</code> – Adjusts the image dimensions.</li>
+<li><code>ScaleIntensityRange</code> – Normalizes intensity values within a specified range.</li>
+<li><code>CropForeground</code> – Crops the image to focus on the region of interest.</li>
+<li><code>Spacing</code> – Resamples the image to a target voxel spacing.</li>
+<li><code>Orientation</code> – Standardizes image orientation.</li>
+</ul>
+</li>
+<li>Augmentations for Robustness:<ul>
+<li><code>RandRotate90</code> – Randomly rotates images by 90 degrees.</li>
+<li><code>RandShiftIntensity</code> – Randomly shifts intensity values.</li>
+<li><code>RandFlip</code> – Randomly flips images along specified axes.</li>
+</ul>
+</li>
+<li>Pipeline Composition:<ul>
+<li><code>Compose</code> – Chains multiple transformations into a single pipeline.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Models</strong></p>
+<p>Currently, <code>medicai</code> focuses on 3D models for classification and segmentation:</p>
+<ul>
+<li><code>SwinTransformer</code> – 3D classification task.</li>
+<li><code>SwinUNETR</code> – 3D segmentation task.</li>
+</ul>
+<p><strong>Inference</strong></p>
+<ul>
+<li><code>SlidingWindowInference</code> – Processes large 3D images in smaller overlapping windows, improving performance and memory efficiency.</li>
+</ul>
+<h1 id="guides-wip">Guides (WIP)</h1>
+<ul>
+<li>3D transformation</li>
+<li>3D classification</li>
+<li>3D Segmentation</li>
+</ul>
+<h3 id="acknowledgements">Acknowledgements</h3>
+<p>This project is greatly inspired by <a href="https://monai.io/">MONAI</a>.</p>
+<h3 id="citation">Citation</h3>
+<p>If you use <code>medicai</code> in your research, please cite it using the metadata from our <a href="https://github.com/innat/medic-ai/blob/main/CITATION.cff"><code>CITATION.cff</code></a> file.</p>
 
 
 
@@ -544,13 +611,13 @@
         
         
           
-          <a href="general/" class="md-footer__link md-footer__link--next" aria-label="Next: General">
+          <a href="models/manage-models/" class="md-footer__link md-footer__link--next" aria-label="Next: Model">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                General
+                Model
               </div>
             </div>
             <div class="md-footer__button md-icon">
