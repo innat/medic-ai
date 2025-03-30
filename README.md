@@ -17,7 +17,7 @@ pip install . -q
 
 The `medicai` library provides a range of features for medical image processing, model training, and inference. Below is an overview of its key functionalities.
 
-**Image Transformations**
+[**Image Transformations**](https://innat.github.io/medic-ai/transformations/manage-transformations/)
 
 `medicai` includes various transformation utilities for preprocessing medical images:
 
@@ -34,7 +34,7 @@ The `medicai` library provides a range of features for medical image processing,
 - Pipeline Composition:
   - `Compose` – Chains multiple transformations into a single pipeline.
 
-**Models**
+[**Models**](https://innat.github.io/medic-ai/models/manage-models/)
 
 Currently, `medicai` focuses on 3D models for classification and segmentation:
 
