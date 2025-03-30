@@ -51,4 +51,4 @@ This project is greatly inspired by [MONAI](https://monai.io/).
 
 # Citation
 
-If you use this videoswin implementation in your research, please cite it using the metadata from our `CITATION.cff` file.
+If you use `medicai` in your research, please cite it using the metadata from our [`CITATION.cff`](https://github.com/innat/medic-ai/blob/main/CITATION.cff) file.
