@@ -30,12 +30,22 @@ setup(
     author="innat",
     author_email="innat.dev@gmail.com",
     url="https://github.com/innat/medic-ai",
-    package_dir={"": "src"},
+    package_dir={"": "."},
     packages=find_packages(
-        where="src",
+        where=".",
         include=["medicai", "medicai.*"],
-        exclude=("test", "dataloader", "docker", "notebooks"),
+        exclude=("test", "dataloader", "notebooks"),
     ),
+    extras_require={
+        "tensorflow": ["tensorflow[and-cuda]"],
+        "jax": ["jax[cuda12_local]"],
+        "torch": ["torch==2.6.0+cu124"],
+        "all": [
+            "tensorflow[and-cuda]",
+            "jax[cuda12_local]",
+            "torch==2.6.0+cu124",
+        ],
+    },
     python_requires=">=3.6",
     install_requires=get_install_requirements(),
     setup_requires=["wheel"],  # avoid building error when pip is not updated
