@@ -45,6 +45,12 @@ Currently, `medicai` focuses on 3D models for classification and segmentation:
 
 - `SlidingWindowInference` – Processes large 3D images in smaller overlapping windows, improving performance and memory efficiency.
 
+# Guide (WIP)
+
+- 3D transformation
+- 3D classification
+- 3D Segmentation
+
 ### Acknowledgements
 
 This project is greatly inspired by [MONAI](https://monai.io/).
