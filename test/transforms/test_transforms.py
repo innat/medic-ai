@@ -38,7 +38,7 @@ def test_resize_transform():
     # check only one key (image)
     image_only = tf.random.normal((128, 128, 128, 1))
     inputs_image_only = TensorBundle({"image": image_only})
-    resize_transform = Resize(keys=["image"], spatial_shape=(64, 96, 64), only_image=True)
+    resize_transform = Resize(keys=["image"], spatial_shape=(64, 96, 64))
     resized_image_only = resize_transform(inputs)
     assert resized_image_only.data["image"].shape == (64, 96, 64, 1)
 
@@ -96,15 +96,40 @@ def test_crop_foreground():
     assert output.data["label"].shape == (1, 3, 3, 1)
 
 
-def test_meta_tensor():
+def test_tensor_bundle():
     image = tf.random.normal((10, 10, 10, 1))
     label = tf.random.uniform((10, 10, 10, 1), maxval=5, dtype=tf.int32)
     affine = tf.constant(
         [[-1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]], dtype=tf.float32
     )
     meta = {"affine": affine, "pixdim": [1.0, 1.0, 1.0]}
-    inputs = {"image": image, "label": label}
     inputs = TensorBundle({"image": image, "label": label}, meta)
+
+    # Test get_data
+    assert tf.reduce_all(inputs.get_data("image") == image)
+    assert tf.reduce_all(inputs.get_data("label") == label)
+    assert inputs.get_data("affine") is None #affine is in meta.
+
+    # Test get_meta
+    assert tf.reduce_all(inputs.get_meta("affine") == affine)
+    assert inputs.get_meta("pixdim") == [1.0, 1.0, 1.0]
+    assert inputs.get_meta('image') is None #image is in data.
+
+    # Test __getitem__
+    assert tf.reduce_all(inputs["image"] == image)
+    assert tf.reduce_all(inputs["label"] == label)
+    assert tf.reduce_all(inputs["affine"] == affine)
+    assert inputs["pixdim"] == [1.0, 1.0, 1.0]
+
+    # Test set_data
+    new_image = tf.random.normal((5, 5, 5, 1))
+    inputs.set_data("image", new_image)
+    assert tf.reduce_all(inputs.get_data("image") == new_image)
+
+    # Test set_meta
+    new_affine = tf.eye(4)
+    inputs.set_meta("affine", new_affine)
+    assert tf.reduce_all(inputs.get_meta("affine") == new_affine)
 
 
 def test_compose():
