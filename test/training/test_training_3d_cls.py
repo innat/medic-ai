@@ -16,7 +16,7 @@ def transformation(sample):
             ScaleIntensityRange(
                 keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True
             ),
-            Resize(keys=["image"], mode=["bilinear"], spatial_shape=(96, 96, 96), only_image=True),
+            Resize(keys=["image"], mode=["bilinear"], spatial_shape=(96, 96, 96)),
             RandRotate90(keys=["image"], prob=0.1, max_k=3, spatial_axes=(1, 2)),
         ]
     )
