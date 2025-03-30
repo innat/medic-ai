@@ -49,7 +49,7 @@ Currently, `medicai` focuses on 3D models for classification and segmentation:
 # Guide (WIP)
 
 - 3D transformation
-- 3D classification
+- [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
 - 3D Segmentation
 
 # Acknowledgements
