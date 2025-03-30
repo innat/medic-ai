@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from src.medicai.transforms import (
+from medicai.transforms import (
     Compose,
     CropForeground,
     Orientation,

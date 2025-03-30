@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from src.medicai.transforms import TensorBundle
+from medicai.transforms import TensorBundle
 
 
 def test_tensorbundle_creation():

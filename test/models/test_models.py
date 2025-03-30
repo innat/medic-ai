@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from src.medicai.models import SwinTransformer, SwinUNETR
+from medicai.models import SwinTransformer, SwinUNETR
 
 
 def test_swin_unetr():

@@ -1,8 +1,8 @@
 import keras
 import tensorflow as tf
 
-from src.medicai.models import SwinTransformer
-from src.medicai.transforms import Compose, RandRotate90, Resize, ScaleIntensityRange
+from medicai.models import SwinTransformer
+from medicai.transforms import Compose, RandRotate90, Resize, ScaleIntensityRange
 
 
 def create_sample_dict(image, label):

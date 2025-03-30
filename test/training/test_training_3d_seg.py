@@ -1,10 +1,10 @@
 import keras
 import tensorflow as tf
 
-from src.medicai.losses import SparseDiceCELoss
-from src.medicai.metrics import DiceMetric
-from src.medicai.models import SwinUNETR
-from src.medicai.transforms import (
+from medicai.losses import SparseDiceCELoss
+from medicai.metrics import DiceMetric
+from medicai.models import SwinUNETR
+from medicai.transforms import (
     Compose,
     ScaleIntensityRange,
 )
