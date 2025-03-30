@@ -11,7 +11,7 @@ def get_install_requirements():
 
 
 def get_medicai_version():
-    with open("src/medicai/__init__.py", "r") as f:
+    with open("medicai/__init__.py", "r") as f:
         version = re.search(
             r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE
         ).group(1)
