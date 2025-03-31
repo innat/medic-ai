@@ -14,6 +14,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         self,
         model,
         dataset,
+        metrics,
         num_classes,
         overlap=0.5,
         roi_size=(96, 96, 96),
@@ -36,6 +37,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         """
         super().__init__()
         self._model = model
+        self._metrics = metrics
         self.dataset = dataset
         self.num_classes = num_classes
         self.overlap = overlap
@@ -63,26 +65,17 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
             roi_weight_map=self.roi_weight_map,
         )
 
-        self.metric = DiceMetric(
-            num_classes=self.num_classes,
-            include_background=True,
-            reduction="mean",
-            ignore_empty=True,
-            smooth=1e-6,
-            name="dice_score",
-        )
-
     def on_epoch_end(self, epoch, logs=None):
         if (epoch + 1) % self.interval == 0:
             print(f"\nEpoch {epoch+1}: Running inference...")
 
-            self.metric.reset_state()  # Reset metric before evaluation
+            self._metrics.reset_state()  # Reset metric before evaluation
 
             for x, y in self.dataset:  # (bs, d, h, w, channel)
                 y_pred = self.swi(x)
-                self.metric.update_state(y, y_pred)
+                self._metrics.update_state(y, y_pred)
 
-            score = self.metric.result().numpy()
+            score = self._metrics.result().numpy()
             print(f"Epoch {epoch+1}: Score = {score:.4f}")
 
             # Save model if Dice score improves
