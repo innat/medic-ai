@@ -8,29 +8,31 @@ from .base import BaseDiceMetric
 
 
 class SparseDiceMetric(BaseDiceMetric):
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        # convert ground truth to one-hot encoding
-        y_true = ops.one_hot(
-            ops.squeeze(ops.cast(y_true, 'int32'), axis=-1), 
+    def __init__(
+        self,
+        num_classes,
+        class_id=None,
+        from_logits=True,
+        smooth=1e-6,
+        name="sparse_categorical_dice",
+        **kwargs
+    ):
+        super().__init__(
+            num_classes=num_classes,
+            class_id=class_id,
+            smooth=smooth,
+            name=name,
+            **kwargs
+        )
+        self.from_logits = from_logits
+
+    def compute_dice_components(self, y_true, y_pred):
+        y_true_processed = ops.one_hot(
+            ops.squeeze(ops.cast(y_true, 'int32')), 
             num_classes=self.num_classes
         )
-
-        if self.from_logits:
-            y_pred = ops.nn.softmax(y_pred)
-
-        # Extract selected classes
-        y_true, y_pred = self.get_target_class(y_true, y_pred, indices=self.class_id)
-        y_true = ops.reshape(y_true, [-1])
-        y_pred = ops.reshape(y_pred, [-1])
-        y_pred = ops.cast(y_pred, y_true.dtype)
-        
-        # Compute intersection and union
-        intersection = ops.sum(y_true * y_pred)
-        union = ops.sum(y_true) + ops.sum(y_pred)
-
-        self.intersection.assign_add(intersection)
-        self.union.assign_add(union)
-
+        y_pred_processed = ops.nn.softmax(y_pred) if self.from_logits else y_pred
+        return y_true_processed, y_pred_processed
 
 class DiceMetric(Metric):
 
