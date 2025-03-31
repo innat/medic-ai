@@ -4,6 +4,32 @@ hide_warnings()
 
 from keras import ops
 from keras.metrics import Metric
+from .base import BaseDiceMetric
+
+
+class SparseDiceMetric(BaseDiceMetric):
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # convert ground truth to one-hot encoding
+        y_true = ops.one_hot(
+            ops.squeeze(ops.cast(y_true, 'int32'), axis=-1), 
+            num_classes=self.num_classes
+        )
+
+        if self.from_logits:
+            y_pred = ops.nn.softmax(y_pred)
+
+        # Extract selected classes
+        y_true, y_pred = self.get_target_class(y_true, y_pred, indices=self.class_id)
+        y_true = ops.reshape(y_true, [-1])
+        y_pred = ops.reshape(y_pred, [-1])
+        y_pred = ops.cast(y_pred, y_true.dtype)
+        
+        # Compute intersection and union
+        intersection = ops.sum(y_true * y_pred)
+        union = ops.sum(y_true) + ops.sum(y_pred)
+
+        self.intersection.assign_add(intersection)
+        self.union.assign_add(union)
 
 
 class DiceMetric(Metric):
