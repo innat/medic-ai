@@ -13,6 +13,12 @@ cd medic-ai
 pip install . -q
 ```
 
+# Guide
+
+- 3D transformation
+- [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
+- [3D Segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
+
 # Available Features
 
 The `medicai` library provides a range of features for medical image processing, model training, and inference. Below is an overview of its key functionalities.
@@ -45,12 +51,6 @@ Currently, `medicai` focuses on 3D models for classification and segmentation:
 
 - `SlidingWindowInference` – Processes large 3D images in smaller overlapping windows, improving performance and memory efficiency.
 
-
-# Guide (WIP)
-
-- 3D transformation
-- [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
-- 3D Segmentation
 
 # Acknowledgements
 
