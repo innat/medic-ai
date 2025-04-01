@@ -17,7 +17,7 @@ pip install . -q
 
 - 3D transformation
 - [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
-- [3D Segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
+- [3D segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
 
 # Available Features
 
