@@ -7,95 +7,114 @@ from keras.metrics import Metric
 from .base import BaseDiceMetric
 
 
-class SparseDiceMetric(BaseDiceMetric):
+class SparseDiceMetric(Metric):
     def __init__(
-        self,
-        num_classes,
-        class_id=None,
-        from_logits=True,
-        smooth=1e-6,
-        name="sparse_categorical_dice",
-        **kwargs
+        self, from_logits, num_classes, class_id=None, ignore_empty=True, smooth=1e-6, name='dice_metric', **kwargs
     ):
-        super().__init__(
-            num_classes=num_classes,
-            class_id=class_id,
-            smooth=smooth,
-            name=name,
-            **kwargs
-        )
-        self.from_logits = from_logits
+        super().__init__(name=name, **kwargs)
 
-    def compute_dice_components(self, y_true, y_pred):
-        y_true_processed = ops.one_hot(
-            ops.squeeze(ops.cast(y_true, 'int32')), 
-            num_classes=self.num_classes
-        )
-        y_pred_processed = ops.nn.softmax(y_pred) if self.from_logits else y_pred
-        return y_true_processed, y_pred_processed
-
-class DiceMetric(Metric):
-
-    reduction_map = {
-        "mean": ops.mean,
-        "sum": ops.sum,
-        "none": lambda x: x,
-    }
-
-    def __init__(
-        self,
-        num_classes,
-        include_background=True,
-        reduction="mean",
-        ignore_empty=True,
-        smooth=1e-6,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
+        # Handle class_id specification
+        if class_id is None:
+            self.class_id = list(range(num_classes))
+        elif isinstance(class_id, int):
+            self.class_id = [class_id]
+        else:
+            self.class_id = class_id
+        
         self.num_classes = num_classes
-        self.include_background = include_background
-        self.reduction = reduction
+        self.from_logits = from_logits
         self.ignore_empty = ignore_empty
         self.smooth = smooth
-        self.intersection = self.add_weight(
-            name="intersection", shape=(num_classes,), initializer="zeros"
+        
+        # State variables
+        self.total_intersection = self.add_variable(
+            name='total_intersection',
+            shape=(len(self.class_id),),
+            initializer='zeros'
         )
-        self.union = self.add_weight(name="union", shape=(num_classes,), initializer="zeros")
-        self.not_nans = self.add_weight(name="not_nans", initializer="zeros")
+        self.total_union = self.add_variable(
+            name='total_union',
+            shape=(len(self.class_id),),
+            initializer='zeros'
+        )
+        self.valid_counts = self.add_variable(
+            name='valid_counts',
+            shape=(len(self.class_id),),
+            initializer='zeros'
+        )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        y_true = ops.one_hot(
-            ops.squeeze(ops.cast(y_true, "int32"), axis=-1), num_classes=self.num_classes
-        )
-        y_true_reshaped = ops.reshape(y_true, [-1, self.num_classes])
-
         y_pred = ops.cast(y_pred, y_true.dtype)
-        y_pred = ops.nn.softmax(y_pred)
-        y_pred_reshaped = ops.reshape(y_pred, [-1, self.num_classes])
 
-        intersection = ops.sum(y_true_reshaped * y_pred_reshaped, axis=0)
-        union = ops.sum(y_true_reshaped, axis=0) + ops.sum(y_pred_reshaped, axis=0)
+        y_true = ops.one_hot(
+            ops.squeeze(
+                ops.cast(y_true, 'int32'), axis=-1
+            ), 
+            num_classes=self.num_classes
+        )
+        
+        # Convert to one-hot
+        if self.from_logits:
+            y_pred = ops.one_hot(
+                ops.argmax(y_pred, axis=-1),
+                num_classes=self.num_classes
+            )
+            
+        y_true_processed = y_true
+        y_pred_processed = y_pred
 
+        # Select only the classes we want to evaluate
+        y_true_processed = ops.take(y_true_processed, self.class_id, axis=-1)
+        y_pred_processed = ops.take(y_pred_processed, self.class_id, axis=-1)
+
+        # Calculate metrics
+        intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C]
+        union = y_true_processed + y_pred_processed  # [B, D, H, W, C]
+        gt_sum = ops.sum(y_true_processed, axis=[1, 2, 3])  # [B, C]
+        pred_sum = ops.sum(y_pred_processed, axis=[1, 2, 3])  # [B, C]
+
+        # Valid samples mask
         if self.ignore_empty:
-            empty_gt = ops.sum(y_true_reshaped, axis=0) == 0
-            intersection = ops.where(empty_gt, ops.zeros_like(intersection), intersection)
-            union = ops.where(empty_gt, ops.zeros_like(union), union)
+            # Invalid when GT is empty AND prediction is NOT empty
+            invalid_mask = ops.logical_and(
+                gt_sum == 0,  # Empty GT
+                pred_sum != 0  # Non-empty prediction
+            )
+            valid_mask = ops.logical_not(invalid_mask)  # [B, C]
+        else:
+            valid_mask = ops.ones_like(gt_sum, dtype='bool')
 
-        self.intersection.assign_add(intersection)
-        self.union.assign_add(union)
-        self.not_nans.assign_add(ops.sum(ops.cast(union > 0, "float32")))
+        # Convert mask to float and expand dimensions for broadcasting
+        valid_mask_float = ops.cast(valid_mask, 'float32')  # [B, C]
+        
+        # Apply mask to metrics
+        masked_intersection = ops.sum(intersection, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
+        masked_union = ops.sum(union, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
+        
+        # Update state variables
+        self.total_intersection.assign_add(ops.sum(masked_intersection, axis=0))  # [C]
+        self.total_union.assign_add(ops.sum(masked_union, axis=0))  # [C]
+        self.valid_counts.assign_add(ops.sum(valid_mask_float, axis=0))  # [C]
 
     def result(self):
-        dice = (2.0 * self.intersection + self.smooth) / (self.union + self.smooth)
-        if not self.include_background:
-            dice = dice[1:]
-
-        if self.reduction not in self.reduction_map:
-            raise ValueError(f"Unsupported reduction mode: {self.reduction}")
-
-        return self.reduction_map.get(self.reduction)(dice)
+        # Calculate Dice per class
+        dice_per_class = (2. * self.total_intersection + self.smooth) / (self.total_union + self.smooth)
+        
+        # Only average over classes with valid counts > 0
+        valid_classes = self.valid_counts > 0
+        dice_per_class = ops.where(
+            valid_classes,
+            dice_per_class,
+            ops.zeros_like(dice_per_class)
+        )
+        num_valid_classes = ops.sum(ops.cast(valid_classes, 'float32'))
+        return ops.cond(
+            num_valid_classes > 0,
+            lambda: ops.sum(dice_per_class) / num_valid_classes,
+            lambda: ops.cast(0.0, self.dtype)  # Return 0 if no valid classes
+        )
 
     def reset_states(self):
-        self.intersection.assign(ops.zeros_like(self.intersection))
-        self.union.assign(ops.zeros_like(self.union))
-        self.not_nans.assign(0.0)
+        self.total_intersection.assign(ops.zeros(len(self.class_id)))
+        self.total_union.assign(ops.zeros(len(self.class_id)))
+        self.valid_counts.assign(ops.zeros(len(self.class_id)))
