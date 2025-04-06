@@ -4,12 +4,20 @@ hide_warnings()
 
 from keras import ops
 from keras.metrics import Metric
+
 from .base import BaseDiceMetric
 
 
 class SparseDiceMetric(Metric):
     def __init__(
-        self, from_logits, num_classes, class_id=None, ignore_empty=True, smooth=1e-6, name='dice_metric', **kwargs
+        self,
+        from_logits,
+        num_classes,
+        class_id=None,
+        ignore_empty=True,
+        smooth=1e-6,
+        name="dice_metric",
+        **kwargs
     ):
         super().__init__(name=name, **kwargs)
 
@@ -20,46 +28,34 @@ class SparseDiceMetric(Metric):
             self.class_id = [class_id]
         else:
             self.class_id = class_id
-        
+
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
         self.smooth = smooth
-        
+
         # State variables
         self.total_intersection = self.add_variable(
-            name='total_intersection',
-            shape=(len(self.class_id),),
-            initializer='zeros'
+            name="total_intersection", shape=(len(self.class_id),), initializer="zeros"
         )
         self.total_union = self.add_variable(
-            name='total_union',
-            shape=(len(self.class_id),),
-            initializer='zeros'
+            name="total_union", shape=(len(self.class_id),), initializer="zeros"
         )
         self.valid_counts = self.add_variable(
-            name='valid_counts',
-            shape=(len(self.class_id),),
-            initializer='zeros'
+            name="valid_counts", shape=(len(self.class_id),), initializer="zeros"
         )
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         y_pred = ops.cast(y_pred, y_true.dtype)
 
         y_true = ops.one_hot(
-            ops.squeeze(
-                ops.cast(y_true, 'int32'), axis=-1
-            ), 
-            num_classes=self.num_classes
+            ops.squeeze(ops.cast(y_true, "int32"), axis=-1), num_classes=self.num_classes
         )
-        
+
         # Convert to one-hot
         if self.from_logits:
-            y_pred = ops.one_hot(
-                ops.argmax(y_pred, axis=-1),
-                num_classes=self.num_classes
-            )
-            
+            y_pred = ops.one_hot(ops.argmax(y_pred, axis=-1), num_classes=self.num_classes)
+
         y_true_processed = y_true
         y_pred_processed = y_pred
 
@@ -77,20 +73,19 @@ class SparseDiceMetric(Metric):
         if self.ignore_empty:
             # Invalid when GT is empty AND prediction is NOT empty
             invalid_mask = ops.logical_and(
-                gt_sum == 0,  # Empty GT
-                pred_sum != 0  # Non-empty prediction
+                gt_sum == 0, pred_sum != 0  # Empty GT  # Non-empty prediction
             )
             valid_mask = ops.logical_not(invalid_mask)  # [B, C]
         else:
-            valid_mask = ops.ones_like(gt_sum, dtype='bool')
+            valid_mask = ops.ones_like(gt_sum, dtype="bool")
 
         # Convert mask to float and expand dimensions for broadcasting
-        valid_mask_float = ops.cast(valid_mask, 'float32')  # [B, C]
-        
+        valid_mask_float = ops.cast(valid_mask, "float32")  # [B, C]
+
         # Apply mask to metrics
         masked_intersection = ops.sum(intersection, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
         masked_union = ops.sum(union, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
-        
+
         # Update state variables
         self.total_intersection.assign_add(ops.sum(masked_intersection, axis=0))  # [C]
         self.total_union.assign_add(ops.sum(masked_union, axis=0))  # [C]
@@ -98,20 +93,18 @@ class SparseDiceMetric(Metric):
 
     def result(self):
         # Calculate Dice per class
-        dice_per_class = (2. * self.total_intersection + self.smooth) / (self.total_union + self.smooth)
-        
+        dice_per_class = (2.0 * self.total_intersection + self.smooth) / (
+            self.total_union + self.smooth
+        )
+
         # Only average over classes with valid counts > 0
         valid_classes = self.valid_counts > 0
-        dice_per_class = ops.where(
-            valid_classes,
-            dice_per_class,
-            ops.zeros_like(dice_per_class)
-        )
-        num_valid_classes = ops.sum(ops.cast(valid_classes, 'float32'))
+        dice_per_class = ops.where(valid_classes, dice_per_class, ops.zeros_like(dice_per_class))
+        num_valid_classes = ops.sum(ops.cast(valid_classes, "float32"))
         return ops.cond(
             num_valid_classes > 0,
             lambda: ops.sum(dice_per_class) / num_valid_classes,
-            lambda: ops.cast(0.0, self.dtype)  # Return 0 if no valid classes
+            lambda: ops.cast(0.0, self.dtype),  # Return 0 if no valid classes
         )
 
     def reset_states(self):

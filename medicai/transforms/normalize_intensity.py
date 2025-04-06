@@ -2,14 +2,24 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-import tensorflow as tf
-from .tensor_bundle import TensorBundle
 from typing import Sequence
+
+import tensorflow as tf
+
+from .tensor_bundle import TensorBundle
+
 
 class NormalizeIntensity:
     def __init__(
-        self, keys: Sequence[str], subtrahend=None, divisor=None,
-                 nonzero=False, channel_wise=False, dtype=tf.float32, allow_missing_keys=False):
+        self,
+        keys: Sequence[str],
+        subtrahend=None,
+        divisor=None,
+        nonzero=False,
+        channel_wise=False,
+        dtype=tf.float32,
+        allow_missing_keys=False,
+    ):
         self.keys = keys
         self.subtrahend = subtrahend
         self.divisor = divisor
@@ -22,7 +32,7 @@ class NormalizeIntensity:
         mask = tf.not_equal(image, 0.0) if self.nonzero else tf.ones_like(image, dtype=tf.bool)
         num_dims = tf.rank(image)
         channel_axis = num_dims - 1
-    
+
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask_for_mean_std = channel_and_mask
             channel_masked = tf.boolean_mask(channel, channel_mask_for_mean_std)
@@ -32,20 +42,18 @@ class NormalizeIntensity:
             div = self.divisor if self.divisor is not None else std
             div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
             return (channel - sub) / div
-    
+
         # Move the channel axis to the first dimension
         channel_axis_tensor = tf.expand_dims(channel_axis, axis=0)
         other_axes = tf.range(channel_axis)
         permutation = tf.concat([channel_axis_tensor, other_axes], axis=0)
         transposed_image = tf.transpose(image, perm=permutation)
         transposed_mask = tf.transpose(mask, perm=permutation)
-    
+
         normalized_transposed = tf.map_fn(
-            normalize_single_channel,
-            (transposed_image, transposed_mask),
-            dtype=image.dtype
+            normalize_single_channel, (transposed_image, transposed_mask), dtype=image.dtype
         )
-    
+
         # Move the channel axis back to the original position (last)
         # Create the inverse permutation using tf.range and tf.concat
         first_part_inverse = tf.range(1, num_dims)

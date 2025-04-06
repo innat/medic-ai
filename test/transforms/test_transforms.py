@@ -108,12 +108,12 @@ def test_tensor_bundle():
     # Test get_data
     assert tf.reduce_all(inputs.get_data("image") == image)
     assert tf.reduce_all(inputs.get_data("label") == label)
-    assert inputs.get_data("affine") is None #affine is in meta.
+    assert inputs.get_data("affine") is None  # affine is in meta.
 
     # Test get_meta
     assert tf.reduce_all(inputs.get_meta("affine") == affine)
     assert inputs.get_meta("pixdim") == [1.0, 1.0, 1.0]
-    assert inputs.get_meta('image') is None #image is in data.
+    assert inputs.get_meta("image") is None  # image is in data.
 
     # Test __getitem__
     assert tf.reduce_all(inputs["image"] == image)

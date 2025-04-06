@@ -1,20 +1,19 @@
-
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
 import tensorflow as tf
+
 from .tensor_bundle import TensorBundle
+
 
 class RandSpatialCrop:
     def __init__(self, keys, roi_size, max_roi_size=None, random_center=True, random_size=False):
         self.keys = keys
-        self.roi_size = tf.convert_to_tensor(
-            roi_size, dtype=tf.int32
+        self.roi_size = tf.convert_to_tensor(roi_size, dtype=tf.int32)
+        self.max_roi_size = (
+            tf.convert_to_tensor(max_roi_size, dtype=tf.int32) if max_roi_size is not None else None
         )
-        self.max_roi_size = tf.convert_to_tensor(
-            max_roi_size, dtype=tf.int32
-        ) if max_roi_size is not None else None
         self.random_center = random_center
         self.random_size = random_size
 
@@ -50,14 +49,13 @@ class RandSpatialCrop:
             def sample_dim(min_s, max_s, img_s):
                 min_s = tf.where(min_s <= 0, img_s, min_s)
                 max_s = tf.where(max_s <= 0, img_s, max_s)
-                max_s = tf.minimum(max_s, img_s) # Ensure max_s doesn't exceed image size
-                min_s = tf.minimum(min_s, max_s) # Ensure min_s is not greater than max_s
+                max_s = tf.minimum(max_s, img_s)  # Ensure max_s doesn't exceed image size
+                min_s = tf.minimum(min_s, max_s)  # Ensure min_s is not greater than max_s
                 return tf.random.uniform([], minval=min_s, maxval=max_s + 1, dtype=tf.int32)
 
-            roi_size = tf.stack([
-                sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i])
-                for i in range(3)
-            ])
+            roi_size = tf.stack(
+                [sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i]) for i in range(3)]
+            )
         else:
             roi_size = tf.where(roi_size > 0, roi_size, spatial_shape)
             roi_size = tf.minimum(roi_size, spatial_shape)
@@ -65,13 +63,12 @@ class RandSpatialCrop:
 
     def _get_center(self, spatial_shape, roi_size):
         if self.random_center:
-            max_start = tf.maximum(spatial_shape - roi_size, 0) # Corrected max_start
+            max_start = tf.maximum(spatial_shape - roi_size, 0)  # Corrected max_start
 
             # Sample each spatial center coordinate independently
-            random_start = tf.stack([
-                tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32)
-                for i in range(3)
-            ])
+            random_start = tf.stack(
+                [tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32) for i in range(3)]
+            )
             center = random_start + roi_size // 2
         else:
             center = spatial_shape // 2
