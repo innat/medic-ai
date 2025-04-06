@@ -9,4 +9,6 @@ from medicai.transforms.random_shift_intensity import RandShiftIntensity
 from medicai.transforms.resize import Resize
 from medicai.transforms.scaling import ScaleIntensityRange
 from medicai.transforms.spacing import Spacing
+from medicai.transforms.normalize_intensity import NormalizeIntensity
+from medicai.transforms.random_spatial_crop import RandSpatialCrop
 from medicai.transforms.tensor_bundle import TensorBundle
