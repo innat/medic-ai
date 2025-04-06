@@ -6,7 +6,7 @@ import tensorflow as tf
 from .tensor_bundle import TensorBundle
 from typing import Sequence
 
-class NormalizeIntensity2:
+class NormalizeIntensity:
     def __init__(
         self, keys: Sequence[str], subtrahend=None, divisor=None,
                  nonzero=False, channel_wise=False, dtype=tf.float32, allow_missing_keys=False):
