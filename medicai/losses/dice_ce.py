@@ -8,15 +8,18 @@ from keras import losses, ops
 
 class SparseDiceCELoss(keras.losses.Loss):
     def __init__(
-        self, from_logits=False, smooth=1e-5, reduction="sum_over_batch_size", name="sparse_dice_ce"
+        self, from_logits=False, smooth=1e-5, squared_pred=False, name="sparse_dice_ce"
     ):
-        super().__init__(reduction=reduction, name=name)
+        super().__init__(name=name)
         self.from_logits = from_logits
         self.smooth = smooth
+        self.squared_pred = squared_pred
 
     def dice_loss(self, y_true, y_pred):
         intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(y_pred, axis=[1, 2, 3])
+        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
+            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
+        )
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - ops.mean(dice_score)
 
@@ -41,16 +44,19 @@ class CategoricalDiceCELoss(keras.losses.Loss):
         self,
         from_logits=False,
         smooth=1e-5,
-        reduction="sum_over_batch_size",
+        squared_pred=False,
         name="categorical_dice_ce",
     ):
-        super().__init__(reduction=reduction, name=name)
+        super().__init__(name=name)
         self.from_logits = from_logits
         self.smooth = smooth
+        self.squared_pred = squared_pred
 
     def dice_loss(self, y_true, y_pred):
         intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(y_pred, axis=[1, 2, 3])
+        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
+            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
+        )
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - ops.mean(dice_score)
 
@@ -69,15 +75,18 @@ class CategoricalDiceCELoss(keras.losses.Loss):
 
 class BinaryDiceCELoss(keras.losses.Loss):
     def __init__(
-        self, from_logits=False, smooth=1e-5, reduction="sum_over_batch_size", name="binary_dice_ce"
+        self, from_logits=False, smooth=1e-5, squared_pred=False, name="binary_dice_ce"
     ):
-        super().__init__(reduction=reduction, name=name)
+        super().__init__(name=name)
         self.from_logits = from_logits
         self.smooth = smooth
+        self.squared_pred = squared_pred
 
     def dice_loss(self, y_true, y_pred):
         intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(y_pred, axis=[1, 2, 3])
+        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
+            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
+        )
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - ops.mean(dice_score)
 
