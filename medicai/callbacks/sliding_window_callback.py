@@ -5,7 +5,6 @@ hide_warnings()
 
 from keras import callbacks
 
-from medicai.metrics import DiceMetric
 from medicai.utils.inference import SlidingWindowInference
 
 
