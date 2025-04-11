@@ -5,102 +5,74 @@ hide_warnings()
 import keras
 from keras import losses, ops
 
+from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
-class SparseDiceCELoss(keras.losses.Loss):
-    def __init__(
-        self, from_logits=False, smooth=1e-5, squared_pred=False, name="sparse_dice_ce"
-    ):
-        super().__init__(name=name)
-        self.from_logits = from_logits
-        self.smooth = smooth
-        self.squared_pred = squared_pred
 
-    def dice_loss(self, y_true, y_pred):
-        intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
-            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
-        )
-        dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
-        return 1.0 - ops.mean(dice_score)
+class SparseDiceCELoss(SparseDiceLoss):
+
+    def _process_inputs(self, y_true, y_pred):
+        if y_true.shape[-1] == 1:
+            y_true = ops.squeeze(y_true, axis=-1)
+
+        y_true = ops.one_hot(y_true, ops.shape(y_pred)[-1])
+        # TODO: fix for ce loss!
+        # y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        y_true = ops.argmax(y_true, axis=-1)
+        return y_true, y_pred
 
     def call(self, y_true, y_pred):
-        if self.from_logits:
-            y_pred = ops.softmax(y_pred, axis=-1)
+        dice_loss = super().call(y_true, y_pred)
 
-        # Convert sparse labels to one-hot for Dice, keep sparse for CE
-        y_true_onehot = ops.one_hot(ops.squeeze(y_true, axis=-1), ops.shape(y_pred)[-1])
+        if self.class_id is not None:
+            y_true, y_pred = self._process_inputs(y_true, y_pred)
 
-        # Clip predictions for numerical stability
-        y_pred = ops.clip(y_pred, keras.backend.epsilon(), 1.0 - keras.backend.epsilon())
-
-        dice = self.dice_loss(y_true_onehot, y_pred)
-        ce = losses.sparse_categorical_crossentropy(y_true, y_pred, from_logits=False)
-
-        return dice + ops.mean(ce)
-
-
-class CategoricalDiceCELoss(keras.losses.Loss):
-    def __init__(
-        self,
-        from_logits=False,
-        smooth=1e-5,
-        squared_pred=False,
-        name="categorical_dice_ce",
-    ):
-        super().__init__(name=name)
-        self.from_logits = from_logits
-        self.smooth = smooth
-        self.squared_pred = squared_pred
-
-    def dice_loss(self, y_true, y_pred):
-        intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
-            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
+        ce_loss = losses.sparse_categorical_crossentropy(
+            y_true, y_pred, from_logits=self.from_logits
         )
-        dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
-        return 1.0 - ops.mean(dice_score)
+        return dice_loss + ops.mean(ce_loss)
+
+
+class CategoricalDiceCELoss(CategoricalDiceLoss):
+
+    def _process_inputs(self, y_true, y_pred):
+        # TODO: fix for ce loss!
+        # y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        return y_true, y_pred
 
     def call(self, y_true, y_pred):
-        if self.from_logits:
-            y_pred = ops.softmax(y_pred, axis=-1)
+        dice_loss = super().call(y_true, y_pred)
 
-        # Clip predictions for numerical stability
-        y_pred = ops.clip(y_pred, keras.backend.epsilon(), 1.0 - keras.backend.epsilon())
+        if self.class_id is not None:
+            y_true, y_pred = self._process_inputs(y_true, y_pred)
 
-        dice = self.dice_loss(y_true, y_pred)
-        ce = losses.categorical_crossentropy(y_true, y_pred, from_logits=False)
-
-        return dice + ops.mean(ce)
+        ce_loss = losses.categorical_crossentropy(y_true, y_pred, from_logits=self.from_logits)
+        return dice_loss + ops.mean(ce_loss)
 
 
-class BinaryDiceCELoss(keras.losses.Loss):
-    def __init__(
-        self, from_logits=False, smooth=1e-5, squared_pred=False, name="binary_dice_ce"
-    ):
-        super().__init__(name=name)
-        self.from_logits = from_logits
-        self.smooth = smooth
-        self.squared_pred = squared_pred
+class BinaryDiceCELoss(BinaryDiceLoss):
 
-    def dice_loss(self, y_true, y_pred):
-        intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
-            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
-        )
-        dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
-        return 1.0 - ops.mean(dice_score)
+    def _process_inputs(self, y_true, y_pred):
+        # TODO: fix for ce loss!
+        # y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        return y_true, y_pred
 
     def call(self, y_true, y_pred):
-        if self.from_logits:
-            y_pred = ops.sigmoid(y_pred)
+        dice_loss = super().call(y_true, y_pred)
 
-        # Ensure y_true is float32 (matches y_pred)
-        y_true = ops.cast(y_true, y_pred.dtype)
+        if self.class_id is not None:
+            y_true, y_pred = self._process_inputs(y_true, y_pred)
 
-        # Clip predictions for numerical stability
-        y_pred = ops.clip(y_pred, keras.backend.epsilon(), 1.0 - keras.backend.epsilon())
+        if y_pred.shape[-1] == 1:
+            ce_loss = losses.binary_crossentropy(
+                y_true,
+                y_pred,
+                from_logits=self.from_logits,
+            )
+        else:
+            ce_loss = losses.categorical_crossentropy(
+                y_true,
+                y_pred,
+                from_logits=self.from_logits,
+            )
 
-        dice = self.dice_loss(y_true, y_pred)
-        ce = losses.binary_crossentropy(y_true, y_pred, from_logits=False)
-
-        return dice + ops.mean(ce)
+        return dice_loss + ops.mean(ce_loss)
