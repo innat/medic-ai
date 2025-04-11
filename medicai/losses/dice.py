@@ -10,7 +10,7 @@ from .base import BaseDiceLoss
 class SparseDiceLoss(BaseDiceLoss):
     def _process_predictions(self, y_pred):
         if self.from_logits:
-            return ops.one_hot(ops.argmax(y_pred, axis=-1), num_classes=self.num_classes)
+            return ops.softmax(y_pred, axis=-1)
         else:
             return y_pred
 
@@ -25,7 +25,7 @@ class SparseDiceLoss(BaseDiceLoss):
 class CategoricalDiceLoss(BaseDiceLoss):
     def _process_predictions(self, y_pred):
         if self.from_logits:
-            return ops.one_hot(ops.argmax(y_pred, axis=-1), num_classes=self.num_classes)
+            return ops.softmax(y_pred, axis=-1)
         else:
             return y_pred
 

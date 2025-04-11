@@ -8,7 +8,7 @@ class BaseDiceLoss(keras.losses.Loss):
         from_logits,
         num_classes,
         class_id=None,
-        smooth=1e-5,
+        smooth=1e-7,
         squared_pred=False,
         name="base_dice_loss",
         **kwargs,
