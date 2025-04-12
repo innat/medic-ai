@@ -60,8 +60,6 @@ class CategoricalDiceMetric(BaseDiceMetric):
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-6.
         name (str, optional): Name of the metric. Defaults to "categorical_dice".
-        threshold (float, optional): Not directly used in this metric as predictions
-            are converted to one-hot. Defaults to 0.5.
         **kwargs: Additional keyword arguments passed to `BaseDiceMetric`.
     """
 
@@ -94,8 +92,6 @@ class SparseDiceMetric(BaseDiceMetric):
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-6.
         name (str, optional): Name of the metric. Defaults to "sparse_dice".
-        threshold (float, optional): Not directly used in this metric as predictions
-            are converted to one-hot. Defaults to 0.5.
         **kwargs: Additional keyword arguments passed to `BaseDiceMetric`.
     """
 

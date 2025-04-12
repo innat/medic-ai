@@ -118,8 +118,9 @@ class BaseDiceMetric(Metric):
         y_true_processed = self._process_inputs(y_true)
 
         # Select only the classes we want to evaluate
-        y_true_processed = ops.take(y_true_processed, self.class_id, axis=-1)
-        y_pred_processed = ops.take(y_pred_processed, self.class_id, axis=-1)
+        y_true_processed, y_pred_processed = self._get_desired_class_channels(
+            y_true_processed, y_pred_processed
+        )
 
         # Calculate metrics
         intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C]
