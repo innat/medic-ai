@@ -14,12 +14,14 @@ class SparseDiceLoss(BaseDiceLoss):
         else:
             return y_pred
 
-    def call(self, y_true, y_pred):
+    def _process_inputs(self, y_true):
         if y_true.shape[-1] == 1:
             y_true = ops.squeeze(y_true, axis=-1)
 
-        y_true = ops.one_hot(y_true, ops.shape(y_pred)[-1])
-        return super().call(y_true, y_pred)
+        y_true = ops.one_hot(
+            y_true, num_classes=self.num_classes
+        )
+        return y_true
 
 
 class CategoricalDiceLoss(BaseDiceLoss):
@@ -36,3 +38,4 @@ class BinaryDiceLoss(BaseDiceLoss):
             return ops.sigmoid(y_pred)
         else:
             return y_pred
+        

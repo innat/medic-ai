@@ -1,7 +1,6 @@
 import keras
 from keras import ops
 
-
 class BaseDiceLoss(keras.losses.Loss):
     def __init__(
         self,
@@ -46,10 +45,10 @@ class BaseDiceLoss(keras.losses.Loss):
             )
 
     def _get_desired_class_channels(self, y_true, y_pred):
+        
         if self.class_id is None:
             return y_true, y_pred
 
-        # for single binary case
         if self.num_classes == 1:
             return y_true, y_pred
 
@@ -60,6 +59,9 @@ class BaseDiceLoss(keras.losses.Loss):
 
     def _process_predictions(self, y_pred):
         return y_pred
+
+    def _process_inputs(self, y_true):
+        return y_true
 
     def dice_loss(self, y_true, y_pred):
         y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
@@ -72,7 +74,7 @@ class BaseDiceLoss(keras.losses.Loss):
 
     def call(self, y_true, y_pred):
         y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = y_true
+        y_true_processed = self._process_inputs(y_true)
 
         y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
         dice = self.dice_loss(y_true_processed, y_pred_processed)
