@@ -1,3 +1,4 @@
+import keras
 from keras import ops
 from keras.metrics import Metric
 
@@ -38,23 +39,16 @@ class BaseDiceMetric(Metric):
         smooth=1e-6,
         name="base_dice",
         threshold=0.5,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
 
-        # Handle class_id specification
-        if class_id is None:
-            self.class_id = list(range(num_classes))
-        elif isinstance(class_id, int):
-            self.class_id = [class_id]
-        else:
-            self.class_id = class_id
-
+        self.class_id = self._validate_and_get_class_id(class_id, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
         self.threshold = threshold
-        self.smooth = smooth
+        self.smooth = smooth or keras.backend.epsilon()
 
         # State variables
         self.total_intersection = self.add_variable(
@@ -66,6 +60,23 @@ class BaseDiceMetric(Metric):
         self.valid_counts = self.add_variable(
             name="valid_counts", shape=(len(self.class_id),), initializer="zeros"
         )
+
+    def _validate_and_get_class_id(self, class_id, num_classes):
+        if class_id is None:
+            return list(range(num_classes))
+        elif isinstance(class_id, int):
+            return [class_id]
+        elif isinstance(class_id, list):
+            for cid in class_id:
+                if not 0 <= cid < num_classes:
+                    raise ValueError(
+                        f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
+                    )
+            return class_id
+        else:
+            raise ValueError(
+                "class_id must be an integer, a list of integers, or None to consider all classes."
+            )
 
     def _process_predictions(self, y_pred):
         return y_pred

@@ -34,11 +34,9 @@ class BinaryDiceMetric(BaseDiceMetric):
 
     def _process_predictions(self, y_pred):
         if self.from_logits:
-            return ops.cast(
-                ops.sigmoid(y_pred) > self.threshold, dtype="float32"
-                )
+            return ops.cast(ops.sigmoid(y_pred) > self.threshold, dtype="float32")
         else:
-            return y_pred 
+            return y_pred
 
 
 class CategoricalDiceMetric(BaseDiceMetric):
@@ -72,17 +70,6 @@ class CategoricalDiceMetric(BaseDiceMetric):
             return ops.one_hot(ops.argmax(y_pred, axis=-1), num_classes=self.num_classes)
         else:
             return y_pred
-
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        """Updates the metric state.
-
-        Args:
-            y_true (Tensor): One-hot encoded ground truth tensor.
-            y_pred (Tensor): Prediction tensor (logits or probabilities).
-            sample_weight (Tensor, optional): Optional weighting of the samples.
-                Passed to the superclass.
-        """
-        super().update_state(y_true, y_pred, sample_weight)
 
 
 class SparseDiceMetric(BaseDiceMetric):
@@ -118,16 +105,8 @@ class SparseDiceMetric(BaseDiceMetric):
         else:
             return y_pred
 
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        """Updates the metric state.
-
-        Args:
-            y_true (Tensor): Sparse ground truth tensor (integer class indices).
-            y_pred (Tensor): Prediction tensor (logits or probabilities).
-            sample_weight (Tensor, optional): Optional weighting of the samples.
-                Passed to the superclass.
-        """
-        if len(y_true.shape) == len(y_pred.shape) and y_true.shape[-1] == 1:
+    def _process_inputs(self, y_true):
+        if y_true.shape[-1] == 1:
             y_true = ops.squeeze(y_true, axis=-1)
-        y_true_one_hot = ops.one_hot(ops.cast(y_true, "int32"), num_classes=self.num_classes)
-        super().update_state(y_true_one_hot, y_pred, sample_weight)
+        y_true = ops.one_hot(ops.cast(y_true, "int32"), num_classes=self.num_classes)
+        return y_true
