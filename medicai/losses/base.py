@@ -1,7 +1,30 @@
 import keras
 from keras import ops
 
+
 class BaseDiceLoss(keras.losses.Loss):
+    """Base class for Dice-based loss functions.
+
+    This class provides a foundation for calculating Dice loss, a common metric
+    for evaluating the overlap between predicted and ground truth segmentation masks.
+    It handles class ID selection, smoothing, and prediction processing.
+
+    Args:
+        from_logits (bool): Whether `y_pred` is expected to be logits. If True,
+            the predictions will be passed through a sigmoid activation.
+        num_classes (int): The total number of classes in the segmentation task.
+        class_id (int, list of int, or None): If an integer or a list of integers,
+            the Dice loss will be calculated only for the specified class(es).
+            If None, the Dice loss will be calculated for all classes and averaged.
+        smooth (float, optional): A small smoothing factor to prevent division by zero.
+            Defaults to 1e-7.
+        squared_pred (bool, optional): If True, the predictions in the denominator
+            of the Dice coefficient will be squared. This is used in some variations
+            like the F-beta loss. Defaults to False.
+        name (str, optional): Name of the loss function. Defaults to "dice_loss".
+        **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
+    """
+
     def __init__(
         self,
         from_logits,
@@ -9,7 +32,7 @@ class BaseDiceLoss(keras.losses.Loss):
         class_id=None,
         smooth=1e-7,
         squared_pred=False,
-        name="base_dice_loss",
+        name="dice_loss",
         **kwargs,
     ):
         super().__init__(name=name, **kwargs)
@@ -45,15 +68,32 @@ class BaseDiceLoss(keras.losses.Loss):
             )
 
     def _get_desired_class_channels(self, y_true, y_pred):
-        
+        """Selects the channels corresponding to the desired class IDs.
+
+        Args:
+            y_true (Tensor): Ground truth tensor.
+            y_pred (Tensor): Prediction tensor.
+
+        Returns:
+            Tuple[Tensor, Tensor]: A tuple containing the ground truth and
+                prediction tensors with only the desired class channels.
+        """
+
         if self.class_id is None:
             return y_true, y_pred
 
         if self.num_classes == 1:
             return y_true, y_pred
 
-        y_true = ops.take(y_true, self.class_id, axis=-1)
-        y_pred = ops.take(y_pred, self.class_id, axis=-1)
+        selected_y_true = []
+        selected_y_pred = []
+
+        for class_index in self.class_id:
+            selected_y_true.append(y_true[..., class_index : class_index + 1])
+            selected_y_pred.append(y_pred[..., class_index : class_index + 1])
+
+        y_true = ops.concatenate(selected_y_true, axis=-1)
+        y_pred = ops.concatenate(selected_y_pred, axis=-1)
 
         return y_true, y_pred
 
@@ -64,6 +104,15 @@ class BaseDiceLoss(keras.losses.Loss):
         return y_true
 
     def dice_loss(self, y_true, y_pred):
+        """Calculates the Dice loss.
+
+        Args:
+            y_true (Tensor): Ground truth tensor.
+            y_pred (Tensor): Processed prediction tensor (after sigmoid if from logits).
+
+        Returns:
+            Tensor: The Dice loss.
+        """
         y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
         intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
         union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
@@ -73,6 +122,15 @@ class BaseDiceLoss(keras.losses.Loss):
         return 1.0 - ops.mean(dice_score)
 
     def call(self, y_true, y_pred):
+        """Computes the Dice loss.
+
+        Args:
+            y_true (Tensor): Ground truth tensor.
+            y_pred (Tensor): Prediction tensor.
+
+        Returns:
+            Tensor: The computed Dice loss.
+        """
         y_pred_processed = self._process_predictions(y_pred)
         y_true_processed = self._process_inputs(y_true)
 
