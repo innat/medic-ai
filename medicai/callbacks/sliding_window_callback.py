@@ -26,8 +26,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         roi_weight_map=0.8,
         save_path="model.weights.h5",
     ):
-        """
-        Initializes the SlidingWindowInferenceCallback.
+        """Initializes the SlidingWindowInferenceCallback.
 
         Args:
             model (keras.Model): The Keras model to perform inference with.
@@ -99,8 +98,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         )
 
     def on_epoch_end(self, epoch, logs=None):
-        """
-        Performs inference at the end of each epoch if the epoch number
+        """Performs inference at the end of each epoch if the epoch number
         is a multiple of the specified interval. Evaluates the model on the
         provided dataset using sliding window inference and saves the model
         weights if the evaluated metric improves.
