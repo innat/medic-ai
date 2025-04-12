@@ -8,7 +8,33 @@ from .tensor_bundle import TensorBundle
 
 
 class RandSpatialCrop:
+    """Randomly crops a region of interest (ROI) with a specified size from the input tensors.
+
+    This transform extracts a 3D spatial ROI from the tensors specified by `keys`.
+    The size and center of the ROI can be either fixed or randomly determined
+    within the bounds of the input tensor.
+    """
+
     def __init__(self, keys, roi_size, max_roi_size=None, random_center=True, random_size=False):
+        """Initializes the RandSpatialCrop transform.
+
+        Args:
+            keys (Sequence[str]): Keys of the tensors to apply the spatial crop to.
+            roi_size (Union[Tuple[int, int, int], tf.Tensor]): The desired spatial size
+                (depth, height, width) of the cropped ROI. If `random_size` is True, this
+                will be the minimum ROI size. Can be a tuple or a tf.Tensor.
+            max_roi_size (Optional[Union[Tuple[int, int, int], tf.Tensor]]): The maximum
+                spatial size (depth, height, width) of the cropped ROI when `random_size`
+                is True. If None, it defaults to the input tensor's spatial dimensions.
+                Can be a tuple or a tf.Tensor.
+            random_center (bool): If True, the center of the ROI is randomly selected
+                within the valid bounds of the input tensor. If False, the center
+                is at the center of the input tensor. Default is True.
+            random_size (bool): If True, the size of the ROI is randomly sampled
+                between `roi_size` (as minimum) and `max_roi_size` (as maximum) for each
+                spatial dimension. If False, the ROI size is fixed to `roi_size`.
+                Default is False.
+        """
         self.keys = keys
         self.roi_size = tf.convert_to_tensor(roi_size, dtype=tf.int32)
         self.max_roi_size = (
@@ -18,6 +44,15 @@ class RandSpatialCrop:
         self.random_size = random_size
 
     def __call__(self, inputs: TensorBundle) -> TensorBundle:
+        """Apply the random spatial crop to the input TensorBundle.
+
+        Args:
+            inputs (TensorBundle): A dictionary containing tensors and metadata. The tensors
+                specified by `self.keys` will have a spatial ROI cropped.
+
+        Returns:
+            TensorBundle: A dictionary with the spatially cropped tensors and the original metadata.
+        """
         sample_key = self.keys[0]
         img = inputs.data[sample_key]
         input_shape = tf.shape(img)  # shape = (D, H, W, C)
@@ -41,6 +76,14 @@ class RandSpatialCrop:
         return inputs
 
     def _get_roi_size(self, spatial_shape):
+        """Determines the size of the ROI based on random_size.
+
+        Args:
+            spatial_shape (tf.Tensor): The spatial dimensions (depth, height, width) of the input tensor.
+
+        Returns:
+            tf.Tensor: The determined ROI size (depth, height, width).
+        """
         roi_size = self.roi_size
         if self.random_size:
             max_roi_size = self.max_roi_size if self.max_roi_size is not None else spatial_shape
@@ -62,6 +105,15 @@ class RandSpatialCrop:
         return roi_size
 
     def _get_center(self, spatial_shape, roi_size):
+        """Determines the center of the ROI based on random_center.
+
+        Args:
+            spatial_shape (tf.Tensor): The spatial dimensions (depth, height, width) of the input tensor.
+            roi_size (tf.Tensor): The size of the ROI (depth, height, width).
+
+        Returns:
+            tf.Tensor: The coordinates of the center of the ROI (depth, height, width).
+        """
         if self.random_center:
             max_start = tf.maximum(spatial_shape - roi_size, 0)  # Corrected max_start
 

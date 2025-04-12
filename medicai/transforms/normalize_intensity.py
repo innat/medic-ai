@@ -10,6 +10,15 @@ from .tensor_bundle import TensorBundle
 
 
 class NormalizeIntensity:
+    """Normalize the intensity of tensors based on global or channel-wise statistics.
+
+    This transform can perform intensity normalization by subtracting a subtrahend
+    and dividing by a divisor. These values can be pre-defined or computed
+    from the tensor data. The normalization can be applied globally across the
+    entire tensor or independently for each channel. Optionally, the normalization
+    can be computed only over non-zero pixel values.
+    """
+
     def __init__(
         self,
         keys: Sequence[str],
@@ -20,6 +29,31 @@ class NormalizeIntensity:
         dtype=tf.float32,
         allow_missing_keys=False,
     ):
+        """
+        Initializes the NormalizeIntensity transform.
+
+        Args:
+            keys (Sequence[str]): Keys of the tensors to normalize.
+            subtrahend (Optional[Union[float, tf.Tensor]]): Value to subtract from the tensor(s).
+                If None and `channel_wise` is False, the global mean of the non-zero
+                (if `nonzero` is True) or all values is used. If None and `channel_wise`
+                is True, the mean of each channel is used. Default is None.
+            divisor (Optional[Union[float, tf.Tensor]]): Value to divide the tensor(s) by.
+                If None and `channel_wise` is False, the global standard deviation of the
+                non-zero (if `nonzero` is True) or all values is used. If None and
+                `channel_wise` is True, the standard deviation of each channel is used.
+                If the standard deviation is zero, it is replaced with one to avoid division by zero.
+                Default is None.
+            nonzero (bool): If True, normalization statistics (mean and std) are computed
+                only over non-zero values. Default is False.
+            channel_wise (bool): If True, normalization is performed independently for each channel.
+                The subtrahend and divisor will be computed per channel if they are None.
+                Default is False.
+            dtype (Optional[tf.DType]): The data type to cast the normalized tensor(s) to.
+                If None, the original data type is preserved. Default is tf.float32.
+            allow_missing_keys (bool): If True, processing will continue even if some of the specified
+                keys are not found in the input data. The missing keys will be ignored. Default is False.
+        """
         self.keys = keys
         self.subtrahend = subtrahend
         self.divisor = divisor
@@ -29,6 +63,15 @@ class NormalizeIntensity:
         self.allow_missing_keys = allow_missing_keys
 
     def _normalize_channel_wise(self, image: tf.Tensor) -> tf.Tensor:
+        """
+        Normalize the input tensor channel-wise.
+
+        Args:
+            image (tf.Tensor): The input tensor to normalize (shape [..., channels]).
+
+        Returns:
+            tf.Tensor: The channel-wise normalized tensor.
+        """
         mask = tf.not_equal(image, 0.0) if self.nonzero else tf.ones_like(image, dtype=tf.bool)
         num_dims = tf.rank(image)
         channel_axis = num_dims - 1
@@ -63,6 +106,15 @@ class NormalizeIntensity:
         return normalized_image
 
     def _normalize_global(self, image: tf.Tensor) -> tf.Tensor:
+        """
+        Normalize the input tensor globally.
+
+        Args:
+            image (tf.Tensor): The input tensor to normalize.
+
+        Returns:
+            tf.Tensor: The globally normalized tensor.
+        """
         mask = tf.not_equal(image, 0.0) if self.nonzero else tf.ones_like(image, dtype=tf.bool)
         image_masked = tf.boolean_mask(image, mask)
         mean = tf.reduce_mean(image_masked)
@@ -73,6 +125,15 @@ class NormalizeIntensity:
         return (image - sub) / div
 
     def __call__(self, inputs: TensorBundle) -> TensorBundle:
+        """
+        Apply the NormalizeIntensity transform to the input TensorBundle.
+
+        Args:
+            inputs (TensorBundle): A dictionary containing tensors and metadata.
+
+        Returns:
+            TensorBundle: A dictionary with normalized tensors.
+        """
         for key in self.keys:
             if key not in inputs.data:
                 if self.allow_missing_keys:

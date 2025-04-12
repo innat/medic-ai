@@ -10,6 +10,17 @@ from .tensor_bundle import TensorBundle
 
 
 class CropForeground:
+    """Crop an image based on the foreground defined by a selection function.
+
+    This transform identifies the foreground within a specified source tensor
+    using a provided selection function. It then determines the minimal bounding
+    box encompassing this foreground and crops all specified tensors in the
+    input bundle to this bounding box. Optionally, a margin can be added to the
+    bounding box, and the resulting dimensions can be made divisible by a
+    specified value. The start and end coordinates of the cropped region can
+    also be stored in the metadata of the input bundle.
+    """
+
     def __init__(
         self,
         keys: Sequence[str] = ("image", "label"),
@@ -23,6 +34,33 @@ class CropForeground:
         end_coord_key: Optional[str] = "foreground_end_coord",
         allow_missing_keys: bool = False,
     ):
+        """
+        Initializes the CropForeground transform.
+
+        Args:
+            keys (Sequence[str]): Keys of the tensors to crop. Default is ("image", "label").
+            source_key (str): Key of the tensor to use to determine the foreground. Default is "image".
+            select_fn (Callable): A function that takes a tensor and returns a boolean mask
+                indicating the foreground. Default is lambda x: x > 0.
+            channel_indices (Optional[Sequence[int]]): If specified, only these channels of the
+                source tensor will be used to determine the foreground. Default is None.
+            margin (Union[Sequence[int], int]): Amount of margin to add to the bounding box.
+                If an int, the same margin is applied to all spatial dimensions. If a sequence,
+                it should have a length of 3, corresponding to the margin in depth, height, and width.
+                Default is 0.
+            allow_smaller (bool): If True, the cropped region can be smaller than the margin.
+                If False, the cropped region will be at least as large as 2 * margin in each dimension.
+                Default is True.
+            k_divisible (Union[Sequence[int], int]): Ensure the cropped size is divisible by k in each
+                dimension. If an int, the same value is applied to all spatial dimensions. If a
+                sequence, it should have a length of 3. Default is 1.
+            start_coord_key (Optional[str]): Key to store the start coordinates of the cropped region
+                in the metadata. If None, the start coordinates are not stored. Default is "foreground_start_coord".
+            end_coord_key (Optional[str]): Key to store the end coordinates of the cropped region
+                in the metadata. If None, the end coordinates are not stored. Default is "foreground_end_coord".
+            allow_missing_keys (bool): If True, processing will continue even if some of the specified
+                keys are not found in the input data. The missing keys will be ignored. Default is False.
+        """
         self.keys = keys
         self.source_key = source_key
         self.select_fn = select_fn
@@ -35,6 +73,15 @@ class CropForeground:
         self.allow_missing_keys = allow_missing_keys
 
     def __call__(self, inputs: TensorBundle) -> TensorBundle:
+        """
+        Apply the CropForeground transform to the input TensorBundle.
+
+        Args:
+            inputs (TensorBundle): A dictionary containing tensors and metadata.
+
+        Returns:
+            TensorBundle: A dictionary with cropped tensors and updated metadata.
+        """
         # Extract the source data (used to determine the foreground)
         if self.source_key not in inputs.data and self.allow_missing_keys:
             return inputs
@@ -83,6 +130,16 @@ class CropForeground:
     def find_bounding_box(self, image, select_fn):
         """
         Find the bounding box of the foreground in the image.
+
+        Args:
+            image (tf.Tensor): The input tensor to find the foreground in.
+                Shape should be (depth, height, width, channels).
+            select_fn (Callable): A function that takes a tensor and returns a boolean mask
+                indicating the foreground.
+
+        Returns:
+            tuple[tf.Tensor, tf.Tensor]: A tuple containing the minimum and maximum
+            coordinates of the foreground with shape (3,).
         """
         # Apply the selection function to create a mask
         mask = select_fn(image)
@@ -98,6 +155,16 @@ class CropForeground:
     def add_margin(self, min_coords, max_coords, margin, image_shape, allow_smaller):
         """
         Add margin to the bounding box, ensuring it stays within the image bounds.
+
+        Args:
+            min_coords (tf.Tensor): The minimum coordinates of the bounding box (shape (3,)).
+            max_coords (tf.Tensor): The maximum coordinates of the bounding box (shape (3,)).
+            margin (Union[Sequence[int], int]): The margin to add to each dimension.
+            image_shape (tf.Tensor): The shape of the original image (shape (3,)).
+            allow_smaller (bool): Whether to allow the cropped size to be smaller than 2 * margin.
+
+        Returns:
+            tuple[tf.Tensor, tf.Tensor]: The adjusted minimum and maximum coordinates.
         """
         if isinstance(margin, int):
             margin = [margin] * 3  # Apply the same margin to all dimensions
@@ -124,6 +191,15 @@ class CropForeground:
     def make_divisible(self, min_coords, max_coords, k_divisible, image_shape):
         """
         Ensure the bounding box dimensions are divisible by k_divisible.
+
+        Args:
+            min_coords (tf.Tensor): The minimum coordinates of the bounding box (shape (3,)).
+            max_coords (tf.Tensor): The maximum coordinates of the bounding box (shape (3,)).
+            k_divisible (Union[Sequence[int], int]): The divisibility factor for each dimension.
+            image_shape (tf.Tensor): The shape of the original image (shape (3,)).
+
+        Returns:
+            tuple[tf.Tensor, tf.Tensor]: The adjusted minimum and maximum coordinates.
         """
         if isinstance(k_divisible, int):
             k_divisible = [k_divisible] * 3  # Apply the same value to all dimensions
@@ -156,6 +232,14 @@ class CropForeground:
     def crop_tensor(self, tensor, min_coords, max_coords):
         """
         Crop a tensor using the bounding box coordinates.
+
+        Args:
+            tensor (tf.Tensor): The tensor to crop (shape (depth, height, width, channels)).
+            min_coords (tf.Tensor): The minimum coordinates of the cropping region (shape (3,)).
+            max_coords (tf.Tensor): The maximum coordinates of the cropping region (shape (3,)).
+
+        Returns:
+            tf.Tensor: The cropped tensor.
         """
         return tensor[
             min_coords[0] : max_coords[0],

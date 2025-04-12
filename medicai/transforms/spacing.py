@@ -13,12 +13,37 @@ from .tensor_bundle import TensorBundle
 
 
 class Spacing:
+    """Resamples tensors to a specified physical spacing (voxel dimensions).
+
+    This transform takes tensors (e.g., image and label) and resamples them
+    to a target physical spacing defined by `pixdim`. It determines the
+    original spacing from the affine matrix in the metadata. If the affine
+    matrix is not provided, it defaults to a spacing of (1.0, 1.0, 1.0).
+    The resampling is performed using the `Resize` transform with specified
+    interpolation modes.
+    """
+
     def __init__(
         self,
         keys: Sequence[str] = ("image", "label"),
         pixdim: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         mode: Tuple[str, str] = ("bilinear", "nearest"),
     ):
+        """Initializes the Spacing transform.
+
+        Args:
+            keys (Sequence[str]): Keys of the tensors to resample. Default is ("image", "label").
+            pixdim (Tuple[float, float, float]): The desired physical spacing (voxel dimensions)
+                in (depth, height, width) or (z, y, x) order. Default is (1.0, 1.0, 1.0).
+            mode (Union[str, Tuple[str, str]]): The interpolation mode(s) to use for resampling.
+                - If a single string is provided, it's used for all keys.
+                - If a tuple of two strings is provided, the first mode is used for the first key
+                  and the second mode for the second key (assuming the default `keys`).
+                  For more than two keys, provide a dictionary in `__call__`.
+                  Supported modes are those of `tf.image.resize` (for spatial H, W)
+                  and the depth interpolation used within `Resize` (for spatial D).
+                  Default is ("bilinear", "nearest").
+        """
         self.pixdim = pixdim
         self.keys = keys
         self.image_mode = mode[0]
@@ -26,12 +51,30 @@ class Spacing:
         self.mode = dict(zip(keys, mode))
 
     def get_spacing_from_affine(self, affine):
+        """Calculates the voxel spacing from the affine transformation matrix.
+
+        Args:
+            affine (tf.Tensor): The affine transformation matrix (shape (4, 4)).
+
+        Returns:
+            Tuple[float, float, float]: The voxel spacing in (depth, height, width) order.
+        """
         width_spacing = tf.norm(affine[:3, 0])
         depth_spacing = tf.norm(affine[:3, 1])
         height_spacing = tf.norm(affine[:3, 2])
         return (width_spacing, depth_spacing, height_spacing)
 
     def __call__(self, inputs: TensorBundle) -> TensorBundle:
+        """Apply the spacing resampling to the input TensorBundle.
+
+        Args:
+            inputs (TensorBundle): A dictionary containing tensors and metadata.
+                The metadata is expected to contain an 'affine' key representing the
+                affine transformation matrix.
+
+        Returns:
+            TensorBundle: A dictionary with resampled tensors and the original metadata.
+        """
         for key in self.keys:
             if key not in inputs.data:
                 continue
@@ -60,6 +103,19 @@ class Spacing:
         desired_spacing: Tuple[float, float, float],
         mode: str = "bilinear",
     ) -> tf.Tensor:
+        """Resamples a single 3D image tensor to the desired spacing.
+
+        Args:
+            image (tf.Tensor): The input 3D image tensor (depth, height, width, channels).
+            original_spacing (Tuple[float, float, float]): The original voxel spacing
+                in (depth, height, width) order.
+            desired_spacing (Tuple[float, float, float]): The desired voxel spacing
+                in (depth, height, width) order.
+            mode (str): The interpolation mode to use for resampling.
+
+        Returns:
+            tf.Tensor: The resampled 3D image tensor.
+        """
         scale_d = original_spacing[0] / desired_spacing[0]
         scale_h = original_spacing[1] / desired_spacing[1]
         scale_w = original_spacing[2] / desired_spacing[2]

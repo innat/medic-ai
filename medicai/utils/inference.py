@@ -29,6 +29,32 @@ class SlidingWindowInference:
         cval: float = 0.0,
         roi_weight_map=None,
     ):
+        """
+        Initializes the SlidingWindowInference object.
+
+        Args:
+            model: Callable that takes a patch of input and returns predictions.
+            num_classes (int): The number of output classes.
+            roi_size (Sequence[int]): Spatial window size for inferences.
+            sw_batch_size (int): Batch size for sliding window inference.
+            overlap (Union[Sequence[float], float]): Overlap ratio between windows
+                (default: 0.25). Can be a single float for isotropic overlap
+                or a sequence of floats for anisotropic overlap.
+            mode (str): Blending mode for overlapping windows. Options are:
+                "constant" or "gaussian" (default: "constant").
+            sigma_scale (Union[Sequence[float], float]): Standard deviation
+                coefficient for Gaussian blending. Only used if ``mode`` is
+                "gaussian". Can be a single float or a sequence of floats.
+                (default: 0.125).
+            padding_mode (str): Padding mode for inputs when ``roi_size`` is
+                larger than the input size. Options are numpy padding modes
+                (e.g., "constant", "reflect", "replicate") (default: "constant").
+            cval (float): Padding value for "constant" padding mode (default: 0.0).
+            roi_weight_map (Optional[np.ndarray]): Pre-computed weight map for
+                each ROI. If None, it will be computed based on the ``mode``.
+                Should have the same spatial dimensions as ``roi_size``.
+                (default: None).
+        """
         self.model = model
         self.num_classes = num_classes
         self.roi_size = roi_size
@@ -41,7 +67,18 @@ class SlidingWindowInference:
         self.roi_weight_map = roi_weight_map
 
     def __call__(self, inputs):
-        """Call method to perform sliding window inference."""
+        """
+        Call method to perform sliding window inference.
+
+        Args:
+            inputs (np.ndarray): Input tensor with shape
+                (batch_size, *spatial_dims, channels).
+
+        Returns:
+            np.ndarray: The output tensor with the same batch size and
+                spatial dimensions as the input, and the number of channels
+                equal to ``num_classes``.
+        """
         return sliding_window_inference(
             inputs=inputs,
             model=self.model,
@@ -74,19 +111,35 @@ def sliding_window_inference(
     Sliding window inference in TensorFlow, mimicking MONAI's implementation.
 
     Args:
-        inputs: Input tensor with shape (batch_size, *spatial_dims, channels).
-        roi_size: Spatial window size for inferences.
-        sw_batch_size: Batch size for sliding window inference.
+        inputs (np.ndarray): Input tensor with shape
+            (batch_size, *spatial_dims, channels).
         model: Callable that takes a patch of input and returns predictions.
-        overlap: Overlap ratio between windows (default: 0.25).
-        mode: Blending mode for overlapping windows ("constant" or "gaussian").
-        sigma_scale: Standard deviation coefficient for Gaussian blending.
-        padding_mode: Padding mode for inputs when roi_size > input size.
-        cval: Padding value for "constant" padding mode.
-        roi_weight_map: Pre-computed weight map for each ROI (optional).
+        num_classes (Optional[int]): The number of output classes. If None,
+            it will be inferred from the model's output shape.
+        roi_size (Sequence[int]): Spatial window size for inferences.
+        sw_batch_size (int): Batch size for sliding window inference.
+        overlap (Union[Sequence[float], float]): Overlap ratio between windows
+            (default: 0.25). Can be a single float for isotropic overlap
+            or a sequence of floats for anisotropic overlap.
+        mode (str): Blending mode for overlapping windows. Options are:
+            "constant" or "gaussian" (default: "constant").
+        sigma_scale (Union[Sequence[float], float]): Standard deviation
+            coefficient for Gaussian blending. Only used if ``mode`` is
+            "gaussian". Can be a single float or a sequence of floats.
+            (default: 0.125).
+        padding_mode (str): Padding mode for inputs when ``roi_size`` is
+            larger than the input size. Options are numpy padding modes
+            (e.g., "constant", "reflect", "replicate") (default: "constant").
+        cval (float): Padding value for "constant" padding mode (default: 0.0).
+        roi_weight_map (Optional[np.ndarray]): Pre-computed weight map for
+            each ROI. If None, it will be computed based on the ``mode``.
+            Should have the same spatial dimensions as ``roi_size``.
+            (default: None).
 
     Returns:
-        The output tensor.
+        np.ndarray: The output tensor with the same batch size and
+            spatial dimensions as the input, and the number of channels
+            equal to ``num_classes``.
     """
     # Ensure overlap and sigma_scale are sequences
     inputs = np.array(inputs) if not isinstance(inputs, np.ndarray) else inputs

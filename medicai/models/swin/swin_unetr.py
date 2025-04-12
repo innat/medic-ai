@@ -15,6 +15,14 @@ from .swin_backbone import SwinBackbone
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
 class SwinUNETR(keras.Model):
+    """Swin-UNETR: A hybrid transformer-CNN for 3D medical image segmentation.
+
+    This model combines the strengths of the Swin Transformer for feature extraction
+    and a U-Net-like architecture for segmentation. It uses a Swin Transformer
+    backbone to encode the input and a decoder with upsampling and skip connections
+    to generate segmentation maps.
+    """
+
     def __init__(
         self,
         *,
@@ -26,6 +34,22 @@ class SwinUNETR(keras.Model):
         norm_name="instance",
         **kwargs
     ):
+        """Initializes the SwinUNETR model.
+
+        Args:
+            input_shape (tuple): The shape of the input tensor (depth, height, width, channels).
+                Default is (96, 96, 96, 1).
+            num_classes (int): The number of segmentation classes. Default is 4.
+            classifier_activation (str, optional): The activation function for the final
+                classification layer (e.g., 'softmax'). If None, no activation is applied.
+                Default is None.
+            feature_size (int): The base feature map size in the decoder. Default is 48.
+            res_block (bool): Whether to use residual connections in the decoder blocks.
+                Default is True.
+            norm_name (str): The type of normalization to use in the decoder blocks
+                (e.g., 'instance', 'batch'). Default is "instance".
+            **kwargs: Additional keyword arguments passed to the base Model class.
+        """
         encoder = SwinBackbone(
             input_shape=input_shape,
             patch_size=[2, 2, 2],
@@ -70,6 +94,23 @@ class SwinUNETR(keras.Model):
         norm_name="instance",
         classifier_activation=None,
     ):
+        """Builds the UNETR-like decoder part of the model.
+
+        Args:
+            num_classes (int): The number of segmentation classes. Default is 4.
+            feature_size (int): The base feature map size in the decoder. Default is 16.
+            res_block (bool): Whether to use residual connections in the decoder blocks.
+                Default is True.
+            norm_name (str): The type of normalization to use in the decoder blocks
+                (e.g., 'instance', 'batch'). Default is "instance".
+            classifier_activation (str, optional): The activation function for the final
+                classification layer. Default is None.
+
+        Returns:
+            callable: A function that takes a list of encoder outputs (including input)
+                and skip connections and returns the final segmentation logits.
+        """
+
         def apply(inputs):
             enc_input = inputs[0]
             hidden_states_out = inputs[1:]

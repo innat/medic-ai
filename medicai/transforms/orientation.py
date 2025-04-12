@@ -9,15 +9,43 @@ from .tensor_bundle import TensorBundle
 
 
 class Orientation:
-    """
-    Reorients a volume to a specified axis orientation using the affine matrix.
+    """Reorients a volume to a specified axis orientation using the affine matrix.
+
+    This transform takes a tensor bundle containing an image and its affine
+    matrix and reorients the image data to the desired 'axcodes' (e.g., 'RAS').
+    It determines the current orientation from the affine matrix and calculates
+    the necessary transpositions and flips to achieve the target orientation.
     """
 
     def __init__(self, keys: Sequence[str] = ("image", "label"), axcodes: str = "RAS"):
+        """
+        Initializes the Orientation transform.
+
+        Args:
+            keys (Sequence[str]): Keys of the tensors to reorient. Default is ("image", "label").
+            axcodes (str): The desired axis orientation as a 3-character string (e.g., "RAS", "LPS").
+                The characters correspond to the anatomical directions:
+                R: Right, L: Left, A: Anterior, P: Posterior, S: Superior, I: Inferior.
+                Default is "RAS" (Right-Anterior-Superior).
+        """
         self.keys = keys
         self.axcodes = axcodes.upper()
 
     def __call__(self, inputs: TensorBundle) -> TensorBundle:
+        """
+        Apply the orientation transformation to the input TensorBundle.
+
+        Args:
+            inputs (TensorBundle): A dictionary containing tensors and metadata,
+                where the metadata is expected to contain an 'affine' key
+                representing the affine transformation matrix.
+
+        Returns:
+            TensorBundle: A dictionary with reoriented tensors and the original metadata.
+
+        Raises:
+            ValueError: If the 'affine' matrix is not found in the input metadata.
+        """
         affine = inputs.meta.get("affine")
         if affine is None:
             raise ValueError("Affine matrix is required for orientation transformation.")
@@ -34,8 +62,18 @@ class Orientation:
     def apply_orientation(self, image: tf.Tensor, affine: tf.Tensor, axcodes: str) -> tf.Tensor:
         """
         Applies orientation transformation to an image, considering the affine matrix.
-        """
 
+        Args:
+            image (tf.Tensor): The input image tensor (shape [..., channels]).
+            affine (tf.Tensor): The affine transformation matrix (shape (4, 4)).
+            axcodes (str): The desired axis orientation (e.g., "RAS").
+
+        Returns:
+            tf.Tensor: The reoriented image tensor.
+
+        Raises:
+            ValueError: If `axcodes` is not a 3-character string.
+        """
         axis_map = {"R": 0, "A": 1, "S": 2, "L": 0, "P": 1, "I": 2}
         flip_map = {"R": False, "A": False, "S": False, "L": True, "P": True, "I": True}
 

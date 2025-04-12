@@ -27,12 +27,46 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         save_path="model.weights.h5",
     ):
         """
-        Custom Keras callback to perform inference on a dataset periodically and save best model.
+        Initializes the SlidingWindowInferenceCallback.
 
         Args:
-            dataset (tf.data.Dataset or tuple): Dataset to perform inference on. If tuple, should be (X, y).
+            model (keras.Model): The Keras model to perform inference with.
+            dataset (tf.data.Dataset or tuple): Dataset to perform inference on.
+                If a tuple, it should be (X, y). Each element of the dataset
+                should yield a tuple of (input_tensor, ground_truth_tensor).
+            metrics (keras.metrics.Metric or list of keras.metrics.Metric):
+                Keras metric(s) to evaluate the inference results.
+            num_classes (int): The number of classes in the segmentation task.
+            overlap (float): Amount of overlap between adjacent ROIs in each
+                dimension. A value between 0.0 and 1.0. Default is 0.5.
+            roi_size (tuple of int): The size of the Region Of Interest (ROI)
+                to process with the sliding window. Should have the same
+                dimensionality as the input of the model (e.g., (96, 96, 96) for
+                3D). Default is (96, 96, 96).
+            sw_batch_size (int): Batch size for processing individual ROIs.
+                Default is 4.
             interval (int): Number of epochs between each inference run.
+                Inference will be performed at the end of every `interval` epochs.
+                Default is 5.
+            mode (str): How to combine overlapping predictions. Options are:
+                "gaussian", "constant", "max". Default is "constant".
+            padding_mode (str): How to pad the input if its dimensions are not
+                divisible by the `roi_size` with the given `overlap`. Options
+                are: "constant", "reflect", "replicate", "circular".
+                Default is "constant".
+            sigma_scale (float): Standard deviation for the Gaussian weighting
+                window, as a fraction of the `roi_size`. Only used if `mode` is
+                "gaussian". Default is 0.125.
+            cval (float): Constant value used for padding if `padding_mode` is
+                "constant". Default is 0.0.
+            roi_weight_map (tensor or float): Optional ROI weight map. If a
+                tensor, it should have the same spatial dimensions as the input
+                and will be used to weight the contribution of each ROI during
+                aggregation. If a float, a constant weight map will be used.
+                Default is 0.8.
             save_path (str): File path to save the best model weights.
+                The model weights will be saved if the evaluated metric on the
+                inference dataset improves. Default is "model.weights.h5".
         """
         super().__init__()
         self._model = model
@@ -65,6 +99,17 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         )
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Performs inference at the end of each epoch if the epoch number
+        is a multiple of the specified interval. Evaluates the model on the
+        provided dataset using sliding window inference and saves the model
+        weights if the evaluated metric improves.
+
+        Args:
+            epoch (int): The current epoch number (0-indexed).
+            logs (dict, optional): Dictionary of logs passed by the Keras
+                training loop. Defaults to None.
+        """
         if (epoch + 1) % self.interval == 0:
             print(f"\nEpoch {epoch+1}: Running inference...")
 
