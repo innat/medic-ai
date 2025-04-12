@@ -3,6 +3,32 @@ from keras.metrics import Metric
 
 
 class BaseDiceMetric(Metric):
+    """Base class for Dice-based metrics.
+
+    This class provides a foundation for calculating the Dice coefficient, a common
+    metric for evaluating the overlap between predicted and ground truth
+    segmentation masks. It handles class ID selection, ignoring empty samples,
+    smoothing, and thresholding for binary cases.
+
+    Args:
+        from_logits (bool): Whether `y_pred` is expected to be logits. If True,
+            the predictions will be passed through a sigmoid activation for binary
+            tasks or softmax for multi-class tasks in subclasses.
+        num_classes (int): The total number of classes in the segmentation task.
+        class_id (int, list of int, or None): If an integer or a list of integers,
+            the Dice metric will be calculated only for the specified class(es).
+            If None, the Dice metric will be calculated for all classes and averaged.
+        ignore_empty (bool, optional): If True, samples where the ground truth
+            is entirely empty for the selected classes will be ignored during
+            metric calculation. Defaults to True.
+        smooth (float, optional): A small smoothing factor to prevent division by zero.
+            Defaults to 1e-6.
+        name (str, optional): Name of the metric. Defaults to "base_dice".
+        threshold (float, optional): Threshold value used to convert probabilities
+            to binary predictions (for binary or multi-label cases). Defaults to 0.5.
+        **kwargs: Additional keyword arguments passed to `keras.metrics.Metric`.
+    """
+
     def __init__(
         self,
         from_logits,
@@ -45,6 +71,14 @@ class BaseDiceMetric(Metric):
         return y_pred
 
     def update_state(self, y_true, y_pred, sample_weight=None):
+        """Updates the metric's state based on new ground truth and predictions.
+
+        Args:
+            y_true (Tensor): Ground truth tensor.
+            y_pred (Tensor): Prediction tensor.
+            sample_weight (Tensor, optional): Optional weighting of the samples.
+                Not currently used in this base implementation.
+        """
         y_pred = ops.cast(y_pred, y_true.dtype)
 
         y_pred_processed = self._process_predictions(y_pred)
@@ -83,6 +117,12 @@ class BaseDiceMetric(Metric):
         self.valid_counts.assign_add(ops.sum(valid_mask_float, axis=0))  # [C]
 
     def result(self):
+        """Computes the Dice coefficient.
+
+        Returns:
+            Tensor: The mean Dice coefficient across the selected classes,
+                handling cases where no valid samples exist for a class.
+        """
         # Calculate Dice per class
         dice_per_class = (2.0 * self.total_intersection + self.smooth) / (
             self.total_union + self.smooth
