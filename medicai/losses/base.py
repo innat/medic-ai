@@ -37,14 +37,7 @@ class BaseDiceLoss(keras.losses.Loss):
     ):
         super().__init__(name=name, **kwargs)
 
-        # Handle class_id specification
-        if class_id is None:
-            self.class_id = list(range(num_classes))
-        elif isinstance(class_id, int):
-            self.class_id = [class_id]
-        else:
-            self.class_id = class_id
-
+        self.class_id = self._validate_and_get_class_id(class_id, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.squared_pred = squared_pred

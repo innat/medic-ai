@@ -70,6 +70,28 @@ class BaseDiceMetric(Metric):
     def _process_predictions(self, y_pred):
         return y_pred
 
+    def _process_inputs(self, y_true):
+        return y_true
+
+    def _get_desired_class_channels(self, y_true, y_pred):
+        if self.class_id is None:
+            return y_true, y_pred
+
+        if self.num_classes == 1:
+            return y_true, y_pred
+
+        selected_y_true = []
+        selected_y_pred = []
+
+        for class_index in self.class_id:
+            selected_y_true.append(y_true[..., class_index : class_index + 1])
+            selected_y_pred.append(y_pred[..., class_index : class_index + 1])
+
+        y_true = ops.concatenate(selected_y_true, axis=-1)
+        y_pred = ops.concatenate(selected_y_pred, axis=-1)
+
+        return y_true, y_pred
+
     def update_state(self, y_true, y_pred, sample_weight=None):
         """Updates the metric's state based on new ground truth and predictions.
 
@@ -82,7 +104,7 @@ class BaseDiceMetric(Metric):
         y_pred = ops.cast(y_pred, y_true.dtype)
 
         y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = y_true
+        y_true_processed = self._process_inputs(y_true)
 
         # Select only the classes we want to evaluate
         y_true_processed = ops.take(y_true_processed, self.class_id, axis=-1)
