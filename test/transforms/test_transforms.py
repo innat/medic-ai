@@ -38,7 +38,7 @@ def test_resize_transform():
     # check only one key (image)
     image_only = tf.random.normal((128, 128, 128, 1))
     inputs_image_only = TensorBundle({"image": image_only})
-    resize_transform = Resize(keys=["image"], spatial_shape=(64, 96, 64))
+    resize_transform = Resize(keys=["image"], spatial_shape=(64, 96, 64), mode="bilinear")
     resized_image_only = resize_transform(inputs)
     assert resized_image_only.data["image"].shape == (64, 96, 64, 1)
 

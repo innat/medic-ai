@@ -21,7 +21,7 @@ def transformation(sample):
         ]
     )
     result = pipeline(data)
-    return result.data["image"], result.data["label"]
+    return result["image"], result["label"]
 
 
 def train_and_assert(model, dataset):

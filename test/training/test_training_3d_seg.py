@@ -2,7 +2,7 @@ import keras
 import tensorflow as tf
 
 from medicai.losses import SparseDiceCELoss
-from medicai.metrics import DiceMetric
+from medicai.metrics import SparseDiceMetric
 from medicai.models import SwinUNETR
 from medicai.transforms import (
     Compose,
@@ -21,7 +21,7 @@ def transformation(sample):
         ]
     )
     result = pipeline(data, meta)
-    return result.data["image"], result.data["label"]
+    return result["image"], result["label"]
 
 
 def create_sample_dict(image, label):
@@ -47,9 +47,9 @@ def create_model_and_compile(num_classes):
             learning_rate=1e-4,
             weight_decay=1e-5,
         ),
-        loss=SparseDiceCELoss(from_logits=True),
+        loss=SparseDiceCELoss(from_logits=True, num_classes=num_classes),
         metrics=[
-            DiceMetric(
+            SparseDiceMetric(
                 num_classes=num_classes,
                 include_background=True,
                 reduction="mean",

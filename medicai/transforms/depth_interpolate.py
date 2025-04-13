@@ -16,6 +16,7 @@ def nearest_interpolation(volume, target_depth, depth_axis=0):
     resized_volume = tf.gather(volume, depth_indices, axis=depth_axis)
     return resized_volume
 
+
 def linear_interpolation(volume, target_depth, depth_axis=0):
     # Get the original depth size along the specified axis
     original_depth = tf.shape(volume)[depth_axis]
@@ -47,6 +48,7 @@ def linear_interpolation(volume, target_depth, depth_axis=0):
     interpolated_volume = (1 - alpha) * lower_slices + alpha * upper_slices
 
     return interpolated_volume
+
 
 def cubic_interpolation(volume, target_depth, depth_axis=0):
     # Get the original depth size along the specified axis
