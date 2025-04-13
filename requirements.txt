@@ -10,3 +10,4 @@ tzdata
 urllib3
 scipy
 tqdm
+nibabel
