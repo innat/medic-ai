@@ -16,9 +16,12 @@ pip install medicai
 
 # Guide
 
+![](assets/covid.gif)
+
 - [3D transformation](https://innat.github.io/medic-ai/transformations/manage-transformations/)
 - [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
 - [3D segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
+
 
 
 # Acknowledgements
