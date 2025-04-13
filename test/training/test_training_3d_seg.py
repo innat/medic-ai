@@ -50,9 +50,8 @@ def create_model_and_compile(num_classes):
         loss=SparseDiceCELoss(from_logits=True, num_classes=num_classes),
         metrics=[
             SparseDiceMetric(
+                from_logits=True,
                 num_classes=num_classes,
-                include_background=True,
-                reduction="mean",
                 ignore_empty=True,
                 smooth=1e-6,
                 name="dice_score",
