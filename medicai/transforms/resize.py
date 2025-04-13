@@ -5,7 +5,10 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 import tensorflow as tf
 
-from medicai.transforms.depth_interpolate import DepthInterpolation as depth_interpolate
+from medicai.transforms.depth_interpolate import (
+    depth_interpolation_methods,
+    SUPPORTED_DEPTH_METHODS,
+)
 
 from .tensor_bundle import TensorBundle
 
@@ -48,8 +51,18 @@ class Resize:
             ValueError: If `spatial_shape` is neither 2D nor 3D.
         """
         self.keys = keys
-        self.mode = dict(zip(keys, mode))
         self.spatial_shape = spatial_shape
+
+        if isinstance(mode, str):
+            self.mode = {key: mode for key in keys}
+        elif isinstance(mode, (tuple, list)):
+            if len(mode) != len(keys):
+                raise ValueError("Length of 'mode' must match length of 'keys'.")
+            self.mode = dict(zip(keys, mode))
+        elif isinstance(mode, dict):
+            self.mode = mode
+        else:
+            raise TypeError("'mode' must be a string, tuple, list, or dict.")
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the resizing transformation to the input TensorBundle.
@@ -107,7 +120,24 @@ class Resize:
         """
         new_depth, new_height, new_width = self.spatial_shape
         resized_hw = tf.image.resize(image, [new_height, new_width], method=self.mode.get(key))
-        resized_dhw = depth_interpolate()(
-            resized_hw, new_depth, depth_axis=0, method=self.mode.get(key)
-        )
+
+        mode_for_key = self.mode.get(key)
+        if mode_for_key is not None:
+            normalized_mode = mode_for_key.lower()
+            depth_method_map = {
+                "bilinear": "linear",
+                "bicubic": "cubic",
+                "nearest": "nearest",
+            }
+            depth_method = depth_method_map.get(normalized_mode)
+        else:
+            depth_method = None
+
+        if depth_method not in SUPPORTED_DEPTH_METHODS:
+            raise ValueError(
+                f"Unsupported depth interpolation method: {depth_method}. "
+                f"Supported methods are: {SUPPORTED_DEPTH_METHODS}"
+            )
+
+        resized_dhw = depth_interpolation_methods[depth_method](resized_hw, new_depth, depth_axis=0)
         return resized_dhw

@@ -1,6 +1,6 @@
 from medicai.transforms.base import Compose
 from medicai.transforms.crop_foreground import CropForeground
-from medicai.transforms.depth_interpolate import DepthInterpolation
+from medicai.transforms.depth_interpolate import depth_interpolation_methods
 from medicai.transforms.normalize_intensity import NormalizeIntensity
 from medicai.transforms.orientation import Orientation
 from medicai.transforms.random_crop_pos_neg import RandCropByPosNegLabel
