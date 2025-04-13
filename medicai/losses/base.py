@@ -37,7 +37,7 @@ class BaseDiceLoss(keras.losses.Loss):
     ):
         super().__init__(name=name, **kwargs)
 
-        self.class_ids = self._validate_and_get_class_id(class_ids, num_classes)
+        self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.squared_pred = squared_pred
