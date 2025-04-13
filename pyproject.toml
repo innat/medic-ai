@@ -29,3 +29,7 @@ virtual_env = "venv"
 [tool.flake8]
 exclude = "venv"
 ignore = ["E501", "W503", "E226"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
