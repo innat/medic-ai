@@ -18,7 +18,7 @@ class SparseDiceLoss(BaseDiceLoss):
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
@@ -53,7 +53,7 @@ class CategoricalDiceLoss(BaseDiceLoss):
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
@@ -84,7 +84,7 @@ class BinaryDiceLoss(BaseDiceLoss):
         num_classes (int): For binary tasks, this is typically 1, but can be 2
             if the background is explicitly represented. The `class_id` parameter
             can be used to target the foreground channel if `num_classes` is 2.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             For binary tasks, you might specify `class_id=0` or `class_id=[0]`
             to target the foreground channel if `num_classes=2`. If None, and

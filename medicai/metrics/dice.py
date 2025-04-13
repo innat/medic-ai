@@ -18,7 +18,7 @@ class BinaryDiceMetric(BaseDiceMetric):
             the predictions will be passed through a sigmoid activation before
             thresholding.
         num_classes (int): For binary tasks, typically 1.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice metric will be calculated only for the specified class(es).
             Defaults to None (calculates for all classes, usually just one).
         ignore_empty (bool, optional): If True, samples where the ground truth
@@ -51,7 +51,7 @@ class CategoricalDiceMetric(BaseDiceMetric):
             the predictions will be passed through a softmax activation before
             taking the argmax.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice metric will be calculated only for the specified class(es).
             Defaults to None (calculates for all classes).
         ignore_empty (bool, optional): If True, samples where the ground truth
@@ -83,7 +83,7 @@ class SparseDiceMetric(BaseDiceMetric):
             the predictions will be passed through a softmax activation before
             taking the argmax.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice metric will be calculated only for the specified class(es).
             Defaults to None (calculates for all classes).
         ignore_empty (bool, optional): If True, samples where the ground truth

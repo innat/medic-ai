@@ -16,7 +16,7 @@ class BaseDiceMetric(Metric):
             the predictions will be passed through a sigmoid activation for binary
             tasks or softmax for multi-class tasks in subclasses.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice metric will be calculated only for the specified class(es).
             If None, the Dice metric will be calculated for all classes and averaged.
         ignore_empty (bool, optional): If True, samples where the ground truth
@@ -34,7 +34,7 @@ class BaseDiceMetric(Metric):
         self,
         from_logits,
         num_classes,
-        class_id=None,
+        class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
         name="base_dice",
@@ -43,7 +43,7 @@ class BaseDiceMetric(Metric):
     ):
         super().__init__(name=name, **kwargs)
 
-        self.class_id = self._validate_and_get_class_id(class_id, num_classes)
+        self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
@@ -52,27 +52,27 @@ class BaseDiceMetric(Metric):
 
         # State variables
         self.total_intersection = self.add_variable(
-            name="total_intersection", shape=(len(self.class_id),), initializer="zeros"
+            name="total_intersection", shape=(len(self.class_ids),), initializer="zeros"
         )
         self.total_union = self.add_variable(
-            name="total_union", shape=(len(self.class_id),), initializer="zeros"
+            name="total_union", shape=(len(self.class_ids),), initializer="zeros"
         )
         self.valid_counts = self.add_variable(
-            name="valid_counts", shape=(len(self.class_id),), initializer="zeros"
+            name="valid_counts", shape=(len(self.class_ids),), initializer="zeros"
         )
 
-    def _validate_and_get_class_id(self, class_id, num_classes):
-        if class_id is None:
+    def _validate_and_get_class_ids(self, class_ids, num_classes):
+        if class_ids is None:
             return list(range(num_classes))
-        elif isinstance(class_id, int):
-            return [class_id]
-        elif isinstance(class_id, list):
-            for cid in class_id:
+        elif isinstance(class_ids, int):
+            return [class_ids]
+        elif isinstance(class_ids, list):
+            for cid in class_ids:
                 if not 0 <= cid < num_classes:
                     raise ValueError(
                         f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
                     )
-            return class_id
+            return class_ids
         else:
             raise ValueError(
                 "class_id must be an integer, a list of integers, or None to consider all classes."
@@ -85,7 +85,7 @@ class BaseDiceMetric(Metric):
         return y_true
 
     def _get_desired_class_channels(self, y_true, y_pred):
-        if self.class_id is None:
+        if self.class_ids is None:
             return y_true, y_pred
 
         if self.num_classes == 1:
@@ -94,7 +94,7 @@ class BaseDiceMetric(Metric):
         selected_y_true = []
         selected_y_pred = []
 
-        for class_index in self.class_id:
+        for class_index in self.class_ids:
             selected_y_true.append(y_true[..., class_index : class_index + 1])
             selected_y_pred.append(y_pred[..., class_index : class_index + 1])
 
@@ -173,6 +173,6 @@ class BaseDiceMetric(Metric):
         )
 
     def reset_states(self):
-        self.total_intersection.assign(ops.zeros(len(self.class_id)))
-        self.total_union.assign(ops.zeros(len(self.class_id)))
-        self.valid_counts.assign(ops.zeros(len(self.class_id)))
+        self.total_intersection.assign(ops.zeros(len(self.class_ids)))
+        self.total_union.assign(ops.zeros(len(self.class_ids)))
+        self.valid_counts.assign(ops.zeros(len(self.class_ids)))

@@ -50,7 +50,7 @@ def test_categorical_dice_metric():
     dice_metric_mean = CategoricalDiceMetric(
         from_logits=1,
         ignore_empty=0,
-        class_id=[1, 2],
+        class_ids=[1, 2],
         num_classes=y_pred.shape[-1],
         name="dice_score",
     )
@@ -65,7 +65,7 @@ def test_categorical_dice_metric():
     dice_metric_mean = CategoricalDiceMetric(
         from_logits=1,
         ignore_empty=0,
-        class_id=[1, 2],
+        class_ids=[1, 2],
         num_classes=y_pred.shape[-1],
         name="dice_score",
     )
@@ -98,7 +98,7 @@ def test_sparse_categorical_dice_metric():
     dice_metric_mean = SparseDiceMetric(
         from_logits=1,
         ignore_empty=1,
-        class_id=[1, 2],
+        class_ids=[1, 2],
         num_classes=y_pred.shape[-1],
         name="dice_score",
     )
@@ -114,15 +114,15 @@ def test_binary_dice_metric():
 
     batch_size, depth, height, width, num_labels = 2, 5, 64, 64, 3
 
-    y_true = keras.random.uniform(
+    y_true = keras.random.randint(
         shape=(batch_size, depth, height, width, num_labels), minval=0, maxval=2, dtype="int32"
     )
     y_pred_logit = keras.random.normal(
-        shape=(batch_size, depth, height, width, num_labels), dtype="int32"
+        shape=(batch_size, depth, height, width, num_labels), dtype="float32"
     )
 
     dice_metric_from_logits = BinaryDiceMetric(
-        from_logits=1, num_classes=num_labels, ignore_empty=False, class_id=[0]
+        from_logits=1, num_classes=num_labels, ignore_empty=False, class_ids=[0]
     )
     dice_metric_from_logits.update_state(y_true, y_pred_logit)
     score = dice_metric_from_logits.result().numpy()

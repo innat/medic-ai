@@ -13,7 +13,7 @@ class BaseDiceLoss(keras.losses.Loss):
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a sigmoid activation.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
@@ -29,7 +29,7 @@ class BaseDiceLoss(keras.losses.Loss):
         self,
         from_logits,
         num_classes,
-        class_id=None,
+        class_ids=None,
         smooth=1e-7,
         squared_pred=False,
         name="dice_loss",
@@ -37,27 +37,27 @@ class BaseDiceLoss(keras.losses.Loss):
     ):
         super().__init__(name=name, **kwargs)
 
-        self.class_id = self._validate_and_get_class_id(class_id, num_classes)
+        self.class_ids = self._validate_and_get_class_id(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.squared_pred = squared_pred
         self.smooth = smooth or keras.backend.epsilon()
 
-    def _validate_and_get_class_id(self, class_id, num_classes):
-        if class_id is None:
+    def _validate_and_get_class_ids(self, class_ids, num_classes):
+        if class_ids is None:
             return list(range(num_classes))
-        elif isinstance(class_id, int):
-            return [class_id]
-        elif isinstance(class_id, list):
-            for cid in class_id:
+        elif isinstance(class_ids, int):
+            return [class_ids]
+        elif isinstance(class_ids, list):
+            for cid in class_ids:
                 if not 0 <= cid < num_classes:
                     raise ValueError(
                         f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
                     )
-            return class_id
+            return class_ids
         else:
             raise ValueError(
-                "class_id must be an integer, a list of integers, or None to consider all classes."
+                "class_ids must be an integer, a list of integers, or None to consider all classes."
             )
 
     def _get_desired_class_channels(self, y_true, y_pred):
@@ -72,7 +72,7 @@ class BaseDiceLoss(keras.losses.Loss):
                 prediction tensors with only the desired class channels.
         """
 
-        if self.class_id is None:
+        if self.class_ids is None:
             return y_true, y_pred
 
         if self.num_classes == 1:
@@ -81,7 +81,7 @@ class BaseDiceLoss(keras.losses.Loss):
         selected_y_true = []
         selected_y_pred = []
 
-        for class_index in self.class_id:
+        for class_index in self.class_ids:
             selected_y_true.append(y_true[..., class_index : class_index + 1])
             selected_y_pred.append(y_pred[..., class_index : class_index + 1])
 

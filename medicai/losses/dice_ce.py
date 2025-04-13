@@ -21,7 +21,7 @@ class SparseDiceCELoss(SparseDiceLoss):
             the predictions will be passed through a softmax activation for Dice
             loss and used directly for Cross-Entropy.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             both the Dice and Cross-Entropy losses will be calculated only for the
             specified class(es). If None, both losses will be calculated for all
             classes and averaged.
@@ -45,7 +45,7 @@ class SparseDiceCELoss(SparseDiceLoss):
         """
         dice_loss = super().call(y_true, y_pred)
 
-        if self.class_id is not None:
+        if self.class_ids is not None:
             y_true = super()._process_inputs(y_true)
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
@@ -67,7 +67,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss):
             the predictions will be passed through a softmax activation for both
             Dice and Cross-Entropy losses.
         num_classes (int): The total number of classes in the segmentation task.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             both the Dice and Cross-Entropy losses will be calculated only for the
             specified class(es). If None, both losses will be calculated for all
             classes and averaged.
@@ -91,7 +91,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss):
         """
         dice_loss = super().call(y_true, y_pred)
 
-        if self.class_id is not None:
+        if self.class_ids is not None:
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
         ce_loss = keras.losses.categorical_crossentropy(
@@ -124,7 +124,7 @@ class BinaryDiceCELoss(BinaryDiceLoss):
         num_classes (int): For single-class binary tasks, this is typically 1.
             For multi-label binary tasks, this should match the number of channels
             in `y_pred`.
-        class_id (int, list of int, or None): If an integer or a list of integers,
+        class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice and Cross-Entropy losses will be calculated for the specified
             channel(s). For single-class binary tasks, you might use `class_id=0`
             or `[0]`. For multi-label, you can target specific labels. If None,
@@ -154,7 +154,7 @@ class BinaryDiceCELoss(BinaryDiceLoss):
         """
         dice_loss = super().call(y_true, y_pred)
 
-        if self.class_id is not None:
+        if self.class_ids is not None:
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
         if y_pred.shape[-1] == 1:
