@@ -4,9 +4,10 @@ from .tensor_bundle import TensorBundle
 class Compose:
     """Composes several transforms together.
 
-    This class allows you to chain multiple transformations to be 
+    This class allows you to chain multiple transformations to be
     applied sequentially to an input TensorBundle.
     """
+
     def __init__(self, transforms):
         """Initializes the Compose transform.
 

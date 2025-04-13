@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Dict, Sequence, Tuple, Union
 
 from medicai.utils.general import hide_warnings
 
@@ -51,7 +51,7 @@ class Resize:
         self.mode = dict(zip(keys, mode))
         self.spatial_shape = spatial_shape
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the resizing transformation to the input TensorBundle.
 
         Args:
@@ -62,6 +62,10 @@ class Resize:
         Returns:
             TensorBundle: A dictionary with the resized tensors and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         for key in self.keys:
             if key not in inputs.data:
                 continue

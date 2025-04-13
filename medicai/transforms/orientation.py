@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Dict, Sequence, Union
 
 from medicai.utils.general import hide_warnings
 
@@ -31,7 +31,7 @@ class Orientation:
         self.keys = keys
         self.axcodes = axcodes.upper()
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
         Apply the orientation transformation to the input TensorBundle.
 
@@ -46,6 +46,10 @@ class Orientation:
         Raises:
             ValueError: If the 'affine' matrix is not found in the input metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         affine = inputs.meta.get("affine")
         if affine is None:
             raise ValueError("Affine matrix is required for orientation transformation.")

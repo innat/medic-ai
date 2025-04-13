@@ -2,7 +2,7 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-from typing import Sequence
+from typing import Dict, Sequence, Union
 
 import tensorflow as tf
 
@@ -124,7 +124,7 @@ class NormalizeIntensity:
         div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
         return (image - sub) / div
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
         Apply the NormalizeIntensity transform to the input TensorBundle.
 
@@ -134,6 +134,10 @@ class NormalizeIntensity:
         Returns:
             TensorBundle: A dictionary with normalized tensors.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         for key in self.keys:
             if key not in inputs.data:
                 if self.allow_missing_keys:

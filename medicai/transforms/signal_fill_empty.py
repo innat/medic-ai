@@ -1,3 +1,5 @@
+from typing import Dict, Union
+
 import tensorflow as tf
 
 from .tensor_bundle import TensorBundle
@@ -24,7 +26,7 @@ class SignalFillEmpty:
         self.keys = keys
         self.replacement = replacement
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Applies the signal filling operation to the specified tensors in the input
         TensorBundle.
 
@@ -38,6 +40,10 @@ class SignalFillEmpty:
                 infinity values in the specified tensors replaced by the `self.replacement` value.
                 The metadata of the input TensorBundle is preserved.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         for key in self.keys:
             if key in inputs.data:
                 replacement = tf.cast(self.replacement, dtype=inputs.data[key].dtype)

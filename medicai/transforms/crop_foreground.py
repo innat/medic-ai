@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Dict, Optional, Sequence, Union
 
 from medicai.utils.general import hide_warnings
 
@@ -72,7 +72,7 @@ class CropForeground:
         self.end_coord_key = end_coord_key
         self.allow_missing_keys = allow_missing_keys
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
         Apply the CropForeground transform to the input TensorBundle.
 
@@ -82,6 +82,10 @@ class CropForeground:
         Returns:
             TensorBundle: A dictionary with cropped tensors and updated metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         # Extract the source data (used to determine the foreground)
         if self.source_key not in inputs.data and self.allow_missing_keys:
             return inputs

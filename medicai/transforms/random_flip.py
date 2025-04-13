@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Dict, Sequence, Union
 
 from medicai.utils.general import hide_warnings
 
@@ -39,7 +39,7 @@ class RandFlip:
         self.prob = prob
         self.spatial_axis = spatial_axis
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
         Apply the random flipping transformation to the input TensorBundle.
 
@@ -49,6 +49,10 @@ class RandFlip:
         Returns:
             TensorBundle: A dictionary with potentially flipped tensors and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         should_flip = tf.random.uniform([]) < self.prob
 
         for key in self.keys:

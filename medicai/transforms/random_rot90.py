@@ -1,6 +1,8 @@
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
+from typing import Dict, Union
+
 import tensorflow as tf
 
 from .tensor_bundle import TensorBundle
@@ -83,7 +85,11 @@ class RandRotate90:
 
         return array
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         rand_val = tf.random.uniform(())
 
         def apply_rotation():

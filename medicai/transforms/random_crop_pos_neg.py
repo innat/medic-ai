@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Dict, Tuple, Union
 
 from medicai.utils.general import hide_warnings
 
@@ -57,7 +57,7 @@ class RandCropByPosNegLabel:
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
         Applies the random cropping transformation to the input TensorBundle.
 
@@ -70,6 +70,9 @@ class RandCropByPosNegLabel:
                 If `num_samples` is 1, the values are single 4D tensors.
                 If `num_samples` > 1, the values are 5D tensors (num_samples, depth, height, width, channels).
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
 
         image = inputs.data["image"]
         label = inputs.data["label"]

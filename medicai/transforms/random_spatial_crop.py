@@ -1,3 +1,5 @@
+from typing import Dict, Union
+
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
@@ -43,7 +45,7 @@ class RandSpatialCrop:
         self.random_center = random_center
         self.random_size = random_size
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the random spatial crop to the input TensorBundle.
 
         Args:
@@ -53,6 +55,10 @@ class RandSpatialCrop:
         Returns:
             TensorBundle: A dictionary with the spatially cropped tensors and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         sample_key = self.keys[0]
         img = inputs.data[sample_key]
         input_shape = tf.shape(img)  # shape = (D, H, W, C)

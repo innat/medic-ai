@@ -2,7 +2,7 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-from typing import Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 
@@ -53,7 +53,7 @@ class RandShiftIntensity:
         self.prob = prob
         self.channel_wise = channel_wise
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the random intensity shift to the specified tensors in the input TensorBundle.
 
         Args:
@@ -65,6 +65,10 @@ class RandShiftIntensity:
             TensorBundle: A dictionary with the intensity-shifted tensors (if the random
             condition is met) and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         rand_val = tf.random.uniform(())
 
         def apply_shift():

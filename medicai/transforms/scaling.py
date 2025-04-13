@@ -2,7 +2,7 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence, Union
 
 import tensorflow as tf
 
@@ -53,7 +53,7 @@ class ScaleIntensityRange:
         self.clip = clip
         self.dtype = dtype
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the intensity scaling to the specified tensors in the input TensorBundle.
 
         Args:
@@ -63,6 +63,10 @@ class ScaleIntensityRange:
         Returns:
             TensorBundle: A dictionary with the intensity-scaled tensors and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         for key in self.keys:
             if key in inputs.data:
                 inputs.data[key] = self.scale_intensity_range(inputs.data[key])

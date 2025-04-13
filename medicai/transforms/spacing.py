@@ -3,7 +3,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 
 import warnings
-from typing import Sequence, Tuple
+from typing import Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 
@@ -64,7 +64,7 @@ class Spacing:
         height_spacing = tf.norm(affine[:3, 2])
         return (width_spacing, depth_spacing, height_spacing)
 
-    def __call__(self, inputs: TensorBundle) -> TensorBundle:
+    def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the spacing resampling to the input TensorBundle.
 
         Args:
@@ -75,6 +75,10 @@ class Spacing:
         Returns:
             TensorBundle: A dictionary with resampled tensors and the original metadata.
         """
+
+        if isinstance(inputs, dict):
+            inputs = TensorBundle(inputs)
+
         for key in self.keys:
             if key not in inputs.data:
                 continue
