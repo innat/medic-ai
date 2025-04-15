@@ -29,6 +29,12 @@ class SparseDiceCELoss(SparseDiceLoss):
             prevent division by zero. Defaults to 1e-7.
         squared_pred (bool, optional): If True, the predictions in the denominator
             of the Dice coefficient will be squared. Defaults to False.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Must be >= 0.0. A higher value gives more importance to Dice loss.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
+            Defaults to 1.0.
         name (str, optional): Name of the loss function. Defaults to "sparse_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `SparseDiceLoss`.
     """
@@ -52,7 +58,7 @@ class SparseDiceCELoss(SparseDiceLoss):
         ce_loss = keras.losses.categorical_crossentropy(
             y_true, y_pred, from_logits=self.from_logits
         )
-        return dice_loss + ops.mean(ce_loss)
+        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
 
 
 class CategoricalDiceCELoss(CategoricalDiceLoss):
@@ -75,6 +81,12 @@ class CategoricalDiceCELoss(CategoricalDiceLoss):
             prevent division by zero. Defaults to 1e-7.
         squared_pred (bool, optional): If True, the predictions in the denominator
             of the Dice coefficient will be squared. Defaults to False.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Must be >= 0.0. A higher value gives more importance to Dice loss.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
+            Defaults to 1.0.
         name (str, optional): Name of the loss function. Defaults to "categorical_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `CategoricalDiceLoss`.
     """
@@ -97,7 +109,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss):
         ce_loss = keras.losses.categorical_crossentropy(
             y_true, y_pred, from_logits=self.from_logits
         )
-        return dice_loss + ops.mean(ce_loss)
+        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
 
 
 class BinaryDiceCELoss(BinaryDiceLoss):
@@ -133,6 +145,12 @@ class BinaryDiceCELoss(BinaryDiceLoss):
             prevent division by zero. Defaults to 1e-7.
         squared_pred (bool, optional): If True, the predictions in the denominator
             of the Dice coefficient will be squared. Defaults to False.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Must be >= 0.0. A higher value gives more importance to Dice loss.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
+            Defaults to 1.0.
         name (str, optional): Name of the loss function. Defaults to "binary_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `BinaryDiceLoss`.
     """
@@ -157,17 +175,10 @@ class BinaryDiceCELoss(BinaryDiceLoss):
         if self.class_ids is not None:
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
-        if y_pred.shape[-1] == 1:
-            ce_loss = keras.losses.binary_crossentropy(
-                y_true,
-                y_pred,
-                from_logits=self.from_logits,
-            )
-        else:
-            ce_loss = keras.losses.categorical_crossentropy(
-                y_true,
-                y_pred,
-                from_logits=self.from_logits,
-            )
+        ce_loss = keras.losses.binary_crossentropy(
+            y_true,
+            y_pred,
+            from_logits=self.from_logits,
+        )
 
-        return dice_loss + ops.mean(ce_loss)
+        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))

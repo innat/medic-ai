@@ -6,8 +6,8 @@ hide_warnings()
 import tensorflow as tf
 
 from medicai.transforms.depth_interpolate import (
-    depth_interpolation_methods,
     SUPPORTED_DEPTH_METHODS,
+    depth_interpolation_methods,
 )
 
 from .tensor_bundle import TensorBundle

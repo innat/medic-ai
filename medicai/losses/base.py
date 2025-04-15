@@ -21,6 +21,12 @@ class BaseDiceLoss(keras.losses.Loss):
         squared_pred (bool, optional): If True, the predictions in the denominator
             of the Dice coefficient will be squared. This is used in some variations
             like the F-beta loss. Defaults to False.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Must be >= 0.0. A higher value gives more importance to Dice loss.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
+            Defaults to 1.0.
         name (str, optional): Name of the loss function. Defaults to "dice_loss".
         **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
@@ -32,6 +38,8 @@ class BaseDiceLoss(keras.losses.Loss):
         class_ids=None,
         smooth=1e-7,
         squared_pred=False,
+        dice_weight=1.0,
+        ce_weight=1.0,
         name="dice_loss",
         **kwargs,
     ):
@@ -41,6 +49,8 @@ class BaseDiceLoss(keras.losses.Loss):
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.squared_pred = squared_pred
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
         self.smooth = smooth or keras.backend.epsilon()
 
     def _validate_and_get_class_ids(self, class_ids, num_classes):
@@ -71,9 +81,6 @@ class BaseDiceLoss(keras.losses.Loss):
             Tuple[Tensor, Tensor]: A tuple containing the ground truth and
                 prediction tensors with only the desired class channels.
         """
-
-        if self.class_ids is None:
-            return y_true, y_pred
 
         if self.num_classes == 1:
             return y_true, y_pred

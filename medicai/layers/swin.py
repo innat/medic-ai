@@ -528,9 +528,9 @@ class SwinTransformerBlock(keras.Model):
         )
 
         # temp fix: https://github.com/keras-team/keras/issues/19379
-        if keras.backend.backend() == 'jax':
+        if keras.backend.backend() == "jax":
             return x[:, :depth, :height, :width, :]
-            
+
         x = ops.cond(do_pad, lambda: x[:, :depth, :height, :width, :], lambda: x)
 
         return x

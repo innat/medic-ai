@@ -1,5 +1,5 @@
-import numpy as np
 import keras
+import numpy as np
 from keras import ops
 
 from medicai.metrics.dice import BinaryDiceMetric  # noqa: F401
@@ -117,7 +117,7 @@ def test_binary_dice_metric():
     y_true = keras.random.randint(
         shape=(batch_size, depth, height, width, num_labels), minval=0, maxval=2, dtype="int32"
     )
-    y_true = ops.cast(y_true, 'float32')
+    y_true = ops.cast(y_true, "float32")
     y_pred_logit = keras.random.normal(
         shape=(batch_size, depth, height, width, num_labels), dtype="float32"
     )
