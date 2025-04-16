@@ -50,6 +50,16 @@ class RandCropByPosNegLabel:
         if pos == 0 and neg == 0:
             raise ValueError("pos and neg cannot both be zero.")
 
+        if len(keys) != 2:
+            class_name = type(self).__name__
+            raise ValueError(
+                f"{class_name} transformation requires a pair of image and label as keys. "
+            )
+
+        if num_samples != 1:
+            class_name = self.__class__.__name__
+            raise ValueError(f"{class_name} currently supports only num_samples=1.")
+
         self.keys = keys
         self.spatial_size = spatial_size
         self.pos = pos
@@ -74,8 +84,11 @@ class RandCropByPosNegLabel:
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)
 
-        image = inputs.data["image"]
-        label = inputs.data["label"]
+        # unpack the keys
+        image_key, label_key = self.keys
+
+        image = inputs.data[image_key]
+        label = inputs.data[label_key]
 
         image_patches, label_patches = tf.map_fn(
             lambda _: self._process_sample(image, label),
@@ -87,8 +100,8 @@ class RandCropByPosNegLabel:
             image_patches = tf.squeeze(image_patches, axis=0)
             label_patches = tf.squeeze(label_patches, axis=0)
 
-        inputs.data["image"] = image_patches
-        inputs.data["label"] = label_patches
+        inputs.data[image_key] = image_patches
+        inputs.data[label_key] = label_patches
         return inputs
 
     def _process_sample(self, image: tf.Tensor, label: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
