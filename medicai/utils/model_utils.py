@@ -18,8 +18,18 @@ def get_act_layer(name, **kwargs):
     Returns:
         A Keras Activation layer.
     """
-    activation_fn = activations.get(name)
-    return layers.Activation(activation_fn, **kwargs)
+    name = name.lower()
+    if name == "leaky_relu":
+        return layers.LeakyReLU(**kwargs)
+    elif name == "prelu":
+        return layers.PReLU(**kwargs)
+    elif name == "elu":
+        return layers.ELU(**kwargs)
+    elif name == "relu":
+        return layers.ReLU(**kwargs)
+    else:
+        activation_fn = activations.get(name)
+        return layers.Activation(activation_fn)
 
 
 def get_norm_layer(norm_name, **kwargs):
