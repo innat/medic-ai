@@ -201,8 +201,16 @@ def sliding_window_inference(
             patch_list.append(patch)
         patches = np.concatenate(patch_list, axis=0)  # Stack patches along batch dimension
 
+        # padded if needed - its useful for XLA complilation to support tpu or jax backend.
+        bs_actual = patches.shape[0]
+        bs_target = sw_batch_size
+        if bs_actual < bs_target:
+            batch_pad_size = ((0, bs_target - bs_actual), (0, 0), (0, 0), (0, 0), (0, 0))
+            patches = np.pad(patches, batch_pad_size, mode='constant', constant_values=0)
+
         # Predict on the batch of patches
         pred = model.predict(patches, verbose=0)
+        pred = pred[:bs_actual]
 
         # Resize importance map if necessary
         if pred.shape[1:-1] != roi_size:  # Exclude batch and channel dimensions
