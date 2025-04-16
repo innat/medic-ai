@@ -6,6 +6,12 @@ import numpy as np
 
 
 def hide_warnings():
+    import logging
+    import os
+    import sys
+    import warnings
+
+    # Disable Python warnings
     def warn(*args, **kwargs):
         pass
 
@@ -13,7 +19,29 @@ def hide_warnings():
     warnings.simplefilter(action="ignore")
     warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+    # Disable Python logging
+    logging.disable(logging.WARNING)
+    logging.getLogger("tensorflow").disabled = True
+
+    # TensorFlow environment variables
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+    os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
+
+    # Disable TensorFlow debugging information
+    if "tensorflow" in sys.modules:
+        tf = sys.modules["tensorflow"]
+        tf.get_logger().setLevel("ERROR")
+        tf.autograph.set_verbosity(0)
+
+    # Disable ABSL (Ten1orFlow dependency) logging
+    try:
+        import absl.logging
+
+        absl.logging.set_verbosity(absl.logging.ERROR)
+        # Redirect ABSL logs to null
+        absl.logging.get_absl_handler().python_handler.stream = open(os.devnull, "w")
+    except (ImportError, AttributeError):
+        pass
 
 
 def ensure_tuple_rep(val: Any, rep: int) -> Tuple[Any, ...]:
