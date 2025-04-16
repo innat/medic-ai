@@ -521,19 +521,7 @@ class SwinTransformerBlock(keras.Model):
         else:
             x = shifted_x
 
-        # pad if required
-        do_pad = ops.logical_or(
-            ops.greater(self.pad_d1, 0),
-            ops.logical_or(ops.greater(self.pad_r, 0), ops.greater(self.pad_b, 0)),
-        )
-
-        # temp fix: https://github.com/keras-team/keras/issues/19379
-        if keras.backend.backend() == "jax":
-            return x[:, :depth, :height, :width, :]
-
-        x = ops.cond(do_pad, lambda: x[:, :depth, :height, :width, :], lambda: x)
-
-        return x
+        return x[:, :depth, :height, :width, :]
 
     def second_forward(self, x, training):
         x = self.norm2(x)
