@@ -2,8 +2,7 @@ from medicai.utils import hide_warnings
 
 hide_warnings()
 
-from keras import ops
-from keras import callbacks
+from keras import callbacks, ops
 
 from medicai.utils.inference import SlidingWindowInference
 

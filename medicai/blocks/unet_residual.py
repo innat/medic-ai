@@ -31,7 +31,7 @@ def UnetResBlock(
             out_channels, kernel_size, strides=stride, padding="same", use_bias=False
         )(inputs)
         x = get_norm_layer(norm_name)(x)
-        x = get_act_layer(("leakyrelu", {"negative_slope": 0.01}))(x)
+        x = get_act_layer("leaky_relu", negative_slope=0.01)(x)
 
         if dropout_rate:
             x = layers.Dropout(dropout_rate)(x)
@@ -51,7 +51,7 @@ def UnetResBlock(
 
         # add residual connection
         x = layers.Add()([x, residual])
-        x = get_act_layer(("leakyrelu", {"negative_slope": 0.01}))(x)
+        x = get_act_layer("leaky_relu", negative_slope=0.01)(x)
 
         return x
 
