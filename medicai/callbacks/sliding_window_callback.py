@@ -125,3 +125,5 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
                 self.best_score = score
                 self.model.save_weights(self.save_path)
                 print(f"New best score! Model saved to {self.save_path}")
+
+            logs[f"{self._metrics.name}"] = score
