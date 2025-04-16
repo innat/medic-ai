@@ -206,7 +206,7 @@ def sliding_window_inference(
         bs_target = sw_batch_size
         if bs_actual < bs_target:
             batch_pad_size = ((0, bs_target - bs_actual), (0, 0), (0, 0), (0, 0), (0, 0))
-            patches = np.pad(patches, batch_pad_size, mode='constant', constant_values=0)
+            patches = np.pad(patches, batch_pad_size, mode="constant", constant_values=0)
 
         # Predict on the batch of patches
         pred = model.predict(patches, verbose=0)

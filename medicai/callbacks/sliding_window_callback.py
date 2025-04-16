@@ -2,7 +2,7 @@ from medicai.utils import hide_warnings
 
 hide_warnings()
 
-
+from keras import ops
 from keras import callbacks
 
 from medicai.utils.inference import SlidingWindowInference
@@ -115,9 +115,10 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
 
             for x, y in self.dataset:  # (bs, d, h, w, channel)
                 y_pred = self.swi(x)
-                self._metrics.update_state(y, y_pred)
+                self._metrics.update_state(ops.convert_to_tensor(y), ops.convert_to_tensor(y_pred))
 
-            score = self._metrics.result().numpy()
+            score_result = self._metrics.result()
+            score = float(ops.convert_to_numpy(score_result))
             print(f"Epoch {epoch+1}: Score = {score:.4f}")
 
             # Save model if Dice score improves
