@@ -6,5 +6,5 @@
 - [BraTS to TFRecord](https://www.kaggle.com/code/ipythonx/brats-nii-to-tfrecord)
 
 **Training Workflow**
-- [COVID-19 CT 3D Image Segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
+- [COVID-19 CT 3D Image Segmentation](covid19.ct.segment.ipynb)
 - [CT Scan 3D Image Classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
