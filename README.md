@@ -1,33 +1,93 @@
 
-![](assets/logo.jpg)
 
-[![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query)
+<img src="assets/logo.jpg" width="500"/>
 
 
-![Static Badge](https://img.shields.io/badge/keras-3.9.0-darkred?style=flat) ![Static Badge](https://img.shields.io/badge/tensorflow-2.19.0-orange?style=flat) ![Static Badge](https://img.shields.io/badge/torch-2.6.0-red?style=flat)
+[![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query) 
 
-**Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical image analysis using machine learning techniques. It provides seamless compatibility with multiple backends, allowing models to run on `tensorflow`, `torch`, and `jax`.
+![Static Badge](https://img.shields.io/badge/keras-3.9.0-darkred?style=flat) ![Static Badge](https://img.shields.io/badge/tensorflow-2.19.0-orange?style=flat) ![Static Badge](https://img.shields.io/badge/torch-2.6.0-red?style=flat) ![Static Badge](https://img.shields.io/badge/jax-0.4.23-%233399ff)
 
-# Installation
+**Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical image analysis using machine learning techniques. Its core strengths include:
+
+- **Backend Agnostic:** Compatible with `tensorflow`, `torch`, and `jax`.
+- **User-Friendly API:** High-level interface for transformations and model creation.
+- **Scalable Execution:** Supports training and inference on **single/multi-GPU** and **TPU-VM** setups.
+- **Essential Components:** Includes standard metrics and losses, such as Dice.
+- **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data
+
+
+# 📋 Table of Contents
+1. [Installation](#-installation)
+2. [Guides](#-guides)
+3. [Documentation](#-documentation)
+4. [Acknowledgements](#-acknowledgements)
+5. [Citation](#-citation)
+
+
+# 🛠 Installation
+
+PyPI version:
 
 ```bash
-pip install medicai
+!pip install medicai
 ```
 
-# Guide
+Installing from source GitHub:
 
-![](assets/covid.gif)
+```bash
+!pip install git+https://github.com/innat/medic-ai.git
+```
 
-- [3D transformation](https://innat.github.io/medic-ai/transformations/manage-transformations/)
-- [3D classification](https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification)
-- [3D segmentation](https://www.kaggle.com/code/ipythonx/medicai-3d-image-segmentation)
+# 💡 Guides
 
+**Segmentation**: Available guides for 3D segmentation task.
 
+| Task | GitHub | Kaggle | View |
+|----------|----------|----------|----------|
+| Covid-19 (multi-class)   | <a target="_blank" href="notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-covid-19-3d-image-segmentation/notebook"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     | <img src="assets/covid.gif" width="200"/>    |
+| BTCV (multi-class)    | coming soon   | coming soon    | n/a     |
+| BraTS (multi-label)    | coming soon     | coming soon     | n/a     |
+| BraTS-tpu-vm    | coming soon     | coming soon     | n/a     |
+| spleen (binary)   | coming soon     | coming soon     | n/a     |
 
-# Acknowledgements
+**Classification**: Available guides for 3D classification task.
+
+| Task (Classification) | GitHub | Kaggle |
+|----------|----------|----------|
+| Covid-19-CT (binary)   | n/a      | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
+|
+
+# 📚 Documentation
+
+To learn more about **model**, **transformation**, and **training**, please visit official documentation: [`medicai/docs`](https://innat.github.io/medic-ai/)
+
+# 🤝 Contributing
+
+1. Install `medicai` from soruce:
+
+```bash
+!git clone https://github.com/innat/medic-ai
+%cd medic-ai
+!pip install keras -qU
+!pip install -e .
+%cd ..
+```
+
+Add your contribution with test code.
+
+2. Run test code as:
+
+```
+python -m pytest test/
+
+# or, only one your new_method
+python -m pytest -k new_method
+```
+
+# 🙏 Acknowledgements
 
 This project is greatly inspired by [MONAI](https://monai.io/).
 
-# Citation
+# 📝 Citation
 
 If you use `medicai` in your research or educational purposes, please cite it using the metadata from our [`CITATION.cff`](https://github.com/innat/medic-ai/blob/main/CITATION.cff) file.
