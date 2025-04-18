@@ -55,7 +55,7 @@ Installing from source GitHub:
 | Task (Classification) | GitHub | Kaggle |
 |----------|----------|----------|
 | Covid-19-CT (binary)   | n/a      | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-|
+
 
 # 📚 Documentation
 
