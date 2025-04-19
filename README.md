@@ -62,6 +62,8 @@ To learn more about **model**, **transformation**, and **training**, please visi
 
 # 🤝 Contributing
 
+Please refer to the current [roadmap](https://github.com/innat/medic-ai/wiki/Roadmap) for an overview of the project. Feel free to explore anything that interests you. If you have suggestions or ideas, I’d appreciate it if you could open a [GitHub issue](https://github.com/innat/medic-ai/issues/new/choose) so we can discuss them further.
+
 1. Install `medicai` from soruce:
 
 ```bash
@@ -72,7 +74,7 @@ To learn more about **model**, **transformation**, and **training**, please visi
 %cd ..
 ```
 
-Add your contribution with test code.
+Add your contribution and implement relevant test code.
 
 2. Run test code as:
 
