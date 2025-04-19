@@ -24,6 +24,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         cval=0.0,
         roi_weight_map=0.8,
         save_path="model.weights.h5",
+        logging=False,
     ):
         """Initializes the SlidingWindowInferenceCallback.
 
@@ -65,6 +66,8 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
             save_path (str): File path to save the best model weights.
                 The model weights will be saved if the evaluated metric on the
                 inference dataset improves. Default is "model.weights.h5".
+            logging (bool): If true, the metric score will be added to Keras
+                training logs. Default is False.
         """
         super().__init__()
         self._model = model
@@ -81,6 +84,7 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         self.sigma_scale = sigma_scale
         self.cval = cval
         self.roi_weight_map = roi_weight_map
+        self.logging = logging
         self.best_score = -float("inf")  # Initialize best score
 
         self.swi = SlidingWindowInference(
@@ -126,4 +130,5 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
                 self.model.save_weights(self.save_path)
                 print(f"New best score! Model saved to {self.save_path}")
 
-            logs[f"{self._metrics.name}"] = score
+            if self.logging:
+                logs[f"{self._metrics.name}"] = score
