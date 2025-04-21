@@ -201,6 +201,7 @@ def sliding_window_inference(
             patch_list.append(patch)
         patches = np.concatenate(patch_list, axis=0)  # Stack patches along batch dimension
 
+        # GitHub: https://github.com/keras-team/keras/issues/21167
         # padded if needed - its useful for XLA complilation to support tpu or jax backend.
         bs_actual = patches.shape[0]
         bs_target = sw_batch_size
