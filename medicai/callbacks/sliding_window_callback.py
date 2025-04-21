@@ -114,19 +114,11 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
         if (epoch + 1) % self.interval == 0:
             print(f"\nEpoch {epoch+1}: Running inference...")
 
-            all_y_true = []
-            all_y_preds = []
-            self._metrics.reset_state()  # Reseting metric before evaluation
+            self._metrics.reset_state()  # Reset metric before evaluation
 
             for x, y in self.dataset:  # (bs, d, h, w, channel)
                 y_pred = self.swi(x)
-                all_y_preds.append(ops.convert_to_numpy(y_pred))
-                all_y_true.append(ops.convert_to_numpy(y))
-
-            # Convert gathered lists to tensors
-            gathered_y_pred = ops.convert_to_tensor(ops.concatenate(all_y_preds, axis=0))
-            gathered_y_true = ops.convert_to_tensor(ops.concatenate(all_y_true, axis=0))
-            self._metrics.update_state(gathered_y_true, gathered_y_pred)
+                self._metrics.update_state(ops.convert_to_tensor(y), ops.convert_to_tensor(y_pred))
 
             score_result = self._metrics.result()
             score = float(ops.convert_to_numpy(score_result))
