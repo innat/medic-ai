@@ -132,3 +132,6 @@ class SlidingWindowInferenceCallback(callbacks.Callback):
 
             if self.logging:
                 logs[f"swi_{self._metrics.name}"] = score
+        else:
+            # By this, CSV callback won't complain if used!
+            logs[f"swi_{self._metrics.name}"] = 0.0
