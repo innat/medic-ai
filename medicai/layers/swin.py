@@ -146,6 +146,27 @@ class SwinPatchingAndEmbedding(keras.Model):
             x = self.norm(x)
 
         return x
+    
+    def compute_output_shape(self, input_shape):
+        batch_size, depth, height, width, _ = input_shape
+ 
+        # Compute padding
+        pad_d = self._compute_padding(depth, self.patch_size[0])[1]
+        pad_h = self._compute_padding(height, self.patch_size[1])[1]
+        pad_w = self._compute_padding(width, self.patch_size[2])[1]
+
+        # Add padding
+        d_padded = depth + pad_d
+        h_padded = height + pad_h
+        w_padded = width + pad_w
+
+        # Output shape after Conv3D with stride = patch_size
+        d_out = d_padded // self.patch_size[0]
+        h_out = h_padded // self.patch_size[1]
+        w_out = w_padded // self.patch_size[2]
+
+        return (batch_size, d_out, h_out, w_out, self.embed_dim)
+
 
     def get_config(self):
         config = super().get_config()
