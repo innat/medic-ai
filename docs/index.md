@@ -8,9 +8,7 @@
 ## Installation
 
 ```bash
-git clone https://github.com/innat/medic-ai
-cd medic-ai
-pip install . -q
+pip install medicai
 ```
 
 ## Available Features
@@ -28,9 +26,10 @@ The `medicai` library provides a range of features for medical image processing,
     - `Spacing` – Resamples the image to a target voxel spacing.
     - `Orientation` – Standardizes image orientation.
 - Augmentations for Robustness:
-     - `RandRotate90` – Randomly rotates images by 90 degrees.
+    - `RandRotate90` – Randomly rotates images by 90 degrees.
     - `RandShiftIntensity` – Randomly shifts intensity values.
     - `RandFlip` – Randomly flips images along specified axes.
+    - `RandomSpatialCrop` - Randomly crops a region of interest (ROI).
 - Pipeline Composition:
      - `Compose` – Chains multiple transformations into a single pipeline.
 
