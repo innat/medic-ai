@@ -557,7 +557,7 @@
 
   <h1>Transformation</h1>
 
-<p>Transformation acts as a prprocessing and augmentation layers for model training. For 3D transformation, the expected format is: <code>depth, height, width, channel</code>. The transformation are implemented for a single sample. All the transformations are implemented using <code>tensorflow</code> in order to able to run with <code>tf.data</code> API with <code>keras</code> multi-backend library.</p>
+<p>Transformation acts as a prprocessing and augmentation layers for model training. In <code>medicai</code> for 3D transformation, the expected format is: <code>depth, height, width, channel</code>. The transformation are implemented for a single sample. All the transformations are implemented using <code>tensorflow</code> in order to able to run with <code>tf.data</code> API with <code>keras</code> multi-backend library.</p>
 <div class="highlight"><pre><span></span><code><span class="n">img_path</span> <span class="o">=</span> <span class="s1">&#39;images/coronacases_001.nii.gz&#39;</span>
 <span class="n">mask_path</span> <span class="o">=</span> <span class="s1">&#39;masks/coronacases_001.nii.gz&#39;</span>
 

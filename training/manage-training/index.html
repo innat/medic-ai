@@ -75,11 +75,6 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
-        
-        <a href="#classification" class="md-skip">
-          Skip to content
-        </a>
-      
     </div>
     <div data-md-component="announce">
       
@@ -441,19 +436,6 @@
       
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Training
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -465,41 +447,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#classification" class="md-nav__link">
-    <span class="md-ellipsis">
-      Classification
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#segmentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Segmentation
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -548,304 +495,56 @@
 
   <h1>Training</h1>
 
-<h2 id="classification">Classification</h2>
-<p>A high-level overview of the 3D classification process using <code>medicai</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;KERAS_BACKEND&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tensorflow&quot;</span> <span class="c1"># tensorflow, torch</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">keras</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinTransformer</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">Compose</span><span class="p">,</span>
-    <span class="n">ScaleIntensityRange</span><span class="p">,</span>
-    <span class="n">RandRotate90</span><span class="p">,</span>
-    <span class="n">Resize</span>
-<span class="p">)</span>
-</code></pre></div>
-<p><strong>Transformation</strong></p>
-<p>Import processing and augmentation operations for training, while using only processing operations for validation.</p>
-<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">train_transformation</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">}</span>
-    <span class="n">pipeline</span> <span class="o">=</span> <span class="n">Compose</span><span class="p">(</span>
-        <span class="p">[</span>
-            <span class="n">ScaleIntensityRange</span><span class="p">(</span>
-                <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">a_min</span><span class="o">=-</span><span class="mi">175</span><span class="p">,</span> <span class="n">a_max</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span> <span class="n">b_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">b_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">True</span>
-            <span class="p">),</span>
-            <span class="n">Resize</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">mode</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;bilinear&#39;</span><span class="p">],</span> <span class="n">spatial_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span><span class="mi">96</span><span class="p">,</span><span class="mi">96</span><span class="p">)),</span>
-            <span class="n">RandRotate90</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">max_k</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">spatial_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-        <span class="p">]</span>
-    <span class="p">)</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">val_transformation</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">label</span><span class="p">):</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">label</span><span class="p">}</span>
-    <span class="n">pipeline</span> <span class="o">=</span> <span class="n">Compose</span><span class="p">(</span>
-        <span class="p">[</span>
-            <span class="n">ScaleIntensityRange</span><span class="p">(</span>
-                <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">a_min</span><span class="o">=-</span><span class="mi">175</span><span class="p">,</span> <span class="n">a_max</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span> <span class="n">b_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">b_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">clip</span><span class="o">=</span><span class="kc">True</span>
-            <span class="p">),</span>
-            <span class="n">Resize</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">mode</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;bilinear&#39;</span><span class="p">],</span> <span class="n">spatial_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span><span class="mi">96</span><span class="p">,</span><span class="mi">96</span><span class="p">)),</span>
-        <span class="p">]</span>
-    <span class="p">)</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
-</code></pre></div>
-<p><strong>Dataloader</strong></p>
-<p>Let's build the dataloader using <a href="https://keras.io/api/utils/python_utils/#pydataset-class"><code>keras.utils.PyDataset</code></a>.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">nibabel</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nib</span>
-
-<span class="k">class</span><span class="w"> </span><span class="nc">NiftiDataLoader</span><span class="p">(</span><span class="n">keras</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">PyDataset</span><span class="p">):</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> 
-        <span class="n">image_paths</span><span class="p">,</span> 
-        <span class="n">labels</span><span class="p">,</span>
-        <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
-        <span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span> 
-        <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> 
-        <span class="n">training</span><span class="o">=</span><span class="kc">True</span>
-    <span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">image_paths</span> <span class="o">=</span> <span class="n">image_paths</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">labels</span> <span class="o">=</span> <span class="n">labels</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="n">batch_size</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">dim</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">shuffle</span> <span class="o">=</span> <span class="n">shuffle</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">training</span> <span class="o">=</span> <span class="n">training</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">on_epoch_end</span><span class="p">()</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image_paths</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">))</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
-        <span class="n">indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">[</span><span class="n">index</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">:(</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">]</span>
-        <span class="n">image_paths_batch</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">image_paths</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>
-        <span class="n">labels_batch</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">indices</span><span class="p">]</span>
-
-        <span class="n">X</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">img_path</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">image_paths_batch</span><span class="p">,</span> <span class="n">labels_batch</span><span class="p">)):</span>
-            <span class="c1"># Load and preprocess image</span>
-            <span class="n">img</span> <span class="o">=</span> <span class="n">nib</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">img_path</span><span class="p">)</span><span class="o">.</span><span class="n">get_fdata</span><span class="p">()</span>
-
-            <span class="c1"># Add channel dimension if needed</span>
-            <span class="k">if</span> <span class="n">img</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
-                <span class="n">img</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
-                <span class="n">img</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">train_transformation</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">img</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="n">val_transformation</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">label</span><span class="p">)</span>
-
-            <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">img</span>
-            <span class="n">y</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">label</span>
-
-        <span class="k">return</span> <span class="n">X</span><span class="p">,</span> <span class="n">y</span>
-
-    <span class="k">def</span><span class="w"> </span><span class="nf">on_epoch_end</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">indices</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">image_paths</span><span class="p">))</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">shuffle</span><span class="p">:</span>
-            <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">indices</span><span class="p">)</span>
-
-
-<span class="n">train_loader</span> <span class="o">=</span> <span class="n">NiftiDataLoader</span><span class="p">(</span>
-    <span class="n">image_paths</span><span class="o">=</span><span class="n">X_train</span><span class="p">,</span>
-    <span class="n">labels</span><span class="o">=</span><span class="n">y_train</span><span class="p">,</span>
-    <span class="n">batch_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
-    <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-    <span class="n">training</span><span class="o">=</span><span class="kc">True</span>
-<span class="p">)</span>
-
-<span class="n">val_loader</span> <span class="o">=</span> <span class="n">NiftiDataLoader</span><span class="p">(</span>
-    <span class="n">image_paths</span><span class="o">=</span><span class="n">X_test</span><span class="p">,</span>
-    <span class="n">labels</span><span class="o">=</span><span class="n">y_test</span><span class="p">,</span>
-    <span class="n">batch_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
-    <span class="n">dim</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
-    <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="n">training</span><span class="o">=</span><span class="kc">False</span>
-<span class="p">)</span>
-</code></pre></div>
-<p><strong>Model</strong></p>
-<p>Create the model and compile it with the necessary loss function and metrics.</p>
-<div class="highlight"><pre><span></span><code><span class="n">model</span> <span class="o">=</span> <span class="n">SwinTransformer</span><span class="p">(</span>
-    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-    <span class="n">num_classes</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-    <span class="n">classifier_activation</span><span class="o">=</span><span class="s1">&#39;sigmoid&#39;</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
-    <span class="n">optimizer</span><span class="o">=</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span>
-        <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
-    <span class="p">),</span>
-    <span class="n">loss</span><span class="o">=</span><span class="n">keras</span><span class="o">.</span><span class="n">losses</span><span class="o">.</span><span class="n">BinaryCrossentropy</span><span class="p">(</span><span class="n">from_logits</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
-    <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;acc&quot;</span><span class="p">],</span>
-    <span class="n">jit_compile</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<span class="p">)</span>
-</code></pre></div>
-<p><strong>Training</strong></p>
-<div class="highlight"><pre><span></span><code><span class="n">history</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
-    <span class="n">train_loader</span><span class="p">,</span> 
-    <span class="n">epochs</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
-    <span class="n">validation_data</span><span class="o">=</span><span class="n">val_loader</span>
-<span class="p">)</span>
-</code></pre></div>
-<h2 id="segmentation">Segmentation</h2>
-<p>A high-level overview of the 3D segmentation process using <code>medicai</code>.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">keras</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.metrics</span><span class="w"> </span><span class="kn">import</span> <span class="n">DiceMetric</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.losses</span><span class="w"> </span><span class="kn">import</span> <span class="n">SparseDiceCELoss</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinUNETR</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-    <span class="n">Compose</span><span class="p">,</span>
-    <span class="n">ScaleIntensityRange</span><span class="p">,</span>
-    <span class="n">CropForeground</span><span class="p">,</span>
-    <span class="n">RandCropByPosNegLabel</span><span class="p">,</span>
-    <span class="n">Spacing</span><span class="p">,</span>
-    <span class="n">Orientation</span><span class="p">,</span>
-    <span class="n">RandShiftIntensity</span><span class="p">,</span>
-    <span class="n">RandRotate90</span><span class="p">,</span>
-    <span class="n">RandFlip</span>
-<span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.callbacks</span><span class="w"> </span><span class="kn">import</span> <span class="n">SlidingWindowInferenceCallback</span>
-</code></pre></div>
-<p><strong>Transformation</strong></p>
-<p>Import processing and augmentation operations for training, while using only processing operations for validation.</p>
-<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">train_transformation</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
-    <span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;affine&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image_affine&quot;</span><span class="p">]}</span> <span class="c1"># Since image and label affine are the same</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]}</span>
-    <span class="n">pipeline</span> <span class="o">=</span> <span class="n">Compose</span><span class="p">([</span>
-        <span class="n">ScaleIntensityRange</span><span class="p">(</span>
-            <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span>
-            <span class="n">a_min</span><span class="o">=-</span><span class="mi">175</span><span class="p">,</span>
-            <span class="n">a_max</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span>
-            <span class="n">b_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-            <span class="n">b_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-            <span class="n">clip</span><span class="o">=</span><span class="kc">True</span>
-        <span class="p">),</span>
-        <span class="n">CropForeground</span><span class="p">(</span>
-            <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span>
-            <span class="n">source_key</span><span class="o">=</span><span class="s2">&quot;image&quot;</span>
-        <span class="p">),</span>
-        <span class="n">Orientation</span><span class="p">(</span><span class="n">keys</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span> <span class="n">axcodes</span> <span class="o">=</span> <span class="s2">&quot;RAS&quot;</span><span class="p">),</span>
-        <span class="n">Spacing</span><span class="p">(</span><span class="n">pixdim</span><span class="o">=</span><span class="p">(</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">),</span> <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">]),</span>
-        <span class="n">RandCropByPosNegLabel</span><span class="p">(</span>
-            <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span>
-            <span class="n">spatial_size</span><span class="o">=</span><span class="p">[</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">],</span> 
-            <span class="n">pos</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
-            <span class="n">neg</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> 
-            <span class="n">num_samples</span><span class="o">=</span><span class="mi">1</span>
-        <span class="p">),</span>
-        <span class="n">RandFlip</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">spatial_axis</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
-        <span class="n">RandFlip</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">spatial_axis</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
-        <span class="n">RandFlip</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">spatial_axis</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
-        <span class="n">RandRotate90</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span> <span class="n">max_k</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">spatial_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)),</span>
-        <span class="n">RandShiftIntensity</span><span class="p">(</span><span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">offsets</span><span class="o">=</span><span class="mf">0.10</span><span class="p">,</span> <span class="n">prob</span><span class="o">=</span><span class="mf">0.50</span><span class="p">)</span>
-    <span class="p">])</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">val_transformation</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
-    <span class="n">meta</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;affine&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image_affine&quot;</span><span class="p">]}</span> <span class="c1"># Since image and label affine are the same</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="s2">&quot;label&quot;</span><span class="p">:</span> <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]}</span>
-    <span class="n">pipeline</span> <span class="o">=</span> <span class="n">Compose</span><span class="p">([</span>
-        <span class="n">ScaleIntensityRange</span><span class="p">(</span>
-            <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span>
-            <span class="n">a_min</span><span class="o">=-</span><span class="mi">175</span><span class="p">,</span>
-            <span class="n">a_max</span><span class="o">=</span><span class="mi">250</span><span class="p">,</span>
-            <span class="n">b_min</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-            <span class="n">b_max</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-            <span class="n">clip</span><span class="o">=</span><span class="kc">True</span>
-        <span class="p">),</span>
-        <span class="n">CropForeground</span><span class="p">(</span>
-            <span class="n">keys</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span>
-            <span class="n">source_key</span><span class="o">=</span><span class="s2">&quot;image&quot;</span>
-        <span class="p">),</span>
-        <span class="n">Orientation</span><span class="p">(</span><span class="n">keys</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">),</span> <span class="n">axcodes</span> <span class="o">=</span> <span class="s2">&quot;RAS&quot;</span><span class="p">),</span>
-        <span class="n">Spacing</span><span class="p">(</span><span class="n">pixdim</span><span class="o">=</span><span class="p">(</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">),</span> <span class="n">keys</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">])</span>
-    <span class="p">])</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="n">pipeline</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">meta</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;image&quot;</span><span class="p">],</span> <span class="n">result</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span>
-</code></pre></div>
-<p><strong>Dataloader</strong></p>
-<p>Create the dataloader using <code>tf.data.TFRecordDataset</code> API. Generating <code>tfrecod</code> is shown <a href="https://www.kaggle.com/code/ipythonx/generate-3d-nii-to-tfrecord-dataset">here</a></p>
-<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">load_tfrecord_dataset</span><span class="p">(</span><span class="n">tfrecord_pattern</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">TFRecordDataset</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">io</span><span class="o">.</span><span class="n">gfile</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">tfrecord_pattern</span><span class="p">))</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">buffer_size</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span> <span class="k">if</span> <span class="n">shuffle</span> <span class="k">else</span> <span class="n">dataset</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">parse_tfrecord_fn</span><span class="p">,</span> <span class="n">num_parallel_calls</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">AUTOTUNE</span><span class="p">)</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">rearrange_shape</span><span class="p">,</span> <span class="n">num_parallel_calls</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">AUTOTUNE</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">shuffle</span><span class="p">:</span>
-        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">train_transformation</span><span class="p">,</span> <span class="n">num_parallel_calls</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">AUTOTUNE</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">val_transformation</span><span class="p">,</span> <span class="n">num_parallel_calls</span><span class="o">=</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">AUTOTUNE</span><span class="p">)</span>
-    <span class="n">dataset</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">batch</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span><span class="o">.</span><span class="n">prefetch</span><span class="p">(</span><span class="n">tf</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">AUTOTUNE</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">dataset</span>
-
-
-<span class="n">tfrecord_pattern</span> <span class="o">=</span> <span class="s2">&quot;1/tfrecords/</span><span class="si">{}</span><span class="s2">_shard_*.tfrec&quot;</span>
-
-<span class="n">train_ds</span> <span class="o">=</span> <span class="n">load_tfrecord_dataset</span><span class="p">(</span>
-    <span class="n">tfrecord_pattern</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;training&quot;</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">True</span>
-<span class="p">)</span>
-<span class="n">val_ds</span> <span class="o">=</span> <span class="n">load_tfrecord_dataset</span><span class="p">(</span>
-    <span class="n">tfrecord_pattern</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s2">&quot;validation&quot;</span><span class="p">),</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="kc">False</span>
-<span class="p">)</span>
-</code></pre></div>
-<p><strong>Model</strong></p>
-<p>Build the <code>SwinUNETR</code> model with the specified input shape and number of classes.</p>
-<div class="highlight"><pre><span></span><code><span class="n">num_classes</span><span class="o">=</span><span class="mi">4</span>
-<span class="n">model</span><span class="o">=</span><span class="n">SwinUNETR</span><span class="p">(</span>
-    <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span>
-    <span class="n">out_channels</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
-    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span>
-
-<span class="n">model</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
-    <span class="n">optimizer</span><span class="o">=</span><span class="n">keras</span><span class="o">.</span><span class="n">optimizers</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span>
-        <span class="n">learning_rate</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
-        <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span>
-    <span class="p">),</span>
-    <span class="n">loss</span><span class="o">=</span><span class="n">SparseDiceCELoss</span><span class="p">(</span><span class="n">from_logits</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-    <span class="n">metrics</span><span class="o">=</span><span class="p">[</span><span class="n">DiceMetric</span><span class="p">(</span>
-        <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
-        <span class="n">include_background</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">reduction</span><span class="o">=</span><span class="s2">&quot;mean&quot;</span><span class="p">,</span>
-        <span class="n">ignore_empty</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-        <span class="n">smooth</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s1">&#39;dice_score&#39;</span>
-    <span class="p">)],</span>
-    <span class="n">jit_compile</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-<span class="p">)</span>
-</code></pre></div>
-<p><strong>Sliding Window Inference Callback</strong></p>
-<p>The Sliding Window Inference callback provides a convenient method for processing large volumetric samples efficiently. Instead of processing the entire volume at once (which may exceed memory limits), the input is divided into smaller overlapping windows. Each window is inferred separately, and the outputs are stitched together to form the final prediction. This approach helps in handling large 3D medical images while optimizing memory usage and ensuring accurate predictions.</p>
-<p><div class="highlight"><pre><span></span><code><span class="n">swi_callback</span> <span class="o">=</span> <span class="n">SlidingWindowInferenceCallback</span><span class="p">(</span>
-    <span class="n">model</span><span class="p">,</span>
-    <span class="n">dataset</span><span class="o">=</span><span class="n">val_ds</span><span class="p">,</span> 
-    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
-    <span class="n">overlap</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
-    <span class="n">roi_size</span><span class="o">=</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
-    <span class="n">sw_batch_size</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
-    <span class="n">interval</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span> 
-    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;constant&quot;</span><span class="p">,</span>
-    <span class="n">padding_mode</span><span class="o">=</span><span class="s2">&quot;constant&quot;</span><span class="p">,</span>
-    <span class="n">sigma_scale</span><span class="o">=</span><span class="mf">0.125</span><span class="p">,</span>
-    <span class="n">cval</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
-    <span class="n">roi_weight_map</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span>
-    <span class="n">save_path</span><span class="o">=</span><span class="s2">&quot;model.weights.h5&quot;</span>
-<span class="p">)</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><span class="n">history</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span>
-    <span class="n">train_ds</span><span class="p">,</span> 
-    <span class="n">epochs</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span>
-    <span class="n">callbacks</span><span class="o">=</span><span class="p">[</span>
-        <span class="n">swi_callback</span>
-    <span class="p">]</span>
-<span class="p">)</span>
-</code></pre></div></p>
+<p>The following guides provide comprehensive, end-to-end examples covering data loading, model training, and evaluation workflows. You can use various types of data loaders, including <a href="https://www.tensorflow.org/api_docs/python/tf/data/Dataset"><code>tf.data.Dataset</code></a>, <a href="https://keras.io/api/utils/python_utils/#pydataset-class"><code>keras.utils.PyDataset</code></a>, <a href="https://pytorch.org/docs/stable/data.html"><code>torch.utils.data.DataLoader</code></a>, or even a custom Python generator function. These workflows are designed to be flexible and can run seamlessly on a single device or scale across multiple <strong>GPUs</strong> or <strong>TPUs</strong>, depending on your setup.</p>
+<p><strong>Segmentation</strong>: Available guides for 3D segmentation task.</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>GitHub</th>
+<th>Kaggle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Covid-19</td>
+<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-covid-19-3d-image-segmentation/notebook"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+</tr>
+<tr>
+<td>BTCV</td>
+<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/btcv.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-btcv-segmentation-in-keras/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+</tr>
+<tr>
+<td>BraTS</td>
+<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/brats.multi-gpu.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+</tr>
+<tr>
+<td>Spleen</td>
+<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/spleen.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-spleen-3d-segmentation-in-keras"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Classification</strong>: Available guides for 3D classification task.</p>
+<table>
+<thead>
+<tr>
+<th>Task (Classification)</th>
+<th>GitHub</th>
+<th>Kaggle</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Covid-19</td>
+<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+</tr>
+</tbody>
+</table>
 
 
 
