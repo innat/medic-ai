@@ -1,22 +1,10 @@
-import keras
 from keras import Model, layers
 
 from medicai.layers.decoder import UNetDecoder
-from medicai.models.densenet import DenseNet
-
-BACKBONE_ZOO = {
-    "densenet121": DenseNet,
-    "densenet169": DenseNet,
-    "densenet201": DenseNet,
-}
-BACKBONE_ARGS = {
-    "densenet121": [311, 139, 51, 4],  # 311, 139, 51, 4   309, 137, 49, 3
-    "densenet169": [365, 137, 49, 3],
-    "densenet201": [477, 137, 49, 3],
-}
+from medicai.utils.model_utils import BACKBONE_ZOO, KERAS_APPLICATION, SKIP_CONNECTION_ARGS
 
 
-def build_backbone(variant: str, input_shape, dim: int, **kwargs):
+def get_unet_backbone(variant: str, input_shape, dim: int, **kwargs):
     if dim == 3:
         # 3D Model
         if variant not in BACKBONE_ZOO:
@@ -29,11 +17,6 @@ def build_backbone(variant: str, input_shape, dim: int, **kwargs):
         )
     else:
         # 2D Keras applications
-        KERAS_APPLICATION = {
-            "densenet121": keras.applications.DenseNet121,
-            "densenet169": keras.applications.DenseNet169,
-            "densenet201": keras.applications.DenseNet201,
-        }
         if variant not in KERAS_APPLICATION:
             raise ValueError(f"2D variant '{variant}' not found.")
         return KERAS_APPLICATION[variant](
@@ -59,7 +42,7 @@ def UNet(
     ConvFinal = layers.Conv3D if dim == 3 else layers.Conv2D
 
     # Load backbone
-    base_model = build_backbone(
+    base_model = get_unet_backbone(
         variant=variant,
         input_shape=input_shape,
         dim=dim,
@@ -68,7 +51,7 @@ def UNet(
     inputs = base_model.input
 
     # Get skip connections
-    selected_layers = BACKBONE_ARGS[variant]
+    selected_layers = SKIP_CONNECTION_ARGS[variant]
     skip_layers = [
         (
             base_model.get_layer(name=i).output

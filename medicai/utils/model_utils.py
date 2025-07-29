@@ -79,3 +79,24 @@ def get_norm_layer(norm_name, **kwargs):
         return layers.GroupNormalization(**kwargs)
     else:
         raise ValueError(f"Unsupported normalization: {norm_name}")
+
+
+BACKBONE_ARGS = {
+    "densenet121": [6, 12, 24, 16],
+    "densenet169": [6, 12, 32, 32],
+    "densenet201": [6, 12, 48, 32],
+}
+
+SKIP_CONNECTION_ARGS = {
+    "densenet121": [309, 137, 49, 3],
+    "densenet169": [365, 137, 49, 3],
+    "densenet201": [477, 137, 49, 3],
+}
+
+BACKBONE_ZOO = {}
+
+KERAS_APPLICATION = {
+    "densenet121": keras.applications.DenseNet121,
+    "densenet169": keras.applications.DenseNet169,
+    "densenet201": keras.applications.DenseNet201,
+}

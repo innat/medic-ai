@@ -42,7 +42,7 @@ class DenseNet3D(keras.Model):
             input_tensor=inputs,
             name="densenet3d_backbone",
         )
-        encoder_outputs = encoder_model.output  # encoder_model(inputs)
+        encoder_outputs = encoder_model.output
 
         if include_top:
             x = GlobalAvgPool(name="avg_pool")(encoder_outputs)

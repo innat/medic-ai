@@ -1,21 +1,16 @@
 from keras.applications import DenseNet121, DenseNet169, DenseNet201
 
+from medicai.utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO, KERAS_APPLICATION
+
 from .densenet_3d import DenseNet3D
 
 
 def DenseNet2D(variant="densenet121", **kwargs):
     variant = variant.lower()
-
-    variant_map = {
-        "densenet121": DenseNet121,
-        "densenet169": DenseNet169,
-        "densenet201": DenseNet201,
-    }
-
-    model_fn = variant_map.get(variant)
+    model_fn = KERAS_APPLICATION.get(variant)
     if model_fn is None:
         raise ValueError(
-            f"Unknown DenseNet variant: {variant}. Choose from {list(variant_map.keys())}"
+            f"Unknown DenseNet variant: {variant}. Choose from {list(KERAS_APPLICATION.keys())}"
         )
     return model_fn(**kwargs)
 
@@ -23,8 +18,8 @@ def DenseNet2D(variant="densenet121", **kwargs):
 def DenseNet(*, input_shape, variant="densenet121", **kwargs):
     ndim = len(input_shape) - 1  # exclude channel dim
 
-    if variant not in BACKBONE_ARGS:
-        raise ValueError(f"Unknown variant {variant}. Must be one of {list(BACKBONE_ARGS.keys())}")
+    if variant not in BACKBONE_ZOO:
+        raise ValueError(f"Unknown variant {variant}. Must be one of {list(BACKBONE_ZOO.keys())}")
 
     blocks = BACKBONE_ARGS[variant]
 
@@ -36,13 +31,6 @@ def DenseNet(*, input_shape, variant="densenet121", **kwargs):
         raise ValueError(f"Unsupported input shape: {input_shape}")
 
 
-BACKBONE_ZOO = {
-    "densenet121": DenseNet,
-    "densenet169": DenseNet,
-    "densenet201": DenseNet,
-}
-BACKBONE_ARGS = {
-    "densenet121": [309, 137, 49, 3],
-    "densenet169": [365, 137, 49, 3],
-    "densenet201": [477, 137, 49, 3],
-}
+BACKBONE_ZOO["densenet121"] = DenseNet
+BACKBONE_ZOO["densenet169"] = DenseNet
+BACKBONE_ZOO["densenet201"] = DenseNet
