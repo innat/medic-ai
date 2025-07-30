@@ -15,6 +15,22 @@ def parse_model_inputs(input_shape, input_tensor, **kwargs):
 
 
 class DenseNet3DBackbone(keras.Model):
+    """
+    A 3D DenseNet backbone model without classification head.
+
+    Args:
+        blocks (list): Number of layers in each dense block.
+        input_shape (tuple): Input tensor shape, excluding batch size.
+        input_tensor (Tensor, optional): Optional input tensor.
+        growth_rate (int): Number of filters to add per dense layer.
+        bn_size (int): Bottleneck size for intermediate convolution layers.
+        compression (float): Compression factor in transition layers.
+        dropout_rate (float): Dropout rate after each dense layer.
+        include_rescaling (bool): Whether to include input rescaling layer.
+        name (str): Model name.
+        **kwargs: Additional keyword arguments for the base Model class.
+    """
+
     def __init__(
         self,
         *,

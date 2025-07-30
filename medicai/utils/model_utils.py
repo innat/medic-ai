@@ -1,3 +1,5 @@
+from functools import partial
+
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
@@ -96,7 +98,7 @@ SKIP_CONNECTION_ARGS = {
 BACKBONE_ZOO = {}
 
 KERAS_APPLICATION = {
-    "densenet121": keras.applications.DenseNet121,
-    "densenet169": keras.applications.DenseNet169,
-    "densenet201": keras.applications.DenseNet201,
+    "densenet121": partial(keras.applications.DenseNet121, weights=None),
+    "densenet169": partial(keras.applications.DenseNet169, weights=None),
+    "densenet201": partial(keras.applications.DenseNet201, weights=None),
 }

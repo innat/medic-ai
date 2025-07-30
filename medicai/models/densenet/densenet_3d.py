@@ -6,6 +6,25 @@ from .densenet_backbone import DenseNet3DBackbone, parse_model_inputs
 
 @keras.saving.register_keras_serializable(package="densenet3d.model")
 class DenseNet3D(keras.Model):
+    """
+    3D variant of DenseNet architecture for volumetric data.
+
+    Args:
+        variant (str): DenseNet variant to use, e.g., 'densenet121', 'densenet169'.
+        include_rescaling (bool): Whether to include input rescaling layer.
+        include_top (bool): Whether to include the classification head.
+        num_classes (int): Number of output classes if `include_top=True`.
+        pooling (str or None): Optional global pooling mode for feature extraction ('avg' or 'max').
+        input_shape (tuple): Input shape excluding batch size, e.g., (depth, height, width, channels).
+        input_tensor (tf.Tensor): Optional Keras tensor to use as image input.
+        classifier_activation (str): Activation for classification layer if `include_top=True`.
+        name (str): Optional model name.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`.
+
+    Attributes:
+        encoder (keras.Model): Backbone feature extractor (DenseNet3DBackbone).
+    """
+
     def __init__(
         self,
         *,
