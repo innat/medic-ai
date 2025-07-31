@@ -52,8 +52,8 @@ def DenseNet(*, input_shape, variant="densenet121", num_classes=1000, **kwargs):
     """
     ndim = len(input_shape) - 1  # exclude channel dim
 
-    if variant not in BACKBONE_ZOO:
-        raise ValueError(f"Unknown variant {variant}. Must be one of {list(BACKBONE_ZOO.keys())}")
+    if variant not in BACKBONE_ARGS:
+        raise ValueError(f"Unknown variant {variant}. Must be one of {list(BACKBONE_ARGS.keys())}")
 
     blocks = BACKBONE_ARGS[variant]
 

@@ -32,7 +32,7 @@ def Conv3x3BnReLU(filters, dim=2, use_batchnorm=True):
     return apply
 
 
-def DecoderBlock(filters, dim=2, block_type="upsample", use_batchnorm=True):
+def DecoderBlock(filters, dim=2, block_type="upsampling", use_batchnorm=True):
     """
     Builds a decoder block that upsamples an input tensor and optionally concatenates with a skip connection.
 

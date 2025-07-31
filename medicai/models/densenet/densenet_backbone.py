@@ -78,11 +78,11 @@ class DenseNet3DBackbone(keras.Model):
 
         self.blocks = blocks
         self.input_tensor = input_tensor
-        self.growth_rate = (growth_rate,)
-        self.bn_size = (bn_size,)
-        self.compression = (compression,)
-        self.dropout_rate = (dropout_rate,)
-        self.include_rescaling = (include_rescaling,)
+        self.growth_rate = growth_rate
+        self.bn_size = bn_size
+        self.compression = compression
+        self.dropout_rate = dropout_rate
+        self.include_rescaling = include_rescaling
         self.name = name
 
     def get_config(self):

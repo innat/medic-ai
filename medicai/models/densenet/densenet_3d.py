@@ -2,7 +2,7 @@ import keras
 from keras import layers
 
 from .densenet_backbone import DenseNet3DBackbone, parse_model_inputs
-
+from ...utils.model_utils import BACKBONE_ARGS
 
 @keras.saving.register_keras_serializable(package="densenet3d.model")
 class DenseNet3D(keras.Model):
@@ -39,8 +39,6 @@ class DenseNet3D(keras.Model):
         name=None,
         **kwargs,
     ):
-
-        from .densenet_model import BACKBONE_ARGS
 
         if variant not in BACKBONE_ARGS:
             raise ValueError(
@@ -87,6 +85,7 @@ class DenseNet3D(keras.Model):
     def get_config(self):
         return {
             "variant": self.variant,
+            "input_shape": self.input_shape[1:],
             "include_rescaling": self.include_rescaling,
             "include_top": self.include_top,
             "num_classes": self.num_classes,
