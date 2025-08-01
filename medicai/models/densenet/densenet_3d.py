@@ -1,8 +1,9 @@
 import keras
 from keras import layers
 
-from .densenet_backbone import DenseNet3DBackbone, parse_model_inputs
 from ...utils.model_utils import BACKBONE_ARGS
+from .densenet_backbone import DenseNet3DBackbone, parse_model_inputs
+
 
 @keras.saving.register_keras_serializable(package="densenet3d.model")
 class DenseNet3D(keras.Model):

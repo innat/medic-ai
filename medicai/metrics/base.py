@@ -122,11 +122,15 @@ class BaseDiceMetric(Metric):
             y_true_processed, y_pred_processed
         )
 
+        # Dynamically determine the spatial dimensions to sum over.
+        # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
+        spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
+
         # Calculate metrics
-        intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C]
-        union = y_true_processed + y_pred_processed  # [B, D, H, W, C]
-        gt_sum = ops.sum(y_true_processed, axis=[1, 2, 3])  # [B, C]
-        pred_sum = ops.sum(y_pred_processed, axis=[1, 2, 3])  # [B, C]
+        intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        union = y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
+        pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
 
         # Valid samples mask
         if self.ignore_empty:
@@ -142,8 +146,8 @@ class BaseDiceMetric(Metric):
         valid_mask_float = ops.cast(valid_mask, "float32")  # [B, C]
 
         # Apply mask to metrics
-        masked_intersection = ops.sum(intersection, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
-        masked_union = ops.sum(union, axis=[1, 2, 3]) * valid_mask_float  # [B, C]
+        masked_intersection = ops.sum(intersection, axis=spatial_dims) * valid_mask_float  # [B, C]
+        masked_union = ops.sum(union, axis=spatial_dims) * valid_mask_float  # [B, C]
 
         # Update state variables
         self.total_intersection.assign_add(ops.sum(masked_intersection, axis=0))  # [C]

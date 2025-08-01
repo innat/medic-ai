@@ -69,7 +69,7 @@ def UNet(
     Raises:
         ValueError: If input shape is not compatible with either 2D or 3D model.
     """
-    
+
     if len(input_shape) == 4:
         dim = 3
     elif len(input_shape) == 3:
@@ -78,7 +78,7 @@ def UNet(
         raise ValueError(
             f"Unsupported input shape rank. Expected 3 (H, W, C) or 4 (D, H, W, C), but got rank {len(input_shape)}."
         )
-    
+
     ConvFinal = layers.Conv3D if dim == 3 else layers.Conv2D
 
     # Load backbone
