@@ -119,10 +119,16 @@ class BaseDiceLoss(keras.losses.Loss):
             Tensor: The Dice loss.
         """
         y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
-        intersection = ops.sum(y_true * y_pred, axis=[1, 2, 3])
-        union = ops.sum(y_true, axis=[1, 2, 3]) + ops.sum(
-            ops.square(y_pred) if self.squared_pred else y_pred, axis=[1, 2, 3]
+
+        # Dynamically determine the spatial dimensions to sum over.
+        # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
+        spatial_dims = list(range(1, len(y_pred.shape) - 1))
+
+        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
+        union = ops.sum(y_true, axis=spatial_dims) + ops.sum(
+            ops.square(y_pred) if self.squared_pred else y_pred, axis=spatial_dims
         )
+
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - ops.mean(dice_score)
 
