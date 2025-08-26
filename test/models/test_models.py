@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from medicai.models import DenseNet, SwinTransformer, SwinUNETR, UNet, UNETR, ViT
+from medicai.models import UNETR, DenseNet, SwinTransformer, SwinUNETR, UNet, ViT
 
 
 def test_unet():
@@ -52,6 +52,7 @@ def test_swin_transformer():
     output = model(dummy_input)
     assert output.shape == (1, num_classes)
 
+
 def test_unetr():
     batch_size = 1
     D, H, W, C = 96, 96, 96, 1
@@ -69,6 +70,7 @@ def test_unetr():
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 1)
     assert output.shape == (1, C)
+
 
 def test_vit():
     batch_size = 4
@@ -94,7 +96,7 @@ def test_vit():
         intermediate_dim=None,
         classifier_activation=None,
         dropout=0.1,
-        name='Vit3D'
+        name="Vit3D",
     )
     x3d = tf.random.normal((batch_size, D, H, W, C))
     y3d = vit3d(x3d)

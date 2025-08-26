@@ -1,5 +1,7 @@
 from keras import layers
 
+from medicai.utils import get_conv_layer, get_reshaping_layer
+
 
 def Conv3x3BnReLU(filters, spatial_dims=2, use_batchnorm=True):
     """
@@ -13,12 +15,12 @@ def Conv3x3BnReLU(filters, spatial_dims=2, use_batchnorm=True):
     Returns:
         function: A function that applies the convolutional block to an input tensor.
     """
-    Conv = layers.Conv3D if spatial_dims == 3 else layers.Conv2D
     BatchNorm = layers.BatchNormalization
 
     def apply(x):
-        x = Conv(
-            filters,
+        x = get_conv_layer(
+            spatial_dims,
+            filters=filters,
             kernel_size=3,
             strides=1,
             padding="same",
@@ -45,14 +47,19 @@ def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm
     Returns:
         function: A function that applies the decoder block to a pair of input and optional skip tensors.
     """
-    Transpose = layers.Conv3DTranspose if spatial_dims == 3 else layers.Conv2DTranspose
-    UpSampling = layers.UpSampling3D if spatial_dims == 3 else layers.UpSampling2D
 
     def apply(x, skip=None):
         if block_type == "transpose":
-            x = Transpose(filters, kernel_size=4, strides=2, padding="same")(x)
+            x = get_conv_layer(
+                spatial_dims,
+                transpose=True,
+                filters=filters,
+                kernel_size=4,
+                strides=2,
+                padding="same",
+            )(x)
         else:
-            x = UpSampling(size=2)(x)
+            x = get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
 
         if skip is not None:
             x = layers.Concatenate(axis=-1)([x, skip])

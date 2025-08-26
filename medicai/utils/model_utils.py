@@ -9,6 +9,23 @@ from keras import activations, layers
 
 
 def get_conv_layer(spatial_dims, transpose=False, **kwargs):
+    """Returns a convolutional layer (2D or 3D) or its transposed version.
+
+    Args:
+        spatial_dims (int): Number of spatial dimensions. Must be 2 or 3.
+        transpose (bool): If True, returns a ConvNDTranspose layer
+                          (Conv2DTranspose or Conv3DTranspose).
+                          If False, returns a standard ConvND layer.
+        **kwargs: Additional keyword arguments passed to the layer constructor
+                  (e.g., filters, kernel_size, strides, padding, activation).
+
+    Returns:
+        tf.keras.layers.Layer: The corresponding convolutional or transposed convolutional layer.
+
+    Example:
+        conv2d = get_conv_layer(2, filters=32, kernel_size=3, padding='same')
+        conv3d_t = get_conv_layer(3, transpose=True, filters=16, kernel_size=3, strides=2)
+    """
     ConvND = {
         2: layers.Conv2D,
         3: layers.Conv3D,
@@ -20,6 +37,67 @@ def get_conv_layer(spatial_dims, transpose=False, **kwargs):
 
     ConvClass = ConvNDTranspose[spatial_dims] if transpose else ConvND[spatial_dims]
     return ConvClass(**kwargs)
+
+
+def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
+    """Returns a reshaping layer (UpSampling or ZeroPadding)
+    for 2D or 3D inputs.
+
+    Args:
+        spatial_dims (int): 2 or 3, determines if 2D or 3D layer is used.
+        layer_type (str): "upsampling" or "padding".
+        **kwargs: Additional arguments passed to the selected layer.
+    """
+    assert spatial_dims in (2, 3), "spatial_dims must be 2 or 3"
+    assert layer_type in ("upsampling", "padding"), "layer_type must be 'upsampling' or 'padding'"
+
+    layers_map = {
+        "upsampling": {2: layers.UpSampling2D, 3: layers.UpSampling3D},
+        "padding": {2: layers.ZeroPadding2D, 3: layers.ZeroPadding3D},
+    }
+
+    LayerClass = layers_map[layer_type][spatial_dims]
+    return LayerClass(**kwargs)
+
+
+def get_pooling_layer(spatial_dims, pool_type, global_pool=False, **kwargs):
+    """
+    Returns a pooling layer (Max or Average) for 1D, 2D, or 3D inputs, including global pooling.
+
+    Args:
+        spatial_dims (int): Number of spatial dimensions. Must be 1, 2, or 3.
+        pool_type (str): Type of pooling. Must be "max" or "avg".
+        global_pool (bool): If True, returns a Global pooling layer (GlobalMaxPooling or GlobalAveragePooling).
+                            If False, returns regular pooling (MaxPooling or AveragePooling).
+        **kwargs: Additional keyword arguments passed to the layer constructor
+                  (e.g., pool_size, strides, padding).
+
+    Returns:
+        keras.layers.Layer: The corresponding Keras pooling layer.
+
+    Example:
+        # 2D max pooling
+        pool2d = get_pooling_layer(2, "max", pool_size=(2, 2), strides=(2, 2))
+
+        # Global average pooling 3D
+        gap3d = get_pooling_layer(3, "average", global_pool=True)
+    """
+    assert spatial_dims in (2, 3), "spatial_dims must be 1, 2, or 3"
+    assert pool_type in ("max", "avg"), "pool_type must be 'max' or 'average'"
+
+    if global_pool:
+        layers_map = {
+            "max": {2: layers.GlobalMaxPooling2D, 3: layers.GlobalMaxPooling3D},
+            "avg": {2: layers.GlobalAveragePooling2D, 3: layers.GlobalAveragePooling3D},
+        }
+    else:
+        layers_map = {
+            "max": {2: layers.MaxPooling2D, 3: layers.MaxPooling3D},
+            "avg": {2: layers.AveragePooling2D, 3: layers.AveragePooling3D},
+        }
+
+    LayerClass = layers_map[pool_type][spatial_dims]
+    return LayerClass(**kwargs)
 
 
 def get_act_layer(name, **kwargs):
