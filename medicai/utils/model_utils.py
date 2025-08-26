@@ -8,6 +8,20 @@ import keras
 from keras import activations, layers
 
 
+def get_conv_layer(spatial_dims, transpose=False, **kwargs):
+    ConvND = {
+        2: layers.Conv2D,
+        3: layers.Conv3D,
+    }
+    ConvNDTranspose = {
+        2: layers.Conv2DTranspose,
+        3: layers.Conv3DTranspose,
+    }
+
+    ConvClass = ConvNDTranspose[spatial_dims] if transpose else ConvND[spatial_dims]
+    return ConvClass(**kwargs)
+
+
 def get_act_layer(name, **kwargs):
     """
     Returns a Keras activation layer based on the provided name and keyword arguments

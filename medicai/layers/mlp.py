@@ -58,3 +58,6 @@ class SwinMLP(layers.Layer):
             }
         )
         return config
+
+
+class ViTMLP(SwinMLP): ...

@@ -1,7 +1,9 @@
 from medicai.blocks import UnetBasicBlock, UnetResBlock
 
 
-def UnetrBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance", res_block=True):
+def UnetrBasicBlock(
+    spatial_dims, out_channels, kernel_size=3, stride=1, norm_name="instance", res_block=True
+):
     """
     A basic building block for a 3D UNet, consisting of two convolutional layers
     with normalization and LeakyReLU activation, and optional dropout.
@@ -22,6 +24,7 @@ def UnetrBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance",
     def wrapper(inputs):
         if res_block:
             x = UnetResBlock(
+                spatial_dims,
                 in_channels=inputs.shape[-1],
                 out_channels=out_channels,
                 kernel_size=kernel_size,
@@ -30,6 +33,7 @@ def UnetrBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance",
             )(inputs)
         else:
             x = UnetBasicBlock(
+                spatial_dims,
                 out_channels,
                 kernel_size,
                 stride,

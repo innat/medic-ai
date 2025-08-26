@@ -1,9 +1,11 @@
 from keras import layers
 
 from medicai.blocks import UnetBasicBlock, UnetResBlock
+from medicai.utils import get_conv_layer
 
 
 def UnetrUpBlock(
+    spatial_dims,
     out_channels,
     kernel_size=3,
     stride=1,
@@ -30,8 +32,10 @@ def UnetrUpBlock(
     stride = upsample_kernel_size
 
     def wrapper(inputs, skip):
-        x = layers.Conv3DTranspose(
-            out_channels,
+        x = get_conv_layer(
+            spatial_dims,
+            transpose=True,
+            filters=out_channels,
             kernel_size=upsample_kernel_size,
             strides=stride,
             use_bias=False,
@@ -43,6 +47,7 @@ def UnetrUpBlock(
         # Apply the convolutional block
         if res_block:
             x = UnetResBlock(
+                spatial_dims,
                 in_channels=x.shape[-1],
                 out_channels=out_channels,
                 kernel_size=kernel_size,
@@ -51,6 +56,7 @@ def UnetrUpBlock(
             )(x)
         else:
             x = UnetBasicBlock(
+                spatial_dims,
                 out_channels=out_channels,
                 kernel_size=kernel_size,
                 stride=1,

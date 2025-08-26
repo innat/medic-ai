@@ -1,9 +1,11 @@
 from keras import layers
 
-from medicai.utils import get_act_layer, get_norm_layer
+from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer
 
 
-def UnetBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance", dropout_rate=None):
+def UnetBasicBlock(
+    spatial_dims, out_channels, kernel_size=3, stride=1, norm_name="instance", dropout_rate=None
+):
     """
     A basic building block for a 3D UNet, consisting of two convolutional layers
     with normalization and LeakyReLU activation, and optional dropout.
@@ -22,14 +24,22 @@ def UnetBasicBlock(out_channels, kernel_size=3, stride=1, norm_name="instance", 
     """
 
     def apply(inputs):
-        x = layers.Conv3D(out_channels, kernel_size, strides=stride, use_bias=False)(inputs)
+        x = get_conv_layer(
+            spatial_dims,
+            filters=out_channels,
+            kernel_size=kernel_size,
+            strides=stride,
+            use_bias=False,
+        )(inputs)
         x = get_norm_layer(norm_name)(x)
         x = get_act_layer("leaky_relu", negative_slope=0.01)(x)
 
         if dropout_rate:
             x = layers.Dropout(dropout_rate)(x)
 
-        x = layers.Conv3D(out_channels, kernel_size, strides=1, use_bias=False)(x)
+        x = get_conv_layer(
+            spatial_dims, filters=out_channels, kernel_size=kernel_size, strides=1, use_bias=False
+        )(x)
         x = get_norm_layer(norm_name)(x)
         x = get_act_layer("leaky_relu", negative_slope=0.01)(x)
 
