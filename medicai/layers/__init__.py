@@ -5,3 +5,4 @@ from .swin import (
     SwinTransformerBlock,
     SwinWindowAttention,
 )
+from .vit import ViTEncoderBlock, ViTPatchingAndEmbedding

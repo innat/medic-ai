@@ -1,17 +1,18 @@
 from keras import Model, layers
 
 from medicai.blocks.unet_imagenet_decoder import UNetDecoder
+from medicai.utils import get_conv_layer
 from medicai.utils.model_utils import BACKBONE_ZOO, KERAS_APPLICATION, SKIP_CONNECTION_ARGS
 
 
-def get_unet_backbone(variant: str, input_shape, dim: int, **kwargs):
+def get_unet_backbone(variant: str, input_shape, spatial_dims: int, **kwargs):
     """
     Retrieves a UNet-compatible backbone model, either 2D or 3D.
 
     Args:
         variant (str): Name of the backbone variant (e.g., "densenet121").
         input_shape (tuple): Shape of the input tensor excluding batch size.
-        dim (int): Dimensionality of the model (2 for 2D, 3 for 3D).
+        spatial_dims (int): Dimensionality of the model (2 for 2D, 3 for 3D).
         **kwargs: Additional arguments passed to the backbone constructor.
 
     Returns:
@@ -20,7 +21,7 @@ def get_unet_backbone(variant: str, input_shape, dim: int, **kwargs):
     Raises:
         ValueError: If the specified variant is not found in the corresponding registry.
     """
-    if dim == 3:
+    if spatial_dims == 3:
         # 3D Model
         if variant not in BACKBONE_ZOO:
             raise ValueError(f"3D variant '{variant}' not found.")
@@ -71,21 +72,19 @@ def UNet(
     """
 
     if len(input_shape) == 4:
-        dim = 3
+        spatial_dims = 3
     elif len(input_shape) == 3:
-        dim = 2
+        spatial_dims = 2
     else:
         raise ValueError(
             f"Unsupported input shape rank. Expected 3 (H, W, C) or 4 (D, H, W, C), but got rank {len(input_shape)}."
         )
 
-    ConvFinal = layers.Conv3D if dim == 3 else layers.Conv2D
-
     # Load backbone
     base_model = get_unet_backbone(
         variant=variant,
         input_shape=input_shape,
-        dim=dim,
+        spatial_dims=spatial_dims,
     )
 
     inputs = base_model.input
@@ -103,15 +102,15 @@ def UNet(
 
     # Apply decoder
     x = base_model.output
-    decoder = UNetDecoder(skip_layers, decoder_filters, dim, block_type=decoder_block_type)
+    decoder = UNetDecoder(skip_layers, decoder_filters, spatial_dims, block_type=decoder_block_type)
     x = decoder(x)
 
     # Final segmentation head
-    x = ConvFinal(num_classes, kernel_size=1, padding="same")(x)
+    x = get_conv_layer(spatial_dims, filters=num_classes, kernel_size=1, padding="same")(x)
     outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
     # built unet
-    model = Model(inputs=inputs, outputs=outputs, name=f"UNet{dim}D_{variant}")
+    model = Model(inputs=inputs, outputs=outputs, name=f"UNet{spatial_dims}D_{variant}")
 
     # loading model weights
     if weights is not None:

@@ -50,6 +50,7 @@ class SwinUNETR(keras.Model):
                 (e.g., 'instance', 'batch'). Default is "instance".
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+        spatial_dims = len(input_shape) - 1
         encoder = SwinBackbone(
             input_shape=input_shape,
             patch_size=[2, 2, 2],
@@ -70,6 +71,7 @@ class SwinUNETR(keras.Model):
             encoder.get_layer("swin_feature4").output,
         ]
         unetr_head = self.build_decoder(
+            spatial_dims=spatial_dims,
             num_classes=num_classes,
             feature_size=feature_size,
             res_block=True,
@@ -88,6 +90,7 @@ class SwinUNETR(keras.Model):
 
     def build_decoder(
         self,
+        spatial_dims,
         num_classes=4,
         feature_size=16,
         res_block=True,
@@ -117,32 +120,58 @@ class SwinUNETR(keras.Model):
 
             # Encoder 1 (process raw input)
             enc0 = UnetrBasicBlock(
-                feature_size, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
+                spatial_dims,
+                out_channels=feature_size,
+                kernel_size=3,
+                stride=1,
+                norm_name=norm_name,
+                res_block=res_block,
             )(enc_input)
 
             # Encoder 2 (process hidden_states_out[0])
             enc1 = UnetrBasicBlock(
-                feature_size, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
+                spatial_dims,
+                out_channels=feature_size,
+                kernel_size=3,
+                stride=1,
+                norm_name=norm_name,
+                res_block=res_block,
             )(hidden_states_out[0])
 
             # Encoder 3 (process hidden_states_out[1])
             enc2 = UnetrBasicBlock(
-                feature_size * 2, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
+                spatial_dims,
+                out_channels=feature_size * 2,
+                kernel_size=3,
+                stride=1,
+                norm_name=norm_name,
+                res_block=res_block,
             )(hidden_states_out[1])
 
             # Encoder 4 (process hidden_states_out[2])
             enc3 = UnetrBasicBlock(
-                feature_size * 4, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
+                spatial_dims,
+                out_channels=feature_size * 4,
+                kernel_size=3,
+                stride=1,
+                norm_name=norm_name,
+                res_block=res_block,
             )(hidden_states_out[2])
 
             # Encoder 5 (process hidden_states_out[4] as bottleneck)
             dec4 = UnetrBasicBlock(
-                feature_size * 16, kernel_size=3, stride=1, norm_name=norm_name, res_block=res_block
+                spatial_dims,
+                out_channels=feature_size * 16,
+                kernel_size=3,
+                stride=1,
+                norm_name=norm_name,
+                res_block=res_block,
             )(hidden_states_out[4])
 
             # Decoder 5 (upsample dec4 and concatenate with hidden_states_out[3])
             dec3 = UnetrUpBlock(
-                feature_size * 8,
+                spatial_dims,
+                out_channels=feature_size * 8,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
@@ -151,7 +180,8 @@ class SwinUNETR(keras.Model):
 
             # Decoder 4 (upsample dec3 and concatenate with enc3)
             dec2 = UnetrUpBlock(
-                feature_size * 4,
+                spatial_dims,
+                out_channels=feature_size * 4,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
@@ -160,7 +190,8 @@ class SwinUNETR(keras.Model):
 
             # Decoder 3 (upsample dec2 and concatenate with enc2)
             dec1 = UnetrUpBlock(
-                feature_size * 2,
+                spatial_dims,
+                out_channels=feature_size * 2,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
@@ -169,7 +200,8 @@ class SwinUNETR(keras.Model):
 
             # Decoder 2 (upsample dec1 and concatenate with enc1)
             dec0 = UnetrUpBlock(
-                feature_size,
+                spatial_dims,
+                out_channels=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
@@ -177,7 +209,8 @@ class SwinUNETR(keras.Model):
             )(dec1, enc1)
 
             out = UnetrUpBlock(
-                feature_size,
+                spatial_dims,
+                out_channels=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
@@ -185,7 +218,7 @@ class SwinUNETR(keras.Model):
             )(dec0, enc0)
 
             # Final output (process dec0 and produce logits)
-            logits = UnetOutBlock(num_classes, activation=classifier_activation)(out)
+            logits = UnetOutBlock(spatial_dims, num_classes, activation=classifier_activation)(out)
             return logits
 
         return apply
