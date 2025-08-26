@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from medicai.models import DenseNet, SwinTransformer, SwinUNETR, UNet
+from medicai.models import DenseNet, SwinTransformer, SwinUNETR, UNet, UNETR, ViT
 
 
 def test_unet():
@@ -51,3 +51,51 @@ def test_swin_transformer():
     dummy_input = tf.random.normal((1, 96, 96, 96, 1))
     output = model(dummy_input)
     assert output.shape == (1, num_classes)
+
+def test_unetr():
+    batch_size = 1
+    D, H, W, C = 96, 96, 96, 1
+
+    # test for 3D
+    dummy_input = tf.random.normal((batch_size, D, H, W, C))
+    model = UNETR(input_shape=(D, H, W, C), num_classes=3)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 96, 1)
+    assert output.shape == (1, C)
+
+    # test for 2D
+    dummy_input = tf.random.normal((batch_size, H, W, C))
+    model = UNETR(input_shape=(H, W, C), num_classes=3)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 1)
+    assert output.shape == (1, C)
+
+def test_vit():
+    batch_size = 4
+    D, H, W, C = 16, 32, 32, 1
+    num_classes = 10
+
+    vit2d = ViT(
+        input_shape=(H, W, 3),
+        num_classes=num_classes,
+        pooling="token",
+        intermediate_dim=128,
+        classifier_activation="softmax",
+        dropout=0.1,
+    )
+    x2d = tf.random.normal((batch_size, H, W, 3))
+    y2d = vit2d(x2d)
+    assert y2d.shape == (batch_size, num_classes)
+
+    vit3d = ViT(
+        input_shape=(D, H, W, C),  # D, H, W, C
+        num_classes=num_classes,
+        pooling="gap",
+        intermediate_dim=None,
+        classifier_activation=None,
+        dropout=0.1,
+        name='Vit3D'
+    )
+    x3d = tf.random.normal((batch_size, D, H, W, C))
+    y3d = vit3d(x3d)
+    assert y3d.shape == (batch_size, num_classes)

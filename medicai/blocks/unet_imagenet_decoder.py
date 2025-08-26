@@ -1,7 +1,7 @@
 from keras import layers
 
 
-def Conv3x3BnReLU(filters, dim=2, use_batchnorm=True):
+def Conv3x3BnReLU(filters, spatial_dims=2, use_batchnorm=True):
     """
     Builds a 3x3 convolutional block followed by optional BatchNormalization and ReLU activation.
 
@@ -13,7 +13,7 @@ def Conv3x3BnReLU(filters, dim=2, use_batchnorm=True):
     Returns:
         function: A function that applies the convolutional block to an input tensor.
     """
-    Conv = layers.Conv3D if dim == 3 else layers.Conv2D
+    Conv = layers.Conv3D if spatial_dims == 3 else layers.Conv2D
     BatchNorm = layers.BatchNormalization
 
     def apply(x):
@@ -32,21 +32,21 @@ def Conv3x3BnReLU(filters, dim=2, use_batchnorm=True):
     return apply
 
 
-def DecoderBlock(filters, dim=2, block_type="upsampling", use_batchnorm=True):
+def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm=True):
     """
     Builds a decoder block that upsamples an input tensor and optionally concatenates with a skip connection.
 
     Args:
         filters (int): Number of filters for the convolutional layers.
-        dim (int): Dimensionality of the operation (2 for 2D, 3 for 3D).
+        spatial_dims (int): Dimensionality of the operation (2 for 2D, 3 for 3D).
         block_type (str): Upsampling strategy — either 'upsample' (interpolation) or 'transpose' (learned).
         use_batchnorm (bool): Whether to use BatchNormalization in convolutional blocks.
 
     Returns:
         function: A function that applies the decoder block to a pair of input and optional skip tensors.
     """
-    Transpose = layers.Conv3DTranspose if dim == 3 else layers.Conv2DTranspose
-    UpSampling = layers.UpSampling3D if dim == 3 else layers.UpSampling2D
+    Transpose = layers.Conv3DTranspose if spatial_dims == 3 else layers.Conv2DTranspose
+    UpSampling = layers.UpSampling3D if spatial_dims == 3 else layers.UpSampling2D
 
     def apply(x, skip=None):
         if block_type == "transpose":
@@ -57,14 +57,14 @@ def DecoderBlock(filters, dim=2, block_type="upsampling", use_batchnorm=True):
         if skip is not None:
             x = layers.Concatenate(axis=-1)([x, skip])
 
-        x = Conv3x3BnReLU(filters, dim=dim, use_batchnorm=use_batchnorm)(x)
-        x = Conv3x3BnReLU(filters, dim=dim, use_batchnorm=use_batchnorm)(x)
+        x = Conv3x3BnReLU(filters, spatial_dims=spatial_dims, use_batchnorm=use_batchnorm)(x)
+        x = Conv3x3BnReLU(filters, spatial_dims=spatial_dims, use_batchnorm=use_batchnorm)(x)
         return x
 
     return apply
 
 
-def UNetDecoder(skip_layers, decoder_filters, dim, block_type="upsampling"):
+def UNetDecoder(skip_layers, decoder_filters, spatial_dims, block_type="upsampling"):
     """
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
 
@@ -81,7 +81,7 @@ def UNetDecoder(skip_layers, decoder_filters, dim, block_type="upsampling"):
     def decoder(x):
         for i, filters in enumerate(decoder_filters):
             skip = skip_layers[i] if i < len(skip_layers) else None
-            x = DecoderBlock(filters, dim, block_type)(x, skip)
+            x = DecoderBlock(filters, spatial_dims, block_type)(x, skip)
         return x
 
     return decoder
