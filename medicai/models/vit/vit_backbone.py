@@ -26,7 +26,7 @@ class ViTBackbone(keras.Model):
         Vision Transformer (ViT) backbone for feature extraction.
 
         This class implements the core ViT encoder, including patching, embedding,
-        transformer encoder blocks, and layer normalization. It supports both 2D 
+        transformer encoder blocks, and layer normalization. It supports both 2D
         and 3D inputs.
 
         Args:

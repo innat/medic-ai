@@ -12,12 +12,11 @@ def UnetrPrUpBlock(
     conv_block=False,
     res_block=False,
 ):
-
     """
     Functional closure version of a UNETR projection upsampling block.
 
     This block performs upsampling using a transpose convolution followed
-    by optional convolutional or residual sub-blocks. It returns a callable 
+    by optional convolutional or residual sub-blocks. It returns a callable
     function `apply(x)` that applies the block to an input tensor.
 
     Args:
@@ -28,11 +27,11 @@ def UnetrPrUpBlock(
         stride (int or tuple): Stride for the convolutional sub-blocks.
         upsample_kernel_size (int or tuple): Kernel size / stride for the initial transpose convolution.
         conv_block (bool): If True, apply convolutional sub-blocks after transpose conv.
-        res_block (bool): If True and conv_block is True, use residual blocks (`UnetResBlock`) 
+        res_block (bool): If True and conv_block is True, use residual blocks (`UnetResBlock`)
                         instead of basic convolutional blocks (`UnetBasicBlock`).
 
     Returns:
-        function: A callable `apply(x)` function that applies the UNETR projection upsampling block 
+        function: A callable `apply(x)` function that applies the UNETR projection upsampling block
                 to a tensor `x`.
 
     Example:
@@ -51,7 +50,6 @@ def UnetrPrUpBlock(
         # Apply it to a feature tensor `x`
         y = up_block(x)
     """
-
 
     # Base transpose conv initializer
     transp_conv_init = get_conv_layer(

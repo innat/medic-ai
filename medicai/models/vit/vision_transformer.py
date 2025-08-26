@@ -25,8 +25,8 @@ class ViT(keras.Model):
         """
         Vision Transformer (ViT) model for classification.
 
-        This class implements a Keras-based Vision Transformer (ViT) model, 
-        supporting both 2D and 3D inputs. The model consists of a ViT backbone, 
+        This class implements a Keras-based Vision Transformer (ViT) model,
+        supporting both 2D and 3D inputs. The model consists of a ViT backbone,
         optional intermediate pre-logits layer, dropout, and a classification head.
 
         Args:
@@ -61,7 +61,6 @@ class ViT(keras.Model):
                 pooling="gap",
             )
         """
-
 
         # === Backbone ===
         self.backbone = ViTBackbone(

@@ -28,7 +28,7 @@ class UNETR(keras.Model):
     ):
         """UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
 
-        UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using 
+        UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using
         projection upsampling blocks and skip connections from intermediate transformer layers.
 
         Args:
