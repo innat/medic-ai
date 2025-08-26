@@ -18,7 +18,6 @@ class UNETR(keras.Model):
         num_heads: int = 12,
         num_layers: int = 12,
         patch_size: int = 16,
-        pos_embed: str = "conv",
         norm_name: str = "instance",
         conv_block: bool = True,
         res_block: bool = True,
@@ -43,7 +42,6 @@ class UNETR(keras.Model):
             num_heads (int): Number of attention heads per transformer layer.
             num_layers (int): Number of transformer encoder layers.
             patch_size (int): Size of the patches extracted from input.
-            pos_embed (str): Type of positional embedding ("conv" or "learned").
             norm_name (str): Type of normalization for decoder blocks ("instance", "batch", etc.).
             conv_block (bool): Whether to use convolutional blocks in decoder.
             res_block (bool): Whether to use residual blocks in decoder.
@@ -133,7 +131,6 @@ class UNETR(keras.Model):
         self.conv_block = conv_block
         self.res_block = res_block
         self.dropout_rate = dropout_rate
-        self.pos_embed = pos_embed
 
     def build_decoder(
         self,
@@ -251,5 +248,4 @@ class UNETR(keras.Model):
             "conv_block": self.conv_block,
             "res_block": self.res_block,
             "dropout_rate": self.dropout_rate,
-            "pos_embed": self.pos_embed,
         }

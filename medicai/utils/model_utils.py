@@ -80,10 +80,10 @@ def get_pooling_layer(spatial_dims, pool_type, global_pool=False, **kwargs):
         pool2d = get_pooling_layer(2, "max", pool_size=(2, 2), strides=(2, 2))
 
         # Global average pooling 3D
-        gap3d = get_pooling_layer(3, "average", global_pool=True)
+        gap3d = get_pooling_layer(3, "avg", global_pool=True)
     """
-    assert spatial_dims in (2, 3), "spatial_dims must be 1, 2, or 3"
-    assert pool_type in ("max", "avg"), "pool_type must be 'max' or 'average'"
+    assert spatial_dims in (2, 3), "spatial_dims must be 2, or 3"
+    assert pool_type in ("max", "avg"), "pool_type must be 'max' or 'avg'"
 
     if global_pool:
         layers_map = {
