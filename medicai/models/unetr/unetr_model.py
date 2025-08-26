@@ -26,6 +26,52 @@ class UNETR(keras.Model):
         name: str = "UNETR",
         **kwargs,
     ):
+        """UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
+
+        UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using 
+        projection upsampling blocks and skip connections from intermediate transformer layers.
+
+        Args:
+            input_shape (tuple): Shape of the input tensor excluding batch size.
+                                For example, (height, width, channels) for 2D
+                                or (depth, height, width, channels) for 3D.
+            num_classes (int): Number of output segmentation classes.
+            classifier_activation (str, optional): Activation function applied to the output layer.
+            feature_size (int): Base number of feature channels in decoder blocks.
+            hidden_size (int): Hidden size of the transformer encoder.
+            mlp_dim (int): Hidden size of MLPs in transformer blocks.
+            num_heads (int): Number of attention heads per transformer layer.
+            num_layers (int): Number of transformer encoder layers.
+            patch_size (int): Size of the patches extracted from input.
+            pos_embed (str): Type of positional embedding ("conv" or "learned").
+            norm_name (str): Type of normalization for decoder blocks ("instance", "batch", etc.).
+            conv_block (bool): Whether to use convolutional blocks in decoder.
+            res_block (bool): Whether to use residual blocks in decoder.
+            dropout_rate (float): Dropout rate applied in backbone and intermediate layers.
+            name (str): Model name.
+            **kwargs: Additional keyword arguments passed to keras.Model.
+
+        Example:
+            # 3D UNETR for 3-class segmentation
+            model = UNETR(
+                input_shape=(16, 128, 128, 1),
+                num_classes=3,
+                feature_size=16,
+                hidden_size=768,
+                mlp_dim=3072,
+                num_heads=12,
+                num_layers=12,
+                patch_size=16,
+                norm_name="instance",
+                conv_block=True,
+                res_block=True,
+                dropout_rate=0.1,
+            )
+
+            # Forward pass
+            output = model(tf.random.normal((1, 16, 128, 128, 1)))
+        """
+
         if not (0 <= dropout_rate <= 1):
             raise ValueError("dropout_rate should be between 0 and 1.")
         if hidden_size % num_heads != 0:
