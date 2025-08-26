@@ -1,7 +1,7 @@
 import keras
 import tensorflow as tf
 
-from medicai.models import SwinTransformer
+from medicai.models import SwinTransformer, ViT
 from medicai.transforms import Compose, RandRotate90, Resize, ScaleIntensityRange
 
 
@@ -32,8 +32,8 @@ def train_and_assert(model, dataset):
     assert len(history.history["binary_accuracy"]) == 5
 
 
-def create_model_and_compile(num_classes):
-    model = SwinTransformer(
+def create_model_and_compile(model_class, num_classes):
+    model = model_class(
         input_shape=(96, 96, 96, 1),
         num_classes=num_classes,
         classifier_activation=None,
@@ -62,9 +62,14 @@ def create_dummy_dataset(batch_size, num_classes):
 
 def test_training_with_meta():
     num_classes = 1
-    model = create_model_and_compile(num_classes)
+    model_list = [SwinTransformer, ViT]
+    
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.map(create_sample_dict, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(transformation, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.batch(1).prefetch(tf.data.AUTOTUNE)
-    train_and_assert(model, dataset)
+
+    for model_class in model_list:
+        print(f"Testing {model_class.__name__}")
+        model = create_model_and_compile(model_class, num_classes)
+        train_and_assert(model, dataset)

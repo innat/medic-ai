@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from medicai.losses import SparseDiceCELoss
 from medicai.metrics import SparseDiceMetric
-from medicai.models import SwinUNETR
+from medicai.models import SwinUNETR, UNETR
 from medicai.transforms import (
     Compose,
     ScaleIntensityRange,
@@ -36,8 +36,8 @@ def train_and_assert(model, dataset):
     assert len(history.history["dice_score"]) == 5
 
 
-def create_model_and_compile(num_classes):
-    model = SwinUNETR(
+def create_model_and_compile(model_class, num_classes):
+    model = model_class(
         input_shape=(96, 96, 96, 1),
         num_classes=num_classes,
         classifier_activation=None,
@@ -84,7 +84,11 @@ def test_training_with_meta():
 
 def test_training():
     num_classes = 4
-    model = create_model_and_compile(num_classes)
+    model_list = [SwinUNETR, UNETR]
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.batch(1).prefetch(tf.data.AUTOTUNE)
-    train_and_assert(model, dataset)
+
+    for model_class in model_list:
+        print(f"Testing {model_class.__name__}")
+        model = create_model_and_compile(model_class, num_classes)
+        train_and_assert(model, dataset)
