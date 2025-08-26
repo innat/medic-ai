@@ -22,6 +22,46 @@ class ViT(keras.Model):
         name="vit",
         **kwargs,
     ):
+        """
+        Vision Transformer (ViT) model for classification.
+
+        This class implements a Keras-based Vision Transformer (ViT) model, 
+        supporting both 2D and 3D inputs. The model consists of a ViT backbone, 
+        optional intermediate pre-logits layer, dropout, and a classification head.
+
+        Args:
+            input_shape (tuple): Shape of the input tensor excluding batch size.
+                                For example, (height, width, channels) for 2D
+                                or (depth, height, width, channels) for 3D.
+            num_classes (int): Number of output classes for classification.
+            patch_size (int or tuple): Size of the patches extracted from the input.
+            num_layers (int): Number of transformer encoder layers.
+            num_heads (int): Number of attention heads in each transformer layer.
+            hidden_dim (int): Hidden dimension size of the transformer encoder.
+            mlp_dim (int): Hidden dimension size of the MLP in transformer blocks.
+            pooling (str): Pooling strategy for the output. "token" for CLS token,
+                        "gap" for global average pooling over spatial dimensions.
+            intermediate_dim (int, optional): Dimension of optional pre-logits dense layer.
+                                            If None, no intermediate layer is used.
+            classifier_activation (str, optional): Activation function for the output layer.
+            dropout (float): Dropout rate applied before the output layer.
+            name (str): Name of the model.
+            **kwargs: Additional keyword arguments passed to keras.Model.
+
+        Example:
+            # 2D ViT for 10-class classification
+            model = ViT(input_shape=(224, 224, 3), num_classes=10, patch_size=16)
+
+            # 3D ViT with intermediate layer and global average pooling
+            model = ViT(
+                input_shape=(16, 128, 128, 1),
+                num_classes=5,
+                patch_size=4,
+                intermediate_dim=512,
+                pooling="gap",
+            )
+        """
+
 
         # === Backbone ===
         self.backbone = ViTBackbone(

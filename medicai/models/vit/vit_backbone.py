@@ -22,6 +22,55 @@ class ViTBackbone(keras.Model):
         name=None,
         **kwargs,
     ):
+        """
+        Vision Transformer (ViT) backbone for feature extraction.
+
+        This class implements the core ViT encoder, including patching, embedding,
+        transformer encoder blocks, and layer normalization. It supports both 2D 
+        and 3D inputs.
+
+        Args:
+            input_shape (tuple): Shape of the input tensor excluding batch size.
+                                For example, (height, width, channels) for 2D
+                                or (depth, height, width, channels) for 3D.
+            patch_size (int or tuple): Size of the patches extracted from the input.
+                                    If int, the same size is used for all spatial dims.
+            num_layers (int): Number of transformer encoder layers.
+            num_heads (int): Number of attention heads per transformer layer.
+            hidden_dim (int): Hidden dimension size of the transformer encoder.
+            mlp_dim (int): Hidden dimension size of the MLP in each transformer block.
+            dropout_rate (float): Dropout rate applied after patch embedding and in MLPs.
+            attention_dropout (float): Dropout rate for the attention weights.
+            layer_norm_epsilon (float): Epsilon for layer normalization.
+            use_mha_bias (bool): Whether to use bias in multi-head attention.
+            use_mlp_bias (bool): Whether to use bias in the MLP layers.
+            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
+            use_patch_bias (bool): Whether to use bias in the patch embedding layer.
+            name (str, optional): Name of the model.
+            **kwargs: Additional keyword arguments passed to keras.Model.
+
+        Example:
+            # 2D ViT backbone
+            backbone = ViTBackbone(
+                input_shape=(224, 224, 3),
+                patch_size=16,
+                num_layers=12,
+                num_heads=12,
+                hidden_dim=768,
+                mlp_dim=3072,
+            )
+
+            # 3D ViT backbone
+            backbone3d = ViTBackbone(
+                input_shape=(16, 128, 128, 1),
+                patch_size=(4, 16, 16),
+                num_layers=8,
+                num_heads=8,
+                hidden_dim=512,
+                mlp_dim=2048,
+            )
+        """
+
         # === Spatial dims detection ===
         spatial_dims = len(input_shape) - 1  # 2 or 3
         image_shape = input_shape[:-1]  # (h, w) or (d, h, w)
