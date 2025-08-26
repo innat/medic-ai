@@ -7,7 +7,7 @@ def UnetBasicBlock(
     spatial_dims, out_channels, kernel_size=3, stride=1, norm_name="instance", dropout_rate=None
 ):
     """
-    A basic building block for a 3D UNet, consisting of two convolutional layers
+    A basic building block for a UNet (2D or 3D), consisting of two convolutional layers
     with normalization and LeakyReLU activation, and optional dropout.
 
     Args:
