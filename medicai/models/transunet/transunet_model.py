@@ -78,6 +78,7 @@ class TransUNet(keras.Model):
         mlp_dim=1024,
         num_queries=100,
         dropout_rate=0.1,
+        name=None,
         **kwargs,
     ):
 
@@ -131,7 +132,7 @@ class TransUNet(keras.Model):
         for i in range(num_decoder_layers):
             decoder_output = TransUNetDecoderBlock(
                 embed_dim, num_heads, mlp_dim, dropout_rate, name=f"transunet_decoder_block_{i+1}"
-            )(decoder_output, encoder_output)
+            )([decoder_output, encoder_output])
 
         # Coarse-to-fine Z-Blocks
         # Prepare CNN features for Z-Blocks (flatten spatial dimensions)
@@ -147,17 +148,17 @@ class TransUNet(keras.Model):
         # Z³ Block: Refine with deepest features
         z3 = CoarseToFineAttention(
             embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_1"
-        )(decoder_output, c3_proj)
+        )([decoder_output, c3_proj])
 
         # Z² Block: Refine with mid-level features
         z2 = CoarseToFineAttention(
             embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_2"
-        )(z3, c2_proj)
+        )([z3, c2_proj])
 
         # Z¹ Block: Refine with shallow features
         z1 = CoarseToFineAttention(
             embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_3"
-        )(z2, c1_proj)
+        )([z2, c1_proj])
 
         # CNN Decoder with SpatialCrossAttention
         target_shape = get_target_spatial_shape(input_shape, downsampling_factor=8)
@@ -260,7 +261,7 @@ class TransUNet(keras.Model):
             activation=classifier_activation,
         )(d3)
 
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        super().__init__(inputs=inputs, outputs=outputs, name=name or "TransUNet", **kwargs)
 
         self.num_classes = num_classes
         self.patch_size = patch_size

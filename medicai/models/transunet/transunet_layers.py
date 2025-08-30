@@ -162,12 +162,13 @@ class TransUNetDecoderBlock(layers.Layer):
 
     def build(self, input_shape):
         # Masked self-attention
+        query_shape = input_shape[0]
         self.masked_self_att = layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.embed_dim // self.num_heads,
             dropout=self.dropout_rate,
         )
-        self.masked_self_att.build(input_shape, input_shape)
+        self.masked_self_att.build(query_shape, query_shape)
 
         # Use MaskedCrossAttention
         self.masked_cross_att = MaskedCrossAttention(
@@ -175,7 +176,7 @@ class TransUNetDecoderBlock(layers.Layer):
             key_dim=self.embed_dim // self.num_heads,
             dropout_rate=self.dropout_rate,
         )
-        self.masked_cross_att.build(input_shape)
+        self.masked_cross_att.build(query_shape)
 
         # MLP
         self.mlp_layer = TransUNetMLP(
@@ -185,28 +186,35 @@ class TransUNetDecoderBlock(layers.Layer):
             drop_rate=self.dropout_rate,
             name="mlp_decode",
         )
-        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
+        self.mlp_layer.build(query_shape)
+
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
         self.built = True
 
-    def call(self, queries, encoder_output, attention_mask=None, training=None):
+    def call(self, queries, encoder_output=None, attention_mask=None, training=None):
         # Masked self-attention
         p1 = self.masked_self_att(
             queries, queries, attention_mask=attention_mask, training=training
         )
-        p1 = self.layernorm(queries + p1)
+        p1 = self.layernorm1(queries + p1)
 
-        # Masked cross-attention (now using the explicit MaskedCrossAttention)
+        # Masked cross-attention
         p2 = self.masked_cross_att(
             p1, key=encoder_output, value=encoder_output, mask=attention_mask, training=training
         )
+        p1 = self.layernorm2(p1 + p2)
 
         # MLP
         p3 = self.mlp_layer(p2)
-        output = self.layernorm(p2 + p3)
+        output = self.layernorm3(p2 + p3)
 
         return output
 
     def compute_output_shape(self, input_shape):
+        if isinstance(input_shape, list):
+            return input_shape[0]
         return input_shape
 
     def get_config(self):
@@ -252,12 +260,13 @@ class CoarseToFineAttention(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
+        query_shape = input_shape[0]  # [query_shape, features_shape]
         self.cross_attention = MaskedCrossAttention(
             num_heads=self.num_heads,
             key_dim=self.embed_dim // self.num_heads,
             dropout_rate=self.dropout_rate,
         )
-        self.cross_attention.build(input_shape)
+        self.cross_attention.build(query_shape)
 
         self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.mlp_layer = TransUNetMLP(
@@ -268,14 +277,18 @@ class CoarseToFineAttention(layers.Layer):
             name="mlp",
         )
 
-    def call(self, query, features, training=None):
+    def call(self, query, features=None, training=None):
         # Cross-attention, with query coming from transformer decoder and features from CNN encoder
         attn_output = self.cross_attention(query, key=features, value=features, training=training)
 
         # MLP for further refinement
-        mlp_output = self.mlp_layer(attn_output)
-        output = self.layernorm(mlp_output + mlp_output)
+        output = self.mlp_layer(attn_output)
         return output
+
+    def compute_output_shape(self, input_shape):
+        if isinstance(input_shape, list):
+            return input_shape[0]
+        return input_shape
 
     def get_config(self):
         config = super().get_config()
@@ -375,7 +388,7 @@ class SpatialCrossAttention(layers.Layer):
 
         # Compute spatial attention
         attention_scores = self.compute_attention_scores(query, key)
-        attention_weights = ops.softmax(attention_scores, axis=-1)
+        attention_weights = self.apply_global_softmax(attention_scores)
 
         # Apply attention
         attended = self.apply_attention(attention_weights, value)
@@ -389,6 +402,20 @@ class SpatialCrossAttention(layers.Layer):
     def apply_attention(self, weights, value):
         pattern = {2: "bij,bijd->bijd", 3: "bijk,bijkd->bijkd"}
         return ops.einsum(pattern[self.spatial_dims], weights, value)
+
+    def apply_global_softmax(self, attention_scores):
+        original_shape = ops.shape(attention_scores)
+
+        # Flatten all spatial dimensions
+        flattened_scores = ops.reshape(attention_scores, (original_shape[0], -1))
+
+        # Apply softmax globally
+        attention_weights_flat = ops.softmax(flattened_scores, axis=-1)
+
+        # Reshape back to original spatial dimensions
+        attention_weights = ops.reshape(attention_weights_flat, original_shape)
+
+        return attention_weights
 
     def compute_output_shape(self, input_shape):
         if isinstance(input_shape, list):
