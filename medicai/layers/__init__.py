@@ -1,4 +1,4 @@
-from .mlp import MLPBlock, SwinMLP, ViTMLP
+from .mlp import MLPBlock, SwinMLP, TransUNetMLP, ViTMLP
 from .swin import (
     SwinBasicLayer,
     SwinPatchingAndEmbedding,

@@ -206,7 +206,7 @@ def get_norm_layer(norm_name, **kwargs):
         raise ValueError(f"Unsupported normalization: {norm_name}")
 
 
-def parse_model_inputs(input_shape, input_tensor, **kwargs):
+def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
     if input_tensor is None:
         return keras.layers.Input(shape=input_shape, **kwargs)
     else:
