@@ -136,29 +136,35 @@ class TransUNet(keras.Model):
 
         # Coarse-to-fine Z-Blocks
         # Prepare CNN features for Z-Blocks (flatten spatial dimensions)
-        c1_flat = layers.Reshape((-1, 32))(c1)  # (batch, spatial, channels)
-        c2_flat = layers.Reshape((-1, 64))(c2)
-        c3_flat = layers.Reshape((-1, 128))(c3)
+        c1_flat = layers.Reshape((-1, c1.shape[-1]))(c1)  # (batch, spatial, channels)
+        c2_flat = layers.Reshape((-1, c2.shape[-1]))(c2)
+        c3_flat = layers.Reshape((-1, c3.shape[-1]))(c3)
 
         # Project CNN features to transformer dimension
         c1_proj = layers.Dense(embed_dim)(c1_flat)
         c2_proj = layers.Dense(embed_dim)(c2_flat)
         c3_proj = layers.Dense(embed_dim)(c3_flat)
 
-        # Z³ Block: Refine with deepest features
+        # Z³ Block: Refine with DEEPEST features first (coarse level)
         z3 = CoarseToFineAttention(
-            embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_1"
-        )([decoder_output, c3_proj])
+            embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_3"
+        )(
+            [decoder_output, c1_proj]
+        )  # c1_proj (deepest: index=309)
 
-        # Z² Block: Refine with mid-level features
+        # Z² Block: Refine with MID-LEVEL features
         z2 = CoarseToFineAttention(
             embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_2"
-        )([z3, c2_proj])
+        )(
+            [z3, c2_proj]
+        )  # c2_proj (mid: index=137)
 
-        # Z¹ Block: Refine with shallow features
+        # Z¹ Block: Refine with SHALLOWEST features last (fine level)
         z1 = CoarseToFineAttention(
-            embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_3"
-        )([z2, c1_proj])
+            embed_dim, num_heads, mlp_dim, dropout_rate, name="coarse_attention_1"
+        )(
+            [z2, c3_proj]
+        )  # c3_proj (shallowest: index=49)
 
         # CNN Decoder with SpatialCrossAttention
         target_shape = get_target_spatial_shape(input_shape, downsampling_factor=8)
