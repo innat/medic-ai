@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from medicai.models import UNETR, DenseNet, SwinTransformer, SwinUNETR, ViT, DenseUNet121
+from medicai.models import UNETR, DenseNet, DenseUNet121, SwinTransformer, SwinUNETR, ViT
 
 
 def test_unet():

@@ -8,17 +8,8 @@ import keras
 import numpy as np
 from keras import layers
 
-from ...layers.swin import SwinBasicLayer, SwinPatchingAndEmbedding, SwinPatchMerging
-
-
-def parse_model_inputs(input_shape, input_tensor, **kwargs):
-    if input_tensor is None:
-        return keras.layers.Input(shape=input_shape, **kwargs)
-    else:
-        if not keras.backend.is_keras_tensor(input_tensor):
-            return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
-        else:
-            return input_tensor
+from medicai.layers import SwinBasicLayer, SwinPatchingAndEmbedding, SwinPatchMerging
+from medicai.utils import parse_model_inputs
 
 
 class SwinBackbone(keras.Model):
