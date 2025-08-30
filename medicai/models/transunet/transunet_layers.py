@@ -288,7 +288,7 @@ class CoarseToFineAttention(layers.Layer):
 
         # MLP for further refinement
         mlp_output = self.mlp_layer(attn_output)
-        output = self.layernorm(mlp_output)
+        output = self.layernorm(attn_output + mlp_output)
         return output
 
     def compute_output_shape(self, input_shape):
@@ -315,7 +315,6 @@ class SpatialCrossAttention(layers.Layer):
 
     Args:
         filters: Number of output filters/channels
-        num_heads: Number of attention heads (default: 4)
 
     Inputs:
         decoder_features: Decoder features to be refined
