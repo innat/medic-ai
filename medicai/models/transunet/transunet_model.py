@@ -4,7 +4,7 @@ from keras import layers
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.models import DenseNetBackbone
-from medicai.utils import get_conv_layer, parse_model_inputs
+from medicai.utils import get_act_layer, get_conv_layer, parse_model_inputs
 
 from .transunet_layers import (
     CoarseToFineAttention,
@@ -184,25 +184,34 @@ class TransUNet(keras.Model):
             filters=128,
             kernel_size=2,
             strides=2,
+            activation=None,
             padding="same",
         )(spatial_features)
+        d1 = layers.BatchNormalization()(d1)
+        d1 = get_act_layer(name="relu")(d1)
         d1 = SpatialCrossAttention(128)([d1, c1])  # Fuse with c1 (deepest, lowest resolution)
+
         d1 = get_conv_layer(
             spatial_dims=len(d1.shape[1:-1]),
             layer_type="conv",
             filters=128,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d1)
+        d1 = get_act_layer(name="relu")(d1)
+        d1 = layers.BatchNormalization()(d1)
+
         d1 = get_conv_layer(
             spatial_dims=len(d1.shape[1:-1]),
             layer_type="conv",
             filters=128,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d1)
+        d1 = layers.BatchNormalization()(d1)
+        d1 = get_act_layer(name="relu")(d1)
 
         # Level 2: Upsample and apply SpatialCrossAttention with c2 (MID-LEVEL - medium resolution)
         d2 = get_conv_layer(
@@ -211,25 +220,34 @@ class TransUNet(keras.Model):
             filters=64,
             kernel_size=2,
             strides=2,
+            activation=None,
             padding="same",
         )(d1)
+        d1 = layers.BatchNormalization()(d1)
+        d1 = get_act_layer(name="relu")(d1)
+
         d2 = SpatialCrossAttention(64)([d2, c2])  # Fuse with c2 (mid-level, medium resolution)
         d2 = get_conv_layer(
             spatial_dims=len(d2.shape[1:-1]),
             layer_type="conv",
             filters=64,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d2)
+        d2 = layers.BatchNormalization()(d2)
+        d2 = get_act_layer(name="relu")(d2)
+
         d2 = get_conv_layer(
             spatial_dims=len(d2.shape[1:-1]),
             layer_type="conv",
             filters=64,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d2)
+        d2 = layers.BatchNormalization()(d2)
+        d2 = get_act_layer(name="relu")(d2)
 
         # Level 3: Upsample and apply SpatialCrossAttention with c3 (SHALLOWEST - highest resolution)
         d3 = get_conv_layer(
@@ -238,25 +256,33 @@ class TransUNet(keras.Model):
             filters=32,
             kernel_size=2,
             strides=2,
+            activation=None,
             padding="same",
         )(d2)
+        d3 = layers.BatchNormalization()(d3)
+        d3 = get_act_layer(name="relu")(d3)
+
         d3 = SpatialCrossAttention(32)([d3, c3])  # Fuse with c3 (shallowest, highest resolution)
         d3 = get_conv_layer(
             spatial_dims=len(d3.shape[1:-1]),
             layer_type="conv",
             filters=32,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d3)
+        d3 = layers.BatchNormalization()(d3)
+        d3 = get_act_layer(name="relu")(d3)
         d3 = get_conv_layer(
             spatial_dims=len(d3.shape[1:-1]),
             layer_type="conv",
             filters=32,
             kernel_size=3,
-            activation="relu",
+            activation=None,
             padding="same",
         )(d3)
+        d3 = layers.BatchNormalization()(d3)
+        d3 = get_act_layer(name="relu")(d3)
 
         # Final output
         outputs = get_conv_layer(

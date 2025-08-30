@@ -361,6 +361,7 @@ class SpatialCrossAttention(layers.Layer):
             kernel_size=1,
             name="out_conv",
         )
+        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
 
         # Automatic resizing based on input shapes
         resize_factors = []
@@ -394,7 +395,7 @@ class SpatialCrossAttention(layers.Layer):
 
         # Apply attention
         attended = self.apply_attention(attention_weights, value)
-        output = self.out_conv(attended) + decoder_features
+        output = self.layernorm(self.out_conv(attended) + decoder_features)
         return output
 
     def compute_attention_scores(self, query, key):
