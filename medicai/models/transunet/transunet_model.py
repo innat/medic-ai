@@ -78,6 +78,7 @@ class TransUNet(keras.Model):
         mlp_dim=1024,
         num_queries=100,
         dropout_rate=0.1,
+        decoder_projection_filters=64,
         name=None,
         **kwargs,
     ):
@@ -180,10 +181,12 @@ class TransUNet(keras.Model):
             num_heads=num_heads, key_dim=embed_dim // num_heads, name="decoder_projection_attention"
         )(query=positional_queries, key=z1, value=z1)
 
-        projected_features = layers.Dense(64, name="decoder_projection_dense")(decoded_features)
-        spatial_features = layers.Reshape(target_shape + [64], name="decoder_reshape")(
-            projected_features
-        )
+        projected_features = layers.Dense(
+            decoder_projection_filters, name="decoder_projection_dense"
+        )(decoded_features)
+        spatial_features = layers.Reshape(
+            target_shape + [decoder_projection_filters], name="decoder_reshape"
+        )(projected_features)
 
         # [Build decoder pathway with proper skip connections]
         # Decoder stages fuse with encoder features of corresponding resolutions:
@@ -191,9 +194,16 @@ class TransUNet(keras.Model):
         # - d2 (medium resolution) ↔ c2 (mid-level features, medium resolution)
         # - d3 (highest resolution) ↔ c3 (shallowest features, highest resolution)
         spatial_dims_val = len(spatial_features.shape[1:-1])
-        d1 = self.build_decoder(128, spatial_dims_val, "decoder_stage1")(spatial_features, c1)
-        d2 = self.build_decoder(64, spatial_dims_val, "decoder_stage2")(d1, c2)
-        d3 = self.build_decoder(32, spatial_dims_val, "decoder_stage3")(d2, c3)
+        decoder_filters = [
+            decoder_projection_filters * 2,  # d1 filters (e.g., 128 if projection=64)
+            decoder_projection_filters,  # d2 filters (e.g., 64 if projection=64)
+            decoder_projection_filters // 2,  # d3 filters (e.g., 32 if projection=64)
+        ]
+        d1 = self.build_decoder(decoder_filters[0], spatial_dims_val, "decoder_stage1")(
+            spatial_features, c1
+        )
+        d2 = self.build_decoder(decoder_filters[1], spatial_dims_val, "decoder_stage2")(d1, c2)
+        d3 = self.build_decoder(decoder_filters[2], spatial_dims_val, "decoder_stage3")(d2, c3)
 
         # Final output
         outputs = get_conv_layer(
@@ -219,6 +229,7 @@ class TransUNet(keras.Model):
         self.mlp_dim = mlp_dim
         self.num_queries = num_queries
         self.dropout_rate = dropout_rate
+        self.decoder_projection_filters = decoder_projection_filters
 
     def build_decoder(self, filters, spatial_dims, stage_name):
         def apply(input_tensor, skip_tensor):
@@ -263,6 +274,7 @@ class TransUNet(keras.Model):
             "mlp_dim": self.mlp_dim,
             "num_queries": self.num_queries,
             "dropout_rate": self.dropout_rate,
+            "decoder_projection_filters": self.decoder_projection_filters,
         }
         return config
 
