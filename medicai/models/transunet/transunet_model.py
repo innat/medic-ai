@@ -125,7 +125,7 @@ class TransUNet(keras.Model):
             )(encoder_output)
 
         # Transformer Decoder
-        learnable_queries = LearnableQueries(num_queries, embed_dim, name="learnable_queries_1")(
+        learnable_queries = LearnableQueries(num_queries, embed_dim, name="learnable_queries")(
             encoder_output
         )
         decoder_output = learnable_queries
@@ -166,16 +166,24 @@ class TransUNet(keras.Model):
             [z2, c3_proj]
         )  # c3_proj (shallowest: index=49)
 
-        # CNN Decoder with SpatialCrossAttention
+        # CNN Decoder : Create learnable positional queries
         target_shape = self.get_target_spatial_shape(input_shape, downsampling_factor=8)
         num_spatial_positions = self.get_num_spatial_positions(target_shape)
         positional_queries = LearnableQueries(
-            num_spatial_positions, embed_dim, name="learnable_queries_2"
+            num_spatial_positions, embed_dim, name="positional_queries"
         )(
             z1
         )  # (batch, spatial_positions, embed_dim)
-        decoded_features = layers.Dense(64)(positional_queries)
-        spatial_features = layers.Reshape(target_shape + [64])(decoded_features)
+
+        # Use positional queries to attend to the transformer decoder's output (z1)
+        decoded_features = layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=embed_dim // num_heads, name="decoder_projection_attention"
+        )(query=positional_queries, key=z1, value=z1)
+
+        projected_features = layers.Dense(64, name="decoder_projection_dense")(decoded_features)
+        spatial_features = layers.Reshape(target_shape + [64], name="decoder_reshape")(
+            projected_features
+        )
 
         # Level 1: Upsample and apply SpatialCrossAttention with c1 (DEEPEST - lowest resolution)
         d1 = get_conv_layer(
