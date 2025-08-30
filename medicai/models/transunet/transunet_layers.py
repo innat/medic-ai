@@ -397,10 +397,14 @@ class SpatialCrossAttention(layers.Layer):
         return output
 
     def compute_attention_scores(self, query, key):
+        """This computes scores via an element-wise product of query and key,
+        summed over the channel dimension.
+        """
         pattern = {2: "bijd,bijd->bij", 3: "bijkd,bijkd->bijk"}
         return ops.einsum(pattern[self.spatial_dims], query, key)
 
     def apply_attention(self, weights, value):
+        """This applies the computed spatial attention weights to the value tensor."""
         pattern = {2: "bij,bijd->bijd", 3: "bijk,bijkd->bijkd"}
         return ops.einsum(pattern[self.spatial_dims], weights, value)
 

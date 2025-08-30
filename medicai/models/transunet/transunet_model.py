@@ -185,112 +185,15 @@ class TransUNet(keras.Model):
             projected_features
         )
 
-        # Level 1: Upsample and apply SpatialCrossAttention with c1 (DEEPEST - lowest resolution)
-        d1 = get_conv_layer(
-            spatial_dims=len(spatial_features.shape[1:-1]),
-            layer_type="conv_transpose",
-            filters=128,
-            kernel_size=2,
-            strides=2,
-            activation=None,
-            padding="same",
-        )(spatial_features)
-        d1 = layers.BatchNormalization()(d1)
-        d1 = get_act_layer(name="relu")(d1)
-        d1 = SpatialCrossAttention(128)([d1, c1])  # Fuse with c1 (deepest, lowest resolution)
-
-        d1 = get_conv_layer(
-            spatial_dims=len(d1.shape[1:-1]),
-            layer_type="conv",
-            filters=128,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d1)
-        d1 = layers.BatchNormalization()(d1)
-        d1 = get_act_layer(name="relu")(d1)
-
-        d1 = get_conv_layer(
-            spatial_dims=len(d1.shape[1:-1]),
-            layer_type="conv",
-            filters=128,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d1)
-        d1 = layers.BatchNormalization()(d1)
-        d1 = get_act_layer(name="relu")(d1)
-
-        # Level 2: Upsample and apply SpatialCrossAttention with c2 (MID-LEVEL - medium resolution)
-        d2 = get_conv_layer(
-            spatial_dims=len(d1.shape[1:-1]),
-            layer_type="conv_transpose",
-            filters=64,
-            kernel_size=2,
-            strides=2,
-            activation=None,
-            padding="same",
-        )(d1)
-        d2 = layers.BatchNormalization()(d2)
-        d2 = get_act_layer(name="relu")(d2)
-
-        d2 = SpatialCrossAttention(64)([d2, c2])  # Fuse with c2 (mid-level, medium resolution)
-        d2 = get_conv_layer(
-            spatial_dims=len(d2.shape[1:-1]),
-            layer_type="conv",
-            filters=64,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d2)
-        d2 = layers.BatchNormalization()(d2)
-        d2 = get_act_layer(name="relu")(d2)
-
-        d2 = get_conv_layer(
-            spatial_dims=len(d2.shape[1:-1]),
-            layer_type="conv",
-            filters=64,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d2)
-        d2 = layers.BatchNormalization()(d2)
-        d2 = get_act_layer(name="relu")(d2)
-
-        # Level 3: Upsample and apply SpatialCrossAttention with c3 (SHALLOWEST - highest resolution)
-        d3 = get_conv_layer(
-            spatial_dims=len(d2.shape[1:-1]),
-            layer_type="conv_transpose",
-            filters=32,
-            kernel_size=2,
-            strides=2,
-            activation=None,
-            padding="same",
-        )(d2)
-        d3 = layers.BatchNormalization()(d3)
-        d3 = get_act_layer(name="relu")(d3)
-
-        d3 = SpatialCrossAttention(32)([d3, c3])  # Fuse with c3 (shallowest, highest resolution)
-        d3 = get_conv_layer(
-            spatial_dims=len(d3.shape[1:-1]),
-            layer_type="conv",
-            filters=32,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d3)
-        d3 = layers.BatchNormalization()(d3)
-        d3 = get_act_layer(name="relu")(d3)
-        d3 = get_conv_layer(
-            spatial_dims=len(d3.shape[1:-1]),
-            layer_type="conv",
-            filters=32,
-            kernel_size=3,
-            activation=None,
-            padding="same",
-        )(d3)
-        d3 = layers.BatchNormalization()(d3)
-        d3 = get_act_layer(name="relu")(d3)
+        # [Build decoder pathway with proper skip connections]
+        # Decoder stages fuse with encoder features of corresponding resolutions:
+        # - d1 (lowest resolution) ↔ c1 (deepest features, lowest resolution)
+        # - d2 (medium resolution) ↔ c2 (mid-level features, medium resolution)
+        # - d3 (highest resolution) ↔ c3 (shallowest features, highest resolution)
+        spatial_dims_val = len(spatial_features.shape[1:-1])
+        d1 = self.build_decoder(128, spatial_dims_val, "decoder_stage1")(spatial_features, c1)
+        d2 = self.build_decoder(64, spatial_dims_val, "decoder_stage2")(d1, c2)
+        d3 = self.build_decoder(32, spatial_dims_val, "decoder_stage3")(d2, c3)
 
         # Final output
         outputs = get_conv_layer(
@@ -316,6 +219,36 @@ class TransUNet(keras.Model):
         self.mlp_dim = mlp_dim
         self.num_queries = num_queries
         self.dropout_rate = dropout_rate
+
+    def build_decoder(self, filters, spatial_dims, stage_name):
+        def apply(input_tensor, skip_tensor):
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv_transpose",
+                filters=filters,
+                kernel_size=2,
+                strides=2,
+                padding="same",
+                name=f"{stage_name}_transpose_conv",
+            )(input_tensor)
+            x = layers.BatchNormalization(name=f"{stage_name}_transpose_bn")(x)
+            x = get_act_layer(name="relu")(x)
+            x = SpatialCrossAttention(filters, name=f"{stage_name}_sca")([x, skip_tensor])
+
+            for i in range(2):
+                x = get_conv_layer(
+                    spatial_dims=spatial_dims,
+                    layer_type="conv",
+                    filters=filters,
+                    kernel_size=3,
+                    padding="same",
+                    name=f"{stage_name}_conv{i + 1}",
+                )(x)
+                x = layers.BatchNormalization(name=f"{stage_name}_conv{i + 1}_bn")(x)
+                x = get_act_layer(name="relu")(x)
+            return x
+
+        return apply
 
     def get_config(self):
         config = {
