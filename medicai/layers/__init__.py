@@ -6,3 +6,4 @@ from .swin import (
     SwinWindowAttention,
 )
 from .vit import ViTEncoderBlock, ViTPatchingAndEmbedding
+from .mlp import MLPBlock, SwinMLP, ViTMLP

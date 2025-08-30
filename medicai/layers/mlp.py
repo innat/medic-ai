@@ -4,18 +4,18 @@ hide_warnings()
 from keras import layers
 
 
-class SwinMLP(layers.Layer):
-    """A multi-layer perceptron (MLP) block used in Swin-MLP architecture.
+class MLPBlock(layers.Layer):
+    """A multi-layer perceptron (MLP) block.
 
     This layer consists of two fully connected (Dense) layers with a GELU
     activation in between, followed by dropout layers. It's a fundamental
-    building block in the Swin-MLP network, replacing the traditional
+    building block in the many network, replacing the traditional
     multi-head self-attention mechanism found in standard Transformer
     architectures.
     """
 
     def __init__(self, hidden_dim, output_dim, drop_rate=0.0, activation="gelu", **kwargs):
-        """Initializes the SwinMLP layer.
+        """Initializes the MLPBlock layer.
 
         Args:
             hidden_dim (int): The number of units in the hidden layer.
@@ -60,4 +60,6 @@ class SwinMLP(layers.Layer):
         return config
 
 
-class ViTMLP(SwinMLP): ...
+class ViTMLP(MLPBlock): ...
+
+class SwinMLP(MLPBlock): ...
