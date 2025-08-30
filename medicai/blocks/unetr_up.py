@@ -34,7 +34,7 @@ def UnetrUpBlock(
     def wrapper(inputs, skip):
         x = get_conv_layer(
             spatial_dims,
-            transpose=True,
+            layer_type="conv_transpose",
             filters=out_channels,
             kernel_size=upsample_kernel_size,
             strides=stride,

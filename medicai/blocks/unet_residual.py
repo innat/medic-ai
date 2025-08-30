@@ -35,6 +35,7 @@ def UnetResBlock(
         # first convolution
         x = get_conv_layer(
             spatial_dims,
+            layer_type="conv",
             filters=out_channels,
             kernel_size=kernel_size,
             strides=stride,
@@ -50,6 +51,7 @@ def UnetResBlock(
         # second convolution
         x = get_conv_layer(
             spatial_dims,
+            layer_type="conv",
             filters=out_channels,
             kernel_size=kernel_size,
             strides=1,
@@ -64,6 +66,7 @@ def UnetResBlock(
         if downsample:
             residual = get_conv_layer(
                 spatial_dims,
+                layer_type="conv",
                 filters=out_channels,
                 kernel_size=1,
                 strides=stride,

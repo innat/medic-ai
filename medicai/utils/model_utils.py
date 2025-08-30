@@ -5,37 +5,68 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 
 import keras
+import tensorflow as tf
 from keras import activations, layers
+from tensorflow.keras import layers
 
 
-def get_conv_layer(spatial_dims, transpose=False, **kwargs):
-    """Returns a convolutional layer (2D or 3D) or its transposed version.
+def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
+    """
+    Returns a convolutional layer (2D or 3D) based on the given type.
 
     Args:
         spatial_dims (int): Number of spatial dimensions. Must be 2 or 3.
-        transpose (bool): If True, returns a ConvNDTranspose layer
-                          (Conv2DTranspose or Conv3DTranspose).
-                          If False, returns a standard ConvND layer.
-        **kwargs: Additional keyword arguments passed to the layer constructor
-                  (e.g., filters, kernel_size, strides, padding, activation).
+        layer_type (str): One of {'conv', 'conv_transpose', 'separable_conv', 'depthwise_conv'}.
+        **kwargs: Additional keyword arguments for the layer (filters, kernel_size, strides, etc.).
 
     Returns:
-        tf.keras.layers.Layer: The corresponding convolutional or transposed convolutional layer.
+        keras.layers.Layer: A Keras convolutional layer.
 
-    Example:
-        conv2d = get_conv_layer(2, filters=32, kernel_size=3, padding='same')
-        conv3d_t = get_conv_layer(3, transpose=True, filters=16, kernel_size=3, strides=2)
+    Raises:
+        ValueError: If spatial_dims is not in {2, 3} or if an unsupported layer_type is requested.
     """
-    ConvND = {
-        2: layers.Conv2D,
-        3: layers.Conv3D,
-    }
-    ConvNDTranspose = {
-        2: layers.Conv2DTranspose,
-        3: layers.Conv3DTranspose,
-    }
+    SUPPORTED_TYPES = {"conv", "conv_transpose", "separable_conv", "depthwise_conv"}
 
-    ConvClass = ConvNDTranspose[spatial_dims] if transpose else ConvND[spatial_dims]
+    if spatial_dims not in (2, 3):
+        raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
+
+    layer_type = layer_type.lower()
+
+    # Validation rules
+    if layer_type in {"conv", "conv_transpose", "separable_conv"}:
+        if "filters" not in kwargs:
+            raise ValueError(f"'{layer_type}' requires a 'filters' argument.")
+    if layer_type == "depthwise_conv":
+        if "filters" in kwargs:
+            raise ValueError(
+                "'depthwise_conv' does not accept 'filters' (use 'kernel_size', 'depth_multiplier', etc.)."
+            )
+
+    # Dispatch
+    if layer_type == "conv":
+        ConvClass = {2: layers.Conv2D, 3: layers.Conv3D}[spatial_dims]
+
+    elif layer_type == "conv_transpose":
+        ConvClass = {2: layers.Conv2DTranspose, 3: layers.Conv3DTranspose}[spatial_dims]
+
+    elif layer_type == "separable_conv":
+        if spatial_dims == 2:
+            ConvClass = layers.SeparableConv2D
+        else:
+            raise ValueError("SeparableConv is only available in 2D.")
+
+    elif layer_type == "depthwise_conv":
+        if spatial_dims == 2:
+            ConvClass = layers.DepthwiseConv2D
+        else:
+            raise ValueError("DepthwiseConv is only available in 2D.")
+
+    else:
+        raise ValueError(
+            f"Unsupported layer_type: '{layer_type}'. "
+            f"Supported types are: {sorted(SUPPORTED_TYPES)}"
+        )
+
     return ConvClass(**kwargs)
 
 

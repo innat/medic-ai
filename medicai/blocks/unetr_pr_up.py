@@ -54,7 +54,7 @@ def UnetrPrUpBlock(
     # Base transpose conv initializer
     transp_conv_init = get_conv_layer(
         spatial_dims,
-        transpose=True,
+        layer_type="conv_transpose",
         filters=out_channels,
         kernel_size=upsample_kernel_size,
         strides=upsample_kernel_size,
@@ -69,7 +69,7 @@ def UnetrPrUpBlock(
                 def block_fn(x):
                     x = get_conv_layer(
                         spatial_dims,
-                        transpose=True,
+                        layer_type="conv_transpose",
                         filters=out_channels,
                         kernel_size=upsample_kernel_size,
                         strides=upsample_kernel_size,
@@ -90,7 +90,7 @@ def UnetrPrUpBlock(
                 def block_fn(x):
                     x = get_conv_layer(
                         spatial_dims,
-                        transpose=True,
+                        layer_type="conv_transpose",
                         filters=out_channels,
                         kernel_size=upsample_kernel_size,
                         strides=upsample_kernel_size,
@@ -110,7 +110,7 @@ def UnetrPrUpBlock(
             def block_fn(x):
                 x = get_conv_layer(
                     spatial_dims,
-                    transpose=True,
+                    layer_type="conv_transpose",
                     filters=out_channels,
                     kernel_size=upsample_kernel_size,
                     strides=upsample_kernel_size,

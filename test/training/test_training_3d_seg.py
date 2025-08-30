@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from medicai.losses import SparseDiceCELoss
 from medicai.metrics import SparseDiceMetric
-from medicai.models import SwinUNETR, UNETR
+from medicai.models import UNETR, SwinUNETR
 from medicai.transforms import (
     Compose,
     ScaleIntensityRange,

@@ -60,7 +60,7 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
 
         self.patch_embedding = get_conv_layer(
             self.spatial_dims,
-            transpose=False,
+            layer_type="conv",
             filters=self.hidden_dim,
             kernel_size=self.patch_size,
             strides=self.patch_size,

@@ -27,7 +27,7 @@ def UnetOutBlock(spatial_dims, num_classes, dropout_rate=None, activation=None):
     def wrapper(inputs):
         x = get_conv_layer(
             spatial_dims,
-            transpose=False,
+            layer_type="conv",
             filters=num_classes,
             kernel_size=1,
             strides=1,

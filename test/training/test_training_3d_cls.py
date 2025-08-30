@@ -63,7 +63,7 @@ def create_dummy_dataset(batch_size, num_classes):
 def test_training_with_meta():
     num_classes = 1
     model_list = [SwinTransformer, ViT]
-    
+
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.map(create_sample_dict, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(transformation, num_parallel_calls=tf.data.AUTOTUNE)

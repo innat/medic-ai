@@ -106,7 +106,9 @@ def UNet(
     x = decoder(x)
 
     # Final segmentation head
-    x = get_conv_layer(spatial_dims, filters=num_classes, kernel_size=1, padding="same")(x)
+    x = get_conv_layer(
+        spatial_dims, layer_type="conv", filters=num_classes, kernel_size=1, padding="same"
+    )(x)
     outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
     # built unet

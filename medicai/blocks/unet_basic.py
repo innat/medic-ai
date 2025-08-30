@@ -26,6 +26,7 @@ def UnetBasicBlock(
     def apply(inputs):
         x = get_conv_layer(
             spatial_dims,
+            layer_type="conv",
             filters=out_channels,
             kernel_size=kernel_size,
             strides=stride,
@@ -38,7 +39,12 @@ def UnetBasicBlock(
             x = layers.Dropout(dropout_rate)(x)
 
         x = get_conv_layer(
-            spatial_dims, filters=out_channels, kernel_size=kernel_size, strides=1, use_bias=False
+            spatial_dims,
+            layer_type="conv",
+            filters=out_channels,
+            kernel_size=kernel_size,
+            strides=1,
+            use_bias=False,
         )(x)
         x = get_norm_layer(norm_name)(x)
         x = get_act_layer("leaky_relu", negative_slope=0.01)(x)

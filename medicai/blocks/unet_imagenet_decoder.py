@@ -20,6 +20,7 @@ def Conv3x3BnReLU(filters, spatial_dims=2, use_batchnorm=True):
     def apply(x):
         x = get_conv_layer(
             spatial_dims,
+            layer_type="conv",
             filters=filters,
             kernel_size=3,
             strides=1,
@@ -52,7 +53,7 @@ def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm
         if block_type == "transpose":
             x = get_conv_layer(
                 spatial_dims,
-                transpose=True,
+                layer_type="conv_transpose",
                 filters=filters,
                 kernel_size=4,
                 strides=2,
