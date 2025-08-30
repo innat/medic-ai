@@ -306,13 +306,15 @@ class TransUNet(keras.Model):
         target_shape = []
         for i in range(spatial_dims):
             dim = input_shape[i]
-            if dim is not None:
-                if dim % downsampling_factor != 0:
-                    raise ValueError(
-                        f"Input spatial dimension {i} ({dim}) is not divisible by "
-                        f"downsampling_factor ({downsampling_factor})."
-                    )
-                target_shape.append(dim // downsampling_factor)
-            else:
-                target_shape.append(None)
+            if dim is None:
+                raise ValueError(
+                    f"Spatial dimension {i} of input_shape cannot be None for TransUNet, but got {dim}. "
+                    f"It's required to determine the number of positional queries."
+                )
+            if dim % downsampling_factor != 0:
+                raise ValueError(
+                    f"Input spatial dimension {i} ({dim}) is not divisible by "
+                    f"downsampling_factor ({downsampling_factor})."
+                )
+            target_shape.append(dim // downsampling_factor)
         return target_shape
