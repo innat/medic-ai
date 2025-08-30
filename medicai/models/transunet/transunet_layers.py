@@ -193,7 +193,7 @@ class TransUNetDecoderBlock(layers.Layer):
         p1 = self.masked_self_att(
             queries, queries, attention_mask=attention_mask, training=training
         )
-        p1 = self.layernorm1(queries + p1)
+        p1 = self.layernorm(queries + p1)
 
         # Masked cross-attention (now using the explicit MaskedCrossAttention)
         p2 = self.masked_cross_att(
