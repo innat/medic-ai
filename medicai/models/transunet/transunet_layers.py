@@ -15,7 +15,7 @@ class LearnableQueries(layers.Layer):
     Attributes:
         num_queries (int): Number of learnable query tokens to generate.
         embed_dim (int): Dimensionality of each query token.
-        queries (tf.Variable): Learnable query parameter matrix of shape
+        queries (keras.Variable): Learnable query parameter matrix of shape
                               (1, num_queries, embed_dim).
 
     Args:
@@ -80,7 +80,7 @@ class MaskedCrossAttention(layers.Layer):
     Includes residual connection, dropout, and layer normalization.
 
     Args:
-        embed_dim: Dimensionality of input and output representations
+        key_dim: Dimensionality of the key projections
         num_heads: Number of attention heads
         dropout_rate: Dropout rate for attention outputs (default: 0.1)
 
@@ -120,7 +120,7 @@ class MaskedCrossAttention(layers.Layer):
         config = super().get_config()
         config.update(
             {
-                "embed_dim": self.embed_dim,
+                "key_dim": self.key_dim,
                 "num_heads": self.num_heads,
                 "dropout_rate": self.dropout_rate,
             }
@@ -185,26 +185,24 @@ class TransUNetDecoderBlock(layers.Layer):
             drop_rate=self.dropout_rate,
             name="mlp_decode",
         )
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm3 = layers.LayerNormalization(epsilon=1e-6)
-
+        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.built = True
 
     def call(self, queries, encoder_output, attention_mask=None, training=None):
         # Masked self-attention
-        p1 = self.masked_self_att(queries, queries, attention_mask=attention_mask)
+        p1 = self.masked_self_att(
+            queries, queries, attention_mask=attention_mask, training=training
+        )
         p1 = self.layernorm1(queries + p1)
 
         # Masked cross-attention (now using the explicit MaskedCrossAttention)
         p2 = self.masked_cross_att(
             p1, key=encoder_output, value=encoder_output, mask=attention_mask, training=training
         )
-        p2 = self.layernorm2(p1 + p2)
 
         # MLP
         p3 = self.mlp_layer(p2)
-        output = self.layernorm3(p2 + p3)
+        output = self.layernorm(p2 + p3)
 
         return output
 
@@ -261,7 +259,7 @@ class CoarseToFineAttention(layers.Layer):
         )
         self.cross_attention.build(input_shape)
 
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.mlp_layer = TransUNetMLP(
             self.mlp_dim,
             activation="gelu",
@@ -269,20 +267,14 @@ class CoarseToFineAttention(layers.Layer):
             drop_rate=self.dropout_rate,
             name="mlp",
         )
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.dropout1 = layers.Dropout(self.dropout_rate)
-        self.dropout2 = layers.Dropout(self.dropout_rate)
 
     def call(self, query, features, training=None):
         # Cross-attention, with query coming from transformer decoder and features from CNN encoder
-        attn_output = self.cross_attention(query, key=features, value=features)
-        attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(query + attn_output)
+        attn_output = self.cross_attention(query, key=features, value=features, training=training)
 
         # MLP for further refinement
-        mlp_output = self.mlp_layer(out1)
-        mlp_output = self.dropout2(mlp_output, training=training)
-        output = self.layernorm2(out1 + mlp_output)
+        mlp_output = self.mlp_layer(attn_output)
+        output = self.layernorm(mlp_output + mlp_output)
         return output
 
     def get_config(self):

@@ -52,11 +52,13 @@ class TransUNet(keras.Model):
         ```python
         model3d = TransUNet(
             input_shape=(128, 128, 128, 1),
+            patch_size=(16, 16, 16),
             num_classes=3,
             embed_dim=256
         )
         model2d = TransUNet(
             input_shape=(224, 224, 3),
+            patch_size=(16, 16),
             num_classes=3,
             embed_dim=256
         )
