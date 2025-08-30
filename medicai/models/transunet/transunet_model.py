@@ -199,8 +199,8 @@ class TransUNet(keras.Model):
             activation=None,
             padding="same",
         )(d1)
-        d1 = get_act_layer(name="relu")(d1)
         d1 = layers.BatchNormalization()(d1)
+        d1 = get_act_layer(name="relu")(d1)
 
         d1 = get_conv_layer(
             spatial_dims=len(d1.shape[1:-1]),
@@ -223,8 +223,8 @@ class TransUNet(keras.Model):
             activation=None,
             padding="same",
         )(d1)
-        d1 = layers.BatchNormalization()(d1)
-        d1 = get_act_layer(name="relu")(d1)
+        d2 = layers.BatchNormalization()(d2)
+        d2 = get_act_layer(name="relu")(d2)
 
         d2 = SpatialCrossAttention(64)([d2, c2])  # Fuse with c2 (mid-level, medium resolution)
         d2 = get_conv_layer(
@@ -291,9 +291,12 @@ class TransUNet(keras.Model):
             filters=num_classes,
             kernel_size=1,
             activation=classifier_activation,
+            dtype="float32",
         )(d3)
 
-        super().__init__(inputs=inputs, outputs=outputs, name=name or "TransUNet", **kwargs)
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name or f"TransUNet{spatial_dims}D", **kwargs
+        )
 
         self.num_classes = num_classes
         self.patch_size = patch_size
