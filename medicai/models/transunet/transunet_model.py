@@ -303,4 +303,16 @@ class TransUNet(keras.Model):
     @staticmethod
     def get_target_spatial_shape(input_shape, downsampling_factor=8):
         spatial_dims = len(input_shape) - 1  # For 2D or 3D
-        return [input_shape[i] // downsampling_factor for i in range(spatial_dims)]
+        target_shape = []
+        for i in range(spatial_dims):
+            dim = input_shape[i]
+            if dim is not None:
+                if dim % downsampling_factor != 0:
+                    raise ValueError(
+                        f"Input spatial dimension {i} ({dim}) is not divisible by "
+                        f"downsampling_factor ({downsampling_factor})."
+                    )
+                target_shape.append(dim // downsampling_factor)
+            else:
+                target_shape.append(None)
+        return target_shape

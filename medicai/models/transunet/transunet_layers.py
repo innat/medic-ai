@@ -105,10 +105,9 @@ class MaskedCrossAttention(layers.Layer):
         self.attention = layers.MultiHeadAttention(
             num_heads=self.num_heads, key_dim=self.key_dim, dropout=self.dropout_rate
         )
-        self.attention.build(input_shape, input_shape)
         self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.dropout = layers.Dropout(self.dropout_rate)
-        self.built = True
+        super().build(input_shape)
 
     def call(self, query, key, value, mask=None, training=False):
         attn_output = self.attention(
@@ -364,15 +363,20 @@ class SpatialCrossAttention(layers.Layer):
         )
 
         # Automatic resizing based on input shapes
-        resize_factors = [
-            decoder_shape[i + 1] // skip_shape[i + 1] for i in range(self.spatial_dims)
-        ]
+        resize_factors = []
+        for i in range(self.spatial_dims):
+            if decoder_shape[i + 1] % skip_shape[i + 1] != 0:
+                raise ValueError(
+                    f"Spatial dimension {i} of decoder features ({decoder_shape[i + 1]}) "
+                    f"is not divisible by the corresponding skip feature dimension ({skip_shape[i + 1]})."
+                )
+            resize_factors.append(decoder_shape[i + 1] // skip_shape[i + 1])
         self.skip_resize = get_reshaping_layer(
             spatial_dims=self.spatial_dims, layer_type="upsampling", size=resize_factors
         )
         super().build(input_shape)
 
-    def call(self, inputs, skip_features=None):
+    def call(self, inputs):
         # inputs is a list [decoder_features, skip_features]
         decoder_features, skip_features = inputs
 
