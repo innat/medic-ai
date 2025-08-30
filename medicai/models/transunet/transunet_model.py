@@ -167,8 +167,8 @@ class TransUNet(keras.Model):
         )  # c3_proj (shallowest: index=49)
 
         # CNN Decoder with SpatialCrossAttention
-        target_shape = get_target_spatial_shape(input_shape, downsampling_factor=8)
-        num_spatial_positions = get_num_spatial_positions(target_shape)
+        target_shape = self.get_target_spatial_shape(input_shape, downsampling_factor=8)
+        num_spatial_positions = self.get_num_spatial_positions(target_shape)
         positional_queries = LearnableQueries(
             num_spatial_positions, embed_dim, name="learnable_queries_2"
         )(
@@ -177,7 +177,7 @@ class TransUNet(keras.Model):
         decoded_features = layers.Dense(64)(positional_queries)
         spatial_features = layers.Reshape(target_shape + [64])(decoded_features)
 
-        # Level 1: Upsample and apply SpatialCrossAttention with c3
+        # Level 1: Upsample and apply SpatialCrossAttention with c1 (DEEPEST - lowest resolution)
         d1 = get_conv_layer(
             spatial_dims=len(spatial_features.shape[1:-1]),
             layer_type="conv_transpose",
@@ -186,7 +186,7 @@ class TransUNet(keras.Model):
             strides=2,
             padding="same",
         )(spatial_features)
-        d1 = SpatialCrossAttention(128, name="spatial_cross_attention_1")([d1, c3])
+        d1 = SpatialCrossAttention(128)([d1, c1])  # Fuse with c1 (deepest, lowest resolution)
         d1 = get_conv_layer(
             spatial_dims=len(d1.shape[1:-1]),
             layer_type="conv",
@@ -204,7 +204,7 @@ class TransUNet(keras.Model):
             padding="same",
         )(d1)
 
-        # Level 2: Upsample and apply SpatialCrossAttention with c2
+        # Level 2: Upsample and apply SpatialCrossAttention with c2 (MID-LEVEL - medium resolution)
         d2 = get_conv_layer(
             spatial_dims=len(d1.shape[1:-1]),
             layer_type="conv_transpose",
@@ -213,7 +213,7 @@ class TransUNet(keras.Model):
             strides=2,
             padding="same",
         )(d1)
-        d2 = SpatialCrossAttention(64, name="spatial_cross_attention_2")([d2, c2])
+        d2 = SpatialCrossAttention(64)([d2, c2])  # Fuse with c2 (mid-level, medium resolution)
         d2 = get_conv_layer(
             spatial_dims=len(d2.shape[1:-1]),
             layer_type="conv",
@@ -231,7 +231,7 @@ class TransUNet(keras.Model):
             padding="same",
         )(d2)
 
-        # Level 3: Upsample and apply SpatialCrossAttention with c1
+        # Level 3: Upsample and apply SpatialCrossAttention with c3 (SHALLOWEST - highest resolution)
         d3 = get_conv_layer(
             spatial_dims=len(d2.shape[1:-1]),
             layer_type="conv_transpose",
@@ -240,7 +240,7 @@ class TransUNet(keras.Model):
             strides=2,
             padding="same",
         )(d2)
-        d3 = SpatialCrossAttention(32, name="spatial_cross_attention_3")([d3, c1])
+        d3 = SpatialCrossAttention(32)([d3, c3])  # Fuse with c3 (shallowest, highest resolution)
         d3 = get_conv_layer(
             spatial_dims=len(d3.shape[1:-1]),
             layer_type="conv",
@@ -296,11 +296,11 @@ class TransUNet(keras.Model):
         }
         return config
 
+    @staticmethod
+    def get_num_spatial_positions(target_shape):
+        return np.prod(target_shape)
 
-def get_num_spatial_positions(target_shape):
-    return np.prod(target_shape)
-
-
-def get_target_spatial_shape(input_shape, downsampling_factor=8):
-    spatial_dims = len(input_shape) - 1  # For 2D or 3D
-    return [input_shape[i] // downsampling_factor for i in range(spatial_dims)]
+    @staticmethod
+    def get_target_spatial_shape(input_shape, downsampling_factor=8):
+        spatial_dims = len(input_shape) - 1  # For 2D or 3D
+        return [input_shape[i] // downsampling_factor for i in range(spatial_dims)]

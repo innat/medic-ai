@@ -373,12 +373,8 @@ class SpatialCrossAttention(layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs, skip_features=None):
-        if skip_features is None:
-            # inputs is a list [decoder_features, skip_features]
-            decoder_features, skip_features = inputs
-        else:
-            # inputs is decoder_features, skip_features is separate
-            decoder_features = inputs
+        # inputs is a list [decoder_features, skip_features]
+        decoder_features, skip_features = inputs
 
         # Auto-resize skip features to match decoder
         skip_resized = self.skip_resize(skip_features)
