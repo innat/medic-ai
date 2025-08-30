@@ -1,2 +1,2 @@
-from .densenet_backbone import DenseNet3DBackbone
-from .densenet_model import DenseNet
+from .densenet import DenseNet
+from .densenet_backbone import DenseNetBackbone

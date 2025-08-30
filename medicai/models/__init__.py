@@ -1,5 +1,5 @@
-from .densenet import DenseNet, DenseNet3DBackbone
+from .densenet import DenseNet, DenseNetBackbone
 from .swin import SwinTransformer, SwinUNETR
-from .unet import UNet
+from .unet import DenseUNet121, DenseUNet169, DenseUNet201, DenseUNetBase
 from .unetr import UNETR
 from .vit import ViT, ViTBackbone

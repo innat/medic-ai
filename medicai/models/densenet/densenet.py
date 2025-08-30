@@ -1,12 +1,12 @@
 import keras
 from keras import layers
 
-from ...utils.model_utils import BACKBONE_ARGS
-from .densenet_backbone import DenseNet3DBackbone, parse_model_inputs
+from ...utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO, get_pooling_layer, parse_model_inputs
+from .densenet_backbone import DenseNetBackbone
 
 
 @keras.saving.register_keras_serializable(package="densenet3d.model")
-class DenseNet3D(keras.Model):
+class DenseNet(keras.Model):
     """
     3D variant of DenseNet architecture for volumetric data.
 
@@ -48,27 +48,33 @@ class DenseNet3D(keras.Model):
 
         blocks = BACKBONE_ARGS[variant]
         name = name or variant
-        GlobalAvgPool = layers.GlobalAveragePooling3D
-        GlobalMaxPool = layers.GlobalMaxPooling3D
+
+        GlobalAvgPool = get_pooling_layer(
+            spatial_dims=len(input_shape) - 1, layer_type="avg", global_pool=True
+        )
+        GlobalMaxPool = get_pooling_layer(
+            spatial_dims=len(input_shape) - 1,
+            layer_type="max",
+        )
 
         inputs = parse_model_inputs(input_shape, input_tensor)
 
         # The actual backbone feature extractor (Functional)
-        encoder_model = DenseNet3DBackbone(
+        encoder_model = DenseNetBackbone(
             blocks=blocks,
             include_rescaling=include_rescaling,
             input_tensor=inputs,
-            name="densenet3d_backbone",
+            name="densenet_backbone",
         )
         encoder_outputs = encoder_model.output
 
         if include_top:
-            x = GlobalAvgPool(name="avg_pool")(encoder_outputs)
+            x = GlobalAvgPool(encoder_outputs)
             x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
         elif pooling == "avg":
-            x = GlobalAvgPool(name="avg_pool")(encoder_outputs)
+            x = GlobalAvgPool(encoder_outputs)
         elif pooling == "max":
-            x = GlobalMaxPool(name="max_pool")(encoder_outputs)
+            x = GlobalMaxPool(encoder_outputs)
         else:
             x = encoder_outputs
 
@@ -97,3 +103,8 @@ class DenseNet3D(keras.Model):
     @classmethod
     def from_config(cls, config):
         return cls(**config)
+
+
+BACKBONE_ZOO["densenet121"] = DenseNet
+BACKBONE_ZOO["densenet169"] = DenseNet
+BACKBONE_ZOO["densenet201"] = DenseNet

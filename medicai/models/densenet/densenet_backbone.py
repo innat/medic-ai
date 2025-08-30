@@ -1,20 +1,11 @@
 import keras
 from keras import layers
 
-from ...layers.densenet import DenseBlock3D, TransitionLayer3D
+from ...utils import get_conv_layer, get_pooling_layer, parse_model_inputs
+from .densenet_layers import DenseBlock, TransitionLayer
 
 
-def parse_model_inputs(input_shape, input_tensor, **kwargs):
-    if input_tensor is None:
-        return keras.layers.Input(shape=input_shape, **kwargs)
-    else:
-        if not keras.backend.is_keras_tensor(input_tensor):
-            return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
-        else:
-            return input_tensor
-
-
-class DenseNet3DBackbone(keras.Model):
+class DenseNetBackbone(keras.Model):
     """
     A 3D DenseNet backbone model without classification head.
 
@@ -42,7 +33,7 @@ class DenseNet3DBackbone(keras.Model):
         compression=0.5,
         dropout_rate=0.0,
         include_rescaling=False,
-        name="densenet3d_backbone",
+        name="densenet_backbone",
         **kwargs
     ):
         """Builds a functional DenseNet3D backbone"""
@@ -53,21 +44,35 @@ class DenseNet3DBackbone(keras.Model):
             x = layers.Rescaling(1.0 / 255)(x)
 
         # Initial convolution stem
-        x = layers.Conv3D(64, kernel_size=7, strides=2, padding="same", use_bias=False)(x)
+        x = get_conv_layer(
+            spatial_dims=len(x.shape) - 2,
+            layer_type="conv",
+            filters=64,
+            kernel_size=7,
+            strides=2,
+            padding="same",
+            use_bias=False,
+        )(x)
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
-        x = layers.MaxPooling3D(pool_size=3, strides=2, padding="same")(x)
+        x = get_pooling_layer(
+            spatial_dims=len(x.shape) - 2,
+            layer_type="max",
+            pool_size=3,
+            strides=2,
+            padding="same",
+        )(x)
 
         # Dense blocks and transitions
         num_channels = 64
 
         for i, num_layers in enumerate(blocks):
-            x = DenseBlock3D(x, num_layers, growth_rate, bn_size, dropout_rate)
+            x = DenseBlock(x, num_layers, growth_rate, bn_size, dropout_rate)
             num_channels += num_layers * growth_rate
 
             if i != len(blocks) - 1:
                 out_channels = int(num_channels * compression)
-                x = TransitionLayer3D(x, out_channels)
+                x = TransitionLayer(x, out_channels)
                 num_channels = out_channels
 
         # Final batch norm

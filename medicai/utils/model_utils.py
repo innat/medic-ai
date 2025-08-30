@@ -91,13 +91,13 @@ def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
     return LayerClass(**kwargs)
 
 
-def get_pooling_layer(spatial_dims, pool_type, global_pool=False, **kwargs):
+def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
     """
     Returns a pooling layer (Max or Average) for 1D, 2D, or 3D inputs, including global pooling.
 
     Args:
         spatial_dims (int): Number of spatial dimensions. Must be 1, 2, or 3.
-        pool_type (str): Type of pooling. Must be "max" or "avg".
+        layer_type (str): Type of pooling. Must be "max" or "avg".
         global_pool (bool): If True, returns a Global pooling layer (GlobalMaxPooling or GlobalAveragePooling).
                             If False, returns regular pooling (MaxPooling or AveragePooling).
         **kwargs: Additional keyword arguments passed to the layer constructor
@@ -114,7 +114,7 @@ def get_pooling_layer(spatial_dims, pool_type, global_pool=False, **kwargs):
         gap3d = get_pooling_layer(3, "avg", global_pool=True)
     """
     assert spatial_dims in (2, 3), "spatial_dims must be 2, or 3"
-    assert pool_type in ("max", "avg"), "pool_type must be 'max' or 'avg'"
+    assert layer_type in ("max", "avg"), "pool_type must be 'max' or 'avg'"
 
     if global_pool:
         layers_map = {
@@ -127,7 +127,7 @@ def get_pooling_layer(spatial_dims, pool_type, global_pool=False, **kwargs):
             "avg": {2: layers.AveragePooling2D, 3: layers.AveragePooling3D},
         }
 
-    LayerClass = layers_map[pool_type][spatial_dims]
+    LayerClass = layers_map[layer_type][spatial_dims]
     return LayerClass(**kwargs)
 
 
@@ -206,6 +206,16 @@ def get_norm_layer(norm_name, **kwargs):
         raise ValueError(f"Unsupported normalization: {norm_name}")
 
 
+def parse_model_inputs(input_shape, input_tensor, **kwargs):
+    if input_tensor is None:
+        return keras.layers.Input(shape=input_shape, **kwargs)
+    else:
+        if not keras.backend.is_keras_tensor(input_tensor):
+            return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
+        else:
+            return input_tensor
+
+
 BACKBONE_ARGS = {
     "densenet121": [6, 12, 24, 16],
     "densenet169": [6, 12, 32, 32],
@@ -219,9 +229,3 @@ SKIP_CONNECTION_ARGS = {
 }
 
 BACKBONE_ZOO = {}
-
-KERAS_APPLICATION = {
-    "densenet121": partial(keras.applications.DenseNet121, weights=None),
-    "densenet169": partial(keras.applications.DenseNet169, weights=None),
-    "densenet201": partial(keras.applications.DenseNet201, weights=None),
-}
