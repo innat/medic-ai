@@ -177,18 +177,17 @@ class TransUNet(keras.Model):
         )  # (batch, spatial_positions, embed_dim)
 
         # Use positional queries to attend to the transformer decoder's output (z1)
-        decoded_features = layers.MultiHeadAttention(
-            num_heads=num_heads, key_dim=embed_dim // num_heads, name="decoder_projection_attention"
-        )(query=positional_queries, key=z1, value=z1)
+        # decoded_features = layers.MultiHeadAttention(
+        #     num_heads=num_heads, key_dim=embed_dim // num_heads, name="decoder_projection_attention"
+        # )(query=positional_queries, key=z1, value=z1)
 
         projected_features = layers.Dense(
             decoder_projection_filters, name="decoder_projection_dense"
-        )(decoded_features)
+        )(positional_queries)
         spatial_features = layers.Reshape(
             target_shape + [decoder_projection_filters], name="decoder_reshape"
         )(projected_features)
 
-        # [Build decoder pathway with proper skip connections]
         # Decoder stages fuse with encoder features of corresponding resolutions:
         # - d1 (lowest resolution) ↔ c1 (deepest features, lowest resolution)
         # - d2 (medium resolution) ↔ c2 (mid-level features, medium resolution)
