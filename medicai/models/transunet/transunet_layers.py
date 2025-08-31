@@ -122,7 +122,6 @@ class TransUNetDecoderBlock(layers.Layer):
             activation="gelu",
             output_dim=self.embed_dim,
             drop_rate=self.dropout_rate,
-            kernel_initializer=HeNormal(),
             name="mlp_decode",
         )
         self.mlp_layer.build(query_shape)
