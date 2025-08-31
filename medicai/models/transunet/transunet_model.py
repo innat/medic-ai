@@ -1,15 +1,14 @@
 import keras
 import numpy as np
 from keras import layers
+from keras.initializers import HeNormal
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.models import DenseNetBackbone
-from medicai.utils import get_act_layer, get_conv_layer, parse_model_inputs
+from medicai.utils import get_act_layer, get_conv_layer, get_reshaping_layer, parse_model_inputs
 
 from .transunet_layers import (
     CoarseToFineAttention,
-    LearnableQueries,
-    SpatialCrossAttention,
     TransUNetDecoderBlock,
 )
 
@@ -110,8 +109,8 @@ class TransUNet(keras.Model):
             patch_size=patch_size,
             hidden_dim=embed_dim,
             num_channels=p3.shape[-1],
-            use_class_token=False,
-            use_patch_bias=False,
+            use_class_token=True,
+            use_patch_bias=True,
             name="transunet_vit_patching_and_embedding",
         )(p3)
 
@@ -125,15 +124,15 @@ class TransUNet(keras.Model):
                 name=f"transunet_vit_feature{i + 1}",
             )(encoder_output)
 
+        # The first token is the class token (0), the rest are the spatial patches (1).
+        patch_tokens = encoder_output[:, 1:, :]  # spatial tokens without class token
+
         # Transformer Decoder
-        learnable_queries = LearnableQueries(num_queries, embed_dim, name="learnable_queries")(
-            encoder_output
-        )
-        decoder_output = learnable_queries
+        decoder_output = patch_tokens
         for i in range(num_decoder_layers):
             decoder_output = TransUNetDecoderBlock(
                 embed_dim, num_heads, mlp_dim, dropout_rate, name=f"transunet_decoder_block_{i+1}"
-            )([decoder_output, encoder_output])
+            )([decoder_output, patch_tokens])
 
         # Coarse-to-fine Z-Blocks
         # Prepare CNN features for Z-Blocks (flatten spatial dimensions)
@@ -169,21 +168,11 @@ class TransUNet(keras.Model):
 
         # CNN Decoder : Create learnable positional queries
         target_shape = self.get_target_spatial_shape(input_shape, downsampling_factor=8)
-        num_spatial_positions = self.get_num_spatial_positions(target_shape)
-        positional_queries = LearnableQueries(
-            num_spatial_positions, embed_dim, name="positional_queries"
-        )(
-            z1
-        )  # (batch, spatial_positions, embed_dim)
-
-        # Use positional queries to attend to the transformer decoder's output (z1)
-        # decoded_features = layers.MultiHeadAttention(
-        #     num_heads=num_heads, key_dim=embed_dim // num_heads, name="decoder_projection_attention"
-        # )(query=positional_queries, key=z1, value=z1)
-
         projected_features = layers.Dense(
-            decoder_projection_filters, name="decoder_projection_dense"
-        )(positional_queries)
+            decoder_projection_filters,
+            kernel_initializer=HeNormal(),
+            name="decoder_projection_dense",
+        )(z1)
         spatial_features = layers.Reshape(
             target_shape + [decoder_projection_filters], name="decoder_reshape"
         )(projected_features)
@@ -210,6 +199,7 @@ class TransUNet(keras.Model):
             layer_type="conv",
             filters=num_classes,
             kernel_size=1,
+            kernel_initializer=HeNormal(),
             activation=classifier_activation,
             dtype="float32",
         )(d3)
@@ -232,19 +222,42 @@ class TransUNet(keras.Model):
 
     def build_decoder(self, filters, spatial_dims, stage_name):
         def apply(input_tensor, skip_tensor):
+            # Upsample previous decoder stage features using the CUP approach
+            # The Cascaded Up-sampling (CUP) block consists of UpSampling followed by a ConvND and ReLU
+            x = get_reshaping_layer(
+                spatial_dims=spatial_dims,
+                layer_type="upsampling",
+                size=2,
+                name=f"{stage_name}_upsample",
+            )(input_tensor)
             x = get_conv_layer(
                 spatial_dims=spatial_dims,
-                layer_type="conv_transpose",
+                layer_type="conv",
                 filters=filters,
-                kernel_size=2,
-                strides=2,
+                kernel_size=3,
+                activation="relu",
                 padding="same",
-                name=f"{stage_name}_transpose_conv",
-            )(input_tensor)
-            x = layers.BatchNormalization(name=f"{stage_name}_transpose_bn")(x)
+                name=f"{stage_name}_conv_upsample",
+            )(x)
+            x = layers.BatchNormalization(name=f"{stage_name}_conv_upsample_bn")(x)
             x = get_act_layer(name="relu")(x)
-            x = SpatialCrossAttention(filters, name=f"{stage_name}_sca")([x, skip_tensor])
 
+            # Upsample the skip_tensor to match the new shape of x
+            # This is the same fix as before, ensuring shapes match
+            upsample_factor = tuple(
+                s_out // s_in for s_out, s_in in zip(x.shape[1:-1], skip_tensor.shape[1:-1])
+            )
+            upsampled_skip = get_reshaping_layer(
+                spatial_dims=spatial_dims,
+                layer_type="upsampling",
+                size=upsample_factor,
+                name=f"{stage_name}_upsample_skip",
+            )(skip_tensor)
+
+            # Concatenate with upsampled skip connection
+            x = layers.Concatenate(axis=-1, name=f"{stage_name}_concat")([x, upsampled_skip])
+
+            # Two standard convolutional blocks to process concatenated features
             for i in range(2):
                 x = get_conv_layer(
                     spatial_dims=spatial_dims,
@@ -276,10 +289,6 @@ class TransUNet(keras.Model):
             "decoder_projection_filters": self.decoder_projection_filters,
         }
         return config
-
-    @staticmethod
-    def get_num_spatial_positions(target_shape):
-        return np.prod(target_shape)
 
     @staticmethod
     def get_target_spatial_shape(input_shape, downsampling_factor=8):

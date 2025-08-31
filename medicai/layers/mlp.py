@@ -30,8 +30,8 @@ class MLPBlock(layers.Layer):
         self._activation_identifier = activation
         self.drop_rate = drop_rate
         self.activation = layers.Activation(self._activation_identifier)
-        self.fc1 = layers.Dense(self.hidden_dim)
-        self.fc2 = layers.Dense(self.output_dim)
+        self.fc1 = layers.Dense(self.hidden_dim, **kwargs)
+        self.fc2 = layers.Dense(self.output_dim, **kwargs)
         self.dropout = layers.Dropout(self.drop_rate)
 
     def build(self, input_shape):
