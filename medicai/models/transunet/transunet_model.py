@@ -45,7 +45,6 @@ class TransUNet(keras.Model):
         - Transformer: Processes patches with self-attention for global context
         - Transformer Decoder: Refines features with masked cross-attention
         - Coarse-to-Fine Attention: Z-blocks fuse transformer and CNN features
-        - CNN Decoder: Upsamples with spatial cross-attention to skip connections
 
     Example:
         ```python
@@ -75,7 +74,6 @@ class TransUNet(keras.Model):
         num_heads=8,
         embed_dim=256,
         mlp_dim=1024,
-        num_queries=100,
         dropout_rate=0.1,
         decoder_projection_filters=64,
         name=None,
@@ -216,7 +214,6 @@ class TransUNet(keras.Model):
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
-        self.num_queries = num_queries
         self.dropout_rate = dropout_rate
         self.decoder_projection_filters = decoder_projection_filters
 
@@ -284,7 +281,6 @@ class TransUNet(keras.Model):
             "num_heads": self.num_heads,
             "embed_dim": self.embed_dim,
             "mlp_dim": self.mlp_dim,
-            "num_queries": self.num_queries,
             "dropout_rate": self.dropout_rate,
             "decoder_projection_filters": self.decoder_projection_filters,
         }
