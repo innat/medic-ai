@@ -34,14 +34,14 @@ class MaskedCrossAttention(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        input_shape_x, input_shape_y = input_shape
+        query_shape, key_value_shape = input_shape
         self.attention = layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.key_dim,
             kernel_initializer=HeNormal(),
             dropout=self.dropout_rate,
         )
-        self.attention.build(input_shape_x, input_shape_y)
+        self.attention.build([query_shape, key_value_shape])
         self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.dropout = layers.Dropout(self.dropout_rate)
         super().build(input_shape)
