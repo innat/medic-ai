@@ -48,6 +48,11 @@ class TransUNet(keras.Model):
         name=None,
         **kwargs,
     ):
+
+        if any(dim is None for dim in input_shape[:-1]):
+            raise ValueError(
+                "TransUNet requires a fixed spatial input shape. " f"Got input_shape={input_shape}"
+            )
         spatial_dims = len(input_shape) - 1
 
         if isinstance(patch_size, int):

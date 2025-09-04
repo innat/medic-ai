@@ -49,16 +49,12 @@ class MaskedCrossAttention(layers.Layer):
         else:
             self.attention.build(input_shape, input_shape, input_shape)
 
-        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
-        self.dropout = layers.Dropout(self.dropout_rate)
         super().build(input_shape)
 
     def call(self, query, key, value, mask=None, training=False):
-        attn_output = self.attention(
+        output = self.attention(
             query=query, key=key, value=value, attention_mask=mask, training=training
         )
-        attn_output = self.dropout(attn_output, training=training)
-        output = self.layernorm(query + attn_output)
         return output
 
     def get_config(self):
