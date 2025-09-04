@@ -137,7 +137,7 @@ class QueryRefinementBlock(layers.Layer):
         # 1. Cross-attention
         queries_norm = self.layernorm1(queries)
         attn_output = self.cross_attention(
-            query=queries_norm, key=encoder_output, value=encoder_output, training=training
+            [queries_norm, encoder_output, encoder_output], training=training
         )
         # Residual connection and layer norm
         x = queries + attn_output
