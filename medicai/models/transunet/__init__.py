@@ -1,6 +1,7 @@
 from .transunet_layers import (
     CoarseToFineAttention,
+    LearnableQueries,
     MaskedCrossAttention,
-    TransUNetDecoderBlock,
+    QueryRefinementBlock,
 )
 from .transunet_model import TransUNet

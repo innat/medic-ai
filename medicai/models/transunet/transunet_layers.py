@@ -1,4 +1,5 @@
-from keras import layers
+import keras
+from keras import layers, ops
 from keras.initializers import HeNormal
 
 from medicai.layers import TransUNetMLP
@@ -63,29 +64,27 @@ class MaskedCrossAttention(layers.Layer):
         return config
 
 
-class TransUNetDecoderBlock(layers.Layer):
-    """Transformer decoder block with masked self-attention and cross-attention.
+class QueryRefinementBlock(layers.Layer):
+    """Transformer block for refining learnable queries using encoder output.
 
-    Implements a single decoder block with:
-    1. Masked self-attention (autoregressive)
-    2. Cross-attention to encoder features
-    3. MLP for feature transformation
-    4. Residual connections and layer normalization
+    This is the P-block from the paper's decoder. It refines a set of learnable
+    query tokens by applying cross-attention with features from the Vision Transformer
+    encoder. This is followed by a feed-forward network (MLP) and residual connections.
 
     Args:
-        embed_dim: Dimensionality of input and output representations
-        num_heads: Number of attention heads
-        mlp_dim: Hidden dimension of the MLP (typically 4× embed_dim)
-        dropout_rate: Dropout rate for attention and MLP (default: 0.1)
+        embed_dim: Dimensionality of input and output token representations.
+        num_heads: Number of attention heads.
+        mlp_dim: Hidden dimension of the MLP layer.
+        dropout_rate: Dropout rate for attention and MLP (default: 0.1).
 
     Inputs:
-        queries: Decoder input of shape (batch_size, num_queries, embed_dim)
-        encoder_output: Encoder features of shape (batch_size, seq_len, embed_dim)
-        attention_mask: Optional mask for autoregressive generation
-        training: Boolean for training mode
+        A list of two tensors:
+        - queries: The learnable query tokens of shape `(batch_size, num_queries, embed_dim)`.
+        - encoder_output: The output from the Vision Transformer encoder,
+          of shape `(batch_size, num_patches, embed_dim)`.
 
     Outputs:
-        Tensor of shape (batch_size, num_queries, embed_dim) with refined features
+        A tensor of the same shape as the input queries, with refined features.
     """
 
     def __init__(self, embed_dim, num_heads, mlp_dim, dropout_rate=0.1, **kwargs):
@@ -96,28 +95,14 @@ class TransUNetDecoderBlock(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        # input_shape will be a list: [query_shape, encoder_output_shape]
-        query_shape, _ = input_shape
-
-        # Masked self-attention
-        self.masked_self_att = layers.MultiHeadAttention(
-            num_heads=self.num_heads,
-            key_dim=self.embed_dim // self.num_heads,
-            dropout=self.dropout_rate,
-            kernel_initializer=HeNormal(),
-        )
-        self.masked_self_att.build(query_shape, query_shape)
-
-        # Use MaskedCrossAttention
-        self.masked_cross_att = MaskedCrossAttention(
+        query_shape, encoder_output_shape = input_shape
+        self.cross_attention = MaskedCrossAttention(
             num_heads=self.num_heads,
             key_dim=self.embed_dim // self.num_heads,
             dropout_rate=self.dropout_rate,
         )
-        self.masked_cross_att.build(query_shape)
-
-        # MLP
-        self.mlp_layer = TransUNetMLP(
+        self.cross_attention.build(query_shape, encoder_output_shape)
+        self.mlp_layer = self.TransUNetMLP(
             self.mlp_dim,
             activation="gelu",
             output_dim=self.embed_dim,
@@ -125,27 +110,23 @@ class TransUNetDecoderBlock(layers.Layer):
             name="mlp_decode",
         )
         self.mlp_layer.build(query_shape)
-
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
-        self.built = True
 
-    def call(self, inputs, attention_mask=None, training=None):
-        # Unpack inputs: [queries, encoder_output]
+    def call(self, inputs, training=None):
         queries, encoder_output = inputs
 
-        # Masked self-attention
-        p1 = self.masked_self_att(queries, queries, use_causal_mask=True, training=training)
-        p1 = self.layernorm1(queries + p1)
-
-        # Masked cross-attention
-        p2 = self.masked_cross_att(
-            p1, key=encoder_output, value=encoder_output, mask=attention_mask, training=training
+        # 1. Cross-attention
+        attn_output = self.cross_attention(
+            query=queries, key=encoder_output, value=encoder_output, training=training
         )
+        # Residual connection and layer norm
+        x = self.layernorm1(queries + attn_output)
 
-        # MLP
-        p3 = self.mlp_layer(p2)
-        output = self.layernorm2(p2 + p3)
+        # 2. MLP
+        mlp_output = self.mlp_layer(x)
+        # Residual connection and layer norm
+        output = self.layernorm2(x + mlp_output)
 
         return output
 
@@ -237,3 +218,44 @@ class CoarseToFineAttention(layers.Layer):
             }
         )
         return config
+
+
+class LearnableQueries(layers.Layer):
+    """Initializes and provides a set of learnable query tokens.
+
+    These tokens are learnable parameters of the model, initialized with random
+    values. During the `call` method, they are tiled to match the batch size
+    of the input tensor, providing a unique set of queries for each sample in the batch.
+
+    Args:
+        num_queries: The number of learnable queries to create.
+        embed_dim: The dimensionality of each query token.
+
+    Inputs:
+        Any tensor, used only to infer the batch size for tiling the queries.
+
+    Outputs:
+        A tensor of shape `(batch_size, num_queries, embed_dim)` containing
+        the tiled learnable queries.
+    """
+
+    def __init__(self, num_queries, embed_dim, **kwargs):
+        super().__init__(**kwargs)
+        self.num_queries = num_queries
+        self.embed_dim = embed_dim
+
+    def build(self, input_shape):
+        self.queries = self.add_weight(
+            name="learnable_queries",
+            shape=[1, self.num_queries, self.embed_dim],
+            initializer=keras.initializers.RandomNormal(stddev=0.02),
+            trainable=True,
+        )
+        self.built = True
+
+    def call(self, inputs):
+        batch_size = ops.shape(inputs)[0]
+        return ops.tile(self.queries, [batch_size, 1, 1])
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], self.num_queries, self.embed_dim)
