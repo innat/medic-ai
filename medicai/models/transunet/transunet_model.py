@@ -237,7 +237,7 @@ class TransUNet(keras.Model):
                 strides=2,
                 padding="same",
                 name=f"final_upsample_conv_{i}",
-            )
+            )(x)
             x = keras.layers.BatchNormalization(name=f"final_upsample_bn_{i}")(x)
             x = keras.layers.Activation("relu", name=f"final_upsample_relu_{i}")(x)
 

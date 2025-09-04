@@ -102,7 +102,7 @@ class QueryRefinementBlock(layers.Layer):
             dropout_rate=self.dropout_rate,
         )
         self.cross_attention.build(query_shape, encoder_output_shape)
-        self.mlp_layer = self.TransUNetMLP(
+        self.mlp_layer = TransUNetMLP(
             self.mlp_dim,
             activation="gelu",
             output_dim=self.embed_dim,
