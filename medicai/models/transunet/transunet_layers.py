@@ -41,6 +41,7 @@ class MaskedCrossAttention(layers.Layer):
             dropout=self.dropout_rate,
         )
 
+        # TODO: Handle the if/else branch more efficiently.
         if len(input_shape) == 2:
             query_shape, key_value_shape = input_shape
             key_shape = key_value_shape
@@ -94,6 +95,12 @@ class QueryRefinementBlock(layers.Layer):
 
     def __init__(self, embed_dim, num_heads, mlp_dim, dropout_rate=0.1, **kwargs):
         super().__init__(**kwargs)
+
+        if embed_dim % num_heads != 0:
+            raise ValueError(
+                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})."
+            )
+
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.mlp_dim = mlp_dim
