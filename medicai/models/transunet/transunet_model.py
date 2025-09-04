@@ -272,8 +272,7 @@ class TransUNet(keras.Model):
 
     @staticmethod
     def flatten_spatial_to_tokens(x):
-        num_tokens = np.prod(x.shape[1:-1])
-        return layers.Reshape((num_tokens, x.shape[-1]))(x)
+        return layers.Reshape((-1, x.shape[-1]))(x)
 
     @staticmethod
     def reshape_to_spatial_tokens(x, target_tensor):
