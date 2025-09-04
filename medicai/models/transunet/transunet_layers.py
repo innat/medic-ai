@@ -20,7 +20,6 @@ class MaskedCrossAttention(layers.Layer):
         queries: Query tensor of shape (batch_size, target_len, embed_dim)
         keys: Key tensor of shape (batch_size, source_len, embed_dim)
         values: Value tensor of shape (batch_size, source_len, embed_dim)
-        mask: Optional attention mask to prevent attention to certain positions
         training: Boolean for training mode
 
     Outputs:
@@ -54,7 +53,7 @@ class MaskedCrossAttention(layers.Layer):
 
         super().build(input_shape)
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, mask=None, training=False):
 
         if len(inputs) == 3:
             query, key, value = inputs
@@ -62,9 +61,18 @@ class MaskedCrossAttention(layers.Layer):
             query, value = inputs
             key = value
 
-        output = self.attention(
-            query=query, key=key, value=value, attention_mask=None, training=training
-        )
+        # query refinement
+        if mask is None or (isinstance(mask, (list, tuple)) and all(m is None for m in mask)):
+            mask = None
+
+        # masked cross-attention
+        if mask is not None:
+            output = self.attention(
+                query=query, key=key, value=value, attention_mask=mask, training=training
+            )
+        else:  # query refinement
+            output = self.attention(query=query, key=key, value=value, training=training)
+
         return output
 
     def compute_output_shape(self, input_shape):
@@ -203,7 +211,6 @@ class LearnableQueries(layers.Layer):
             initializer=keras.initializers.RandomNormal(stddev=0.02),
             trainable=True,
         )
-        self.built = True
 
     def call(self, inputs):
         batch_size = ops.shape(inputs)[0]

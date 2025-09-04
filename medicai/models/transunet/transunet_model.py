@@ -1,6 +1,6 @@
 import keras
 import numpy as np
-from keras import layers
+from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.models import DenseNetBackbone
@@ -193,6 +193,22 @@ class TransUNet(keras.Model):
             for i, f in enumerate(cnn_features)
         ]
 
+        # First stage: Use the deepest P-queries (P3) to start the Z-path.
+        z_tokens_query = refined_p_queries[-1]
+
+        # Generate a coarse segmentation map from the query tokens.
+        # This will serve as the first mask for the cross-attention.
+        z_spatial_coarse = self.reshape_to_spatial_tokens(z_tokens_query, proj_cnn_features[-1])
+        mask_conv = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=num_classes,
+            kernel_size=1,
+            name="mask_conv_c3",
+        )(z_spatial_coarse)
+        query_len = refined_p_queries[-1].shape[1]
+        mask = self.make_attention_mask(mask_conv, query_len)
+
         # Start the Z-path with the deepest features (c3) and the most refined queries (P3).
         # The output of this attention block is the first Z-token set (Z3).
         z_tokens = MaskedCrossAttention(
@@ -205,7 +221,8 @@ class TransUNet(keras.Model):
                 refined_p_queries[-1],
                 self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
                 self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
-            ]
+            ],
+            mask=mask,
         )
 
         # Now, progressively upsample the Z tokens and fuse them with the next level of CNN features.
@@ -228,6 +245,17 @@ class TransUNet(keras.Model):
             # Flatten the upsampled grid back to tokens. The number of tokens increases.
             z_upsampled_tokens = self.flatten_spatial_to_tokens(z_upsampled_spatial)
 
+            # Generate the new mask for this stage from the upsampled Z tokens
+            mask_conv = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=num_classes,
+                kernel_size=1,
+                name=f"mask_conv_c{i}",
+            )(z_upsampled_spatial)
+            query_len = z_upsampled_tokens.shape[1]
+            mask = self.make_attention_mask(mask_conv, query_len)
+
             # Get the tokens for the next CNN feature map
             cnn_tokens = self.flatten_spatial_to_tokens(proj_cnn_features[i - 1])
 
@@ -238,7 +266,7 @@ class TransUNet(keras.Model):
                 key_dim=embed_dim // num_heads,
                 dropout_rate=dropout_rate,
                 name=f"coarse_to_fine_stage_c{i}",
-            )([z_upsampled_tokens, cnn_tokens, cnn_tokens])
+            )([z_upsampled_tokens, cnn_tokens, cnn_tokens], mask=mask)
 
         # -------------------- 3. Final CNN Decoder Path --------------------
         # `z_tokens` is now at the resolution of c1. We convert it to a spatial map.
@@ -280,3 +308,15 @@ class TransUNet(keras.Model):
     def reshape_to_spatial_tokens(x, target_tensor):
         target_spatial_shape = target_tensor.shape[1:-1]
         return layers.Reshape(target_spatial_shape + (x.shape[-1],))(x)
+
+    @staticmethod
+    def make_attention_mask(mask_conv, query_len):
+        # Take argmax or foreground channel only
+        mask_binary = ops.cast(mask_conv > 0.5, "float32")
+        # Collapse channels -> key length
+        key_mask = ops.max(mask_binary, axis=-1)
+        key_mask = layers.Reshape((-1,))(key_mask)
+        # Expand for query_len
+        key_mask = ops.expand_dims(key_mask, axis=1)
+        mask = ops.tile(key_mask, [1, query_len, 1])
+        return mask
