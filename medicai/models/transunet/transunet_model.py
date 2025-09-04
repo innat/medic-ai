@@ -322,7 +322,6 @@ class TransUNet(keras.Model):
 
         # 4. Flatten spatial dims to get key_len
         key_mask = layers.Reshape((-1,))(foreground_mask)
-        key_mask = ops.cast(key_mask, dtype="float32")
 
         # 5. Create a base tensor filled with a large negative value
         neg_inf_tensor = ops.ones_like(key_mask, dtype="float32") * -1e9
