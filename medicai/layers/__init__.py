@@ -1,4 +1,4 @@
-from .attention import ChannelWiseAttention, ElementWiseAttention, SpatialCrossAttention
+from .attention import ChannelWiseAttention, ElementWiseAttention
 from .mlp import MLPBlock, SwinMLP, TransUNetMLP, ViTMLP
 from .swin import (
     SwinBasicLayer,

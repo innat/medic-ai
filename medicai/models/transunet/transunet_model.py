@@ -64,9 +64,9 @@ class TransUNet(keras.Model):
         base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
 
         # In a real model, get layers by name. Using a dummy index for this example.
-        c1 = base_encoder.get_layer(index=49).output  # (24, 24, 24, 128)
-        c2 = base_encoder.get_layer(index=137).output  # (12, 12, 12, 256)
-        c3 = base_encoder.get_layer(index=309).output  # (6, 6, 6, 512)
+        c1 = base_encoder.get_layer(name="block0_trans_relu").output  # (24, 24, 24, 128)
+        c2 = base_encoder.get_layer(name="block1_trans_relu").output  # (12, 12, 12, 256)
+        c3 = base_encoder.get_layer(name="block2_trans_relu").output  # (6, 6, 6, 512)
         final_cnn_output = base_encoder.output  # (3, 3, 3, 1024)
 
         cnn_features = [c1, c2, c3]
