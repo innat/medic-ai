@@ -214,7 +214,8 @@ class LearnableQueries(layers.Layer):
 
     def call(self, inputs):
         batch_size = ops.shape(inputs)[0]
-        return ops.tile(self.queries, [batch_size, 1, 1])
+        output = ops.broadcast_to(self.queries, [batch_size, self.num_queries, self.embed_dim])
+        return output
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.num_queries, self.embed_dim)
