@@ -4,8 +4,6 @@ hide_warnings()
 
 from keras import layers, ops
 
-from medicai.utils import get_conv_layer, get_reshaping_layer
-
 
 class ChannelWiseAttention(layers.Layer):
     def __init__(self, alpha, **kwargs):

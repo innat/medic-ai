@@ -69,10 +69,10 @@ class TransUNet(keras.Model):
         base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
 
         # Get CNN feature maps from the encoder.
-        c1 = base_encoder.get_layer(name="block0_trans_relu").output  # (24, 24, 24, 128)
-        c2 = base_encoder.get_layer(name="block1_trans_relu").output  # (12, 12, 12, 256)
-        c3 = base_encoder.get_layer(name="block2_trans_relu").output  # (6, 6, 6, 512)
-        final_cnn_output = base_encoder.output  # (3, 3, 3, 1024)
+        c1 = base_encoder.get_layer(name="block0_trans_relu").output
+        c2 = base_encoder.get_layer(name="block1_trans_relu").output
+        c3 = base_encoder.get_layer(name="block2_trans_relu").output
+        final_cnn_output = base_encoder.output
 
         cnn_features = [c1, c2, c3]
 
@@ -311,12 +311,30 @@ class TransUNet(keras.Model):
 
     @staticmethod
     def make_attention_mask(mask_conv, query_len):
-        # Take argmax or foreground channel only
-        mask_binary = ops.cast(mask_conv > 0.5, "float32")
-        # Collapse channels -> key length
-        key_mask = ops.max(mask_binary, axis=-1)
-        key_mask = layers.Reshape((-1,))(key_mask)
-        # Expand for query_len
-        key_mask = ops.expand_dims(key_mask, axis=1)
-        mask = ops.tile(key_mask, [1, query_len, 1])
+        # 1. Convert logits to probabilities over classes
+        mask_probs = ops.softmax(mask_conv, axis=-1)
+
+        # 2. Predicted class per spatial location
+        predicted_classes = ops.argmax(mask_probs, axis=-1)
+
+        # 3. Foreground mask (True for non-background)
+        foreground_mask = predicted_classes > 0
+
+        # 4. Flatten spatial dims to get key_len
+        key_mask = layers.Reshape((-1,))(foreground_mask)
+        key_mask = ops.cast(key_mask, dtype="float32")
+
+        # 5. Create a base tensor filled with a large negative value
+        neg_inf_tensor = ops.ones_like(key_mask, dtype="float32") * -1e9
+
+        # 6. Use ops.where to set foreground locations to 0
+        attention_mask_values = ops.where(
+            key_mask,
+            ops.zeros_like(key_mask, dtype="float32"),
+            neg_inf_tensor,
+        )  # (B, key_len)
+
+        # 7. Expand to (batch_size, query_len, key_len)
+        attention_mask_values = ops.expand_dims(attention_mask_values, axis=1)
+        mask = ops.tile(attention_mask_values, [1, query_len, 1])
         return mask
