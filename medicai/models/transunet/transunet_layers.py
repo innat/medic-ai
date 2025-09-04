@@ -46,7 +46,7 @@ class MaskedCrossAttention(layers.Layer):
             self.attention.build(query_shape, key_value_shape, key_value_shape)
         elif len(input_shape) == 3:
             query_shape, key_shape, value_shape = input_shape
-            self.attention.build(query_shape, key_shape, value_shape)
+            self.attention.build(query_shape, value_shape, key_shape)
         else:
             raise ValueError(
                 f"MaskedCrossAttention layer expects list of 2 or 3 input shapes, but received {len(input_shape)}."
@@ -55,7 +55,13 @@ class MaskedCrossAttention(layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs, training=False):
-        query, key, value = inputs
+
+        if len(inputs) == 3:
+            query, key, value = inputs
+        else:
+            query, value = inputs
+            key = value
+
         output = self.attention(
             query=query, key=key, value=value, attention_mask=None, training=training
         )
