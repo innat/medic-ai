@@ -34,12 +34,14 @@ class MaskedCrossAttention(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
+        input_shape_x, input_shape_y = input_shape
         self.attention = layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.key_dim,
             kernel_initializer=HeNormal(),
             dropout=self.dropout_rate,
         )
+        self.attention.build([input_shape_x, input_shape_y])
         self.layernorm = layers.LayerNormalization(epsilon=1e-6)
         self.dropout = layers.Dropout(self.dropout_rate)
         super().build(input_shape)
@@ -95,11 +97,13 @@ class QueryRefinementBlock(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
+        query_shape, encoder_output_shape = input_shape
         self.cross_attention = MaskedCrossAttention(
             num_heads=self.num_heads,
             key_dim=self.embed_dim // self.num_heads,
             dropout_rate=self.dropout_rate,
         )
+        self.cross_attention.build([query_shape, encoder_output_shape])
         self.mlp_layer = TransUNetMLP(
             self.mlp_dim,
             activation="gelu",
@@ -107,6 +111,7 @@ class QueryRefinementBlock(layers.Layer):
             drop_rate=self.dropout_rate,
             name="mlp_decode",
         )
+        self.mlp_layer.build(query_shape)
         self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
 
