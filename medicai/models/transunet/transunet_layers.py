@@ -133,7 +133,7 @@ class QueryRefinementBlock(layers.Layer):
         x = self.layernorm1(queries + attn_output)
 
         # 2. MLP
-        mlp_output = self.mlp_layer(x)
+        mlp_output = self.mlp_layer(x, training=training)
         # Residual connection and layer norm
         output = self.layernorm2(x + mlp_output)
 
