@@ -8,8 +8,8 @@ from medicai.layers import TransUNetMLP
 class MaskedCrossAttention(layers.Layer):
     """Masked cross-attention layer for transformer decoders.
 
-    Performs cross-attention between queries and key-value pairs with optional masking.
-    Includes residual connection, dropout, and layer normalization.
+    This layer is a wrapper around `keras.layers.MultiHeadAttention` to perform
+    cross-attention between a query and a set of key-value pairs.
 
     Args:
         key_dim: Dimensionality of the key projections
@@ -122,16 +122,18 @@ class QueryRefinementBlock(layers.Layer):
         queries, encoder_output = inputs
 
         # 1. Cross-attention
+        queries_norm = self.layernorm1(queries)
         attn_output = self.cross_attention(
-            query=queries, key=encoder_output, value=encoder_output, training=training
+            query=queries_norm, key=encoder_output, value=encoder_output, training=training
         )
         # Residual connection and layer norm
-        x = self.layernorm1(queries + attn_output)
+        x = queries + attn_output
 
         # 2. MLP
-        mlp_output = self.mlp_layer(x, training=training)
+        x_norm = self.layernorm2(x)
+        mlp_output = self.mlp_layer(x_norm, training=training)
         # Residual connection and layer norm
-        output = self.layernorm2(x + mlp_output)
+        output = x + mlp_output
 
         return output
 

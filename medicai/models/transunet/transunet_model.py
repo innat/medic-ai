@@ -68,7 +68,7 @@ class TransUNet(keras.Model):
         # -------------------- CNN Encoder --------------------
         base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
 
-        # In a real model, get layers by name. Using a dummy index for this example.
+        # Get CNN feature maps from the encoder.
         c1 = base_encoder.get_layer(name="block0_trans_relu").output  # (24, 24, 24, 128)
         c2 = base_encoder.get_layer(name="block1_trans_relu").output  # (12, 12, 12, 256)
         c3 = base_encoder.get_layer(name="block2_trans_relu").output  # (6, 6, 6, 512)
