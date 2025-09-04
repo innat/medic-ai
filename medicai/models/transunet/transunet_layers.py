@@ -34,9 +34,12 @@ class MaskedCrossAttention(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        query_shape = input_shape[0]
-        key_shape = input_shape[1]
-        value_shape = input_shape[1] if len(input_shape) == 2 else input_shape[2]
+        if len(input_shape) == 2:
+            query_shape, key_value_shape = input_shape
+            key_shape = key_value_shape
+            value_shape = key_value_shape
+        else:  # len(input_shape) == 3
+            query_shape, key_shape, value_shape = input_shape
 
         self.attention = layers.MultiHeadAttention(
             num_heads=self.num_heads,
