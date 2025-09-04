@@ -41,22 +41,28 @@ class MaskedCrossAttention(layers.Layer):
             dropout=self.dropout_rate,
         )
 
-        # TODO: Handle the if/else branch more efficiently.
         if len(input_shape) == 2:
             query_shape, key_value_shape = input_shape
-            key_shape = key_value_shape
-            value_shape = key_value_shape
+            self.attention.build(query_shape, key_value_shape, key_value_shape)
+        elif len(input_shape) == 3:
+            query_shape, key_shape, value_shape = input_shape
             self.attention.build(query_shape, key_shape, value_shape)
         else:
-            self.attention.build(input_shape, input_shape, input_shape)
+            raise ValueError(
+                f"MaskedCrossAttention layer expects list of 2 or 3 input shapes, but received {len(input_shape)}."
+            )
 
         super().build(input_shape)
 
-    def call(self, query, key, value, mask=None, training=False):
+    def call(self, inputs, training=False):
+        query, key, value = inputs
         output = self.attention(
-            query=query, key=key, value=value, attention_mask=mask, training=training
+            query=query, key=key, value=value, attention_mask=None, training=training
         )
         return output
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0]  # Return shape of queries
 
     def get_config(self):
         config = super().get_config()

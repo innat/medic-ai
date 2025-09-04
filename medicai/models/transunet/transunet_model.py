@@ -201,9 +201,11 @@ class TransUNet(keras.Model):
             dropout_rate=dropout_rate,
             name="coarse_to_fine_stage_c3",
         )(
-            query=refined_p_queries[-1],
-            key=self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
-            value=self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
+            [
+                refined_p_queries[-1],
+                self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
+                self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
+            ]
         )
 
         # Now, progressively upsample the Z tokens and fuse them with the next level of CNN features.
@@ -236,7 +238,7 @@ class TransUNet(keras.Model):
                 key_dim=embed_dim // num_heads,
                 dropout_rate=dropout_rate,
                 name=f"coarse_to_fine_stage_c{i}",
-            )(query=z_upsampled_tokens, key=cnn_tokens, value=cnn_tokens)
+            )([z_upsampled_tokens, cnn_tokens, cnn_tokens])
 
         # -------------------- 3. Final CNN Decoder Path --------------------
         # `z_tokens` is now at the resolution of c1. We convert it to a spatial map.
