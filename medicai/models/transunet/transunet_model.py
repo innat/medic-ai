@@ -70,7 +70,6 @@ class TransUNet(keras.Model):
         final_cnn_output = base_encoder.output  # (3, 3, 3, 1024)
 
         cnn_features = [c1, c2, c3]
-        num_decoder_layers = len(cnn_features)
 
         # -------------------- Transformer Encoder --------------------
         encoded_patches = ViTPatchingAndEmbedding(
@@ -98,7 +97,6 @@ class TransUNet(keras.Model):
             encoder_output=encoder_output,
             cnn_features=cnn_features,
             final_cnn_output=final_cnn_output,
-            num_decoder_layers=num_decoder_layers,
             num_heads=num_heads,
             embed_dim=embed_dim,
             mlp_dim=mlp_dim,
@@ -117,12 +115,26 @@ class TransUNet(keras.Model):
         self.patch_size = patch_size
         self.classifier_activation = classifier_activation
         self.num_encoder_layers = num_encoder_layers
-        self.num_decoder_layers = num_decoder_layers
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
         self.dropout_rate = dropout_rate
         self.decoder_projection_filters = decoder_projection_filters
+
+    def get_config(self):
+        config = {
+            "input_shape": self.input_shape[1:],
+            "num_classes": self.num_classes,
+            "classifier_activation": self.classifier_activation,
+            "patch_size": self.patch_size,
+            "num_encoder_layers": self.num_encoder_layers,
+            "num_heads": self.num_heads,
+            "embed_dim": self.embed_dim,
+            "mlp_dim": self.mlp_dim,
+            "dropout_rate": self.dropout_rate,
+            "decoder_projection_filters": self.decoder_projection_filters,
+        }
+        return config
 
     def build_decoder(
         self,
@@ -179,8 +191,8 @@ class TransUNet(keras.Model):
         # Start the Z-path with the deepest features (c3) and the most refined queries (P3).
         # The output of this attention block is the first Z-token set (Z3).
         z_tokens = MaskedCrossAttention(
-            key_dim=embed_dim,
             num_heads=num_heads,
+            key_dim=embed_dim // num_heads,
             dropout_rate=dropout_rate,
             name="coarse_to_fine_stage_c3",
         )(
@@ -215,8 +227,8 @@ class TransUNet(keras.Model):
             # Fuse the upsampled Z tokens with the next projected CNN features using attention.
             # The upsampled Z tokens are the query, and the next CNN features are key/value.
             z_tokens = MaskedCrossAttention(
-                key_dim=embed_dim,
                 num_heads=num_heads,
+                key_dim=embed_dim // num_heads,
                 dropout_rate=dropout_rate,
                 name=f"coarse_to_fine_stage_c{i}",
             )(query=z_upsampled_tokens, key=cnn_tokens, value=cnn_tokens)
