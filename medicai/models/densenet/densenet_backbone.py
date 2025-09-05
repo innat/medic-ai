@@ -67,12 +67,12 @@ class DenseNetBackbone(keras.Model):
         num_channels = 64
 
         for i, num_layers in enumerate(blocks):
-            x = DenseBlock(x, num_layers, growth_rate, bn_size, dropout_rate)
+            x = DenseBlock(x, num_layers, growth_rate, bn_size, dropout_rate, block_idx=i)
             num_channels += num_layers * growth_rate
 
             if i != len(blocks) - 1:
                 out_channels = int(num_channels * compression)
-                x = TransitionLayer(x, out_channels)
+                x = TransitionLayer(x, out_channels, block_idx=i)
                 num_channels = out_channels
 
         # Final batch norm
