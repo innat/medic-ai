@@ -18,10 +18,11 @@
 
 # 📋 Table of Contents
 1. [Installation](#-installation)
-2. [Guides](#-guides)
-3. [Documentation](#-documentation)
-4. [Acknowledgements](#-acknowledgements)
-5. [Citation](#-citation)
+2. [Features](#-features)
+3. [Guides](#-guides)
+4. [Documentation](#-documentation)
+5. [Acknowledgements](#-acknowledgements)
+6. [Citation](#-citation)
 
 
 # 🛠 Installation
@@ -37,6 +38,38 @@ Installing from source GitHub:
 ```bash
 !pip install git+https://github.com/innat/medic-ai.git
 ```
+
+# 📊 Features
+
+**Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
+
+| Model        | Supported Modalities | Primary Task   | Architecture Type         |
+| ------------ | -------------------- | -------------- | ------------------------- |
+| DenseNet     | 2D, 3D               | Classification | CNN                       |
+| DenseUNet121 | 2D, 3D               | Segmentation   | CNN                       |
+| DenseUNet169 | 2D, 3D               | Segmentation   | CNN                       |
+| DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
+| ViT          | 2D, 3D               | Classification | Transformer               |
+| UNETR        | 2D, 3D               | Segmentation   | Transformer               |
+| SwinUNETR    | 2D, 3D               | Segmentation   | Transformer               |
+| TransUNet    | 2D, 3D               | Segmentation   | Hybrid (CNN + Transformer)|
+
+**Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data.
+
+```
+CropForeground
+NormalizeIntensity
+Orientation
+RandCropByPosNegLabel
+RandFlip
+RandRotate90
+RandShiftIntensity
+RandSpatialCrop
+Resize
+ScaleIntensityRange
+Spacing
+```
+
 
 # 💡 Guides
 
