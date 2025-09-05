@@ -8,22 +8,26 @@ from medicai.layers import TransUNetMLP
 class MaskedCrossAttention(layers.Layer):
     """Masked cross-attention layer for transformer decoders.
 
-    This layer is a wrapper around `keras.layers.MultiHeadAttention` to perform
-    cross-attention between a query and a set of key-value pairs.
+    This layer is a wrapper around `keras.layers.MultiHeadAttention` that can perform
+    both standard cross-attention and masked cross-attention. It also includes
+    a He Normal initializer for the attention kernel.
 
     Args:
-        key_dim: Dimensionality of the key projections
-        num_heads: Number of attention heads
-        dropout_rate: Dropout rate for attention outputs (default: 0.1)
+        key_dim: Dimensionality of the key and query projections.
+        num_heads: Number of attention heads.
+        dropout_rate: Dropout rate for attention outputs (default: 0.1).
 
     Inputs:
-        queries: Query tensor of shape (batch_size, target_len, embed_dim)
-        keys: Key tensor of shape (batch_size, source_len, embed_dim)
-        values: Value tensor of shape (batch_size, source_len, embed_dim)
-        training: Boolean for training mode
+        A list of tensors.
+        - `[query, key, value]`: The layer performs attention on this triplet.
+        - `[query, value]`: The layer uses `value` for both `key` and `value`
+          tensors for self-attention-like behavior, useful for query refinement.
+        - `mask`: An optional boolean attention mask tensor to prevent attention
+          to certain positions.
 
     Outputs:
-        Tensor of shape (batch_size, target_len, embed_dim) with attended features
+        A tensor of the same shape as the `query` tensor, containing the
+        attended features.
     """
 
     def __init__(self, num_heads, key_dim, dropout_rate=0.1, **kwargs):
@@ -142,8 +146,8 @@ class QueryRefinementBlock(layers.Layer):
             name="mlp_decode",
         )
         self.mlp_layer.build(query_shape)
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-5)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-5)
 
     def call(self, inputs, training=None):
         queries, encoder_output = inputs

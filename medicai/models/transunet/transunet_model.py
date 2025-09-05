@@ -18,7 +18,8 @@ class TransUNet(keras.Model):
     a coarse-to-fine attention mechanism to produce the final segmentation map.
 
     Args:
-        input_shape: The shape of the input data, e.g., `(depth, height, width, channels)`.
+        input_shape: The shape of the input data. For 2D, it is `(height, width, channels)`.
+            For 3D, it is `(depth, height, width, channels)`.
         num_classes: The number of segmentation classes.
         patch_size: The size of the patches for the Vision Transformer.
         classifier_activation: Activation function for the final segmentation head
@@ -225,7 +226,7 @@ class TransUNet(keras.Model):
             mask=mask,
         )
 
-        # Now, progressively upsample the Z tokens and fuse them with the next level of CNN features.
+        # Now we progressively upsample the Z tokens and fuse them with the next level of CNN features.
         # The loop runs from i=2 down to 1.
         for i in range(len(cnn_features) - 1, 0, -1):
             # Reshape Z tokens to the current spatial grid
@@ -296,16 +297,23 @@ class TransUNet(keras.Model):
             kernel_size=1,
             padding="same",
             activation=classifier_activation,
+            dtype="float32",
             name="final_output_conv",
         )(x)
         return outputs
 
     @staticmethod
     def flatten_spatial_to_tokens(x):
+        # Flattens the spatial dimensions of a tensor,
+        # converting it from a feature map to a sequence of tokens.
+        # This is a necessary step before feeding features into a Transformer.
         return layers.Reshape((-1, x.shape[-1]))(x)
 
     @staticmethod
     def reshape_to_spatial_tokens(x, target_tensor):
+        # Reshapes a sequence of tokens back into a spatial feature map.
+        # The target_tensor's shape is used to infer the correct spatial dimensions
+        # for reshaping, allowing the output to be used by a CNN decoder.
         target_spatial_shape = target_tensor.shape[1:-1]
         return layers.Reshape(target_spatial_shape + (x.shape[-1],))(x)
 
@@ -313,26 +321,20 @@ class TransUNet(keras.Model):
     def make_attention_mask(mask_conv, query_len):
         # 1. Convert logits to probabilities over classes
         mask_probs = ops.softmax(mask_conv, axis=-1)
-
         # 2. Predicted class per spatial location
         predicted_classes = ops.argmax(mask_probs, axis=-1)
-
         # 3. Foreground mask (True for non-background)
         foreground_mask = predicted_classes > 0
-
         # 4. Flatten spatial dims to get key_len
         key_mask = layers.Reshape((-1,))(foreground_mask)
-
         # 5. Create a base tensor filled with a large negative value
         neg_inf_tensor = ops.ones_like(key_mask, dtype="float32") * -1e9
-
         # 6. Use ops.where to set foreground locations to 0
         attention_mask_values = ops.where(
             key_mask,
             ops.zeros_like(key_mask, dtype="float32"),
             neg_inf_tensor,
         )  # (B, key_len)
-
         # 7. Expand to (batch_size, query_len, key_len)
         attention_mask_values = ops.expand_dims(attention_mask_values, axis=1)
         mask = ops.tile(attention_mask_values, [1, query_len, 1])
