@@ -54,7 +54,6 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             self.class_token = self.add_weight(
                 shape=(1, 1, self.hidden_dim),
                 initializer="random_normal",
-                dtype=self.variable_dtype,
                 name="class_token",
             )
 
