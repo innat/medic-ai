@@ -8,3 +8,4 @@ from .swin import (
     SwinWindowAttention,
 )
 from .vit import ViTEncoderBlock, ViTPatchingAndEmbedding
+from .drop_path import DropPath
