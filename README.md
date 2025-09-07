@@ -51,7 +51,7 @@ Installing from source GitHub:
 | DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
 | ViT          | 2D, 3D               | Classification | Transformer               |
 | UNETR        | 2D, 3D               | Segmentation   | Transformer               |
-| SwinUNETR    | 2D, 3D               | Segmentation   | Transformer               |
+| SwinUNETR    | 3D               | Segmentation   | Transformer               |
 | TransUNet    | 2D, 3D               | Segmentation   | Hybrid (CNN + Transformer)|
 
 **Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data.
