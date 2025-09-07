@@ -1,13 +1,10 @@
-from functools import partial
-
 from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
 import keras
-import tensorflow as tf
 from keras import activations, layers
-from tensorflow.keras import layers
+from keras import layers
 
 
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
