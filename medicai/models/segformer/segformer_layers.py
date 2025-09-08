@@ -38,11 +38,15 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
     def build(self, input_shape):
         spatial_dims = len(input_shape) - 2
         padding_size = self.patch_size // 2
+
+        # Layer for applying padding to the input tensor.
         self.padding = get_reshaping_layer(
             spatial_dims=spatial_dims, layer_type="padding", padding=padding_size
         )
         self.padding.build(input_shape)
 
+        # Convolutional layer for projecting and extracting overlapping patches.
+        # This layer is the source of the trainable parameters.
         self.proj = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
@@ -54,12 +58,22 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         padded_shape = self.padding.compute_output_shape(input_shape)
         self.proj.build(padded_shape)
 
+        # Layer normalization to normalize the projected patch embeddings.
         self.norm = get_norm_layer(norm_name="layer", epsilon=1e-5)
         norm_input_shape = (input_shape[0], -1, self.project_dim)
         self.norm.build(norm_input_shape)
         self.built = True
 
     def call(self, x):
+        """
+        Performs the forward pass of the layer.
+
+        Args:
+            x (Tensor): The input tensor with shape `(batch, ..., channels)`.
+
+        Returns:
+            Tensor: The output tensor with shape `(batch, sequence_length, project_dim)`.
+        """
         # Apply padding to the input tensor.
         x = self.padding(x)
 
@@ -71,10 +85,21 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         batch_size = ops.shape(x)[0]
         channels = ops.shape(x)[-1]
         x = ops.reshape(x, (batch_size, -1, channels))
+
+        # Normalize the patch embeddings.
         x = self.norm(x)
         return x
 
     def compute_output_shape(self, input_shape):
+        """
+        Computes the output shape of the layer for fixed input sizes.
+
+        Args:
+            input_shape (tuple): The input shape, including the batch dimension.
+
+        Returns:
+            tuple: The output shape `(batch_size, sequence_length, project_dim)`.
+        """
         batch_size = input_shape[0]
         spatial_dims = input_shape[1:-1]
         padding_size = self.patch_size // 2
@@ -117,8 +142,29 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         qkv_bias=True,
         attention_dropout=0.0,
         projection_dropout=0.0,
+        **kwargs,
     ):
-        super().__init__()
+        """
+        SegFormer Multi-Head Self-Attention Layer with Spatial Reduction.
+
+        This layer implements the efficient self-attention mechanism proposed in the
+        SegFormer architecture. It applies a spatial reduction to the key (K) and
+        value (V) tensors, which significantly reduces the computational complexity
+        and memory footprint, making it suitable for high-resolution feature maps
+        in vision models. The query (Q) tensor remains at full resolution.
+
+        Args:
+            project_dim (int): The dimension of the projected queries, keys, and values.
+            num_heads (int): The number of attention heads.
+            sr_ratio (int): The spatial reduction ratio for keys and values.
+                A value of 1 means no reduction (standard multi-head attention).
+                A value greater than 1 applies a convolutional downsampling layer.
+            spatial_dims (int): The number of spatial dimensions of the input (e.g., 2 for images, 3 for volumes).
+            qkv_bias (bool): A boolean flag to indicate applying bias to projected queries, keys, and values.
+            attention_dropout (float, optional): Dropout rate for the attention scores. Defaults to 0.0.
+            projection_dropout (float, optional): Dropout rate for the final projection output. Defaults to 0.0.
+        """
+        super().__init__(**kwargs)
         self.num_heads = num_heads
         self.sr_ratio = sr_ratio
         self.scale = (project_dim // num_heads) ** -0.5
@@ -133,7 +179,6 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
         # Precompute spatial dimensions during build (when shapes are concrete)
         self.spatial_size = int(round(N ** (1 / self.spatial_dims)))
-        self.original_N = N  # Store the original sequence length
 
         # Build query projection layer
         self.q = keras.layers.Dense(self.project_dim, use_bias=self.qkv_bias)
@@ -141,9 +186,6 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
         # Build key and value projection layers
         if self.sr_ratio > 1:
-            # Calculate spatial dimensions for SR
-            spatial_shape = [self.spatial_size] * self.spatial_dims
-
             # Build spatial reduction layers
             self.sr = get_conv_layer(
                 spatial_dims=self.spatial_dims,
@@ -152,6 +194,8 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
                 kernel_size=self.sr_ratio,
                 strides=self.sr_ratio,
             )
+            # Calculate spatial dimensions for SR (patial reduction)
+            spatial_shape = [self.spatial_size] * self.spatial_dims
             sr_input_shape = (B, *spatial_shape, C)
             self.sr.build(sr_input_shape)
 
@@ -171,22 +215,19 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
             # No spatial reduction or spatial_size is None
             k_v_input_shape = input_shape
 
+        # Build key and value layers
         self.k = keras.layers.Dense(self.project_dim, use_bias=self.qkv_bias)
-        self.k.build(k_v_input_shape)
-
         self.v = keras.layers.Dense(self.project_dim, use_bias=self.qkv_bias)
+        self.k.build(k_v_input_shape)
         self.v.build(k_v_input_shape)
 
         # Build final projection and dropout layers
         self.proj = keras.layers.Dense(self.project_dim)
-        self.proj.build(input_shape)
-
         self.dropout = keras.layers.Dropout(self.attention_dropout)
-        self.dropout.build((B, self.num_heads, N, N))
-
         self.proj_drop = keras.layers.Dropout(self.projection_dropout)
+        self.proj.build(input_shape)
+        self.dropout.build((B, self.num_heads, N, N))
         self.proj_drop.build(input_shape)
-
         self.built = True
 
     def call(self, x):
@@ -263,8 +304,24 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
 
 class MixFFN(keras.layers.Layer):
-    def __init__(self, mlp_ratio, spatial_dims, dropout=0.0):
-        super().__init__()
+    def __init__(self, mlp_ratio, spatial_dims, dropout=0.0, **kwargs):
+        """
+        Mixed Feed-Forward Network (MixFFN) layer.
+
+        This layer is a modified feed-forward network used in architectures like SegFormer.
+        It combines a standard fully connected (Dense) layer with a depthwise separable
+        convolutional layer. This allows the model to capture local spatial information
+        that might be lost during the tokenization and self-attention processes,
+        improving performance on vision tasks.
+
+        Args:
+            mlp_ratio (int): The ratio of the hidden dimension to the input dimension.
+                The hidden layer size will be input_channels * mlp_ratio.
+            spatial_dims (int): The number of spatial dimensions of the input (e.g., 2 for images, 3 for volumes).
+            dropout (float, optional): The dropout rate applied after the GELU activation
+                and the final dense layer. Defaults to 0.0.
+        """
+        super().__init__(**kwargs)
         self.spatial_dims = spatial_dims
         self.mlp_ratio = mlp_ratio
         self.dropout_rate = dropout
@@ -321,11 +378,9 @@ class MixFFN(keras.layers.Layer):
         # Pass through first fully connected layer
         x = self.fc1(x)
 
-        B, N, C = ops.shape(x)[0], ops.shape(x)[1], ops.shape(x)[2]
-
-        spatial_shape = [self.spatial_size] * self.spatial_dims
-
         # Reshape to spatial format for depthwise convolution
+        spatial_shape = [self.spatial_size] * self.spatial_dims
+        B, C = ops.shape(x)[0], ops.shape(x)[2]
         x_reshaped = ops.reshape(x, (B, *spatial_shape, C))
 
         # Apply depthwise convolution

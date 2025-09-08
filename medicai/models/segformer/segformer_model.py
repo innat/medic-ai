@@ -106,7 +106,7 @@ class SegFormer(keras.Model):
         outputs = decoder_head(skips)
 
         if classifier_activation:
-            outputs = layers.Activation(classifier_activation)(outputs)
+            outputs = layers.Activation(classifier_activation, dtype="float32")(outputs)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"SegFormer{spatial_dims}D", **kwargs
