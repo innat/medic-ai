@@ -1,7 +1,13 @@
 import keras
 from keras import layers, ops
 
-from medicai.utils import get_conv_layer, get_reshaping_layer, resize_volumes
+from medicai.utils import (
+    get_act_layer,
+    get_conv_layer,
+    get_norm_layer,
+    get_reshaping_layer,
+    resize_volumes,
+)
 
 from .segformer_layers import MixVisionTransformer
 
@@ -189,8 +195,8 @@ class SegFormer(keras.Model):
                 filters=decoder_head_embedding_dim,
                 kernel_size=1,
             )(x)
-            x = layers.BatchNormalization()(x)
-            x = layers.ReLU()(x)
+            x = get_norm_layer(norm_name="batch")(x)
+            x = get_act_layer(name="relu")(x)
             x = layers.Dropout(dropout)(x)
 
             # Final prediction
@@ -207,7 +213,7 @@ class SegFormer(keras.Model):
         num_patches = int(ops.prod(spatial_shape_tensor))
         x = layers.Reshape((num_patches, ops.shape(x)[-1]))(x)
         x = layers.Dense(hidden_dims)(x)
-        x = layers.LayerNormalization()(x)
+        x = get_norm_layer(norm_name="layer", epsilon=1e-5)(x)
         return x
 
     def reshape_to_spatial(self, x, target_shape):
