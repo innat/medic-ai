@@ -5,12 +5,12 @@ from scipy.ndimage import zoom
 from tqdm import tqdm
 
 from medicai.utils.general import (
-    crop_output,
-    get_scan_interval,
     compute_importance_map,
+    crop_output,
     dense_patch_slices,
     ensure_tuple_rep,
     fall_back_tuple,
+    get_scan_interval,
     get_valid_patch_size,
 )
 

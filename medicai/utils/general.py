@@ -182,7 +182,7 @@ def crop_output(
     return output[tuple(crop_slices)]
 
 
-def resize_volumes(volumes, depth, height, width, method='trilinear'):
+def resize_volumes(volumes, depth, height, width, method="trilinear"):
     from keras import ops
 
     def trilinear_resize(volumes, depth, height, width):
@@ -201,7 +201,7 @@ def resize_volumes(volumes, depth, height, width, method='trilinear'):
         upper_d = ops.take(volumes, z1, axis=1)  # (B, out_d, H,  W, C)
 
         dz = ops.reshape(dz, (1, depth, 1, 1, 1))  # broadcast shape
-        interp_d = (1.0 - dz) * lower_d + dz * upper_d        # (B, out_d, H, W, C)
+        interp_d = (1.0 - dz) * lower_d + dz * upper_d  # (B, out_d, H, W, C)
 
         # --- Height (axis=2) ---
         y = ops.linspace(0.0, ops.cast(in_h - 1, "float32"), height)  # (out_h,)
@@ -228,7 +228,7 @@ def resize_volumes(volumes, depth, height, width, method='trilinear'):
         out = (1.0 - dx) * lower_w + dx * upper_w  # (B, out_d, out_h, out_w, C)
         out = ops.cast(out, original_dtype)
         return out
-    
+
     if method == "trilinear":
         return trilinear_resize(volumes, depth, height, width)
     else:
