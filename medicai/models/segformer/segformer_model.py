@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 from keras import layers, ops
 
 from medicai.utils import get_conv_layer, get_reshaping_layer, resize_volumes
@@ -187,7 +186,7 @@ class SegFormer(keras.Model):
 
     def linear_embedding(self, x, hidden_dims):
         spatial_shape_tensor = ops.shape(x)[1:-1]
-        num_patches = int(np.prod(spatial_shape_tensor))
+        num_patches = int(ops.prod(spatial_shape_tensor))
         x = layers.Reshape((num_patches, ops.shape(x)[-1]))(x)
         x = layers.Dense(hidden_dims)(x)
         x = layers.LayerNormalization()(x)
