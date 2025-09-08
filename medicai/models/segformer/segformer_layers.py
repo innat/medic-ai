@@ -72,7 +72,7 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
 
         x = self.norm(x)
         return x
-
+    
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -95,6 +95,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
         qkv_bias=True,
         attention_dropout=0.0,
         projection_dropout=0.0,
+        **kwargs,
     ):
         """
         SegFormer Multi-Head Self-Attention Layer with Spatial Reduction.
@@ -116,7 +117,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
             attention_dropout (float, optional): Dropout rate for the attention scores. Defaults to 0.0.
             projection_dropout (float, optional): Dropout rate for the final projection output. Defaults to 0.0.
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_heads = num_heads
         self.sr_ratio = sr_ratio
         # Calculate the scaling factor for attention scores.
@@ -214,7 +215,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
 
 
 class MixFFN(keras.layers.Layer):
-    def __init__(self, mlp_ratio, spatial_dims, dropout=0.0):
+    def __init__(self, mlp_ratio, spatial_dims, dropout=0.0, **kwargs):
         """
         Mixed Feed-Forward Network (MixFFN) layer.
 
@@ -231,7 +232,7 @@ class MixFFN(keras.layers.Layer):
             dropout (float, optional): The dropout rate applied after the GELU activation
                 and the final dense layer. Defaults to 0.0.
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.spatial_dims = spatial_dims
         self.mlp_ratio = mlp_ratio
         self.dropout_rate = dropout
