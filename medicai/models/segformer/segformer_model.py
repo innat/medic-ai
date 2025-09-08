@@ -68,6 +68,23 @@ class SegFormer(keras.Model):
             **kwargs: Standard Keras Model keyword arguments.
         """
         spatial_dims = len(input_shape) - 1
+
+        spatial_shapes = list(input_shape[:spatial_dims])
+        if any(dim is None for dim in spatial_shapes):
+            raise ValueError(
+                f"Input shape {input_shape} is not fully specified. "
+                "SegFormer requires fixed spatial dimensions (e.g., (224, 224, 3) or (128, 128, 128, 1)), "
+                "not `None`."
+            )
+
+        # Check that the spatial dimensions are all equal.
+        if not all(x == spatial_shapes[0] for x in spatial_shapes):
+            raise ValueError(
+                f"Input shape {input_shape} is not square or cubic. "
+                "SegFormer currently only supports inputs with equal spatial dimensions "
+                "for proper hierarchical downsampling and reshaping."
+            )
+
         mit_backbone = MixVisionTransformer(
             input_shape=input_shape,
             qkv_bias=qkv_bias,
