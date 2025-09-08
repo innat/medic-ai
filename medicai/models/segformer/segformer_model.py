@@ -6,6 +6,7 @@ from medicai.utils import get_conv_layer, get_reshaping_layer, resize_volumes
 from .segformer_layers import MixVisionTransformer
 
 
+@keras.utils.register_keras_serializable(package="segformer")
 class SegFormer(keras.Model):
     def __init__(
         self,

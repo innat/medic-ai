@@ -526,6 +526,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         return config
 
 
+@keras.utils.register_keras_serializable(package="mixvisiontransformer")
 class MixVisionTransformer(keras.Model):
     def __init__(
         self,
