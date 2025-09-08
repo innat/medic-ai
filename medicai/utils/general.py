@@ -1,6 +1,7 @@
 from typing import Any, List, Sequence, Tuple
 
 import numpy as np
+from keras import ops
 
 
 def hide_warnings():
@@ -183,8 +184,6 @@ def crop_output(
 
 
 def resize_volumes(volumes, depth, height, width, method="trilinear"):
-    from keras import ops
-
     def trilinear_resize(volumes, depth, height, width):
         original_dtype = volumes.dtype
         volumes = ops.cast(volumes, "float32")

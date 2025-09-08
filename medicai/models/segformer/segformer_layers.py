@@ -168,8 +168,6 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
             x = self.sr(x)
             x = ops.reshape(x, (B, -1, C))
             x = self.norm(x)
-        else:
-            x = x
 
         # Project and reshape the key (K) and value (V) for multi-head attention.
         k = self.k(x)
@@ -311,6 +309,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         num_heads,
         spatial_dims,
         sr_ratio=1,
+        mlp_ratio=2,
         drop_prob=0.0,
         qkv_bias=True,
         layer_norm_epsilon=1e-5,
@@ -337,6 +336,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
             drop_prob (float, optional): The dropout rate for Stochastic Depth (DropPath).
                 This is applied to the output of both the attention and MLP blocks. Defaults to 0.0.
             qkv_bias (bool): A boolean flag to indicate applying bias to projected queries, keys, and values.
+            mlp_ratio (int): A MLP expansion ratios for each encoder stage.
             layer_norm_epsilon (float, optional): A small value added to the denominator of the layer normalization
                 for numerical stability. Defaults to 1e-5.
             attention_dropout (float, optional): The dropout rate for the attention scores. Defaults to 0.0.
@@ -346,14 +346,14 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         super().__init__(**kwargs)
         self.project_dim = project_dim
         self.num_heads = num_heads
-        self.drop_prop = drop_prob
+        self.drop_prob = drop_prob
         self.sr_ratio = sr_ratio
         self.layer_norm_epsilon = layer_norm_epsilon
-        self.drop_prob = drop_prob
         self.attention_dropout = attention_dropout
         self.projection_dropout = projection_dropout
         self.spatial_dims = spatial_dims
         self.qkv_bias = qkv_bias
+        self.mlp_ratio = mlp_ratio
 
         # Layer normalization applied before the attention block.
         self.norm1 = get_norm_layer(norm_name="layer", epsilon=self.layer_norm_epsilon)
@@ -370,15 +370,14 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         )
 
         # Stochastic Depth (DropPath) regularization.
-        self.drop_path = DropPath(self.drop_prop)
+        self.drop_path = DropPath(self.drop_prob)
 
         # Layer normalization applied before the MixFFN block.
         self.norm2 = get_norm_layer(norm_name="layer", epsilon=self.layer_norm_epsilon)
 
         # Mixed Feed-Forward Network to capture local context.
         self.mlp = MixFFN(
-            channels=self.project_dim,
-            mid_channels=int(self.project_dim * 4),
+            mlp_ratio=self.mlp_ratio,
             spatial_dims=self.spatial_dims,
             dropout=0.0,
         )
@@ -397,7 +396,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
             {
                 "project_dim": self.project_dim,
                 "num_heads": self.num_heads,
-                "drop_prop": self.drop_prop,
+                "drop_prob": self.drop_prob,
                 "sr_ratio": self.sr_ratio,
                 "qkv_bias": self.qkv_bias,
                 "layer_norm_epsilon": self.layer_norm_epsilon,
