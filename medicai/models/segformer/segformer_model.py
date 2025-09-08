@@ -219,5 +219,5 @@ class SegFormer(keras.Model):
             target_depth, target_height, target_width = target_spatial_shape
             x = resize_volumes(x, target_depth, target_height, target_width, method="trilinear")
         elif spatial_dims == 2:
-            x = ops.image.resize(x, target_spatial_shape)
+            x = ops.image.resize(x, target_spatial_shape, interpolation="bilinear")
         return x
