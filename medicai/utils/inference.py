@@ -5,8 +5,8 @@ from scipy.ndimage import zoom
 from tqdm import tqdm
 
 from medicai.utils.general import (
-    _crop_output,
-    _get_scan_interval,
+    crop_output,
+    get_scan_interval,
     compute_importance_map,
     dense_patch_slices,
     ensure_tuple_rep,
@@ -169,7 +169,7 @@ def sliding_window_inference(
         inputs = np.pad(inputs, pad_size, mode=padding_mode.lower(), constant_values=cval)
 
     # Compute scan intervals
-    scan_interval = _get_scan_interval(image_size, roi_size, num_spatial_dims, overlap)
+    scan_interval = get_scan_interval(image_size, roi_size, num_spatial_dims, overlap)
     slices = dense_patch_slices(image_size, roi_size, scan_interval)
 
     # Create importance map
@@ -233,6 +233,6 @@ def sliding_window_inference(
 
     # Remove padding if necessary
     if any(p for pair in pad_size for p in pair):
-        output_image = _crop_output(output_image, pad_size, image_size_)
+        output_image = crop_output(output_image, pad_size, image_size_)
 
     return output_image
