@@ -92,6 +92,7 @@ class SegFormer(keras.Model):
                 "for proper hierarchical downsampling and reshaping."
             )
 
+        # Build the encoder
         mit_backbone = MixVisionTransformer(
             input_shape=input_shape,
             qkv_bias=qkv_bias,
