@@ -216,8 +216,19 @@ class SegFormer(keras.Model):
 
     def resize_to_target(self, x, target_spatial_shape, spatial_dims):
         if spatial_dims == 3:
+            uid = keras.backend.get_uid(prefix="resize_op")
             target_depth, target_height, target_width = target_spatial_shape
-            x = resize_volumes(x, target_depth, target_height, target_width, method="trilinear")
+            lambda_layer = ResizeVolume(
+                lambda volume: resize_volumes(
+                    volume, target_depth, target_height, target_width, method="trilinear"
+                ),
+                name=f"resize_op{uid}",
+            )
+            x = lambda_layer(x)
         elif spatial_dims == 2:
             x = ops.image.resize(x, target_spatial_shape, interpolation="bilinear")
         return x
+
+
+class ResizeVolume(keras.layers.Lambda):
+    pass
