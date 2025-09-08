@@ -365,7 +365,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
             sr_ratio=self.sr_ratio,
             spatial_dims=self.spatial_dims,
             attention_dropout=self.attention_dropout,
-            proj_dropout=self.projection_dropout,
+            projection_dropout=self.projection_dropout,
             qkv_bias=qkv_bias,
         )
 
