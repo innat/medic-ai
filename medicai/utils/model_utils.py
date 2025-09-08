@@ -4,7 +4,6 @@ hide_warnings()
 
 import keras
 from keras import activations, layers
-from keras import layers
 
 
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):

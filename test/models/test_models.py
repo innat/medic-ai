@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from medicai.models import UNETR, DenseNet, DenseUNet121, SwinTransformer, SwinUNETR, ViT
+from medicai.models import UNETR, DenseNet, DenseUNet121, SegFormer, SwinTransformer, SwinUNETR, ViT
 
 
 def test_unet():
@@ -102,3 +102,23 @@ def test_vit():
     x3d = tf.random.normal((batch_size, D, H, W, C))
     y3d = vit3d(x3d)
     assert y3d.shape == (batch_size, num_classes)
+
+
+def test_segformer():
+    batch_size = 1
+    D, H, W, C = 96, 96, 96, 1
+    num_classes = 3
+
+    # test for 3D
+    dummy_input = tf.random.normal((batch_size, D, H, W, C))
+    model = SegFormer(input_shape=(D, H, W, C), num_classes=num_classes)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 96, 1)
+    assert output.shape == (batch_size, D, H, W, 3)
+
+    # test for 2D
+    dummy_input = tf.random.normal((batch_size, H, W, C))
+    model = SegFormer(input_shape=(H, W, C), num_classes=num_classes)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 1)
+    assert output.shape == (batch_size, H, W, 3)

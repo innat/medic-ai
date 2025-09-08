@@ -1,8 +1,7 @@
-import os
-import warnings
 from typing import Any, List, Sequence, Tuple
 
 import numpy as np
+from keras import ops
 
 
 def hide_warnings():
@@ -64,7 +63,7 @@ def fall_back_tuple(val: Any, fallback: Sequence[int]) -> Tuple[int, ...]:
     return tuple(val)
 
 
-def _get_scan_interval(
+def get_scan_interval(
     image_size: Sequence[int],
     roi_size: Sequence[int],
     num_spatial_dims: int,
@@ -159,7 +158,7 @@ def get_valid_patch_size(image_size: Sequence[int], patch_size: Sequence[int]) -
     return tuple(min(p, i) for p, i in zip(patch_size, image_size))
 
 
-def _crop_output(
+def crop_output(
     output: np.ndarray, pad_size: Sequence[Sequence[int]], original_size: Sequence[int]
 ) -> np.ndarray:
     """
@@ -182,3 +181,54 @@ def _crop_output(
 
     # Convert the list of slices to a tuple for proper indexing
     return output[tuple(crop_slices)]
+
+
+def resize_volumes(volumes, depth, height, width, method="trilinear"):
+    def trilinear_resize(volumes, depth, height, width):
+        original_dtype = volumes.dtype
+        volumes = ops.cast(volumes, "float32")
+        batch_size, in_d, in_h, in_w, channels = ops.shape(volumes)
+
+        # --- Depth (axis=1) ---
+        z = ops.linspace(0.0, ops.cast(in_d - 1, "float32"), depth)  # (out_d,)
+        z0 = ops.cast(ops.floor(z), "int32")
+        z1 = ops.minimum(z0 + 1, in_d - 1)
+        dz = z - ops.cast(z0, "float32")  # (out_d,)
+
+        # Gather along depth (axis=1) using 1D indices -> result has depth = out_d
+        lower_d = ops.take(volumes, z0, axis=1)  # (B, out_d, H,  W, C)
+        upper_d = ops.take(volumes, z1, axis=1)  # (B, out_d, H,  W, C)
+
+        dz = ops.reshape(dz, (1, depth, 1, 1, 1))  # broadcast shape
+        interp_d = (1.0 - dz) * lower_d + dz * upper_d  # (B, out_d, H, W, C)
+
+        # --- Height (axis=2) ---
+        y = ops.linspace(0.0, ops.cast(in_h - 1, "float32"), height)  # (out_h,)
+        y0 = ops.cast(ops.floor(y), "int32")
+        y1 = ops.minimum(y0 + 1, in_h - 1)
+        dy = y - ops.cast(y0, "float32")
+
+        lower_h = ops.take(interp_d, y0, axis=2)  # (B, out_d, out_h, W, C)
+        upper_h = ops.take(interp_d, y1, axis=2)  # (B, out_d, out_h, W, C)
+
+        dy = ops.reshape(dy, (1, 1, height, 1, 1))
+        interp_h = (1.0 - dy) * lower_h + dy * upper_h  # (B, out_d, out_h, W, C)
+
+        # --- Width (axis=3) ---
+        x = ops.linspace(0.0, ops.cast(in_w - 1, "float32"), width)  # (out_w,)
+        x0 = ops.cast(ops.floor(x), "int32")
+        x1 = ops.minimum(x0 + 1, in_w - 1)
+        dx = x - ops.cast(x0, "float32")
+
+        lower_w = ops.take(interp_h, x0, axis=3)  # (B, out_d, out_h, out_w, C)
+        upper_w = ops.take(interp_h, x1, axis=3)  # (B, out_d, out_h, out_w, C)
+
+        dx = ops.reshape(dx, (1, 1, 1, width, 1))
+        out = (1.0 - dx) * lower_w + dx * upper_w  # (B, out_d, out_h, out_w, C)
+        out = ops.cast(out, original_dtype)
+        return out
+
+    if method == "trilinear":
+        return trilinear_resize(volumes, depth, height, width)
+    else:
+        raise ValueError(f"Unsupported resize method: {method}")

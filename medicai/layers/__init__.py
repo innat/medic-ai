@@ -1,4 +1,5 @@
 from .attention import ChannelWiseAttention, ElementWiseAttention
+from .drop_path import DropPath
 from .mlp import MLPBlock, SwinMLP, TransUNetMLP, ViTMLP
 from .swin import (
     SwinBasicLayer,
@@ -8,4 +9,3 @@ from .swin import (
     SwinWindowAttention,
 )
 from .vit import ViTEncoderBlock, ViTPatchingAndEmbedding
-from .drop_path import DropPath

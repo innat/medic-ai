@@ -52,11 +52,12 @@ Installing from source GitHub:
 | ViT          | 2D, 3D               | Classification | Transformer               |
 | UNETR        | 2D, 3D               | Segmentation   | Transformer               |
 | SwinUNETR    | 3D               | Segmentation   | Transformer               |
-| TransUNet    | 2D, 3D               | Segmentation   | Hybrid (CNN + Transformer)|
+| TransUNet    | 2D, 3D               | Segmentation   | Transformer |
+| SegFormer    | 2D, 3D               | Segmentation   | Transformer |
 
-**Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data.
+**Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with **TensorFlow** operations. It can be used in the `tf.data` API or a Python data generator and is fully compatible with multiple backends, `tf`, `torch`, `jax` in training and inference, supporting both GPUs and TPUs.
 
-```
+```bash
 CropForeground
 NormalizeIntensity
 Orientation

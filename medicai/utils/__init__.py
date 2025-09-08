@@ -1,8 +1,7 @@
 from pathlib import Path
 
-from medicai.utils.general import hide_warnings
+from medicai.utils.general import hide_warnings, resize_volumes
 from medicai.utils.inference import SlidingWindowInference, sliding_window_inference
-from medicai.utils.layer_dispatch import get_layer_fn
 from medicai.utils.model_utils import (
     get_act_layer,
     get_conv_layer,
