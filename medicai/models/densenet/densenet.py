@@ -5,31 +5,10 @@ from ...utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO, get_pooling_layer,
 from .densenet_backbone import DenseNetBackbone
 
 
-@keras.saving.register_keras_serializable(package="densenet3d.model")
-class DenseNet(keras.Model):
-    """
-    3D variant of DenseNet architecture for volumetric data.
-
-    Args:
-        variant (str): DenseNet variant to use, e.g., 'densenet121', 'densenet169'.
-        include_rescaling (bool): Whether to include input rescaling layer.
-        include_top (bool): Whether to include the classification head.
-        num_classes (int): Number of output classes if `include_top=True`.
-        pooling (str or None): Optional global pooling mode for feature extraction ('avg' or 'max').
-        input_shape (tuple): Input shape excluding batch size, e.g., (depth, height, width, channels).
-        input_tensor (tf.Tensor): Optional Keras tensor to use as image input.
-        classifier_activation (str): Activation for classification layer if `include_top=True`.
-        name (str): Optional model name.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`.
-
-    Attributes:
-        encoder (keras.Model): Backbone feature extractor (DenseNet3DBackbone).
-    """
-
+class DenseNet121(DenseNetBackbone):
     def __init__(
         self,
         *,
-        variant="densenet121",
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
@@ -40,71 +19,79 @@ class DenseNet(keras.Model):
         name=None,
         **kwargs,
     ):
-
-        if variant not in BACKBONE_ARGS:
-            raise ValueError(
-                f"Invalid variant '{variant}'. Choose from {list(BACKBONE_ARGS.keys())}."
-            )
-
-        blocks = BACKBONE_ARGS[variant]
-        name = name or variant
-
-        GlobalAvgPool = get_pooling_layer(
-            spatial_dims=len(input_shape) - 1, layer_type="avg", global_pool=True
-        )
-        GlobalMaxPool = get_pooling_layer(
-            spatial_dims=len(input_shape) - 1,
-            layer_type="max",
-        )
-
-        inputs = parse_model_inputs(input_shape, input_tensor)
-
-        # The actual backbone feature extractor (Functional)
-        encoder_model = DenseNetBackbone(
+        blocks = BACKBONE_ARGS["densenet121"]
+        super().__init__(
             blocks=blocks,
             include_rescaling=include_rescaling,
-            input_tensor=inputs,
-            name="densenet_backbone",
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            input_shape=input_shape,
+            input_tensor=input_tensor,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
         )
-        encoder_outputs = encoder_model.output
-
-        if include_top:
-            x = GlobalAvgPool(encoder_outputs)
-            x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
-        elif pooling == "avg":
-            x = GlobalAvgPool(encoder_outputs)
-        elif pooling == "max":
-            x = GlobalMaxPool(encoder_outputs)
-        else:
-            x = encoder_outputs
-
-        super().__init__(inputs=inputs, outputs=x, name=name)
-
-        # Save reference to encoder (used for skip connections externally)
-        self.encoder = encoder_model
-        self.include_top = include_top
-        self.pooling = pooling
-        self.classifier_activation = classifier_activation
-        self.variant = variant
-        self.include_rescaling = include_rescaling
-        self.num_classes = num_classes
-
-    def get_config(self):
-        return {
-            "variant": self.variant,
-            "input_shape": self.input_shape[1:],
-            "include_rescaling": self.include_rescaling,
-            "include_top": self.include_top,
-            "num_classes": self.num_classes,
-            "pooling": self.pooling,
-            "classifier_activation": self.classifier_activation,
-        }
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
 
 
-BACKBONE_ZOO["densenet121"] = DenseNet
-BACKBONE_ZOO["densenet169"] = DenseNet
-BACKBONE_ZOO["densenet201"] = DenseNet
+class DenseNet169(keras.Model):
+    def __init__(
+        self,
+        *,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        input_shape=(None, None, None, 1),
+        input_tensor=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        blocks = BACKBONE_ARGS["densenet169"]
+        super().__init__(
+            blocks=blocks,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            input_shape=input_shape,
+            input_tensor=input_tensor,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+class DenseNet201(keras.Model):
+    def __init__(
+        self,
+        *,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        input_shape=(None, None, None, 1),
+        input_tensor=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        blocks = BACKBONE_ARGS["densenet201"]
+        super().__init__(
+            blocks=blocks,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            input_shape=input_shape,
+            input_tensor=input_tensor,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+BACKBONE_ZOO["densenet121"] = DenseNet121
+BACKBONE_ZOO["densenet169"] = DenseNet169
+BACKBONE_ZOO["densenet201"] = DenseNet201

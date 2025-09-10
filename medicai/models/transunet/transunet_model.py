@@ -75,7 +75,7 @@ class TransUNet(keras.Model):
 
         inputs = parse_model_inputs(input_shape=input_shape, name="transunet_input")
 
-        # CNN Encoder (or ResNet or DSPNet)
+        # CNN Encoder (or ResNet or CSPNet)
         base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
 
         # Get CNN feature maps from the encoder.
@@ -185,7 +185,9 @@ class TransUNet(keras.Model):
         # Step 1: Initialize Learnable Queries.
         # These queries act as "segmentation concepts" and will be refined over
         # the course of the decoder.
-        current_queries = LearnableQueries(num_queries, embed_dim)(encoder_output)  # Initial queries
+        current_queries = LearnableQueries(num_queries, embed_dim)(
+            encoder_output
+        )  # Initial queries
 
         # Step 2: Project CNN features for decoder skip connections
         # Project the 3 intermediate CNN features (C1, C2, C3) to the
