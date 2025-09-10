@@ -98,8 +98,6 @@ class DenseNetBackbone(keras.Model):
             x = GlobalAvgPool(x)
         elif pooling == "max":
             x = GlobalMaxPool(x)
-        else:
-            x = x
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
