@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from medicai.losses import SparseDiceCELoss
 from medicai.metrics import SparseDiceMetric
-from medicai.models import UNETR, SwinUNETR
+from medicai.models import UNETR, SwinUNETR, TransUNet
 from medicai.transforms import (
     Compose,
     ScaleIntensityRange,
@@ -74,12 +74,16 @@ def create_dummy_dataset(batch_size, num_classes):
 
 def test_training_with_meta():
     num_classes = 4
-    model = create_model_and_compile(num_classes)
+    model_list = [SwinUNETR, TransUNet]
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.map(create_sample_dict, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(transformation, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.batch(1).prefetch(tf.data.AUTOTUNE)
-    train_and_assert(model, dataset)
+
+    for model_class in model_list:
+        print(f"Testing {model_class.__name__}")
+        model = create_model_and_compile(model_class, num_classes)
+        train_and_assert(model, dataset)
 
 
 def test_training():
