@@ -157,13 +157,8 @@ class LearnableQueries(layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.num_queries, self.embed_dim)
-    
+
     def get_config(self):
         config = super().get_config()
-        config.update(
-            {
-                "num_queries": self.num_queries,
-                "embed_dim": self.embed_dim
-            }
-        )
+        config.update({"num_queries": self.num_queries, "embed_dim": self.embed_dim})
         return config

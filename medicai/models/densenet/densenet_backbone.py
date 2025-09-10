@@ -28,6 +28,10 @@ class DenseNetBackbone(keras.Model):
         blocks,
         input_shape=(None, None, None, 1),
         input_tensor=None,
+        include_top=False,
+        pooling=None,
+        num_classes=1000,
+        classifier_activation="softmax",
         growth_rate=32,
         bn_size=4,
         compression=0.5,
@@ -79,6 +83,22 @@ class DenseNetBackbone(keras.Model):
         x = layers.BatchNormalization()(x)
         x = layers.Activation("relu")(x)
 
+        GlobalAvgPool = get_pooling_layer(
+            spatial_dims=len(input_shape) - 1, layer_type="avg", global_pool=True
+        )
+        GlobalMaxPool = get_pooling_layer(
+            spatial_dims=len(input_shape) - 1,
+            layer_type="max",
+        )
+
+        if include_top:
+            x = GlobalAvgPool(x)
+            x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
+        elif pooling == "avg":
+            x = GlobalAvgPool(x)
+        elif pooling == "max":
+            x = GlobalMaxPool(x)
+
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.blocks = blocks
@@ -88,6 +108,10 @@ class DenseNetBackbone(keras.Model):
         self.compression = compression
         self.dropout_rate = dropout_rate
         self.include_rescaling = include_rescaling
+        self.include_top = include_top
+        self.pooling = pooling
+        self.classifier_activation = classifier_activation
+        self.num_classes = num_classes
         self.name = name
 
     def get_config(self):
@@ -99,6 +123,10 @@ class DenseNetBackbone(keras.Model):
             "bn_size": self.bn_size,
             "compression": self.compression,
             "dropout_rate": self.dropout_rate,
+            "include_top": self.include_top,
+            "pooling": self.pooling,
+            "num_classes": self.num_classes,
+            "classifier_activation": self.classifier_activation,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
         }

@@ -1,4 +1,4 @@
-from .densenet import DenseNet, DenseNetBackbone
+from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
 from .segformer import SegFormer
 from .swin import SwinTransformer, SwinUNETR
 from .transunet import TransUNet
