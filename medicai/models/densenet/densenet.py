@@ -34,7 +34,7 @@ class DenseNet121(DenseNetBackbone):
         )
 
 
-class DenseNet169(keras.Model):
+class DenseNet169(DenseNetBackbone):
     def __init__(
         self,
         *,
@@ -63,7 +63,7 @@ class DenseNet169(keras.Model):
         )
 
 
-class DenseNet201(keras.Model):
+class DenseNet201(DenseNetBackbone):
     def __init__(
         self,
         *,
