@@ -1,3 +1,6 @@
+import numpy as np
+import tensorflow as tf
+
 from .tensor_bundle import TensorBundle
 
 
@@ -17,6 +20,7 @@ class Compose:
                 return a modified TensorBundle.
         """
         self.transforms = transforms
+        self._to_tensor = lambda x: tf.convert_to_tensor(x)
 
     def __call__(self, image_data, meta_data=None):
         """Applies the sequence of transforms to the input data and metadata.
@@ -32,6 +36,18 @@ class Compose:
         Returns:
             TensorBundle: The result after applying all the transforms in the sequence.
         """
+
+        # Automatically convert all NumPy arrays in image_data to TensorFlow tensors
+        for key, value in image_data.items():
+            if isinstance(value, np.ndarray):
+                image_data[key] = self._to_tensor(value)
+
+        # Also convert any NumPy arrays in meta_data
+        if meta_data is not None:
+            for key, value in meta_data.items():
+                if isinstance(value, np.ndarray):
+                    meta_data[key] = self._to_tensor(value)
+
         x = TensorBundle(image_data, meta_data)
         for transform in self.transforms:
             x = transform(x)
