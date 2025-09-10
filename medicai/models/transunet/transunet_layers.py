@@ -1,123 +1,46 @@
 import keras
 from keras import layers, ops
-from keras.initializers import HeNormal
 
 from medicai.layers import TransUNetMLP
 
 
 class MaskedCrossAttention(layers.Layer):
-    """Masked cross-attention layer for transformer decoders.
+    def __init__(self, embed_dim, num_heads, mlp_dim=1024, dropout_rate=0.1, **kwargs):
+        """
+        A masked cross-attention block for the TransUNet decoder.
 
-    This layer is a wrapper around `keras.layers.MultiHeadAttention` that can perform
-    both standard cross-attention and masked cross-attention. It also includes
-    a He Normal initializer for the attention kernel.
+        This layer performs masked cross-attention between a set of queries and the
+        transformer encoder's output, followed by a multi-layer perceptron (MLP).
+        The attention mask is used to selectively attend to relevant parts of the
+        encoder output, refining the queries based on spatial context.
 
-    Args:
-        key_dim: Dimensionality of the key and query projections.
-        num_heads: Number of attention heads.
-        dropout_rate: Dropout rate for attention outputs (default: 0.1).
+        The refinement loop in the decoder uses this layer to iteratively update
+        learnable queries, which are then used to predict segmentation masks.
 
-    Inputs:
-        A list of tensors.
-        - `[query, key, value]`: The layer performs attention on this triplet.
-        - `[query, value]`: The layer uses `value` for both `key` and `value`
-          tensors for self-attention-like behavior, useful for query refinement.
-        - `mask`: An optional boolean attention mask tensor to prevent attention
-          to certain positions.
+        Args:
+            embed_dim (int): The embedding dimension of the input queries and keys/values.
+            num_heads (int): The number of attention heads. `embed_dim` must be
+                divisible by `num_heads`.
+            mlp_dim (int, optional): The hidden dimension of the MLP. Defaults to 1024.
+            dropout_rate (float, optional): The dropout rate for attention and MLP.
+                Defaults to 0.1.
+            **kwargs: Keyword arguments passed to the parent `layers.Layer` class.
 
-    Outputs:
-        A tensor of the same shape as the `query` tensor, containing the
-        attended features.
-    """
+        Inputs:
+            A list of three tensors:
+            - queries (Tensor): The query tensor, typically the learnable queries.
+                Shape: `(batch_size, num_queries, embed_dim)`.
+            - encoder_output (Tensor): The output from the ViT encoder.
+                Shape: `(batch_size, num_tokens, embed_dim)`.
+            - mask (Tensor): The attention mask to be applied. A `1` indicates a
+                valid token to attend to, while a `0` or negative infinity value
+                masks it out. Shape: `(batch_size, num_queries, num_tokens)`.
 
-    def __init__(self, num_heads, key_dim, dropout_rate=0.1, **kwargs):
-        super().__init__(**kwargs)
-        self.key_dim = key_dim
-        self.num_heads = num_heads
-        self.dropout_rate = dropout_rate
-
-    def build(self, input_shape):
-        self.attention = layers.MultiHeadAttention(
-            num_heads=self.num_heads,
-            key_dim=self.key_dim,
-            kernel_initializer=HeNormal(),
-            dropout=self.dropout_rate,
-        )
-
-        if len(input_shape) == 2:
-            query_shape, key_value_shape = input_shape
-            self.attention.build(query_shape, key_value_shape, key_value_shape)
-        elif len(input_shape) == 3:
-            query_shape, key_shape, value_shape = input_shape
-            self.attention.build(query_shape, value_shape, key_shape)
-        else:
-            raise ValueError(
-                f"MaskedCrossAttention layer expects list of 2 or 3 input shapes, but received {len(input_shape)}."
-            )
-
-        super().build(input_shape)
-
-    def call(self, inputs, mask=None, training=False):
-
-        if len(inputs) == 3:
-            query, key, value = inputs
-        else:
-            query, value = inputs
-            key = value
-
-        # query refinement
-        if mask is None or (isinstance(mask, (list, tuple)) and all(m is None for m in mask)):
-            mask = None
-
-        # masked cross-attention
-        if mask is not None:
-            output = self.attention(
-                query=query, key=key, value=value, attention_mask=mask, training=training
-            )
-        else:  # query refinement
-            output = self.attention(query=query, key=key, value=value, training=training)
-
-        return output
-
-    def compute_output_shape(self, input_shape):
-        return input_shape[0]  # Return shape of queries
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "key_dim": self.key_dim,
-                "num_heads": self.num_heads,
-                "dropout_rate": self.dropout_rate,
-            }
-        )
-        return config
-
-
-class QueryRefinementBlock(layers.Layer):
-    """Transformer block for refining learnable queries using encoder output.
-
-    This is the P-block from the paper's decoder. It refines a set of learnable
-    query tokens by applying cross-attention with features from the Vision Transformer
-    encoder. This is followed by a feed-forward network (MLP) and residual connections.
-
-    Args:
-        embed_dim: Dimensionality of input and output token representations.
-        num_heads: Number of attention heads.
-        mlp_dim: Hidden dimension of the MLP layer.
-        dropout_rate: Dropout rate for attention and MLP (default: 0.1).
-
-    Inputs:
-        A list of two tensors:
-        - queries: The learnable query tokens of shape `(batch_size, num_queries, embed_dim)`.
-        - encoder_output: The output from the Vision Transformer encoder,
-          of shape `(batch_size, num_patches, embed_dim)`.
-
-    Outputs:
-        A tensor of the same shape as the input queries, with refined features.
-    """
-
-    def __init__(self, embed_dim, num_heads, mlp_dim, dropout_rate=0.1, **kwargs):
+        Outputs:
+            A tensor with the same shape as the `queries` input, representing the
+            queries after being refined by the cross-attention and MLP.
+            Shape: `(batch_size, num_queries, embed_dim)`.
+        """
         super().__init__(**kwargs)
 
         if embed_dim % num_heads != 0:
@@ -131,13 +54,15 @@ class QueryRefinementBlock(layers.Layer):
         self.dropout_rate = dropout_rate
 
     def build(self, input_shape):
-        query_shape, encoder_output_shape = input_shape
-        self.cross_attention = MaskedCrossAttention(
+        # Input shape should be [query_shape, encoder_output_shape, mask_shape]
+        query_shape, encoder_output_shape, _ = input_shape
+        self.cross_attention = keras.layers.MultiHeadAttention(
             num_heads=self.num_heads,
             key_dim=self.embed_dim // self.num_heads,
-            dropout_rate=self.dropout_rate,
+            value_dim=self.embed_dim // self.num_heads,
+            dropout=self.dropout_rate,
         )
-        self.cross_attention.build([query_shape, encoder_output_shape])
+        self.cross_attention.build(query_shape, encoder_output_shape, encoder_output_shape)
         self.mlp_layer = TransUNetMLP(
             self.mlp_dim,
             activation="gelu",
@@ -146,30 +71,39 @@ class QueryRefinementBlock(layers.Layer):
             name="mlp_decode",
         )
         self.mlp_layer.build(query_shape)
-        self.layernorm1 = layers.LayerNormalization(epsilon=1e-5)
-        self.layernorm2 = layers.LayerNormalization(epsilon=1e-5)
+        self.layernorm1 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
+        self.layernorm1.build((None, None, self.embed_dim))
+        self.layernorm2.build((None, None, self.embed_dim))
 
     def call(self, inputs, training=None):
-        queries, encoder_output = inputs
+        # Inputs should be [queries, encoder_output, mask]
+        queries, encoder_output, mask = inputs
 
-        # 1. Cross-attention
+        # 1. Cross-attention with mask
         queries_norm = self.layernorm1(queries)
+
         attn_output = self.cross_attention(
-            [queries_norm, encoder_output, encoder_output], training=training
+            query=queries_norm,
+            key=encoder_output,
+            value=encoder_output,
+            attention_mask=mask,
+            training=training,
         )
-        # Residual connection and layer norm
+
+        # Residual connection
         x = queries + attn_output
 
         # 2. MLP
         x_norm = self.layernorm2(x)
         mlp_output = self.mlp_layer(x_norm, training=training)
-        # Residual connection and layer norm
+        # Residual connection
         output = x + mlp_output
 
         return output
 
     def compute_output_shape(self, input_shape):
-        return input_shape[0]  # Return shape of queries
+        return input_shape[0]
 
     def get_config(self):
         config = super().get_config()
@@ -223,3 +157,13 @@ class LearnableQueries(layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.num_queries, self.embed_dim)
+    
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "num_queries": self.num_queries,
+                "embed_dim": self.embed_dim
+            }
+        )
+        return config

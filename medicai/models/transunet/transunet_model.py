@@ -1,12 +1,11 @@
 import keras
-import numpy as np
 from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.models import DenseNetBackbone
-from medicai.utils import get_conv_layer, parse_model_inputs
+from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_inputs
 
-from .transunet_layers import LearnableQueries, MaskedCrossAttention, QueryRefinementBlock
+from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
 
 class TransUNet(keras.Model):
@@ -14,24 +13,33 @@ class TransUNet(keras.Model):
 
     This model combines a 3D or 2D CNN encoder (DenseNet) with a Vision Transformer
     (ViT) encoder and a hybrid decoder. The CNN extracts multi-scale local features,
-    while the ViT captures global context. The decoder refines the features using
-    a coarse-to-fine attention mechanism to produce the final segmentation map.
+    while the ViT captures global context. The decoder upsamples the fused
+    features to produce the final segmentation map using a coarse-to-fine
+    attention mechanism and U-Net-style skip connections.
 
     Args:
-        input_shape: The shape of the input data. For 2D, it is `(height, width, channels)`.
-            For 3D, it is `(depth, height, width, channels)`.
-        num_classes: The number of segmentation classes.
-        patch_size: The size of the patches for the Vision Transformer.
-        classifier_activation: Activation function for the final segmentation head
-            (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
-        num_encoder_layers: The number of transformer encoder blocks (default: 12).
-        num_heads: The number of attention heads in the transformer blocks (default: 8).
-        embed_dim: The dimensionality of the token embeddings (default: 256).
-        mlp_dim: The hidden dimension of the MLP in the transformer blocks (default: 1024).
-        dropout_rate: The dropout rate for regularization (default: 0.1).
-        decoder_projection_filters: The number of filters for the final CNN
-            upsampling layers in the decoder (default: 64).
-        name: The name of the model (default: "TransUNetND").
+        input_shape (tuple): The shape of the input data. For 2D, it is
+            `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
+        num_classes (int): The number of segmentation classes.
+        patch_size (int or tuple): The size of the patches for the Vision
+            Transformer. Must be a tuple of length `spatial_dims`.
+        num_queries (int, optional): The number of learnable queries used in the
+            decoder's attention mechanism. Defaults to 100.
+        classifier_activation (str, optional): Activation function for the final
+            segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
+        num_encoder_layers (int, optional): The number of transformer encoder blocks
+            in the ViT encoder. Defaults to 12.
+        num_heads (int, optional): The number of attention heads in the transformer blocks.
+            Defaults to 8.
+        embed_dim (int, optional): The dimensionality of the token embeddings.
+            Defaults to 256.
+        mlp_dim (int, optional): The hidden dimension of the MLP in the transformer
+            blocks. Defaults to 1024.
+        dropout_rate (float, optional): The dropout rate for regularization.
+            Defaults to 0.1.
+        decoder_projection_filters (int, optional): The number of filters for the
+            convolutional layers in the decoder upsampling path. Defaults to 64.
+        name (str, optional): The name of the model. Defaults to `TransUNetND`.
     """
 
     def __init__(
@@ -40,8 +48,9 @@ class TransUNet(keras.Model):
         num_classes,
         patch_size,
         classifier_activation=None,
-        num_encoder_layers=12,
+        num_encoder_layers=6,
         num_heads=8,
+        num_queries=100,
         embed_dim=256,
         mlp_dim=1024,
         dropout_rate=0.1,
@@ -66,7 +75,7 @@ class TransUNet(keras.Model):
 
         inputs = parse_model_inputs(input_shape=input_shape, name="transunet_input")
 
-        # -------------------- CNN Encoder --------------------
+        # CNN Encoder (or ResNet or DSPNet)
         base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
 
         # Get CNN feature maps from the encoder.
@@ -77,7 +86,7 @@ class TransUNet(keras.Model):
 
         cnn_features = [c1, c2, c3]
 
-        # -------------------- Transformer Encoder --------------------
+        # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
             image_size=final_cnn_output.shape[1:-1],
             patch_size=patch_size,
@@ -98,7 +107,7 @@ class TransUNet(keras.Model):
                 name=f"transunet_vit_encoder_block_{i + 1}",
             )(encoder_output)
 
-        # -------------------- Decoder --------------------
+        # Decoder
         outputs = self.build_decoder(
             encoder_output=encoder_output,
             cnn_features=cnn_features,
@@ -107,17 +116,28 @@ class TransUNet(keras.Model):
             embed_dim=embed_dim,
             mlp_dim=mlp_dim,
             dropout_rate=dropout_rate,
-            decoder_projection_filters=decoder_projection_filters,
             num_classes=num_classes,
-            classifier_activation=classifier_activation,
+            num_queries=num_queries,
             spatial_dims=spatial_dims,
+            decoder_projection_filters=decoder_projection_filters,
         )
+
+        outputs = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=num_classes,
+            kernel_size=1,
+            activation=classifier_activation,
+            dtype="float32",
+            name="final_conv",
+        )(outputs)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"TransUNet{spatial_dims}D", **kwargs
         )
 
         self.num_classes = num_classes
+        self.num_queries = num_queries
         self.patch_size = patch_size
         self.classifier_activation = classifier_activation
         self.num_encoder_layers = num_encoder_layers
@@ -131,6 +151,7 @@ class TransUNet(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
+            "num_queries": self.num_queries,
             "classifier_activation": self.classifier_activation,
             "patch_size": self.patch_size,
             "num_encoder_layers": self.num_encoder_layers,
@@ -149,193 +170,242 @@ class TransUNet(keras.Model):
         final_cnn_output,
         num_heads,
         embed_dim,
+        num_classes,
+        num_queries,
         mlp_dim,
         dropout_rate,
-        decoder_projection_filters,
-        num_classes,
-        classifier_activation,
         spatial_dims,
+        decoder_projection_filters,
     ):
-        # -------------------- 1. Learnable Queries & Refinement (P-Blocks) --------------------
-        spatial_shape_c3 = cnn_features[-1].shape[1:-1]
-        num_queries = int(np.prod(spatial_shape_c3))
+        """
+        Builds the hybrid decoder, which consists of a transformer-based
+        refinement loop and a U-Net style upsampling path.
+        """
 
-        # Initialize P0
-        p_queries = LearnableQueries(
-            num_queries=num_queries, embed_dim=embed_dim, name="initial_learnable_queries"
-        )(final_cnn_output)
+        # Step 1: Initialize Learnable Queries.
+        # These queries act as "segmentation concepts" and will be refined over
+        # the course of the decoder.
+        current_queries = LearnableQueries(num_queries, embed_dim)(encoder_output)  # Initial queries
 
-        # Refine queries by attending to the encoder output.
-        # This creates P1, P2, P3...
-        refined_p_queries = [p_queries]
-        for i in range(len(cnn_features)):
-            # This is the "P-block" from the diagram
-            p_queries = QueryRefinementBlock(
-                embed_dim=embed_dim,
-                num_heads=num_heads,
-                mlp_dim=mlp_dim,
-                dropout_rate=dropout_rate,
-                name=f"p_refinement_attention_{i+1}",
-            )([p_queries, encoder_output])
-
-            refined_p_queries.append(p_queries)
-
-        # -------------------- 2. Coarse-to-fine Attention (Z-Blocks) --------------------
-
-        # Project all CNN features to the `embed_dim` for attention
-        proj_cnn_features = [
-            get_conv_layer(
+        # Step 2: Project CNN features for decoder skip connections
+        # Project the 3 intermediate CNN features (C1, C2, C3) to the
+        # transformer's embedding dimension.
+        projected_features = []
+        for i, feat in enumerate(cnn_features):
+            proj_feat = get_conv_layer(
                 spatial_dims=spatial_dims,
                 layer_type="conv",
                 filters=embed_dim,
                 kernel_size=1,
                 name=f"proj_cnn_{i}",
-            )(f)
-            for i, f in enumerate(cnn_features)
-        ]
+            )(feat)
+            projected_features.append(proj_feat)
 
-        # First stage: Use the deepest P-queries (P3) to start the Z-path.
-        z_tokens_query = refined_p_queries[-1]
-
-        # Generate a coarse segmentation map from the query tokens.
-        # This will serve as the first mask for the cross-attention.
-        z_spatial_coarse = self.reshape_to_spatial_tokens(z_tokens_query, proj_cnn_features[-1])
-        mask_conv = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=num_classes,
-            kernel_size=1,
-            name="mask_conv_c3",
-        )(z_spatial_coarse)
-        query_len = refined_p_queries[-1].shape[1]
-        mask = self.make_attention_mask(mask_conv, query_len)
-
-        # Start the Z-path with the deepest features (c3) and the most refined queries (P3).
-        # The output of this attention block is the first Z-token set (Z3).
-        z_tokens = MaskedCrossAttention(
-            num_heads=num_heads,
-            key_dim=embed_dim // num_heads,
-            dropout_rate=dropout_rate,
-            name="coarse_to_fine_stage_c3",
-        )(
-            [
-                refined_p_queries[-1],
-                self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
-                self.flatten_spatial_to_tokens(proj_cnn_features[-1]),
-            ],
-            mask=mask,
+        # Step 3: Initial Coarse Prediction
+        # Generate an initial coarse mask prediction by performing a dot product
+        # between the learnable queries (F) and the global transformer context (E).
+        # Paper notation: M_0 = F^T * E
+        initial_coarse_logits = layers.Dot(axes=(2, 2))([current_queries, encoder_output])
+        current_coarse_mask = layers.Activation("sigmoid", name="initial_coarse_mask")(
+            initial_coarse_logits
         )
 
-        # Now we progressively upsample the Z tokens and fuse them with the next level of CNN features.
-        # The loop runs from i=2 down to 1.
-        for i in range(len(cnn_features) - 1, 0, -1):
-            # Reshape Z tokens to the current spatial grid
-            z_spatial = self.reshape_to_spatial_tokens(z_tokens, proj_cnn_features[i])
+        # Step 4: Coarse-to-Fine Refinement Loop
+        # This loop iterates through the CNN feature maps in reverse order (C3 -> C2 -> C1),
+        # refining the queries and mask at each step.
+        for t, cnn_feature in enumerate(reversed(projected_features)):  # [C3, C2, C1]
+            level_name = f"level_{t}"  # level_0 (C3), level_1 (C2), level_2 (C1)
 
-            # Upsample the spatial grid using Conv3DTranspose
-            z_upsampled_spatial = get_conv_layer(
-                spatial_dims=spatial_dims,
-                layer_type="conv_transpose",
-                filters=embed_dim,
-                kernel_size=2,
-                strides=2,
-                padding="same",
-                name=f"z_upsample_{i}",
-            )(z_spatial)
+            # Step 4a: Prepare CNN features for cross-attention
+            # Flatten the spatial dimensions of the CNN feature map into a sequence of tokens.
+            P_t = self.flatten_spatial_to_tokens(cnn_feature, embed_dim=embed_dim)
+            current_num_tokens = ops.shape(P_t)[1]
 
-            # Flatten the upsampled grid back to tokens. The number of tokens increases.
-            z_upsampled_tokens = self.flatten_spatial_to_tokens(z_upsampled_spatial)
+            # Step 4b: Create an attention mask from the previous coarse prediction
+            # The previous coarse mask (M_(t-1)) is resized to match the number of tokens
+            # in the current CNN feature map (P_t). This mask guides the cross-attention
+            resized_mask = layers.Resizing(
+                height=ops.shape(current_coarse_mask)[1],
+                width=current_num_tokens,
+                interpolation="nearest",
+                name=f"mask_resize_{level_name}",
+            )(current_coarse_mask[..., None])
+            resized_mask = ops.squeeze(resized_mask, axis=-1)
 
-            # Generate the new mask for this stage from the upsampled Z tokens
-            mask_conv = get_conv_layer(
-                spatial_dims=spatial_dims,
-                layer_type="conv",
-                filters=num_classes,
-                kernel_size=1,
-                name=f"mask_conv_c{i}",
-            )(z_upsampled_spatial)
-            query_len = z_upsampled_tokens.shape[1]
-            mask = self.make_attention_mask(mask_conv, query_len)
+            # The mask is converted to a format suitable for Keras's MultiHeadAttention,
+            # where large negative values effectively "mask out" tokens.
+            attention_mask = layers.Lambda(
+                lambda x: ops.where(x > 0.5, 0.0, -1e9), name=f"attention_mask_{level_name}"
+            )(resized_mask)
 
-            # Get the tokens for the next CNN feature map
-            cnn_tokens = self.flatten_spatial_to_tokens(proj_cnn_features[i - 1])
-
-            # Fuse the upsampled Z tokens with the next projected CNN features using attention.
-            # The upsampled Z tokens are the query, and the next CNN features are key/value.
-            z_tokens = MaskedCrossAttention(
+            # Step 4c: Masked Cross-Attention
+            # The current queries (F_t) perform a masked cross-attention on the CNN feature tokens (P_t).
+            # This refines the queries by incorporating local, fine-grained information.
+            refined_queries = MaskedCrossAttention(
+                embed_dim=embed_dim,
                 num_heads=num_heads,
-                key_dim=embed_dim // num_heads,
+                mlp_dim=mlp_dim,
                 dropout_rate=dropout_rate,
-                name=f"coarse_to_fine_stage_c{i}",
-            )([z_upsampled_tokens, cnn_tokens, cnn_tokens], mask=mask)
+                name=f"masked_xattn_{level_name}",
+            )([current_queries, P_t, attention_mask])
 
-        # -------------------- 3. Final CNN Decoder Path --------------------
-        # `z_tokens` is now at the resolution of c1. We convert it to a spatial map.
-        x = self.reshape_to_spatial_tokens(z_tokens, cnn_features[0])
+            # Step 4d: Update current queries and coarse mask
+            # The queries are updated with the refined output from the cross-attention.
+            current_queries = refined_queries
 
-        # Perform the final upsampling stages.
-        final_decoder_filters = [decoder_projection_filters * 2, decoder_projection_filters]
+            # A new, more refined coarse mask (M_t) is generated from the updated queries
+            # and the global transformer context (E).
+            current_coarse_logits = layers.Dot(axes=(2, 2))([current_queries, encoder_output])
+            current_coarse_mask = layers.Activation("sigmoid", name=f"coarse_mask_{level_name}")(
+                current_coarse_logits
+            )
 
-        for i, f in enumerate(final_decoder_filters):
-            x = get_conv_layer(
-                spatial_dims=spatial_dims,
-                layer_type="conv_transpose",
-                filters=f,
-                kernel_size=2,
-                strides=2,
-                padding="same",
-                name=f"final_upsample_conv_{i}",
-            )(x)
-            x = keras.layers.BatchNormalization(name=f"final_upsample_bn_{i}")(x)
-            x = keras.layers.Activation("relu", name=f"final_upsample_relu_{i}")(x)
+        # Step 5: Final Predictions from Refined Queries
+        # After the refinement loop, the final queries are used to produce two outputs:
+        # a class prediction for each query, and a final mask prediction.
 
-        # Final segmentation head
-        outputs = get_conv_layer(
+        # Class prediction: maps each query to a class probability.
+        # Paper notation: Class logits
+        class_logits = layers.Dense(num_classes, name="class_prediction")(current_queries)
+
+        # Final mask prediction: maps each query to a spatial mask.
+        final_mask_logits = layers.Dot(axes=(2, 2))(
+            [current_queries, encoder_output]  # Ground in global context
+        )
+        final_mask = layers.Activation("sigmoid", name="final_mask")(final_mask_logits)
+
+        # Step 6: Combine Masks with Class Predictions
+        # The final segmentation map is produced by combining the per-query class
+        # predictions with their corresponding spatial masks.
+        final_output = self.combine_masks_and_classes(final_mask, class_logits, final_cnn_output)
+
+        # Step 7: U-Net style upsampling path
+        # This final path uses standard convolutions and upsampling to refine the
+        # combined output and leverage the CNN skip connections (C1, C2, C3).
+        c1, c2, c3 = cnn_features
+
+        # Step 7a: UpSampling and Concatenation with C3
+        x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
-            filters=num_classes,
-            kernel_size=1,
+            filters=decoder_projection_filters,
+            kernel_size=3,
             padding="same",
-            activation=classifier_activation,
-            dtype="float32",
-            name="final_output_conv",
+            name="decoder_proj_0",
+        )(final_output)
+        x = get_reshaping_layer(
+            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c3"
         )(x)
-        return outputs
+        x = layers.Concatenate(axis=-1, name="concat_with_c3")([x, c3])
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=decoder_projection_filters,
+            kernel_size=3,
+            padding="same",
+            activation="relu",
+            name="decoder_conv_1",
+        )(x)
+
+        # Step 7b: UpSampling and Concatenation with C2
+        x = get_reshaping_layer(
+            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c2"
+        )(x)
+        x = layers.Concatenate(axis=-1, name="concat_with_c2")([x, c2])
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=decoder_projection_filters,
+            kernel_size=3,
+            padding="same",
+            activation="relu",
+            name="decoder_conv_2",
+        )(x)
+
+        # Step 7c: UpSampling and Concatenation with C1
+        x = get_reshaping_layer(
+            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c1"
+        )(x)
+        x = layers.Concatenate(axis=-1, name="concat_with_c1")([x, c1])
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=decoder_projection_filters,
+            kernel_size=3,
+            padding="same",
+            activation="relu",
+            name="decoder_conv_3",
+        )(x)
+
+        # Final upsampling to the original input resolution
+        x = get_reshaping_layer(
+            spatial_dims=spatial_dims, layer_type="upsampling", size=4, name="final_upsample"
+        )(x)
+
+        return x
 
     @staticmethod
-    def flatten_spatial_to_tokens(x):
-        # Flattens the spatial dimensions of a tensor,
-        # converting it from a feature map to a sequence of tokens.
-        # This is a necessary step before feeding features into a Transformer.
-        return layers.Reshape((-1, x.shape[-1]))(x)
+    def flatten_spatial_to_tokens(x, embed_dim=None):
+        """Flatten spatial dims to tokens (B, N, C)."""
+        if embed_dim is None:
+            embed_dim = x.shape[-1]
+        return layers.Reshape((-1, embed_dim))(x)
 
-    @staticmethod
-    def reshape_to_spatial_tokens(x, target_tensor):
-        # Reshapes a sequence of tokens back into a spatial feature map.
-        # The target_tensor's shape is used to infer the correct spatial dimensions
-        # for reshaping, allowing the output to be used by a CNN decoder.
-        target_spatial_shape = target_tensor.shape[1:-1]
-        return layers.Reshape(target_spatial_shape + (x.shape[-1],))(x)
+    def combine_masks_and_classes(self, mask_predictions, class_predictions, spatial_reference):
+        """
+        Combine mask predictions and class predictions to produce final segmentation output.
 
-    @staticmethod
-    def make_attention_mask(mask_conv, query_len):
-        # 1. Convert logits to probabilities over classes
-        mask_probs = ops.softmax(mask_conv, axis=-1)
-        # 2. Predicted class per spatial location
-        predicted_classes = ops.argmax(mask_probs, axis=-1)
-        # 3. Foreground mask (True for non-background)
-        foreground_mask = predicted_classes > 0
-        # 4. Flatten spatial dims to get key_len
-        key_mask = layers.Reshape((-1,))(foreground_mask)
-        # 5. Create a base tensor filled with a large negative value
-        neg_inf_tensor = ops.ones_like(key_mask, dtype="float32") * -1e9
-        # 6. Use ops.where to set foreground locations to 0
-        attention_mask_values = ops.where(
-            key_mask,
-            ops.zeros_like(key_mask, dtype="float32"),
-            neg_inf_tensor,
-        )  # (B, key_len)
-        # 7. Expand to (batch_size, query_len, key_len)
-        attention_mask_values = ops.expand_dims(attention_mask_values, axis=1)
-        mask = ops.tile(attention_mask_values, [1, query_len, 1])
-        return mask
+        This method handles both 2D and 3D inputs by dynamically adjusting the spatial dimensions
+        and einsum operation based on the input shape.
+
+        Args:
+            mask_predictions: Tensor of shape (batch_size, num_queries, num_spatial_tokens)
+                containing mask logits for each query.
+            class_predictions: Tensor of shape (batch_size, num_queries, num_classes)
+                containing class logits for each query.
+            spatial_reference: Tensor with target spatial shape used for reference.
+
+        Returns:
+            final_output: Tensor of shape (batch_size, *spatial_dims, num_classes)
+                containing the final segmentation probabilities.
+        """
+        num_queries = ops.shape(mask_predictions)[1]
+        num_classes = ops.shape(class_predictions)[2]
+
+        # Get target spatial shape from reference tensor
+        spatial_shape = ops.shape(spatial_reference)[1:-1]  # Exclude batch and channel dimensions
+        spatial_dims = len(spatial_shape)  # 2 for 2D, 3 for 3D
+
+        target_elements = int(ops.prod(spatial_shape))  # Total spatial elements (H*W or D*H*W)
+        actual_elements = ops.shape(mask_predictions)[2]
+
+        # Reshape mask predictions to match target spatial dimensions
+        if actual_elements != target_elements:
+            # Resize mask predictions to match target using a dense layer
+            mask_predictions = layers.Dense(target_elements, name="mask_resize")(mask_predictions)
+
+        # Reshape to spatial dimensions: (batch, queries, *spatial_dims)
+        mask_spatial = layers.Reshape(
+            (num_queries,) + tuple(spatial_shape), name="reshape_masks_spatial"
+        )(mask_predictions)
+
+        # Get class probabilities using softmax
+        class_probs = layers.Softmax(axis=-1, name="class_probabilities")(class_predictions)
+
+        # Combine masks with class probabilities using einsum
+        # The einsum pattern depends on whether we're working with 2D or 3D data
+        einsum_pattern = (
+            f"bi{'d' if spatial_dims == 3 else ''}hw,bik->b{'d' if spatial_dims == 3 else ''}hwk"
+        )
+
+        final_output = layers.Lambda(
+            lambda inputs: ops.einsum(einsum_pattern, inputs[0], inputs[1]),
+            output_shape=lambda input_shape: (
+                input_shape[0][0],  # batch size
+                *tuple(spatial_shape),  # spatial dimensions (D,H,W or H,W)
+                num_classes,  # number of classes
+            ),
+            name=f"combine_masks_classes_{spatial_dims}d",
+        )([mask_spatial, class_probs])
+
+        return final_output
