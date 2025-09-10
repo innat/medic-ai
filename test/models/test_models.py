@@ -1,6 +1,15 @@
 import tensorflow as tf
 
-from medicai.models import UNETR, DenseNet, DenseUNet121, SegFormer, SwinTransformer, SwinUNETR, ViT
+from medicai.models import (
+    UNETR,
+    DenseNet121,
+    DenseUNet121,
+    SegFormer,
+    SwinTransformer,
+    SwinUNETR,
+    TransUNet,
+    ViT,
+)
 
 
 def test_unet():
@@ -21,13 +30,13 @@ def test_unet():
 def test_densenet():
     num_classes = 1
     input_shape = (64, 64, 64, 1)
-    model = DenseNet(input_shape=input_shape, num_classes=num_classes)
+    model = DenseNet121(input_shape=input_shape, num_classes=num_classes)
     dummy_input = tf.random.normal((1, 64, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, num_classes)
 
     input_shape = (64, 64, 1)
-    model = DenseNet(input_shape=input_shape, num_classes=num_classes)
+    model = DenseNet121(input_shape=input_shape, num_classes=num_classes)
     dummy_input = tf.random.normal((1, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, num_classes)
@@ -119,6 +128,26 @@ def test_segformer():
     # test for 2D
     dummy_input = tf.random.normal((batch_size, H, W, C))
     model = SegFormer(input_shape=(H, W, C), num_classes=num_classes)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 1)
+    assert output.shape == (batch_size, H, W, 3)
+
+
+def test_transunet():
+    batch_size = 1
+    D, H, W, C = 96, 96, 96, 1
+    num_classes = 3
+
+    # test for 3D
+    dummy_input = tf.random.normal((batch_size, D, H, W, C))
+    model = TransUNet(input_shape=(D, H, W, C), num_classes=num_classes)
+    output = model(dummy_input)
+    assert model.input_shape == (None, 96, 96, 96, 1)
+    assert output.shape == (batch_size, D, H, W, 3)
+
+    # test for 2D
+    dummy_input = tf.random.normal((batch_size, H, W, C))
+    model = TransUNet(input_shape=(H, W, C), num_classes=num_classes)
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 1)
     assert output.shape == (batch_size, H, W, 3)
