@@ -1,7 +1,4 @@
-import keras
-from keras import layers
-
-from ...utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO, get_pooling_layer, parse_model_inputs
+from ...utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO
 from .densenet_backbone import DenseNetBackbone
 
 
@@ -20,6 +17,8 @@ class DenseNet121(DenseNetBackbone):
         **kwargs,
     ):
         blocks = BACKBONE_ARGS["densenet121"]
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseNet121{spatial_dims}D"
         super().__init__(
             blocks=blocks,
             include_rescaling=include_rescaling,
@@ -49,6 +48,8 @@ class DenseNet169(DenseNetBackbone):
         **kwargs,
     ):
         blocks = BACKBONE_ARGS["densenet169"]
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseNet169{spatial_dims}D"
         super().__init__(
             blocks=blocks,
             include_rescaling=include_rescaling,
@@ -78,6 +79,8 @@ class DenseNet201(DenseNetBackbone):
         **kwargs,
     ):
         blocks = BACKBONE_ARGS["densenet201"]
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseNet201{spatial_dims}D"
         super().__init__(
             blocks=blocks,
             include_rescaling=include_rescaling,

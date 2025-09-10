@@ -22,7 +22,8 @@ class DenseUNetBase(keras.Model):
         classifier_activation=None,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
-        **kwargs
+        name=None,
+        **kwargs,
     ):
         # Get spatial dims for 2D and 3D cases.
         spatial_dims = len(input_shape) - 1
@@ -54,7 +55,9 @@ class DenseUNetBase(keras.Model):
             spatial_dims, layer_type="conv", filters=num_classes, kernel_size=1, padding="same"
         )(x)
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name or f"DenseUNetBase{spatial_dims}D", **kwargs
+        )
 
         self.backbone_name = backbone_name
         self.num_classes = num_classes
@@ -83,8 +86,11 @@ class DenseUNet121(DenseUNetBase):
         classifier_activation=None,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
-        **kwargs
+        name=None,
+        **kwargs,
     ):
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseNet121{spatial_dims}D"
         super().__init__(
             backbone_name="densenet121",
             input_shape=input_shape,
@@ -93,7 +99,8 @@ class DenseUNet121(DenseUNetBase):
             classifier_activation=classifier_activation,
             decoder_block_type=decoder_block_type,
             decoder_filters=decoder_filters,
-            **kwargs
+            name=name,
+            **kwargs,
         )
 
 
@@ -106,8 +113,11 @@ class DenseUNet169(DenseUNetBase):
         classifier_activation=None,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
-        **kwargs
+        name=None,
+        **kwargs,
     ):
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseUNet169{spatial_dims}D"
         super().__init__(
             backbone_name="densenet169",
             input_shape=input_shape,
@@ -116,7 +126,8 @@ class DenseUNet169(DenseUNetBase):
             classifier_activation=classifier_activation,
             decoder_block_type=decoder_block_type,
             decoder_filters=decoder_filters,
-            **kwargs
+            name=name,
+            **kwargs,
         )
 
 
@@ -129,8 +140,11 @@ class DenseUNet201(DenseUNetBase):
         classifier_activation=None,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
-        **kwargs
+        name=None,
+        **kwargs,
     ):
+        spatial_dims = len(input_shape) - 1
+        name = name or f"DenseUNet201{spatial_dims}D"
         super().__init__(
             backbone_name="densenet201",
             input_shape=input_shape,
@@ -139,5 +153,6 @@ class DenseUNet201(DenseUNetBase):
             classifier_activation=classifier_activation,
             decoder_block_type=decoder_block_type,
             decoder_filters=decoder_filters,
-            **kwargs
+            name=name,
+            **kwargs,
         )

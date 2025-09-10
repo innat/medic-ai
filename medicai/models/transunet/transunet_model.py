@@ -22,13 +22,13 @@ class TransUNet(keras.Model):
             `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
         num_classes (int): The number of segmentation classes.
         patch_size (int or tuple): The size of the patches for the Vision
-            Transformer. Must be a tuple of length `spatial_dims`.
+            Transformer. Must be a tuple of length `spatial_dims`. Defaults to 3.
         num_queries (int, optional): The number of learnable queries used in the
             decoder's attention mechanism. Defaults to 100.
         classifier_activation (str, optional): Activation function for the final
             segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
         num_encoder_layers (int, optional): The number of transformer encoder blocks
-            in the ViT encoder. Defaults to 12.
+            in the ViT encoder. Defaults to 6.
         num_heads (int, optional): The number of attention heads in the transformer blocks.
             Defaults to 8.
         embed_dim (int, optional): The dimensionality of the token embeddings.
@@ -46,7 +46,7 @@ class TransUNet(keras.Model):
         self,
         input_shape,
         num_classes,
-        patch_size,
+        patch_size=3,
         classifier_activation=None,
         num_encoder_layers=6,
         num_heads=8,
