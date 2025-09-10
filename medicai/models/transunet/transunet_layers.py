@@ -79,7 +79,6 @@ class MaskedCrossAttention(layers.Layer):
     def call(self, inputs, training=None):
         # Inputs should be [queries, encoder_output, mask]
         queries, encoder_output, mask = inputs
-        queries = layers.Reshape((-1, self.embed_dim))(queries)
 
         # 1. Cross-attention with mask
         queries_norm = self.layernorm1(queries)
