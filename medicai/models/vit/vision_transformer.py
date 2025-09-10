@@ -3,7 +3,7 @@ from keras import ops
 
 from .vit_backbone import ViTBackbone
 
-
+@keras.saving.register_keras_serializable(package="vit")
 class ViT(keras.Model):
     def __init__(
         self,
