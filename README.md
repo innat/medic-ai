@@ -53,7 +53,7 @@ Installing from source GitHub:
 | DenseUNet169 | 2D, 3D               | Segmentation   | CNN                       |
 | DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
 | UNETR        | 2D, 3D               | Segmentation   | Transformer               |
-| SwinUNETR    | 3D               | Segmentation   | Transformer               |
+| SwinUNETR    | 2D, 3D               | Segmentation   | Transformer               |
 | TransUNet    | 2D, 3D               | Segmentation   | Transformer |
 | SegFormer    | 2D, 3D               | Segmentation   | Transformer |
 

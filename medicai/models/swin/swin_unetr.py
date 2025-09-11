@@ -12,7 +12,7 @@ from .swin_backbone import SwinBackbone
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
 class SwinUNETR(keras.Model):
-    """Swin-UNETR: A hybrid transformer-CNN for 3D medical image segmentation.
+    """Swin-UNETR: A hybrid transformer-CNN for 3D or 2D medical image segmentation.
 
     This model combines the strengths of the Swin Transformer for feature extraction
     and a U-Net-like architecture for segmentation. It uses a Swin Transformer
@@ -23,7 +23,7 @@ class SwinUNETR(keras.Model):
     def __init__(
         self,
         *,
-        input_shape=(96, 96, 96, 1),
+        input_shape,
         num_classes=4,
         classifier_activation=None,
         feature_size=48,
@@ -35,7 +35,6 @@ class SwinUNETR(keras.Model):
 
         Args:
             input_shape (tuple): The shape of the input tensor (depth, height, width, channels).
-                Default is (96, 96, 96, 1).
             num_classes (int): The number of segmentation classes. Default is 4.
             classifier_activation (str, optional): The activation function for the final
                 classification layer (e.g., 'softmax'). If None, no activation is applied.
@@ -50,9 +49,9 @@ class SwinUNETR(keras.Model):
         spatial_dims = len(input_shape) - 1
         encoder = SwinBackbone(
             input_shape=input_shape,
-            patch_size=[2, 2, 2],
+            patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 2],
             depths=[2, 2, 2, 2],
-            window_size=[7, 7, 7],
+            window_size=[7, 7, 7] if spatial_dims == 3 else [7, 7],
             num_heads=[3, 6, 12, 24],
             embed_dim=48,
             attn_drop_rate=0.0,
