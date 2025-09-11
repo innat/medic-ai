@@ -7,6 +7,7 @@ from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_input
 
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
+
 @keras.saving.register_keras_serializable(package="transunet")
 class TransUNet(keras.Model):
     """3D or 2D TransUNet model for medical image segmentation.

@@ -4,6 +4,8 @@ hide_warnings()
 
 import keras
 
+from medicai.utils import get_pooling_layer
+
 from .swin_backbone import SwinBackbone
 
 
@@ -30,6 +32,7 @@ class SwinTransformer(keras.Model):
                 Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+        spatial_dims = len(input_shape) - 1
         inputs = keras.Input(shape=input_shape)
         encoder = SwinBackbone(
             input_shape=input_shape,
@@ -43,7 +46,9 @@ class SwinTransformer(keras.Model):
             patch_norm=False,
         )(inputs)
 
-        x = keras.layers.GlobalAveragePooling3D()(encoder)
+        x = get_pooling_layer(spatial_dims=spatial_dims, layer_type="avg", global_pool=True)(
+            encoder
+        )
         outputs = keras.layers.Dense(num_classes, activation=classifier_activation)(x)
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 

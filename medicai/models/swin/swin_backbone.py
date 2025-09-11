@@ -24,7 +24,7 @@ class SwinBackbone(keras.Model):
     def __init__(
         self,
         *,
-        input_shape=(32, 224, 224, 3),
+        input_shape,
         input_tensor=None,
         embed_dim=96,
         patch_size=[2, 4, 4],
@@ -67,16 +67,13 @@ class SwinBackbone(keras.Model):
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
         # Parse input specification.
+        spatial_dims = len(input_shape) - 1
         input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
 
         # Check that the input video is well specified.
-        if (
-            input_spec.shape[-4] is None
-            or input_spec.shape[-3] is None
-            or input_spec.shape[-2] is None
-        ):
+        if any(dim is None for dim in input_shape[:-1]):
             raise ValueError(
-                "Depth, height and width of the video must be specified" " in `input_shape`."
+                "TransUNet requires a fixed spatial input shape. " f"Got input_shape={input_shape}"
             )
 
         x = input_spec
@@ -84,7 +81,7 @@ class SwinBackbone(keras.Model):
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
         x = SwinPatchingAndEmbedding(
-            patch_size=patch_size,
+            patch_size=patch_size[:spatial_dims],
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
@@ -98,7 +95,7 @@ class SwinBackbone(keras.Model):
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
-                window_size=window_size,
+                window_size=window_size[:spatial_dims],
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,

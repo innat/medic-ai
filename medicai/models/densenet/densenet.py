@@ -1,6 +1,8 @@
 import keras
+
 from ...utils.model_utils import BACKBONE_ARGS, BACKBONE_ZOO
 from .densenet_backbone import DenseNetBackbone
+
 
 @keras.saving.register_keras_serializable(package="densenet121")
 class DenseNet121(DenseNetBackbone):
@@ -33,6 +35,7 @@ class DenseNet121(DenseNetBackbone):
             **kwargs,
         )
 
+
 @keras.saving.register_keras_serializable(package="densenet169")
 class DenseNet169(DenseNetBackbone):
     def __init__(
@@ -63,6 +66,7 @@ class DenseNet169(DenseNetBackbone):
             name=name,
             **kwargs,
         )
+
 
 @keras.saving.register_keras_serializable(package="densenet201")
 class DenseNet201(DenseNetBackbone):

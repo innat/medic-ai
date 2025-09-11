@@ -76,11 +76,16 @@ def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
         **kwargs: Additional arguments passed to the selected layer.
     """
     assert spatial_dims in (2, 3), "spatial_dims must be 2 or 3"
-    assert layer_type in ("upsampling", "padding"), "layer_type must be 'upsampling' or 'padding'"
+    assert layer_type in (
+        "upsampling",
+        "padding",
+        "cropping",
+    ), "layer_type must be 'upsampling' or 'padding' or 'cropping'"
 
     layers_map = {
         "upsampling": {2: layers.UpSampling2D, 3: layers.UpSampling3D},
         "padding": {2: layers.ZeroPadding2D, 3: layers.ZeroPadding3D},
+        "cropping": {2: layers.Cropping2D, 3: layers.Cropping3D},
     }
 
     LayerClass = layers_map[layer_type][spatial_dims]
