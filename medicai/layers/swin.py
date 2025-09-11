@@ -109,7 +109,6 @@ def compute_mask(spatial_shape, window_size, shift_size):
     # Compute attention mask
     attn_mask = ops.expand_dims(mask_windows, axis=1) - ops.expand_dims(mask_windows, axis=2)
     attn_mask = ops.where(attn_mask != 0, -100.0, 0.0)
-    attn_mask = ops.where(attn_mask == 0, 0.0, attn_mask)
     return attn_mask
 
 
@@ -465,7 +464,6 @@ class SwinTransformerBlock(keras.Model):
         self.norm1 = self.norm_layer(axis=-1, epsilon=1e-5)
         self.norm1.build(input_shape)
         self.norm2 = self.norm_layer(axis=-1, epsilon=1e-5)
-        # self.norm2.build(input_shape)
         self.norm2.build((*input_shape[:-1], self.input_dim))
 
         # Attention
@@ -479,7 +477,6 @@ class SwinTransformerBlock(keras.Model):
             proj_drop_rate=self.drop_rate,
         )
         self.attn.build((None, None, self.input_dim))
-        # self.attn.build(input_shape)
 
         # MLP
         self.mlp = SwinMLP(
@@ -488,7 +485,6 @@ class SwinTransformerBlock(keras.Model):
             activation=self._activation_identifier,
             drop_rate=self.drop_rate,
         )
-        # self.mlp.build(input_shape)
         self.mlp.build((*input_shape[:-1], self.input_dim))
 
         # compute padding for all spatial dims
@@ -507,7 +503,6 @@ class SwinTransformerBlock(keras.Model):
         self.built = True
 
     def first_forward(self, x, mask_matrix, training):
-        input_shape = ops.shape(x)
         x = self.norm1(x)
         x = ops.pad(x, self.pads)
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
