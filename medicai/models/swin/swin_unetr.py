@@ -12,7 +12,7 @@ from .swin_backbone import SwinBackbone
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
 class SwinUNETR(keras.Model):
-    """Swin-UNETR: A hybrid transformer-CNN for 3D medical image segmentation.
+    """Swin-UNETR: A hybrid transformer-CNN for 3D or 2D medical image segmentation.
 
     This model combines the strengths of the Swin Transformer for feature extraction
     and a U-Net-like architecture for segmentation. It uses a Swin Transformer

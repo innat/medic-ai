@@ -68,13 +68,16 @@ class SwinBackbone(keras.Model):
         """
         # Parse input specification.
         spatial_dims = len(input_shape) - 1
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
 
         # Check that the input video is well specified.
+        assert spatial_dims in (2, 3), "input_shape must be (D, H, W) or (D, H, W, C)"
         if any(dim is None for dim in input_shape[:-1]):
             raise ValueError(
-                "TransUNet requires a fixed spatial input shape. " f"Got input_shape={input_shape}"
+                "Swin Transformer requires a fixed spatial input shape. "
+                f"Got input_shape={input_shape}"
             )
+
+        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
 
         x = input_spec
 
