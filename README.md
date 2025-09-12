@@ -49,6 +49,7 @@ Installing from source GitHub:
 | DenseNet169     | 2D, 3D               | Classification | CNN                       |
 | DenseNet201     | 2D, 3D               | Classification | CNN                       |
 | ViT          | 2D, 3D               | Classification | Transformer               |
+ Swin Transformer          | 2D, 3D               | Classification | Transformer               |
 | DenseUNet121 | 2D, 3D               | Segmentation   | CNN                       |
 | DenseUNet169 | 2D, 3D               | Segmentation   | CNN                       |
 | DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
