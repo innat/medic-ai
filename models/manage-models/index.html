@@ -76,7 +76,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#3d-models" class="md-skip">
+        <a href="#densenet121" class="md-skip">
           Skip to content
         </a>
       
@@ -282,13 +282,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../training/manage-training/" class="md-tabs__link">
+      <a href="../../guides/manage-guides/" class="md-tabs__link">
         
   
   
     
   
-  Training
+  Guides
 
       </a>
     </li>
@@ -436,9 +436,108 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#3d-models" class="md-nav__link">
+  <a href="#densenet121" class="md-nav__link">
     <span class="md-ellipsis">
-      3D Models
+      DenseNet121
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#densenet169" class="md-nav__link">
+    <span class="md-ellipsis">
+      DenseNet169
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#densenet201" class="md-nav__link">
+    <span class="md-ellipsis">
+      DenseNet201
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vision-transformer-vit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Vision Transformer (ViT)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swin-transformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Swin Transformer
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denseunet121" class="md-nav__link">
+    <span class="md-ellipsis">
+      DenseUNet121
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denseunet169" class="md-nav__link">
+    <span class="md-ellipsis">
+      DenseUNet169
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denseunet201" class="md-nav__link">
+    <span class="md-ellipsis">
+      DenseUNet201
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unetr" class="md-nav__link">
+    <span class="md-ellipsis">
+      UNETR
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swinunetr" class="md-nav__link">
+    <span class="md-ellipsis">
+      SwinUNETR
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transunet" class="md-nav__link">
+    <span class="md-ellipsis">
+      TransUNet
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#segformer" class="md-nav__link">
+    <span class="md-ellipsis">
+      SegFormer
     </span>
   </a>
   
@@ -481,12 +580,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../training/manage-training/" class="md-nav__link">
+      <a href="../../guides/manage-guides/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Training
+    Guides
     
   </span>
   
@@ -539,42 +638,710 @@
 
   <h1>Model</h1>
 
-<p>The <code>medicai</code> provides <strong>Swin Transformer</strong> and <strong>SwinUNETR</strong> models for 3D classification and segmentation respectively. These models are translated from official release to keras, and able to run on multiple backend, i.e., <code>tensorflow</code>, <code>torch</code>, and, <code>jax</code> backends.</p>
-<h2 id="3d-models">3D Models</h2>
-<p><strong>Classification</strong></p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinTransformer</span>
-
-<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
-<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">SwinTransformer</span><span class="p">(</span>
-    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
-    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span> 
-    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<p>The <code>medic-ai</code> library provides state-of-the-art models for 2D and 3D medical image classification and segmentation. It features models based on both <strong>Convolutional Neural Networks</strong> (CNNs) and <strong>Transformers</strong>, which have been translated from their official releases to work with <strong>Keras</strong>. This allows them to function seamlessly across various backends, including <strong>TensorFlow</strong>, <strong>PyTorch</strong>, and <strong>JAX</strong>. The model inputs can be either <strong>3D</strong> <code>(depth × height × width × channel)</code> or <strong>2D</strong> <code>(height × width × channel)</code>. The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  </p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Supported Modalities</th>
+<th>Primary Task</th>
+<th>Architecture Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#-densenet121">DenseNet121</a></td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseNet169</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseNet201</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>ViT</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>Swin Transformer</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>DenseUNet121</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseUNet169</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseUNet201</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>UNETR</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>SwinUNETR</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>TransUNet</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>SegFormer</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+</tbody>
+</table>
+<p>All models in <code>medicai</code> are flexible and can be built as either <strong>2D</strong> or <strong>3D</strong> models. The library automatically configures the model based on the provided <code>input_shape</code> argument. Specifying <code>(depth, height, width, channel)</code> creates a <strong>3D</strong> model, whereas passing <code>(height, width, channel)</code> builds a <strong>2D</strong> model.</p>
+<h2 id="densenet121"><strong>DenseNet121</strong></h2>
+<p>A 2D or 3D DenseNet-121 model for classification task.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">include_rescaling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">include_top</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+    <span class="n">pooling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="s2">&quot;softmax&quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span>
 
-<span class="n">dummy_input</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">)</span>
-<span class="n">output</span><span class="o">.</span><span class="n">shape</span>
-<span class="n">TensorShape</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
-</code></pre></div>
-<p><strong>Segmentation</strong></p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">tensorflow</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">tf</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">medicai.models</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwinUNETR</span>
+<span class="c1"># Build 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
 
+<span class="c1"># Build 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1608.06993">Densely Connected Convolutional Networks</a> (CVPR 2017)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>include_top</strong>: whether to include the fully-connected layer at the top of the network.</li>
+<li><strong>input_shape</strong>: Input tensor shape, excluding batch size. It can be either <code>(depth, height, width, channel)</code> or <code>(height, width, channel)</code>.</li>
+<li><strong>include_rescaling</strong>: Whether to include input rescaling layer</li>
+<li><strong>pooling</strong>: Optional pooling mode for feature extraction when <code>include_top</code> is <code>False</code>.<ul>
+<li><code>None</code> means that the output of the model will be the 4D/5D tensor output of the last convolutional layer.</li>
+<li><code>avg</code> means that global average pooling will be applied to the output of the last convolutional layer, and thus the output of the model will be a 2D/3D tensor.</li>
+<li><code>max</code> means that global max pooling will be applied.</li>
+</ul>
+</li>
+<li><strong>num_classes</strong>: Number of classes to classify samples.</li>
+<li><strong>classifier_activation</strong>: The activation function to use on the top layer.</li>
+<li><strong>name</strong>: The name of the model.</li>
+</ul>
+<h2 id="densenet169"><strong>DenseNet169</strong></h2>
+<p>A 2D or 3D DenseNet-169 model for classification task.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">include_rescaling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">include_top</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+    <span class="n">pooling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="s2">&quot;softmax&quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1608.06993">Densely Connected Convolutional Networks</a> (CVPR 2017)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>include_top</strong>: whether to include the fully-connected layer at the top of the network.</li>
+<li><strong>input_shape</strong>: Input tensor shape, excluding batch size. It can be either <code>(depth, height, width, channel)</code> or <code>(height, width, channel)</code>.</li>
+<li><strong>include_rescaling</strong>: Whether to include input rescaling layer</li>
+<li><strong>pooling</strong>: Optional pooling mode for feature extraction when <code>include_top</code> is <code>False</code>.<ul>
+<li><code>None</code> means that the output of the model will be the 4D/5D tensor output of the last convolutional layer.</li>
+<li><code>avg</code> means that global average pooling will be applied to the output of the last convolutional layer, and thus the output of the model will be a 2D/3D tensor.</li>
+<li><code>max</code> means that global max pooling will be applied.</li>
+</ul>
+</li>
+<li><strong>num_classes</strong>: Number of classes to classify samples.</li>
+<li><strong>classifier_activation</strong>: The activation function to use on the top layer.</li>
+<li><strong>name</strong>: The name of the model.</li>
+</ul>
+<h2 id="densenet201"><strong>DenseNet201</strong></h2>
+<p>A 2D or 3D DenseNet-201 model for classification task.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">include_rescaling</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="n">include_top</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+    <span class="n">pooling</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="s2">&quot;softmax&quot;</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1608.06993">Densely Connected Convolutional Networks</a> (CVPR 2017)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>include_top</strong>: whether to include the fully-connected layer at the top of the network.</li>
+<li><strong>input_shape</strong>: Input tensor shape, excluding batch size. It can be either <code>(depth, height, width, channel)</code> or <code>(height, width, channel)</code>.</li>
+<li><strong>include_rescaling</strong>: Whether to include input rescaling layer</li>
+<li><strong>pooling</strong>: Optional pooling mode for feature extraction when <code>include_top</code> is <code>False</code>.<ul>
+<li><code>None</code> means that the output of the model will be the 4D/5D tensor output of the last convolutional layer.</li>
+<li><code>avg</code> means that global average pooling will be applied to the output of the last convolutional layer, and thus the output of the model will be a 2D/3D tensor.</li>
+<li><code>max</code> means that global max pooling will be applied.</li>
+</ul>
+</li>
+<li><strong>num_classes</strong>: Number of classes to classify samples.</li>
+<li><strong>classifier_activation</strong>: The activation function to use on the top layer.</li>
+<li><strong>name</strong>: The name of the model.</li>
+</ul>
+<h2 id="vision-transformer-vit"><strong>Vision Transformer (ViT)</strong></h2>
+<p>A 2D and 3D Vision Transformer (ViT) model for classification.</p>
+<p>This class implements a Vision Transformer (ViT) model,
+supporting both 2D and 3D inputs. The model consists of a ViT backbone,
+optional intermediate pre-logits layer, dropout, and a classification head</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">ViT</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">num_layers</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+    <span class="n">num_heads</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+    <span class="n">hidden_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">,</span>
+    <span class="n">mlp_dim</span><span class="o">=</span><span class="mi">3072</span><span class="p">,</span>
+    <span class="n">pooling</span><span class="o">=</span><span class="s2">&quot;token&quot;</span><span class="p">,</span>
+    <span class="n">intermediate_dim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;vit&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 3D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">10</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">ViT</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># Build 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">ViT</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2010.11929">An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale</a> (CVPR 2020)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output classes for classification.</li>
+<li><strong>patch_size (int or tuple)</strong>: Size of the patches extracted from the input.</li>
+<li><strong>num_layers (int)</strong>: Number of transformer encoder layers.</li>
+<li><strong>num_heads (int)</strong>: Number of attention heads in each transformer layer.</li>
+<li><strong>hidden_dim (int)</strong>: Hidden dimension size of the transformer encoder.</li>
+<li><strong>mlp_dim (int)</strong>: Hidden dimension size of the MLP in transformer blocks.</li>
+<li><strong>pooling (str)</strong>: Pooling strategy for the output. <code>token</code> for CLS token,
+    <code>gap</code> for global average pooling over spatial dimensions.</li>
+<li><strong>intermediate_dim (int, optional)</strong>: Dimension of optional pre-logits dense layer.
+    If <code>None</code>, no intermediate layer is used.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the output layer.</li>
+<li><strong>dropout (float)</strong>: Dropout rate applied before the output layer.</li>
+<li><strong>name (str)</strong>: Name of the model.</li>
+</ul>
+<h2 id="swin-transformer"><strong>Swin Transformer</strong></h2>
+<p>A 2D and 3D Swin Transformer model for classification.</p>
+<p>This model utilizes the Swin Transformer backbone for feature extraction
+from 2D or 3D input data and includes a global average pooling layer followed
+by a dense layer for classification.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinTransformer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;swin_transformer&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
 <span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
 <span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">model</span> <span class="o">=</span> <span class="n">SwinUNETR</span><span class="p">(</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinTransformer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinTransformer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2103.14030">Swin Transformer: Hierarchical Vision Transformer using Shifted Windows</a> (CVPR 2021)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output classes for classification.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the output layer.</li>
+<li><strong>name (str)</strong>: Name of the model.</li>
+</ul>
+<h2 id="denseunet121"><strong>DenseUNet121</strong></h2>
+<p>A UNet model with a DenseNet-121 backbone</p>
+<p>This model is a UNet architecture for image segmentation that uses a DenseNet-121 as its feature-extracting encoder. It's built to provide a powerful and flexible solution for both 2D and 3D segmentation tasks. .</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">decoder_block_type</span><span class="o">=</span><span class="s2">&quot;upsampling&quot;</span><span class="p">,</span>
+    <span class="n">decoder_filters</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>
+    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;dense_unet_121&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet121</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1505.04597">U-Net: Convolutional Networks for Biomedical Image Segmentation</a> (CVPR 2015)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output classes for classification.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the output layer.</li>
+<li><strong>decoder_block_type</strong>: Decoder block type, either <code>upsampling</code> or <code>transpose</code>.</li>
+<li><strong>decoder_filters</strong>: The projection filters in decoder blocks. Default: <code>(256, 128, 64, 32, 16)</code>.</li>
+<li><strong>name (str)</strong>: Name of the model.</li>
+</ul>
+<h2 id="denseunet169"><strong>DenseUNet169</strong></h2>
+<p>A UNet model with a DenseNet-169 backbone</p>
+<p>This model is a UNet architecture for image segmentation that uses a DenseNet-169 as its feature-extracting encoder. It's built to provide a powerful and flexible solution for both 2D and 3D segmentation tasks. .</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">decoder_block_type</span><span class="o">=</span><span class="s2">&quot;upsampling&quot;</span><span class="p">,</span>
+    <span class="n">decoder_filters</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>
+    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;dense_unet_121&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet169</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1505.04597">U-Net: Convolutional Networks for Biomedical Image Segmentation</a> (CVPR 2015)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output classes for classification.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the output layer.</li>
+<li><strong>decoder_block_type</strong>: Decoder block type, either <code>upsampling</code> or <code>transpose</code>.</li>
+<li><strong>decoder_filters</strong>: The projection filters in decoder blocks. Default: <code>(256, 128, 64, 32, 16)</code>.</li>
+<li><strong>name (str)</strong>: Name of the model.</li>
+</ul>
+<h2 id="denseunet201"><strong>DenseUNet201</strong></h2>
+<p>A UNet model with a DenseNet-201 backbone</p>
+<p>This model is a UNet architecture for image segmentation that uses a DenseNet-201 as its feature-extracting encoder. It's built to provide a powerful and flexible solution for both 2D and 3D segmentation tasks. .</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">decoder_block_type</span><span class="o">=</span><span class="s2">&quot;upsampling&quot;</span><span class="p">,</span>
+    <span class="n">decoder_filters</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span>
+    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;dense_unet_121&#39;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">DenseUNet201</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/1505.04597">U-Net: Convolutional Networks for Biomedical Image Segmentation</a> (CVPR 2015)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output classes for classification.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the output layer.</li>
+<li><strong>decoder_block_type</strong>: Decoder block type, either <code>upsampling</code> or <code>transpose</code>.</li>
+<li><strong>decoder_filters</strong>: The projection filters in decoder blocks. Default: <code>(256, 128, 64, 32, 16)</code>.</li>
+<li><strong>name (str)</strong>: Name of the model.</li>
+</ul>
+<h2 id="unetr"><strong>UNETR</strong></h2>
+<p>UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D and 2D medical image segmentation.</p>
+<p>UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using
+projection upsampling blocks and skip connections from intermediate transformer layers.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">UNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">feature_size</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+    <span class="n">hidden_size</span> <span class="o">=</span> <span class="mi">768</span><span class="p">,</span>
+    <span class="n">mlp_dim</span> <span class="o">=</span> <span class="mi">3072</span><span class="p">,</span>
+    <span class="n">num_heads</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span>
+    <span class="n">num_layers</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span>
+    <span class="n">patch_size</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
+    <span class="n">norm_name</span> <span class="o">=</span> <span class="s2">&quot;instance&quot;</span><span class="p">,</span>
+    <span class="n">conv_block</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">res_block</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">dropout_rate</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;UNETR&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">UNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">UNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2103.10504">UNETR: Transformers for 3D Medical Image Segmentation</a> (CVPR 2021)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output segmentation classes.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function applied to the output layer.</li>
+<li><strong>feature_size (int)</strong>: Base number of feature channels in decoder blocks.</li>
+<li><strong>hidden_size (int)</strong>: Hidden size of the transformer encoder.</li>
+<li><strong>mlp_dim (int)</strong>: Hidden size of MLPs in transformer blocks.</li>
+<li><strong>num_heads (int)</strong>: Number of attention heads per transformer layer.</li>
+<li><strong>num_layers (int)</strong>: Number of transformer encoder layers.</li>
+<li><strong>patch_size (int)</strong>: Size of the patches extracted from input.</li>
+<li><strong>norm_name (str)</strong>: Type of normalization for decoder blocks (<code>instance</code>, <code>batch</code>, etc.).</li>
+<li><strong>conv_block (bool)</strong>: Whether to use convolutional blocks in decoder.</li>
+<li><strong>res_block (bool)</strong>: Whether to use residual blocks in decoder.</li>
+<li><strong>dropout_rate (float)</strong>: Dropout rate applied in backbone and intermediate layers.</li>
+<li><strong>name (str)</strong>: Model name.</li>
+</ul>
+<h2 id="swinunetr"><strong>SwinUNETR</strong></h2>
+<p>Swin-UNETR: A hybrid transformer-CNN for 3D or 2D medical image segmentation.</p>
+<p>This model combines the strengths of the Swin Transformer for feature extraction
+and a U-Net-like architecture for segmentation. It uses a Swin Transformer
+backbone to encode the input and a decoder with upsampling and skip connections
+to generate segmentation maps.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinUNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">feature_size</span><span class="o">=</span><span class="mi">48</span><span class="p">,</span>
+    <span class="n">norm_name</span><span class="o">=</span><span class="s2">&quot;instance&quot;</span><span class="p">,</span>
+    <span class="n">res_block</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;SwinUNETR&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinUNETR</span><span class="p">(</span>
     <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
     <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
     <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
 <span class="p">)</span>
 
-<span class="n">dummy_input</span> <span class="o">=</span> <span class="n">tf</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
-<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">dummy_input</span><span class="p">)</span>
-<span class="n">output</span><span class="o">.</span><span class="n">shape</span>
-<span class="n">TensorShape</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+<span class="c1"># 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SwinUNETR</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
 </code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2201.01266">Swin UNETR: Swin Transformers for Semantic Segmentation of Brain Tumors in MRI Images</a> (CVPR 2022)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: Shape of the input tensor excluding batch size.
+    For example, <code>(height, width, channels)</code> for 2D
+    or <code>(depth, height, width, channels)</code> for 3D.</li>
+<li><strong>num_classes (int)</strong>: Number of output segmentation classes.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function applied to the output layer.</li>
+<li><strong>feature_size (int)</strong>: The base feature map size in the decoder. Default is <code>48</code>.</li>
+<li><strong>norm_name (str)</strong>: Type of normalization for decoder blocks (<code>instance</code>, <code>batch</code>, etc.).</li>
+<li><strong>res_block (bool)</strong>: Whether to use residual blocks in decoder. Default is True.</li>
+<li><strong>name (str)</strong>: Model name.</li>
+</ul>
+<h2 id="transunet"><strong>TransUNet</strong></h2>
+<p>TransUNet model for 2D or 3D semantic segmentation.</p>
+<p>This model combines a 3D or 2D CNN encoder (DenseNet) with a Vision Transformer
+(ViT) encoder and a hybrid decoder. The CNN extracts multi-scale local features,
+while the ViT captures global context. The decoder upsamples the fused
+features to produce the final segmentation map using a coarse-to-fine
+attention mechanism and U-Net-style skip connections.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">TransUNet</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">patch_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">num_encoder_layers</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">num_heads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">num_queries</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">embed_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+    <span class="n">mlp_dim</span><span class="o">=</span><span class="mi">1024</span><span class="p">,</span>
+    <span class="n">dropout_rate</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">decoder_projection_filters</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">patch_size</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">TransUNet</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">patch_size</span><span class="o">=</span><span class="n">patch_size</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">TransUNet</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">patch_size</span><span class="o">=</span><span class="n">patch_size</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2310.07781">3D TransUNet: Advancing Medical Image Segmentation through Vision Transformers</a> (CVPR 2023)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: The shape of the input data. For 2D, it is
+    <code>(height, width, channels)</code>. For 3D, it is <code>(depth, height, width, channels)</code>.</li>
+<li><strong>num_classes (int)</strong>: The number of segmentation classes.</li>
+<li><strong>patch_size (int or tuple)</strong>: The size of the patches for the Vision
+    Transformer. Must be a tuple of length <code>spatial_dims</code>. Defaults to 3.</li>
+<li><strong>num_queries (int, optional)</strong>: The number of learnable queries used in the
+    decoder's attention mechanism. Defaults to <code>100</code>.</li>
+<li><strong>classifier_activation (str, optional)</strong>: Activation function for the final
+    segmentation head (e.g., <code>sigmoid</code> for binary, <code>softmax</code> for multi-class).</li>
+<li><strong>num_encoder_layers (int, optional)</strong>: The number of transformer encoder blocks
+    in the <code>ViT</code> encoder. Defaults to <code>6</code>.</li>
+<li><strong>num_heads (int, optional)</strong>: The number of attention heads in the transformer blocks.
+    Defaults to <code>8</code>.</li>
+<li><strong>embed_dim (int, optional)</strong>: The dimensionality of the token embeddings.
+    Defaults to <code>256</code>.</li>
+<li><strong>mlp_dim (int, optional)</strong>: The hidden dimension of the MLP in the transformer
+    blocks. Defaults to <code>1024</code>.</li>
+<li><strong>dropout_rate (float, optional)</strong>: The dropout rate for regularization.
+    Defaults to <code>0.1</code>.</li>
+<li><strong>decoder_projection_filters (int, optional)</strong>: The number of filters for the
+    convolutional layers in the decoder upsampling path. Defaults to <code>64</code>.</li>
+<li><strong>name (str, optional)</strong>: The name of the model. Defaults to <code>TransUNetND</code>.</li>
+</ul>
+<p><strong>Note</strong>: The <strong>3D-TransUNet</strong> model combines a CNN and a Transformer in its encoder and decoder. While the original version's encoder uses a ResNet-like CNN, the <code>medicai</code> implementation uses a Densenet-like feature extractor.</p>
+<h2 id="segformer"><strong>SegFormer</strong></h2>
+<p>SegFormer model for 2D or 3D semantic segmentation.</p>
+<p>This class implements the full SegFormer architecture, which combines a
+hierarchical MixVisionTransformer (MiT) encoder with a lightweight MLP decoder
+head. This design is highly efficient for semantic segmentation tasks on
+high-resolution images or volumes.</p>
+<p>The encoder progressively downsamples the spatial dimensions and increases the
+feature dimensions across four stages, producing multi-scale feature maps.
+The decoder then takes these features, processes them through linear layers,
+upsamples them to a common resolution, and fuses them to generate a
+high-resolution segmentation mask.</p>
+<div class="highlight"><pre><span></span><code><span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SegFormer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="p">,</span>
+    <span class="n">num_classes</span><span class="p">,</span>
+    <span class="n">decoder_head_embedding_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+    <span class="n">classifier_activation</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">qkv_bias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">dropout</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">project_dim</span><span class="o">=</span><span class="p">[</span><span class="mi">32</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">160</span><span class="p">,</span> <span class="mi">256</span><span class="p">],</span>
+    <span class="n">layerwise_sr_ratios</span><span class="o">=</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="n">layerwise_patch_sizes</span><span class="o">=</span><span class="p">[</span><span class="mi">7</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+    <span class="n">layerwise_strides</span><span class="o">=</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+    <span class="n">layerwise_num_heads</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span>
+    <span class="n">layerwise_depths</span><span class="o">=</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span>
+    <span class="n">layerwise_mlp_ratios</span><span class="o">=</span><span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span>
+    <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 3D model.</span>
+<span class="n">num_classes</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SegFormer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># 2D model.</span>
+<span class="n">input_shape</span> <span class="o">=</span> <span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">medicai</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">SegFormer</span><span class="p">(</span>
+    <span class="n">input_shape</span><span class="o">=</span><span class="n">input_shape</span><span class="p">,</span> 
+    <span class="n">num_classes</span><span class="o">=</span><span class="n">num_classes</span><span class="p">,</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Reference</strong></p>
+<ul>
+<li><a href="https://arxiv.org/abs/2404.10156">SegFormer3D: an Efficient Transformer for 3D Medical Image Segmentation</a> (CVPR 2024)</li>
+</ul>
+<p><strong>Arguments</strong></p>
+<ul>
+<li><strong>input_shape (tuple)</strong>: The shape of the input data, excluding the batch dimension.</li>
+<li><strong>num_classes (int)</strong>: The number of output classes for segmentation.</li>
+<li><strong>decoder_head_embedding_dim (int, optional)</strong>: The embedding dimension of the decoder head.
+    Defaults to 256.</li>
+<li><strong>classifier_activation (str, optional)</strong>: The activation function for the final output
+    layer. Common choices are <code>softmax</code> for multi-class segmentation and <code>sigmoid</code> for multi-label or binary segmentation. Defaults to <code>None</code>.</li>
+<li><strong>qkv_bias (bool, optional)</strong>: Whether to include a bias in the query, key, and value  <br />
+    projections. Defaults to <code>True</code>.</li>
+<li><strong>dropout (float, optional)</strong>: The dropout rate for the decoder head. Defaults to 0.0.</li>
+<li><strong>project_dim (list[int], optional)</strong>: A list of feature dimensions for each encoder stage.
+    Defaults to <code>[32, 64, 160, 256]</code>.</li>
+<li><strong>layerwise_sr_ratios (list[int], optional)</strong>: A list of spatial reduction ratios for each
+    encoder stage's attention layers. Defaults to <code>[4, 2, 1, 1]</code>.</li>
+<li><strong>layerwise_patch_sizes (list[int], optional)</strong>: A list of patch sizes for the embedding
+    layer in each encoder stage. Defaults to <code>[7, 3, 3, 3]</code>.</li>
+<li><strong>layerwise_strides (list[int], optional)</strong>: A list of strides for the embedding layer in
+    each encoder stage. Defaults to <code>[4, 2, 2, 2]</code>.</li>
+<li><strong>layerwise_num_heads (list[int], optional)</strong>: A list of the number of attention heads for
+    each encoder stage. Defaults to <code>[1, 2, 5, 8]</code>.</li>
+<li><strong>layerwise_depths (list[int], optional)</strong>: A list of the number of transformer blocks for
+    each encoder stage. Defaults to <code>[2, 2, 2, 2]</code>.</li>
+<li><strong>layerwise_mlp_ratios (list[int], optional)</strong>: A list of MLP expansion ratios for each
+    encoder stage. Defaults to <code>[4, 4, 4, 4]</code>.</li>
+<li><strong>name (str, optional)</strong>: The name of the model. Defaults to <code>None</code>.</li>
+</ul>
 
 
 

@@ -280,13 +280,13 @@
   
   
     <li class="md-tabs__item">
-      <a href="training/manage-training/" class="md-tabs__link">
+      <a href="guides/manage-guides/" class="md-tabs__link">
         
   
   
     
   
-  Training
+  Guides
 
       </a>
     </li>
@@ -375,19 +375,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    Home
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="." class="md-nav__link md-nav__link--active">
         
   
@@ -399,79 +386,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      🛠 Installation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#available-features" class="md-nav__link">
-    <span class="md-ellipsis">
-      🍁 Available Features
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#guides" class="md-nav__link">
-    <span class="md-ellipsis">
-      💡 Guides
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#contributing" class="md-nav__link">
-    <span class="md-ellipsis">
-      🤝 Contributing
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#acknowledgements" class="md-nav__link">
-    <span class="md-ellipsis">
-      🙏 Acknowledgements
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#citation" class="md-nav__link">
-    <span class="md-ellipsis">
-      📝 Citation
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -528,12 +442,12 @@
   
   
     <li class="md-nav__item">
-      <a href="training/manage-training/" class="md-nav__link">
+      <a href="guides/manage-guides/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Training
+    Guides
     
   </span>
   
@@ -586,61 +500,130 @@
 
 <p><img src="https://i.imgur.com/GvFKwDG.jpeg" width="500"/></p>
 <h1 id="medicai">MedicAI</h1>
-<p>The <a href="https://github.com/innat/medic-ai"><code>medicai</code></a> is a <a href="https://keras.io/keras_3/">Keras</a> based library designed for medical image analysis using machine learning techniques. Its core strengths include:</p>
+<p><strong>Medic-AI</strong> is a <a href="https://keras.io/keras_3/">Keras</a> based library designed for medical image analysis using machine learning techniques. Its core strengths include:</p>
 <ul>
-<li><strong>Backend Agnostic</strong>: Compatible with <code>tensorflow</code>, <code>torch</code>, and <code>jax</code>.</li>
-<li><strong>User-Friendly API</strong>: High-level interface for transformations and model creation.</li>
-<li><strong>Scalable Execution</strong>: Supports training and inference on <strong>single/multi-GPU</strong> and <strong>TPU-VM</strong> setups.</li>
-<li><strong>Essential Components</strong>: Includes standard metrics and losses, such as Dice.</li>
-<li><strong>Optimized 3D Inference</strong>: Offers an efficient sliding-window method and callback for volumetric data</li>
+<li><strong>Backend Agnostic:</strong> Compatible with <code>tensorflow</code>, <code>torch</code>, and <code>jax</code> backends.</li>
+<li><strong>User-Friendly API:</strong> High-level interface for transformations and model creation.</li>
+<li><strong>Scalable Execution:</strong> Supports training and inference on <strong>single/multi-GPU</strong> and <strong>TPU-VM</strong> setups.</li>
+<li><strong>Essential Components:</strong> Includes standard metrics and losses, such as Dice.</li>
+<li><strong>Optimized 3D Inference:</strong> Offers an efficient sliding-window method and callback for volumetric data</li>
 </ul>
-<h2 id="installation">🛠 Installation</h2>
+<h1 id="table-of-contents">📋 Table of Contents</h1>
+<ol>
+<li><a href="#-installation">Installation</a></li>
+<li><a href="#-features">Features</a></li>
+<li><a href="#-guides">Guides</a></li>
+<li><a href="#-documentation">Documentation</a></li>
+<li><a href="#-acknowledgements">Acknowledgements</a></li>
+<li><a href="#-citation">Citation</a></li>
+</ol>
+<h1 id="installation">🛠 Installation</h1>
 <p>PyPI version:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>medicai
+<div class="highlight"><pre><span></span><code>!pip<span class="w"> </span>install<span class="w"> </span>medicai
 </code></pre></div>
 <p>Installing from source GitHub:</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/innat/medic-ai.git
+<div class="highlight"><pre><span></span><code>!pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/innat/medic-ai.git
 </code></pre></div>
-<h2 id="available-features">🍁 Available Features</h2>
-<p>The <code>medicai</code> library provides a range of features for medical image processing, model training, and inference. Below is an overview of its key functionalities.</p>
-<p><strong>Image Transformations</strong></p>
-<p><code>medicai</code> includes various transformation utilities for preprocessing medical images:</p>
-<ul>
-<li>Basic Transformations:<ul>
-<li><code>Resize</code>: Adjusts the image dimensions.</li>
-<li><code>ScaleIntensityRange</code>: Normalizes intensity values within a specified range.</li>
-<li><code>CropForeground</code>: Crops the image to focus on the region of interest.</li>
-<li><code>Spacing</code>: Resamples the image to a target voxel spacing.</li>
-<li><code>Orientation</code>: Standardizes image orientation.</li>
-<li><code>NormalizeIntensity</code>: Normalize the intensity of tensors based on global or channel-wise statistics.</li>
-<li><code>SignalFillEmpty</code>: Fills <code>nan</code>, positive infinity, and negative infinity values in specified tensors with a
-given replacement.</li>
-</ul>
-</li>
-<li>Augmentations for Robustness:<ul>
-<li><code>RandCropByPosNegLabel</code>: Randomly crops based on positive and negative label ratios.</li>
-<li><code>RandRotate90</code>: Randomly rotates images by 90 degrees.</li>
-<li><code>RandShiftIntensity</code>: Randomly shifts intensity values.</li>
-<li><code>RandFlip</code>: Randomly flips images along specified axes.</li>
-<li><code>RandomSpatialCrop</code>: Randomly crops a region of interest (ROI).</li>
-</ul>
-</li>
-<li>Pipeline Composition:<ul>
-<li><code>Compose</code>: Chains multiple transformations into a single pipeline.</li>
-</ul>
-</li>
-</ul>
-<p><strong>Models</strong></p>
-<p>Currently, <code>medicai</code> focuses on 3D models for classification and segmentation:</p>
-<ul>
-<li><code>SwinTransformer</code> – 3D classification task.</li>
-<li><code>SwinUNETR</code> – 3D segmentation task.</li>
-</ul>
-<p><strong>Inference</strong></p>
-<ul>
-<li><code>SlidingWindowInference</code> – Processes large 3D images in smaller overlapping windows, improving performance and memory efficiency.</li>
-</ul>
-<h2 id="guides">💡 Guides</h2>
+<h1 id="features">📊 Features</h1>
+<p><strong>Available Models</strong> : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either <strong>3D</strong> <code>(depth × height × width × channel)</code> or <strong>2D</strong> <code>(height × width × channel)</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Supported Modalities</th>
+<th>Primary Task</th>
+<th>Architecture Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DenseNet121</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseNet169</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseNet201</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>ViT</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>Swin Transformer</td>
+<td>2D, 3D</td>
+<td>Classification</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>DenseUNet121</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseUNet169</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>DenseUNet201</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>CNN</td>
+</tr>
+<tr>
+<td>UNETR</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>SwinUNETR</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>TransUNet</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+<tr>
+<td>SegFormer</td>
+<td>2D, 3D</td>
+<td>Segmentation</td>
+<td>Transformer</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Available Transformation</strong>: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with <strong>TensorFlow</strong> operations. It can be used in the <code>tf.data</code> API or a Python data generator and is fully compatible with multiple backends, <code>tf</code>, <code>torch</code>, <code>jax</code> in training and inference, supporting both GPUs and TPUs.</p>
+<div class="highlight"><pre><span></span><code>CropForeground
+NormalizeIntensity
+Orientation
+RandCropByPosNegLabel
+RandFlip
+RandRotate90
+RandShiftIntensity
+RandSpatialCrop
+Resize
+ScaleIntensityRange
+Spacing
+</code></pre></div>
+<h1 id="guides">💡 Guides</h1>
 <p><strong>Segmentation</strong>: Available guides for 3D segmentation task.</p>
 <table>
 <thead>
@@ -648,28 +631,33 @@ given replacement.</li>
 <th>Task</th>
 <th>GitHub</th>
 <th>Kaggle</th>
+<th>View</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Covid-19</td>
-<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
 <td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-covid-19-3d-image-segmentation/notebook"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+<td><img src="assets/covid.gif" width="200"/></td>
 </tr>
 <tr>
 <td>BTCV</td>
-<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/btcv.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="notebooks/btcv.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
 <td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-btcv-segmentation-in-keras/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+<td>n/a</td>
 </tr>
 <tr>
 <td>BraTS</td>
-<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/brats.multi-gpu.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="notebooks/brats.multi-gpu.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
 <td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+<td>n/a</td>
 </tr>
 <tr>
 <td>Spleen</td>
-<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/spleen.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="notebooks/spleen.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
 <td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-spleen-3d-segmentation-in-keras"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
+<td><img src="assets/spleen.gif" width="200"></td>
 </tr>
 </tbody>
 </table>
@@ -685,12 +673,14 @@ given replacement.</li>
 <tbody>
 <tr>
 <td>Covid-19</td>
-<td><a target="_blank" href="https://github.com/innat/medic-ai/blob/main/notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
+<td><a target="_blank" href="notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a></td>
 <td><a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a></td>
 </tr>
 </tbody>
 </table>
-<h2 id="contributing">🤝 Contributing</h2>
+<h1 id="documentation">📚 Documentation</h1>
+<p>To learn more about <strong>model</strong>, <strong>transformation</strong>, and <strong>training</strong>, please visit official documentation: <a href="https://innat.github.io/medic-ai/"><code>medicai/docs</code></a></p>
+<h1 id="contributing">🤝 Contributing</h1>
 <p>Please refer to the current <a href="https://github.com/innat/medic-ai/wiki/Roadmap">roadmap</a> for an overview of the project. Feel free to explore anything that interests you. If you have suggestions or ideas, I’d appreciate it if you could open a <a href="https://github.com/innat/medic-ai/issues/new/choose">GitHub issue</a> so we can discuss them further.</p>
 <ol>
 <li>Install <code>medicai</code> from soruce:</li>
@@ -710,9 +700,9 @@ given replacement.</li>
 # or, only one your new_method
 python -m pytest -k new_method
 </code></pre></div>
-<h2 id="acknowledgements">🙏 Acknowledgements</h2>
+<h1 id="acknowledgements">🙏 Acknowledgements</h1>
 <p>This project is greatly inspired by <a href="https://monai.io/">MONAI</a>.</p>
-<h2 id="citation">📝 Citation</h2>
+<h1 id="citation">📝 Citation</h1>
 <p>If you use <code>medicai</code> in your research or educational purposes, please cite it using the metadata from our <a href="https://github.com/innat/medic-ai/blob/main/CITATION.cff"><code>CITATION.cff</code></a> file.</p>
 
 
