@@ -1,8 +1,8 @@
 
-Currently only two models are implemented for 3D classification and segmentation task. The workflow can be run with `tensorflow`, and `torch` backend.
+The `medicai` provides **Swin Transformer** and **SwinUNETR** models for 3D classification and segmentation respectively. These models are translated from official release to keras, and able to run on multiple backend, i.e., `tensorflow`, `torch`, and, `jax` backends.
 
 
-## 3D
+## 3D Models
 
 **Classification**
 
