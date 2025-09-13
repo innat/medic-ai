@@ -22,6 +22,7 @@ class DenseUNetBase(keras.Model):
         classifier_activation=None,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
+        use_attention=False,
         name=None,
         **kwargs,
     ):
@@ -46,7 +47,11 @@ class DenseUNetBase(keras.Model):
         # Apply decoder
         x = base_model.output
         decoder = UNetDecoder(
-            skip_layers, decoder_filters, spatial_dims, block_type=decoder_block_type
+            skip_layers,
+            decoder_filters,
+            spatial_dims,
+            block_type=decoder_block_type,
+            use_attention=use_attention,
         )
         x = decoder(x)
 
