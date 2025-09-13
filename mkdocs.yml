@@ -55,7 +55,7 @@ nav:
   - Home: index.md
   - Model: ./models/manage-models.md
   - Transformation: ./transformations/manage-transformations.md
-  - Training: ./training/manage-training.md
+  - Guides: ./guides/manage-guides.md
   - General: general.md
 
 # Code syntax highlighter

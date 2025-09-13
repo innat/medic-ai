@@ -1,5 +1,6 @@
 from keras import layers
 
+from medicai.layers import AttentionGate
 from medicai.utils import get_conv_layer, get_reshaping_layer
 
 
@@ -35,7 +36,9 @@ def Conv3x3BnReLU(filters, spatial_dims=2, use_batchnorm=True):
     return apply
 
 
-def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm=True):
+def DecoderBlock(
+    filters, spatial_dims=2, block_type="upsampling", use_batchnorm=True, use_attention=False
+):
     """
     Builds a decoder block that upsamples an input tensor and optionally concatenates with a skip connection.
 
@@ -63,6 +66,10 @@ def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm
             x = get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
 
         if skip is not None:
+            if use_attention:
+                skip = AttentionGate(filters, spatial_dims)(
+                    skip, x
+                )  # gating signal = current decoder x
             x = layers.Concatenate(axis=-1)([x, skip])
 
         x = Conv3x3BnReLU(filters, spatial_dims=spatial_dims, use_batchnorm=use_batchnorm)(x)
@@ -72,7 +79,9 @@ def DecoderBlock(filters, spatial_dims=2, block_type="upsampling", use_batchnorm
     return apply
 
 
-def UNetDecoder(skip_layers, decoder_filters, spatial_dims, block_type="upsampling"):
+def UNetDecoder(
+    skip_layers, decoder_filters, spatial_dims, block_type="upsampling", use_attention=False
+):
     """
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
 
@@ -89,7 +98,7 @@ def UNetDecoder(skip_layers, decoder_filters, spatial_dims, block_type="upsampli
     def decoder(x):
         for i, filters in enumerate(decoder_filters):
             skip = skip_layers[i] if i < len(skip_layers) else None
-            x = DecoderBlock(filters, spatial_dims, block_type)(x, skip)
+            x = DecoderBlock(filters, spatial_dims, block_type, use_attention)(x, skip)
         return x
 
     return decoder

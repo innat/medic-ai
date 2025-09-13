@@ -95,7 +95,7 @@ output = transform(data, meta)
 
 # get transformed sample
 medicai_image = output['image'].numpy()
-medicai_label = output['label']
+medicai_label = output['label'].numpy()
 ```
 
 ## Crop Foreground
@@ -123,8 +123,8 @@ data, meta = PyLoadImage(image_path=image_path, label_path=mask_path)
 output = transform(data, meta)
 
 # get transformed sample
-medicai_image = output['image']
-medicai_label = output['label']
+medicai_image = output['image'].numpy()
+medicai_label = output['label'].numpy()
 ```
 
 ## Spacing
@@ -243,7 +243,7 @@ output = transform(data, meta)
 
 # get transformed sample
 medicai_image = output['image'].numpy()
-medicai_label = output['label']
+medicai_label = output['label'].numpy()
 ```
 
 ## Random Crop By Positive Negative Label
@@ -277,7 +277,7 @@ output = transform(data, meta)
 
 # get transformed sample
 medicai_image = output['image'].numpy()
-medicai_label = output['label']
+medicai_label = output['label'].numpy()
 ```
 
 ## Random Spatial Crop
@@ -305,8 +305,8 @@ data, meta = PyLoadImage(image_path=image_path, label_path=mask_path)
 output = transform(data, meta)
 
 # get transformed sample
-medicai_image = output['image']
-medicai_label = output['label']
+medicai_image = output['image'].numpy()
+medicai_label = output['label'].numpy()
 ```
 
 ## Random Flip
