@@ -74,8 +74,7 @@ class DenseNet121(keras.Model):
             spatial_dims=spatial_dims, layer_type="avg", global_pool=True
         )
         GlobalMaxPool = get_pooling_layer(
-            spatial_dims=spatial_dims,
-            layer_type="max",
+            spatial_dims=spatial_dims, layer_type="max", global_pool=True
         )
         if include_top:
             x = GlobalAvgPool(x)
@@ -176,8 +175,7 @@ class DenseNet169(keras.Model):
             spatial_dims=spatial_dims, layer_type="avg", global_pool=True
         )
         GlobalMaxPool = get_pooling_layer(
-            spatial_dims=spatial_dims,
-            layer_type="max",
+            spatial_dims=spatial_dims, layer_type="max", global_pool=True
         )
         if include_top:
             x = GlobalAvgPool(x)
@@ -278,8 +276,7 @@ class DenseNet201(keras.Model):
             spatial_dims=spatial_dims, layer_type="avg", global_pool=True
         )
         GlobalMaxPool = get_pooling_layer(
-            spatial_dims=spatial_dims,
-            layer_type="max",
+            spatial_dims=spatial_dims, layer_type="max", global_pool=True
         )
         if include_top:
             x = GlobalAvgPool(x)
