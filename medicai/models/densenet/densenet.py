@@ -41,8 +41,6 @@ class DenseNet121(keras.Model):
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch size. Can be `(height, width, channels)`
                 for 2D or `(depth, height, width, channels)` for 3D.
-            input_tensor: (Optional) A Keras tensor to use as the input to the
-                model. If not provided, a new input tensor will be created.
             include_rescaling: A boolean indicating whether to include a
                 `Rescaling` layer at the beginning of the model. If `True`,
                 the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
@@ -145,8 +143,6 @@ class DenseNet169(keras.Model):
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch size. Can be `(height, width, channels)`
                 for 2D or `(depth, height, width, channels)` for 3D.
-            input_tensor: (Optional) A Keras tensor to use as the input to the
-                model. If not provided, a new input tensor will be created.
             include_rescaling: A boolean indicating whether to include a
                 `Rescaling` layer at the beginning of the model. If `True`,
                 the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
@@ -249,8 +245,6 @@ class DenseNet201(keras.Model):
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch size. Can be `(height, width, channels)`
                 for 2D or `(depth, height, width, channels)` for 3D.
-            input_tensor: (Optional) A Keras tensor to use as the input to the
-                model. If not provided, a new input tensor will be created.
             include_rescaling: A boolean indicating whether to include a
                 `Rescaling` layer at the beginning of the model. If `True`,
                 the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
