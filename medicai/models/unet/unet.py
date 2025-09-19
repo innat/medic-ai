@@ -87,6 +87,11 @@ class UNet(keras.Model):
         # If encoder provided, use it
         if encoder is not None:
             backbone = encoder
+            if not hasattr(backbone, "pyramid_outputs"):
+                raise AttributeError(
+                    f"The provided `encoder` must have a `pyramid_outputs` attribute, "
+                    f"but the provided encoder of type {type(backbone).__name__} does not."
+                )
         elif encoder_name is not None:
             BackboneClass = BACKBONE_ZOO[encoder_name]
             backbone = BackboneClass(input_shape=input_shape, include_top=False)
