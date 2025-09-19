@@ -299,7 +299,7 @@ class DenseNet201(DenseNetBase):
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
-            blocks=[6, 12, 32, 32],
+            blocks=[6, 12, 48, 32],
             include_rescaling=include_rescaling,
             include_top=include_top,
             num_classes=num_classes,
