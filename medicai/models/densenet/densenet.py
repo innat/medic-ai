@@ -83,6 +83,7 @@ class DenseNetBase(keras.Model):
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.pyramid_outputs = backbone.pyramid_outputs
+        self.blocks = blocks
         self.include_rescaling = include_rescaling
         self.include_top = include_top
         self.num_classes = num_classes
@@ -95,10 +96,11 @@ class DenseNetBase(keras.Model):
             "input_shape": self.input_shape[1:],
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
-            "name": self.name,
             "num_classes": self.num_classes,
             "pooling": self.pooling,
             "classifier_activation": self.classifier_activation,
+            "blocks": self.blocks,
+            "name": self.name,
         }
         return config
 

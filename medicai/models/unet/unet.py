@@ -107,6 +107,9 @@ class UNet(keras.Model):
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = list(backbone.pyramid_outputs.values())
 
+        if not (3 <= encoder_depth <= 5):
+            raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
+
         if len(decoder_filters) < encoder_depth:
             raise ValueError(
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
