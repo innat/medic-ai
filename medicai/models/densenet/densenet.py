@@ -90,7 +90,6 @@ class DenseNet121(keras.Model):
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
-        self.input_tensor = input_tensor
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
@@ -102,7 +101,6 @@ class DenseNet121(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
@@ -197,7 +195,6 @@ class DenseNet169(keras.Model):
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
-        self.input_tensor = input_tensor
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
@@ -209,7 +206,6 @@ class DenseNet169(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
@@ -304,7 +300,6 @@ class DenseNet201(keras.Model):
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
-        self.input_tensor = input_tensor
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
@@ -316,7 +311,6 @@ class DenseNet201(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,

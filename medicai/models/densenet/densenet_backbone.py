@@ -121,7 +121,6 @@ class DenseNetBackbone(keras.Model):
         )
 
         self.blocks = blocks
-        self.input_tensor = input_tensor
         self.growth_rate = growth_rate
         self.bn_size = bn_size
         self.compression = compression
@@ -133,7 +132,6 @@ class DenseNetBackbone(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
             "blocks": self.blocks,
             "growth_rate": self.growth_rate,
             "bn_size": self.bn_size,
