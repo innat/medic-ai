@@ -77,8 +77,8 @@ class UNet(keras.Model):
         else:
             raise ValueError("Either `encoder` or `encoder_name` must be provided.")
 
-        input = backbone.input
-        spatial_dims = len(input[0].shape) - 2
+        inputs = backbone.input
+        spatial_dims = len(inputs[0].shape) - 2
         pyramid_outputs = list(backbone.pyramid_outputs.values())
 
         if len(decoder_filters) < encoder_depth:
@@ -110,7 +110,7 @@ class UNet(keras.Model):
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
         super().__init__(
-            inputs=input, outputs=outputs, name=name or f"UNet{spatial_dims}D", **kwargs
+            inputs=inputs, outputs=outputs, name=name or f"UNet{spatial_dims}D", **kwargs
         )
 
         self.encoder_name = encoder_name
