@@ -30,7 +30,7 @@ class UNet(keras.Model):
         input_shape,
         encoder=None,
         encoder_name=None,
-        encoder_depth=4,
+        encoder_depth=5,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
         num_classes=1,
@@ -51,7 +51,8 @@ class UNet(keras.Model):
                 pre-configured backbone from the `BACKBONE_ZOO` to use as the
                 encoder.
             encoder_depth: An integer specifying how many stages of the encoder
-                backbone to use.
+                backbone to use. A number of stages used in encoder in range [3, 5].
+                This can be used to reduce the size of the model. Default: 5.
             decoder_block_type: A string specifying the type of decoder block
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
@@ -64,7 +65,8 @@ class UNet(keras.Model):
             classifier_activation: A string specifying the activation function
                 for the final classification layer.
             use_attention: A boolean indicating whether to use attention blocks
-                in the decoder.
+                in the decoder. If it is enabled, the UNet will be built as
+                Attention-UNet. Default: False.
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
