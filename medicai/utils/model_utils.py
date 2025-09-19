@@ -6,6 +6,8 @@ import keras
 from keras import activations, layers
 
 
+BACKBONE_ZOO = {}
+
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
     """
     Returns a convolutional layer (2D or 3D) based on the given type.
@@ -217,16 +219,4 @@ def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
             return input_tensor
 
 
-BACKBONE_ARGS = {
-    "densenet121": [6, 12, 24, 16],
-    "densenet169": [6, 12, 32, 32],
-    "densenet201": [6, 12, 48, 32],
-}
 
-SKIP_CONNECTION_ARGS = {
-    "densenet121": [309, 137, 49, 3],
-    "densenet169": [365, 137, 49, 3],
-    "densenet201": [477, 137, 49, 3],
-}
-
-BACKBONE_ZOO = {}
