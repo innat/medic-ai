@@ -137,7 +137,7 @@ class DenseNet169(keras.Model):
         **kwargs,
     ):
         """
-        Initializes the DenseNet121 model.
+        Initializes the DenseNet169 model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -238,7 +238,7 @@ class DenseNet201(keras.Model):
         **kwargs,
     ):
         """
-        Initializes the DenseNet121 model.
+        Initializes the DenseNet201 model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -272,7 +272,7 @@ class DenseNet201(keras.Model):
             input_shape=input_shape, blocks=BACKBONE_ARGS.get("densenet201")
         )
 
-        input = backbone.input
+        inputs = backbone.inputs
         x = backbone.output
 
         GlobalAvgPool = get_pooling_layer(
@@ -290,7 +290,7 @@ class DenseNet201(keras.Model):
         elif pooling == "max":
             x = GlobalMaxPool(x)
 
-        super().__init__(inputs=input, outputs=x, name=name, **kwargs)
+        super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.input_tensor = input_tensor
         self.pyramid_outputs = backbone.pyramid_outputs
