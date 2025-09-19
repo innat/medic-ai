@@ -6,7 +6,7 @@ from medicai.utils.model_utils import (
     get_conv_layer,
 )
 
-from .unet_imagenet_decoder import UNetDecoder
+from .unet_decoder import UNetDecoder
 
 
 class UNet(keras.Model):
@@ -21,6 +21,12 @@ class UNet(keras.Model):
     encoder directly to the corresponding layers in the decoder. This allows
     the decoder to leverage high-resolution features lost during downsampling,
     leading to more accurate segmentations.
+
+    Example:
+    >>> from medicai.models import UNet
+    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121")
+    >>> model = UNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
+    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=3)
 
     """
 

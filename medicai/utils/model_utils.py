@@ -5,8 +5,8 @@ hide_warnings()
 import keras
 from keras import activations, layers
 
-
 BACKBONE_ZOO = {}
+
 
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
     """
@@ -217,6 +217,3 @@ def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
             return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
         else:
             return input_tensor
-
-
-
