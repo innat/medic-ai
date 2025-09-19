@@ -52,10 +52,15 @@ class UNet(keras.Model):
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch size.
             encoder: (Optional) A Keras model to use as the encoder (backbone).
-                If `None`, an encoder will be built using `encoder_name`.
+                This argument is intended for passing a custom or pre-trained
+                model not available in the `BACKBONE_ZOO`. If provided, the
+                model must have a `pyramid_outputs` attribute, which should be
+                a dictionary of intermediate feature vectors from shallow to
+                deep layers (e.g., `'P1'`, `'P2'`, ...).
             encoder_name: (Optional) A string specifying the name of a
                 pre-configured backbone from the `BACKBONE_ZOO` to use as the
-                encoder.
+                encoder. This is a convenient option for using a backbone from
+                the library without having to instantiate it manually.
             encoder_depth: An integer specifying how many stages of the encoder
                 backbone to use. A number of stages used in encoder in range [3, 5].
                 This can be used to reduce the size of the model. Default: 5.
