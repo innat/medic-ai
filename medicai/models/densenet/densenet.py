@@ -94,6 +94,9 @@ class DenseNet121(keras.Model):
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
+        self.num_classes = num_classes
+        self.pooling = pooling
+        self.classifier_activation = classifier_activation
         self.name = name
 
     def get_config(self):
@@ -103,6 +106,9 @@ class DenseNet121(keras.Model):
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
+            "num_classes": self.num_classes,
+            "pooling": self.pooling,
+            "classifier_activation": self.classifier_activation,
         }
         return config
 
@@ -195,6 +201,9 @@ class DenseNet169(keras.Model):
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
+        self.num_classes = num_classes
+        self.pooling = pooling
+        self.classifier_activation = classifier_activation
         self.name = name
 
     def get_config(self):
@@ -204,6 +213,9 @@ class DenseNet169(keras.Model):
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
+            "num_classes": self.num_classes,
+            "pooling": self.pooling,
+            "classifier_activation": self.classifier_activation,
         }
         return config
 
@@ -296,6 +308,9 @@ class DenseNet201(keras.Model):
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
         self.include_top = include_top
+        self.num_classes = num_classes
+        self.pooling = pooling
+        self.classifier_activation = classifier_activation
         self.name = name
 
     def get_config(self):
@@ -305,6 +320,9 @@ class DenseNet201(keras.Model):
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
+            "num_classes": self.num_classes,
+            "pooling": self.pooling,
+            "classifier_activation": self.classifier_activation,
         }
         return config
 
