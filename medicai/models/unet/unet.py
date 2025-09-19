@@ -34,8 +34,8 @@ class UNet(keras.Model):
         self,
         *,
         input_shape,
+        encoder_name,
         encoder=None,
-        encoder_name=None,
         encoder_depth=5,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
@@ -76,12 +76,20 @@ class UNet(keras.Model):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
+        if not input_shape:
+            raise ValueError(
+                "Argument `input_shape` must be provided. "
+                "It should be a tuple of integers specifying the dimensions of the input "
+                "data, not including the batch size. "
+                "For 2D data, the format is `(height, width, channels)`. "
+                "For 3D data, the format is `(depth, height, width, channels)`."
+            )
         # If encoder provided, use it
         if encoder is not None:
             backbone = encoder
         elif encoder_name is not None:
             BackboneClass = BACKBONE_ZOO[encoder_name]
-            backbone = BackboneClass(input_shape=input_shape)
+            backbone = BackboneClass(input_shape=input_shape, include_top=False)
         else:
             raise ValueError("Either `encoder` or `encoder_name` must be provided.")
 

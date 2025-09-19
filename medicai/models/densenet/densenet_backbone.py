@@ -114,8 +114,8 @@ class DenseNetBackbone(keras.Model):
                 num_channels = out_channels
 
         # Final batch norm
-        x = layers.BatchNormalization()(x)
-        x = layers.Activation("relu")(x)
+        x = layers.BatchNormalization(name="final_bn")(x)
+        x = layers.Activation("relu", name="final_relu")(x)
 
         super().__init__(
             inputs=inputs, outputs=x, name=name or f"DenseNetBackbone{spatial_dims}D", **kwargs
