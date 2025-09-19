@@ -69,7 +69,7 @@ class DenseNetBackbone(keras.Model):
             **kwargs: Additional keyword arguments.
         """
         spatial_dims = len(input_shape) - 1
-        inputs = parse_model_inputs(input_shape, input_tensor)
+        inputs = parse_model_inputs(input_shape, input_tensor, name='input_spec')
 
         x = inputs
         if include_rescaling:
@@ -84,9 +84,10 @@ class DenseNetBackbone(keras.Model):
             strides=2,
             padding="same",
             use_bias=False,
+            name='stem_dense_conv'
         )(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.Activation("relu")(x)
+        x = layers.BatchNormalization(name='stem_dense_bn')(x)
+        x = layers.Activation("relu", name='stem_dense_relu')(x)
 
         pyramid_outputs = {"P1": x}
 
