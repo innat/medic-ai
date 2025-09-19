@@ -34,7 +34,7 @@ class UNet(keras.Model):
         self,
         *,
         input_shape,
-        encoder_name,
+        encoder_name=None,
         encoder=None,
         encoder_depth=5,
         decoder_block_type="upsampling",

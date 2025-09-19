@@ -36,7 +36,7 @@ class DenseNetBase(keras.Model):
         **kwargs,
     ):
         """
-        Initializes the DenseNet121 model.
+        Initializes the DenseNetBase model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
