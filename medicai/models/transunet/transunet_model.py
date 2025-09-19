@@ -77,7 +77,9 @@ class TransUNet(keras.Model):
         inputs = parse_model_inputs(input_shape=input_shape, name="transunet_input")
 
         # CNN Encoder (or ResNet or CSPNet)
-        base_encoder = DenseNetBackbone(blocks=[6, 12, 24, 16], input_tensor=inputs)
+        base_encoder = DenseNetBackbone(
+            blocks=[6, 12, 24, 16], input_shape=input_shape, input_tensor=inputs
+        )
 
         # Get CNN feature maps from the encoder.
         c1 = base_encoder.get_layer(name="block0_trans_relu").output
