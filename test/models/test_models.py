@@ -3,11 +3,11 @@ import tensorflow as tf
 from medicai.models import (
     UNETR,
     DenseNet121,
-    DenseUNet121,
     SegFormer,
     SwinTransformer,
     SwinUNETR,
     TransUNet,
+    UNet,
     ViT,
 )
 
@@ -15,13 +15,13 @@ from medicai.models import (
 def test_unet():
     num_classes = 1
     input_shape = (64, 64, 64, 1)
-    model = DenseUNet121(input_shape=input_shape, num_classes=num_classes)
+    model = UNet(input_shape=input_shape, num_classes=num_classes, encoder_name="densenet121")
     dummy_input = tf.random.normal((1, 64, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, 64, 64, 64, num_classes)
 
     input_shape = (64, 64, 1)
-    model = DenseUNet121(input_shape=input_shape, num_classes=num_classes)
+    model = UNet(input_shape=input_shape, num_classes=num_classes, encoder_name="densenet121")
     dummy_input = tf.random.normal((1, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, 64, 64, num_classes)

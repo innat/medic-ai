@@ -2,46 +2,74 @@ import keras
 from keras import layers
 
 from ...utils import get_conv_layer, get_pooling_layer, parse_model_inputs
-from .densenet_layers import DenseBlock, TransitionLayer
+from .densenet_layers import apply_dense_block, apply_transition_layer
 
 
+@keras.utils.register_keras_serializable(package="densenet.backbone")
 class DenseNetBackbone(keras.Model):
     """
-    A 3D DenseNet backbone model without classification head.
+    A Dense Convolutional Network (DenseNet) model.
 
-    Args:
-        blocks (list): Number of layers in each dense block.
-        input_shape (tuple): Input tensor shape, excluding batch size.
-        input_tensor (Tensor, optional): Optional input tensor.
-        growth_rate (int): Number of filters to add per dense layer.
-        bn_size (int): Bottleneck size for intermediate convolution layers.
-        compression (float): Compression factor in transition layers.
-        dropout_rate (float): Dropout rate after each dense layer.
-        include_rescaling (bool): Whether to include input rescaling layer.
-        name (str): Model name.
-        **kwargs: Additional keyword arguments for the base Model class.
+    This class builds a DenseNet model that serves as a feature extractor or
+    'backbone' for other tasks like 2D and 3D classification, or
+    segmentation. The core idea behind DenseNets is to connect each layer to
+    every other layer in a feed-forward fashion, which is different from
+    ResNets, which use identity shortcuts.
+
+    Each layer in a DenseNet receives feature maps from all preceding layers in
+    its 'Dense Block' and passes its own feature maps to all subsequent layers.
+    This creates a dense connectivity pattern, which helps to alleviate the
+    vanishing-gradient problem, strengthen feature propagation, encourage
+    feature reuse, and significantly reduce the number of parameters. The model
+    is composed of multiple Dense Blocks separated by 'Transition Layers'
+    that downsample the feature maps.
+
     """
 
     def __init__(
         self,
         *,
         blocks,
-        input_shape=(None, None, None, 1),
+        input_shape,
         input_tensor=None,
-        include_top=False,
-        pooling=None,
-        num_classes=1000,
-        classifier_activation="softmax",
         growth_rate=32,
         bn_size=4,
         compression=0.5,
         dropout_rate=0.0,
         include_rescaling=False,
-        name="densenet_backbone",
-        **kwargs
+        name=None,
+        **kwargs,
     ):
-        """Builds a functional DenseNet3D backbone"""
-        inputs = parse_model_inputs(input_shape, input_tensor)
+        """
+        Initializes the DenseNetBackbone.
+
+        Args:
+            blocks: A list of integers specifying the number of dense layers in
+                each Dense Block. For example, `[6, 12, 24, 16]` would create
+                a DenseNet-121 architecture.
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            input_tensor: (Optional) A Keras tensor to use as the input to the
+                model. If not provided, a new input tensor will be created.
+            growth_rate: An integer representing the 'growth rate' of the
+                network. This is the number of new feature maps added by each
+                dense layer.
+            bn_size: An integer for the bottleneck layer size. This factor
+                multiplies the growth rate to determine the number of filters
+                in the 1x1 convolution within the bottleneck.
+            compression: A float between 0.0 and 1.0 representing the
+                compression factor of the transition layers. A value less than
+                1.0 reduces the number of feature maps.
+            dropout_rate: A float for the dropout rate to be applied after
+                each dense layer.
+            include_rescaling: A boolean indicating whether to include a
+                `Rescaling` layer at the beginning of the model. If `True`,
+                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+        spatial_dims = len(input_shape) - 1
+        inputs = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 
         x = inputs
         if include_rescaling:
@@ -49,18 +77,22 @@ class DenseNetBackbone(keras.Model):
 
         # Initial convolution stem
         x = get_conv_layer(
-            spatial_dims=len(x.shape) - 2,
+            spatial_dims=spatial_dims,
             layer_type="conv",
             filters=64,
             kernel_size=7,
             strides=2,
             padding="same",
             use_bias=False,
+            name="stem_dense_conv",
         )(x)
-        x = layers.BatchNormalization()(x)
-        x = layers.Activation("relu")(x)
+        x = layers.BatchNormalization(name="stem_dense_bn")(x)
+        x = layers.Activation("relu", name="stem_dense_relu")(x)
+
+        pyramid_outputs = {"P1": x}
+
         x = get_pooling_layer(
-            spatial_dims=len(x.shape) - 2,
+            spatial_dims=spatial_dims,
             layer_type="max",
             pool_size=3,
             strides=2,
@@ -71,62 +103,41 @@ class DenseNetBackbone(keras.Model):
         num_channels = 64
 
         for i, num_layers in enumerate(blocks):
-            x = DenseBlock(x, num_layers, growth_rate, bn_size, dropout_rate, block_idx=i)
+            x = apply_dense_block(x, num_layers, growth_rate, bn_size, dropout_rate, block_idx=i)
             num_channels += num_layers * growth_rate
+
+            pyramid_outputs[f"P{i+2}"] = x
 
             if i != len(blocks) - 1:
                 out_channels = int(num_channels * compression)
-                x = TransitionLayer(x, out_channels, block_idx=i)
+                x = apply_transition_layer(x, out_channels, block_idx=i)
                 num_channels = out_channels
 
         # Final batch norm
-        x = layers.BatchNormalization()(x)
-        x = layers.Activation("relu")(x)
+        x = layers.BatchNormalization(name="final_bn")(x)
+        x = layers.Activation("relu", name="final_relu")(x)
 
-        GlobalAvgPool = get_pooling_layer(
-            spatial_dims=len(input_shape) - 1, layer_type="avg", global_pool=True
+        super().__init__(
+            inputs=inputs, outputs=x, name=name or f"DenseNetBackbone{spatial_dims}D", **kwargs
         )
-        GlobalMaxPool = get_pooling_layer(
-            spatial_dims=len(input_shape) - 1,
-            layer_type="max",
-        )
-
-        if include_top:
-            x = GlobalAvgPool(x)
-            x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
-        elif pooling == "avg":
-            x = GlobalAvgPool(x)
-        elif pooling == "max":
-            x = GlobalMaxPool(x)
-
-        super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.blocks = blocks
-        self.input_tensor = input_tensor
         self.growth_rate = growth_rate
         self.bn_size = bn_size
         self.compression = compression
         self.dropout_rate = dropout_rate
+        self.pyramid_outputs = pyramid_outputs
         self.include_rescaling = include_rescaling
-        self.include_top = include_top
-        self.pooling = pooling
-        self.classifier_activation = classifier_activation
-        self.num_classes = num_classes
         self.name = name
 
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
             "blocks": self.blocks,
             "growth_rate": self.growth_rate,
             "bn_size": self.bn_size,
             "compression": self.compression,
             "dropout_rate": self.dropout_rate,
-            "include_top": self.include_top,
-            "pooling": self.pooling,
-            "num_classes": self.num_classes,
-            "classifier_activation": self.classifier_activation,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
         }

@@ -3,8 +3,8 @@ from keras import layers
 from ...utils import get_conv_layer, get_pooling_layer
 
 
-def DenseLayer(x, growth_rate, bn_size, dropout_rate, block_idx, layer_idx):
-    """A single dense layer (BN -> ReLU -> Conv3D(1x1) -> BN -> ReLU -> Conv3D(3x3))"""
+def apply_dense_layer(x, growth_rate, bn_size, dropout_rate, block_idx, layer_idx):
+    """A single dense layer (BN -> ReLU -> Conv(1x1) -> BN -> ReLU -> Conv(3x3))"""
     out = layers.BatchNormalization(name=f"block{block_idx}_layer{layer_idx}_bn1")(x)
     out = layers.Activation("relu", name=f"block{block_idx}_layer{layer_idx}_relu1")(out)
     out = get_conv_layer(
@@ -34,14 +34,14 @@ def DenseLayer(x, growth_rate, bn_size, dropout_rate, block_idx, layer_idx):
     return layers.Concatenate(axis=-1, name=f"block{block_idx}_layer{layer_idx}_concat")([x, out])
 
 
-def DenseBlock(x, num_layers, growth_rate, bn_size, dropout_rate, block_idx):
-    """A 3D dense block made of multiple DenseLayer"""
+def apply_dense_block(x, num_layers, growth_rate, bn_size, dropout_rate, block_idx):
+    """A 2D/3D dense block made of multiple DenseLayer"""
     for layer_idx in range(num_layers):
-        x = DenseLayer(x, growth_rate, bn_size, dropout_rate, block_idx, layer_idx)
+        x = apply_dense_layer(x, growth_rate, bn_size, dropout_rate, block_idx, layer_idx)
     return x
 
 
-def TransitionLayer(x, out_channels, block_idx):
+def apply_transition_layer(x, out_channels, block_idx):
     x = layers.BatchNormalization(name=f"block{block_idx}_trans_bn")(x)
     x = layers.Activation("relu", name=f"block{block_idx}_trans_relu")(x)
     x = get_conv_layer(
