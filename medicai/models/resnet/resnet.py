@@ -12,7 +12,7 @@ class ResNetBase(keras.Model):
     """
     A full ResNetBase model for classification.
 
-    This class provides a complete ResNetBase model, including both the
+    This class provides a complete ResNet model, including both the
     convolutional backbone and the classification head (the "top"). It is
     capable of handling both 2D and 3D inputs. The model's architecture is
     defined by the `ResNetBackbone` and a final classification layer.
@@ -46,6 +46,20 @@ class ResNetBase(keras.Model):
         Initializes the ResNetBase model.
 
         Args:
+            block_type: A string specifying the type of residual block to use.
+                Can be "basic_block" (for ResNet-18/34) or "bottleneck" (for ResNet-50/101/152).
+            num_blocks: A list of integers specifying the number of residual blocks in each
+                stage of the model.
+            conv_filters: A list of integers specifying the number of filters in the initial
+                convolutional stem.
+            conv_kernel_sizes: A list of integers specifying the kernel size for the initial
+                convolutional stem.
+            num_filters: A list of integers specifying the number of filters for each
+                stage of the residual blocks.
+            num_strides: A list of integers specifying the stride for each stage of
+                the residual blocks.
+            use_pre_activation: A boolean indicating whether to use the pre-activation
+                version of the ResNet block as described in ResNet v2.
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch size. Can be `(height, width, channels)`
                 for 2D or `(depth, height, width, channels)` for 3D.
@@ -134,6 +148,16 @@ class ResNetBase(keras.Model):
 
 
 class ResNet18(ResNetBase):
+    """
+    ResNet-18 model for classification.
+
+    This model uses **basic blocks** with a total of **18 layers** and
+    is a popular choice for various computer vision tasks. It is lighter and
+    faster to train compared to deeper ResNet models. It uses the original
+    ResNet v1 architecture, which applies activation after the addition
+    of the shortcut.
+    """
+
     def __init__(
         self,
         *,
@@ -146,6 +170,25 @@ class ResNet18(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-18 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -168,6 +211,17 @@ class ResNet18(ResNetBase):
 
 
 class ResNet34(ResNetBase):
+    """
+    ResNet-34 model for classification.
+
+    This model uses **basic blocks** with a total of **34 layers** and
+    is a popular choice for various computer vision tasks. It's a deeper
+    version of ResNet-18, offering increased representational power while
+    still being computationally efficient. It uses the original ResNet v1
+    architecture, which applies activation after the addition of the
+    shortcut.
+    """
+
     def __init__(
         self,
         *,
@@ -180,6 +234,25 @@ class ResNet34(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-34 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -202,6 +275,15 @@ class ResNet34(ResNetBase):
 
 
 class ResNet50(ResNetBase):
+    """
+    ResNet-50 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **50 layers**.
+    It's a very popular and well-balanced choice, widely used for transfer
+    learning and general-purpose image classification due to its depth and
+    computational efficiency. It uses the original ResNet v1 architecture.
+    """
+
     def __init__(
         self,
         *,
@@ -214,6 +296,25 @@ class ResNet50(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-50 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -236,6 +337,16 @@ class ResNet50(ResNetBase):
 
 
 class ResNet101(ResNetBase):
+    """
+    ResNet-101 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **101 layers**.
+    As a deeper variant of ResNet, it can capture more complex features
+    from the input data, often leading to higher accuracy on challenging
+    datasets, though at a higher computational cost. It uses the original
+    ResNet v1 architecture.
+    """
+
     def __init__(
         self,
         *,
@@ -248,6 +359,25 @@ class ResNet101(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-101 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -270,6 +400,16 @@ class ResNet101(ResNetBase):
 
 
 class ResNet152(ResNetBase):
+    """
+    ResNet-152 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **152 layers**.
+    As the deepest variant of the original ResNet v1 series, it is designed
+    to handle highly complex visual recognition tasks. It uses the original
+    ResNet v1 architecture, which applies activation after the addition of the
+    shortcut.
+    """
+
     def __init__(
         self,
         *,
@@ -282,6 +422,25 @@ class ResNet152(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-152 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -304,6 +463,16 @@ class ResNet152(ResNetBase):
 
 
 class ResNet50v2(ResNetBase):
+    """
+    ResNet-50 v2 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **50 layers**.
+    Unlike the original ResNet v1, it implements the **pre-activation**
+    design, where Batch Normalization and ReLU are applied *before* the
+    convolutional layers. This modification helps with training deep networks
+    by preventing vanishing gradients and improving information flow.
+    """
+
     def __init__(
         self,
         *,
@@ -316,6 +485,25 @@ class ResNet50v2(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-50 v2 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -338,6 +526,15 @@ class ResNet50v2(ResNetBase):
 
 
 class ResNet101v2(ResNetBase):
+    """
+    ResNet-101 v2 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **101 layers**.
+    Similar to ResNet-50 v2, it employs the **pre-activation** design,
+    which helps to mitigate the vanishing gradient problem and enhances
+    the training of this very deep network.
+    """
+
     def __init__(
         self,
         *,
@@ -350,6 +547,25 @@ class ResNet101v2(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-101 v2 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -372,6 +588,16 @@ class ResNet101v2(ResNetBase):
 
 
 class ResNet152v2(ResNetBase):
+    """
+    ResNet-152 v2 model for classification.
+
+    This model uses **bottleneck blocks** with a total of **152 layers**.
+    It employs the **pre-activation** design, which places Batch Normalization
+    and ReLU activations before the convolutional layers. This design helps
+    to stabilize the training of very deep networks and improves performance
+    by mitigating the vanishing gradient problem.
+    """
+
     def __init__(
         self,
         *,
@@ -384,6 +610,25 @@ class ResNet152v2(ResNetBase):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the ResNet-152 v2 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         spatial_dims = len(input_shape) - 1
         name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
@@ -405,6 +650,131 @@ class ResNet152v2(ResNetBase):
         )
 
 
+class ResNet50vd(ResNetBase):
+    """
+    ResNet-50 "very deep" (vd) model for classification.
+
+    This model uses a "very deep" convolutional stem, which replaces the
+    initial 7x7 convolutional layer with three smaller 3x3 layers. This
+    modification increases the model's capacity and has been shown to
+    improve accuracy. The model uses **bottleneck block vd** with a total
+    of **50 layers**.
+    """
+
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        """
+        Initializes the ResNet-50 vd model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+        spatial_dims = len(input_shape) - 1
+        name = name or f"{self.__class__.__name__}{spatial_dims}D"
+        super().__init__(
+            input_shape=input_shape,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            block_type="bottleneck_block_vd",
+            num_blocks=[3, 4, 6, 3],
+            conv_filters=[32, 32, 64],
+            conv_kernel_sizes=[3, 3, 3],
+            num_filters=[64, 128, 256, 512],
+            num_strides=[1, 2, 2, 2],
+            use_pre_activation=False,
+            **kwargs,
+        )
+
+
+class ResNet200vd(ResNetBase):
+    """
+    ResNet-200 "very deep" (vd) model for classification.
+
+    This model uses a "very deep" convolutional stem with three 3x3 layers,
+    and **bottleneck block vd** with a total of **200 layers**. This variant
+    is a powerful and computationally intensive model designed to achieve
+    state-of-the-art performance on large-scale classification tasks.
+    """
+
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        """
+        Initializes the ResNet-200 vd model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+        spatial_dims = len(input_shape) - 1
+        name = name or f"{self.__class__.__name__}{spatial_dims}D"
+        super().__init__(
+            input_shape=input_shape,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            block_type="bottleneck_block_vd",
+            num_blocks=[3, 12, 48, 3],
+            conv_filters=[32, 32, 64],
+            conv_kernel_sizes=[3, 3, 3],
+            num_filters=[64, 128, 256, 512],
+            num_strides=[1, 2, 2, 2],
+            use_pre_activation=False,
+            **kwargs,
+        )
+
+
 BACKBONE_ZOO["resnet18"] = ResNet18
 BACKBONE_ZOO["resnet34"] = ResNet34
 BACKBONE_ZOO["resnet50"] = ResNet50
@@ -413,3 +783,5 @@ BACKBONE_ZOO["resnet152"] = ResNet152
 BACKBONE_ZOO["resnet50v2"] = ResNet50v2
 BACKBONE_ZOO["resnet101v2"] = ResNet101v2
 BACKBONE_ZOO["resnet152v2"] = ResNet152v2
+BACKBONE_ZOO["resnet50vd"] = ResNet50vd
+BACKBONE_ZOO["resnet200vd"] = ResNet200vd
