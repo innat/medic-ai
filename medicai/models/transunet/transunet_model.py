@@ -109,9 +109,6 @@ class TransUNet(keras.Model):
                 f"The backbone's `pyramid_outputs` is missing one or more required keys. "
                 f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
             )
-        # Sort by key to ensure order from shallow to deep (P1, P2, ...)
-        sorted_keys = sorted(pyramid_outputs.keys())
-        pyramid_outputs = [pyramid_outputs[key] for key in sorted_keys]
         c1 = pyramid_outputs.get("P1")
         c2 = pyramid_outputs.get("P2")
         c3 = pyramid_outputs.get("P3")
