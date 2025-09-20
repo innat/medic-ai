@@ -77,6 +77,11 @@ class TransUNet(keras.Model):
                 f"Got {patch_size} with length {len(patch_size)}"
             )
 
+        if encoder is not None and encoder_name is not None:
+            raise ValueError(
+                "Only one of `encoder` or `encoder_name` can be provided, but received both."
+            )
+
         # If encoder provided, use it
         if encoder is not None:
             backbone = encoder
@@ -98,6 +103,12 @@ class TransUNet(keras.Model):
         # Get CNN feature maps from the encoder.
         inputs = backbone.inputs
         pyramid_outputs = backbone.pyramid_outputs
+        required_keys = {"P1", "P2", "P3", "P4", "P5"}
+        if not required_keys.issubset(pyramid_outputs.keys()):
+            raise ValueError(
+                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
+                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+            )
         c1 = pyramid_outputs.get("P1")
         c2 = pyramid_outputs.get("P2")
         c3 = pyramid_outputs.get("P3")

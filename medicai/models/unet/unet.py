@@ -89,6 +89,12 @@ class UNet(keras.Model):
                 "For 2D data, the format is `(height, width, channels)`. "
                 "For 3D data, the format is `(depth, height, width, channels)`."
             )
+
+        if encoder is not None and encoder_name is not None:
+            raise ValueError(
+                "Only one of `encoder` or `encoder_name` can be provided, but received both."
+            )
+
         # If encoder provided, use it
         if encoder is not None:
             backbone = encoder
@@ -105,7 +111,16 @@ class UNet(keras.Model):
 
         inputs = backbone.input
         spatial_dims = len(input_shape) - 1
-        pyramid_outputs = list(backbone.pyramid_outputs.values())
+        pyramid_outputs = backbone.pyramid_outputs
+
+        required_keys = {"P1", "P2", "P3", "P4", "P5"}
+        if not required_keys.issubset(pyramid_outputs.keys()):
+            raise ValueError(
+                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
+                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+            )
+
+        pyramid_outputs = list(pyramid_outputs.values())
 
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
