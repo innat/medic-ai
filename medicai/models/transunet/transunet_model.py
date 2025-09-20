@@ -98,10 +98,10 @@ class TransUNet(keras.Model):
         # Get CNN feature maps from the encoder.
         inputs = backbone.inputs
         pyramid_outputs = backbone.pyramid_outputs
-        c1 = pyramid_outputs.get("P2")
-        c2 = pyramid_outputs.get("P3")
-        c3 = pyramid_outputs.get("P4")
-        final_cnn_output = pyramid_outputs.get("P5")
+        c1 = pyramid_outputs.get("P1")
+        c2 = pyramid_outputs.get("P2")
+        c3 = pyramid_outputs.get("P3")
+        final_cnn_output = pyramid_outputs.get("P4")
         cnn_features = [c1, c2, c3]  # shallow to deep
 
         # Transformer Encoder
@@ -370,7 +370,7 @@ class TransUNet(keras.Model):
 
         # Final upsampling to the original input resolution
         x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=4, name="final_upsample"
+            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="final_upsample"
         )(x)
 
         return x
