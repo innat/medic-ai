@@ -36,11 +36,9 @@ def train_and_assert(model, dataset):
     assert len(history.history["dice_score"]) == 5
 
 
-def create_model_and_compile(model_class, num_classes):
+def create_model_and_compile(model_class, num_classes, **kwargs):
     model = model_class(
-        input_shape=(96, 96, 96, 1),
-        num_classes=num_classes,
-        classifier_activation=None,
+        input_shape=(96, 96, 96, 1), num_classes=num_classes, classifier_activation=None, **kwargs
     )
     model.compile(
         optimizer=keras.optimizers.AdamW(
@@ -82,7 +80,10 @@ def test_training_with_meta():
 
     for model_class in model_list:
         print(f"Testing {model_class.__name__}")
-        model = create_model_and_compile(model_class, num_classes)
+        if model_class.__name__ == "TransUNet":
+            model = create_model_and_compile(model_class, num_classes, encoder_name="densenet121")
+        else:
+            model = create_model_and_compile(model_class, num_classes)
         train_and_assert(model, dataset)
 
 
