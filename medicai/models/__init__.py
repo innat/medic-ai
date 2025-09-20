@@ -17,3 +17,4 @@ from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
 from .vit import ViT, ViTBackbone
+from ..utils.model_utils import BACKBONE_ZOO
