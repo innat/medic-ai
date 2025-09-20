@@ -41,8 +41,8 @@ class ResNetBackbone(keras.Model):
         num_blocks,
         block_type,
         input_tensor=None,
-        conv_filters=[32, 32, 64],
-        conv_kernel_sizes=[3, 3, 3],
+        conv_filters=[64],
+        conv_kernel_sizes=[7],
         num_filters=[64, 128, 256, 512],
         num_strides=[1, 2, 2, 2],
         use_pre_activation=False,
@@ -50,7 +50,7 @@ class ResNetBackbone(keras.Model):
         **kwargs,
     ):
         """
-        Initializes the ResNet-34 model.
+        Initializes the ResNetBackbone model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -123,8 +123,8 @@ class ResNetBackbone(keras.Model):
             )
         if block_type not in ("basic_block", "bottleneck_block", "bottleneck_block_vd"):
             raise ValueError(
-                '`block_type` must be either `"basic_block"`, `"bottleneck_block_vd"` '
-                f'or `"bottleneck_block"`, Received block_type={block_type}.'
+                '`block_type` must be one of `"basic_block"`, `"bottleneck_block"`, '
+                f'or `"bottleneck_block_vd"`. Received block_type={block_type}.'
             )
 
         num_input_convs = len(conv_filters)
@@ -239,6 +239,7 @@ class ResNetBackbone(keras.Model):
         super().__init__(
             inputs=inputs,
             outputs=x,
+            name="ResNetBackbone",
             **kwargs,
         )
 

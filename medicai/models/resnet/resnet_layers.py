@@ -1,7 +1,6 @@
 from keras import layers
 
-from medicai.utils import get_conv_layer, get_reshaping_layer
-from medicai.utils.model_utils import get_pooling_layer
+from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer
 
 
 def apply_resnet_basic_block(
@@ -441,8 +440,8 @@ def apply_resnet_block(
     block_fn = block_type_map.get(block_type, None)
     if block_fn is None:
         raise ValueError(
-            '`block_type` must be either `"basic_block"`, `"bottleneck_block"`. '
-            f'Or, `""bottleneck_block_vd""`. Received block_type={block_type}.'
+            f"`block_type` must be one of {list(block_type_map.keys())}, "
+            f"but received block_type={block_type}."
         )
 
     for i in range(blocks):
