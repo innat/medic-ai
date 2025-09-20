@@ -36,6 +36,7 @@ class ResNetBackbone(keras.Model):
 
     def __init__(
         self,
+        *,
         input_shape,
         num_blocks,
         block_type,
@@ -45,6 +46,7 @@ class ResNetBackbone(keras.Model):
         num_filters=[64, 128, 256, 512],
         num_strides=[1, 2, 2, 2],
         use_pre_activation=False,
+        include_rescaling=False,
         **kwargs,
     ):
         """
@@ -70,6 +72,9 @@ class ResNetBackbone(keras.Model):
                 `"bottleneck_block"`, or `"bottleneck_block_vd"`. Use `"basic_block"`
                 for ResNet18 and ResNet34. Use `"bottleneck_block"` for ResNet50,
                 ResNet101 and ResNet152. Use `"bottleneck_block_vd"` for the vd models.
+            include_rescaling: A boolean indicating whether to include a
+                `Rescaling` layer at the beginning of the model. If `True`,
+                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
             use_pre_activation: A boolean indicating whether to use pre-activation or not.
                 `True` for ResNetV2, `False` for ResNetVd.
 
@@ -106,7 +111,7 @@ class ResNetBackbone(keras.Model):
         if len(num_filters) != len(num_blocks) or len(num_filters) != len(num_strides):
             raise ValueError(
                 "The length of `num_filters`, `num_blocks` "
-                "and `stackwise_num_strides` must be the same. Received: "
+                "and `num_strides` must be the same. Received: "
                 f"num_filters={num_filters}, "
                 f"num_blocks={num_blocks}, "
                 f"num_strides={num_strides}"
@@ -128,7 +133,11 @@ class ResNetBackbone(keras.Model):
         # === Functional Model ===
         spatial_dims = len(input_shape) - 1
         inputs = parse_model_inputs(input_shape, input_tensor)
-        x = inputs  # Intermediate result.
+        x = inputs
+
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
+
         # The padding between torch and tensorflow/jax differs when `strides>1`.
         # Therefore, we need to manually pad the tensor.
         x = get_reshaping_layer(

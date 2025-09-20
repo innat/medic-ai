@@ -26,24 +26,17 @@ def apply_resnet_basic_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
-        data_format: `None` or str. the ordering of the dimensions in the
-            inputs. Can be `"channels_last"`
-             (`(batch_size, height, width, channels)`) or`"channels_first"`
-            (`(batch_size, channels, height, width)`).
-        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the models computations and weights.
         name: str. A prefix for the layer names used in the block.
 
     Returns:
         The output tensor for the basic residual block.
     """
-    bn_axis = -1
     spatial_dims = len(x.shape) - 2
 
     x_preact = None
     if use_pre_activation:
         x_preact = layers.BatchNormalization(
-            axis=bn_axis,
+            axis=-1,
             epsilon=1e-5,
             momentum=0.9,
             name=f"{name}_pre_activation_bn",
@@ -68,7 +61,7 @@ def apply_resnet_basic_block(
 
         if not use_pre_activation:
             shortcut = layers.BatchNormalization(
-                axis=bn_axis,
+                axis=-1,
                 epsilon=1e-5,
                 momentum=0.9,
                 name=f"{name}_0_bn",
@@ -96,7 +89,7 @@ def apply_resnet_basic_block(
         name=f"{name}_1_conv",
     )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis,
+        axis=-1,
         epsilon=1e-5,
         momentum=0.9,
         name=f"{name}_1_bn",
@@ -116,7 +109,7 @@ def apply_resnet_basic_block(
 
     if not use_pre_activation:
         x = layers.BatchNormalization(
-            axis=bn_axis,
+            axis=-1,
             epsilon=1e-5,
             momentum=0.9,
             name=f"{name}_2_bn",
@@ -150,24 +143,18 @@ def apply_resnet_bottleneck_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
-        data_format: `None` or str. the ordering of the dimensions in the
-            inputs. Can be `"channels_last"`
-             (`(batch_size, height, width, channels)`) or`"channels_first"`
-            (`(batch_size, channels, height, width)`).
-        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the models computations and weights.
         name: str. A prefix for the layer names used in the block.
 
     Returns:
         The output tensor for the residual block.
     """
-    bn_axis = -1
+
     spatial_dims = len(x.shape) - 2
 
     x_preact = None
     if use_pre_activation:
         x_preact = layers.BatchNormalization(
-            axis=bn_axis,
+            axis=-1,
             epsilon=1e-5,
             momentum=0.9,
             name=f"{name}_pre_activation_bn",
@@ -192,7 +179,7 @@ def apply_resnet_bottleneck_block(
 
         if not use_pre_activation:
             shortcut = layers.BatchNormalization(
-                axis=bn_axis,
+                axis=-1,
                 epsilon=1e-5,
                 momentum=0.9,
                 name=f"{name}_0_bn",
@@ -211,7 +198,7 @@ def apply_resnet_bottleneck_block(
         name=f"{name}_1_conv",
     )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis,
+        axis=-1,
         epsilon=1e-5,
         momentum=0.9,
         name=f"{name}_1_bn",
@@ -237,7 +224,7 @@ def apply_resnet_bottleneck_block(
         name=f"{name}_2_conv",
     )(x)
     x = layers.BatchNormalization(
-        axis=bn_axis,
+        axis=-1,
         epsilon=1e-5,
         momentum=0.9,
         name=f"{name}_2_bn",
@@ -255,7 +242,7 @@ def apply_resnet_bottleneck_block(
 
     if not use_pre_activation:
         x = layers.BatchNormalization(
-            axis=bn_axis,
+            axis=-1,
             epsilon=1e-5,
             momentum=0.9,
             name=f"{name}_3_bn",

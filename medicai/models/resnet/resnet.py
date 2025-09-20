@@ -92,6 +92,7 @@ class ResNetBase(keras.Model):
             num_filters=num_filters,
             num_strides=num_strides,
             use_pre_activation=use_pre_activation,
+            include_rescaling=include_rescaling,
         )
         inputs = backbone.inputs
         x = backbone.output
