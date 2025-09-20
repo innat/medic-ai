@@ -412,11 +412,10 @@ def apply_resnet_block(
         filters: int. The number of filters in a block.
         blocks: int. The number of blocks in the stack.
         stride: int. The stride length of the first layer in the first block.
-        block_type: str. The block type to stack. One of `"basic_block"` or
-            `"bottleneck_block"`, `"basic_block_vd"` or
-            `"bottleneck_block_vd"`. Use `"basic_block"` for ResNet18 and
-            ResNet34. Use `"bottleneck_block"` for ResNet50, ResNet101 and
-            ResNet152 and the `"_vd"` prefix for the respective ResNet_vd
+        block_type: str. The block type to stack. One of `"basic_block"`,
+            `"bottleneck_block"`, or `"bottleneck_block_vd"`. Use `"basic_block"`
+            for ResNet18 and ResNet34. Use `"bottleneck_block"` for ResNet50, ResNet101 and
+            ResNet152. Use `"bottleneck_block_vd"` for the `_vd`
             variants.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet and ResNeXt.

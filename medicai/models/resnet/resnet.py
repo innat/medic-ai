@@ -141,13 +141,6 @@ class ResNetBase(keras.Model):
                 "num_classes": self.num_classes,
                 "pooling": self.pooling,
                 "classifier_activation": self.classifier_activation,
-                "block_type": self.block_type,
-                "num_blocks": self.num_blocks,
-                "conv_filters": self.conv_filters,
-                "conv_kernel_sizes": self.conv_kernel_sizes,
-                "num_filters": self.num_filters,
-                "num_strides": self.num_strides,
-                "use_pre_activation": self.use_pre_activation,
             }
         )
         return config
