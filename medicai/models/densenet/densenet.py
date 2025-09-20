@@ -95,17 +95,15 @@ class DenseNetBase(keras.Model):
         self.name = name
 
     def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "input_shape": self.input_shape[1:],
-                "include_top": self.include_top,
-                "include_rescaling": self.include_rescaling,
-                "num_classes": self.num_classes,
-                "pooling": self.pooling,
-                "classifier_activation": self.classifier_activation,
-            }
-        )
+        config = {
+            "input_shape": self.input_shape[1:],
+            "include_top": self.include_top,
+            "include_rescaling": self.include_rescaling,
+            "num_classes": self.num_classes,
+            "pooling": self.pooling,
+            "classifier_activation": self.classifier_activation,
+            "blocks": self.blocks,
+        }
         return config
 
 
