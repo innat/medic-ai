@@ -10,3 +10,4 @@ from .resnet import (
     ResNet152v2,
     ResNet200vd,
 )
+from .resnet_backbone import ResNetBackbone
