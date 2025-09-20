@@ -83,6 +83,9 @@ class ResNetBase(keras.Model):
             **kwargs: Additional keyword arguments.
         """
         spatial_dims = len(input_shape) - 1
+        if name is None and self.__class__ is not ResNetBase:
+            name = f"{self.__class__.__name__}{spatial_dims}D"
+
         backbone = ResNetBackbone(
             input_shape=input_shape,
             block_type=block_type,
@@ -129,25 +132,28 @@ class ResNetBase(keras.Model):
         self.name = name
 
     def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "include_top": self.include_top,
-            "include_rescaling": self.include_rescaling,
-            "num_classes": self.num_classes,
-            "pooling": self.pooling,
-            "classifier_activation": self.classifier_activation,
-            "block_type": self.block_type,
-            "num_blocks": self.num_blocks,
-            "conv_filters": self.conv_filters,
-            "conv_kernel_sizes": self.conv_kernel_sizes,
-            "num_filters": self.num_filters,
-            "num_strides": self.num_strides,
-            "use_pre_activation": self.use_pre_activation,
-            "name": self.name,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "input_shape": self.input_shape[1:],
+                "include_top": self.include_top,
+                "include_rescaling": self.include_rescaling,
+                "num_classes": self.num_classes,
+                "pooling": self.pooling,
+                "classifier_activation": self.classifier_activation,
+                "block_type": self.block_type,
+                "num_blocks": self.num_blocks,
+                "conv_filters": self.conv_filters,
+                "conv_kernel_sizes": self.conv_kernel_sizes,
+                "num_filters": self.num_filters,
+                "num_strides": self.num_strides,
+                "use_pre_activation": self.use_pre_activation,
+            }
+        )
         return config
 
 
+@keras.saving.register_keras_serializable(package="resnet18")
 class ResNet18(ResNetBase):
     """
     ResNet-18 model for classification.
@@ -190,8 +196,6 @@ class ResNet18(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -211,6 +215,7 @@ class ResNet18(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet34")
 class ResNet34(ResNetBase):
     """
     ResNet-34 model for classification.
@@ -254,8 +259,6 @@ class ResNet34(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -275,6 +278,7 @@ class ResNet34(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet50")
 class ResNet50(ResNetBase):
     """
     ResNet-50 model for classification.
@@ -316,8 +320,6 @@ class ResNet50(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -337,6 +339,7 @@ class ResNet50(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet101")
 class ResNet101(ResNetBase):
     """
     ResNet-101 model for classification.
@@ -379,8 +382,6 @@ class ResNet101(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -400,6 +401,7 @@ class ResNet101(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet152")
 class ResNet152(ResNetBase):
     """
     ResNet-152 model for classification.
@@ -442,8 +444,6 @@ class ResNet152(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -463,6 +463,7 @@ class ResNet152(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet50v2")
 class ResNet50v2(ResNetBase):
     """
     ResNet-50 v2 model for classification.
@@ -505,8 +506,6 @@ class ResNet50v2(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -526,6 +525,7 @@ class ResNet50v2(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet101v2")
 class ResNet101v2(ResNetBase):
     """
     ResNet-101 v2 model for classification.
@@ -567,8 +567,6 @@ class ResNet101v2(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -588,6 +586,7 @@ class ResNet101v2(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet152v2")
 class ResNet152v2(ResNetBase):
     """
     ResNet-152 v2 model for classification.
@@ -630,8 +629,6 @@ class ResNet152v2(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -651,6 +648,7 @@ class ResNet152v2(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet50vd")
 class ResNet50vd(ResNetBase):
     """
     ResNet-50 "very deep" (vd) model for classification.
@@ -693,8 +691,6 @@ class ResNet50vd(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -714,6 +710,7 @@ class ResNet50vd(ResNetBase):
         )
 
 
+@keras.saving.register_keras_serializable(package="resnet200vd")
 class ResNet200vd(ResNetBase):
     """
     ResNet-200 "very deep" (vd) model for classification.
@@ -755,8 +752,6 @@ class ResNet200vd(ResNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,

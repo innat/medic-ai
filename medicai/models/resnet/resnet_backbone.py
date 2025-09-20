@@ -6,6 +6,7 @@ from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer
 from .resnet_layers import apply_resnet_block
 
 
+@keras.saving.register_keras_serializable(package="resnet.backbone")
 class ResNetBackbone(keras.Model):
     """ResNet and ResNetV2 core network with hyperparameters.
 
