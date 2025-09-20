@@ -145,6 +145,10 @@ class ResNetBase(keras.Model):
         )
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 @keras.saving.register_keras_serializable(package="resnet18")
 class ResNet18(ResNetBase):

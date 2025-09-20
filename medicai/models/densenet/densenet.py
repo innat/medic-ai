@@ -106,6 +106,10 @@ class DenseNetBase(keras.Model):
         }
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 @keras.saving.register_keras_serializable(package="densenet121")
 class DenseNet121(DenseNetBase):
