@@ -558,6 +558,9 @@ class MixVisionTransformer(keras.Model):
         downsampling of the spatial dimensions and an increase in the feature dimensions,
         similar to a convolutional neural network.
 
+        Reference:
+            https://github.com/keras-team/keras-hub
+
         Args:
             input_shape (tuple): The shape of the input data, excluding the batch dimension.
             max_drop_path_rate (float, optional): The maximum rate for stochastic depth.

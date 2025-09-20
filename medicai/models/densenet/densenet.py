@@ -62,6 +62,9 @@ class DenseNetBase(keras.Model):
             **kwargs: Additional keyword arguments.
         """
         spatial_dims = len(input_shape) - 1
+        if name is None and self.__class__ is not DenseNetBase:
+            name = f"{self.__class__.__name__}{spatial_dims}D"
+
         backbone = DenseNetBackbone(input_shape=input_shape, blocks=blocks)
         inputs = backbone.inputs
         x = backbone.output
@@ -99,10 +102,12 @@ class DenseNetBase(keras.Model):
             "num_classes": self.num_classes,
             "pooling": self.pooling,
             "classifier_activation": self.classifier_activation,
-            "blocks": self.blocks,
-            "name": self.name,
         }
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
 @keras.saving.register_keras_serializable(package="densenet121")
@@ -159,8 +164,6 @@ class DenseNet121(DenseNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 24, 16],
@@ -228,8 +231,6 @@ class DenseNet169(DenseNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 32, 32],
@@ -297,8 +298,6 @@ class DenseNet201(DenseNetBase):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        spatial_dims = len(input_shape) - 1
-        name = name or f"{self.__class__.__name__}{spatial_dims}D"
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 48, 32],

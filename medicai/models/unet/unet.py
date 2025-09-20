@@ -9,6 +9,7 @@ from medicai.utils.model_utils import (
 from .unet_decoder import UNetDecoder
 
 
+@keras.saving.register_keras_serializable(package="unet")
 class UNet(keras.Model):
     """
     The UNet model for semantic segmentation.
@@ -159,6 +160,7 @@ class UNet(keras.Model):
 
         self.encoder_name = encoder_name
         self.encoder = encoder
+        self.encoder_depth = encoder_depth
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
@@ -169,6 +171,7 @@ class UNet(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "encoder_name": self.encoder_name,
+            "encoder_depth": self.encoder_depth,
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "decoder_block_type": self.decoder_block_type,
