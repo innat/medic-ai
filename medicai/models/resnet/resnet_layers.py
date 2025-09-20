@@ -424,12 +424,6 @@ def apply_resnet_block(
         first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `True`.
-        data_format: `None` or str. the ordering of the dimensions in the
-            inputs. Can be `"channels_last"`
-             (`(batch_size, height, width, channels)`) or`"channels_first"`
-            (`(batch_size, channels, height, width)`).
-        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the models computations and weights.
         name: str. A prefix for the layer names used in the stack.
 
     Returns:
