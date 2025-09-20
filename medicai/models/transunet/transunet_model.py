@@ -4,6 +4,7 @@ from keras import layers, ops
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.models import DenseNetBackbone
 from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_inputs
+from medicai.utils.model_utils import BACKBONE_ZOO
 
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
@@ -47,6 +48,8 @@ class TransUNet(keras.Model):
         self,
         input_shape,
         num_classes,
+        encoder_name=None,
+        encoder=None,
         patch_size=3,
         classifier_activation=None,
         num_encoder_layers=6,
@@ -74,20 +77,46 @@ class TransUNet(keras.Model):
                 f"Got {patch_size} with length {len(patch_size)}"
             )
 
-        inputs = parse_model_inputs(input_shape=input_shape, name="transunet_input")
+        if encoder is not None and encoder_name is not None:
+            raise ValueError(
+                "Only one of `encoder` or `encoder_name` can be provided, but received both."
+            )
 
-        # CNN Encoder (or ResNet or CSPNet)
-        base_encoder = DenseNetBackbone(
-            blocks=[6, 12, 24, 16], input_shape=input_shape, input_tensor=inputs
-        )
+        # If encoder provided, use it
+        if encoder is not None:
+            backbone = encoder
+            if not hasattr(backbone, "pyramid_outputs"):
+                raise AttributeError(
+                    f"The provided `encoder` must have a `pyramid_outputs` attribute, "
+                    f"but the provided encoder of type {type(backbone).__name__} does not."
+                )
+        elif encoder_name is not None:
+            if encoder_name not in BACKBONE_ZOO:
+                raise ValueError(
+                    f"Backbone `{encoder_name}` not found. Available: {list(BACKBONE_ZOO.keys())}"
+                )
+            BackboneClass = BACKBONE_ZOO[encoder_name]
+            backbone = BackboneClass(input_shape=input_shape, include_top=False)
+        else:
+            raise ValueError("Either `encoder` or `encoder_name` must be provided.")
 
         # Get CNN feature maps from the encoder.
-        c1 = base_encoder.get_layer(name="block0_trans_relu").output
-        c2 = base_encoder.get_layer(name="block1_trans_relu").output
-        c3 = base_encoder.get_layer(name="block2_trans_relu").output
-        final_cnn_output = base_encoder.output
-
-        cnn_features = [c1, c2, c3]
+        inputs = backbone.inputs
+        pyramid_outputs = backbone.pyramid_outputs
+        required_keys = {"P1", "P2", "P3", "P4", "P5"}
+        if not required_keys.issubset(pyramid_outputs.keys()):
+            raise ValueError(
+                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
+                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+            )
+        # Sort by key to ensure order from shallow to deep (P1, P2, ...)
+        sorted_keys = sorted(pyramid_outputs.keys())
+        pyramid_outputs = [pyramid_outputs[key] for key in sorted_keys]
+        c1 = pyramid_outputs.get("P1")
+        c2 = pyramid_outputs.get("P2")
+        c3 = pyramid_outputs.get("P3")
+        final_cnn_output = pyramid_outputs.get("P4")
+        cnn_features = [c1, c2, c3]  # shallow to deep
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
@@ -141,6 +170,8 @@ class TransUNet(keras.Model):
 
         self.num_classes = num_classes
         self.num_queries = num_queries
+        self.encoder_name = encoder_name
+        self.encoder = encoder
         self.patch_size = patch_size
         self.classifier_activation = classifier_activation
         self.num_encoder_layers = num_encoder_layers
@@ -155,6 +186,7 @@ class TransUNet(keras.Model):
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
             "num_queries": self.num_queries,
+            "encoder_name": self.encoder_name,
             "classifier_activation": self.classifier_activation,
             "patch_size": self.patch_size,
             "num_encoder_layers": self.num_encoder_layers,
@@ -164,7 +196,15 @@ class TransUNet(keras.Model):
             "dropout_rate": self.dropout_rate,
             "decoder_projection_filters": self.decoder_projection_filters,
         }
+        if self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)
 
     def build_decoder(
         self,
@@ -344,7 +384,7 @@ class TransUNet(keras.Model):
 
         # Final upsampling to the original input resolution
         x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=4, name="final_upsample"
+            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="final_upsample"
         )(x)
 
         return x
