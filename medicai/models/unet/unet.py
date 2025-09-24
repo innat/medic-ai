@@ -123,7 +123,7 @@ class UNet(keras.Model):
             )
 
         inputs = encoder.input
-        spatial_dims = len(inputs.shape) - 2
+        spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
