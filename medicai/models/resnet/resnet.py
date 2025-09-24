@@ -2,7 +2,7 @@ import keras
 from keras import layers
 
 from medicai.utils import get_pooling_layer
-from medica.models import registration
+from medicai.models import registration
 from .resnet_backbone import ResNetBackbone
 
 
