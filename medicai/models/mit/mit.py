@@ -103,7 +103,7 @@ class MiTBase(keras.Model):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b0", family="mit")
-class MixVisionTransformerB0(MiTBase):
+class MixViTB0(MiTBase):
     def __init__(
         self,
         *,
@@ -141,7 +141,7 @@ class MixVisionTransformerB0(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b1", family="mit")
-class MixVisionTransformerB1(MiTBase):
+class MixViTB1(MiTBase):
     def __init__(
         self,
         *,
@@ -179,7 +179,7 @@ class MixVisionTransformerB1(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b2", family="mit")
-class MixVisionTransformerB2(MiTBase):
+class MixViTB2(MiTBase):
     def __init__(
         self,
         *,
@@ -217,7 +217,7 @@ class MixVisionTransformerB2(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b3", family="mit")
-class MixVisionTransformerB3(MiTBase):
+class MixViTB3(MiTBase):
     def __init__(
         self,
         *,
@@ -255,7 +255,7 @@ class MixVisionTransformerB3(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b4", family="mit")
-class MixVisionTransformerB4(MiTBase):
+class MixViTB4(MiTBase):
     def __init__(
         self,
         *,
@@ -293,7 +293,7 @@ class MixVisionTransformerB4(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mitb0")
 @registration.register(name="mit_b5", family="mit")
-class MixVisionTransformerB5(MiTBase):
+class MixViTB5(MiTBase):
     def __init__(
         self,
         *,
