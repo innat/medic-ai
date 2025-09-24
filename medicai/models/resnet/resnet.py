@@ -2,10 +2,9 @@ import keras
 from keras import layers
 
 from medicai.utils import get_pooling_layer
-from medicai.utils.registry import BackboneFactoryRegistry
+from medica.models import registration
 from .resnet_backbone import ResNetBackbone
 
-registration = BackboneFactoryRegistry()
 
 @keras.saving.register_keras_serializable(package="resnetbase")
 class ResNetBase(keras.Model):

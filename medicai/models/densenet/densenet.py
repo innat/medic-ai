@@ -2,10 +2,10 @@ import keras
 from keras import layers
 
 from medicai.utils.model_utils import get_pooling_layer
-from medicai.utils.registry import BackboneFactoryRegistry
+from medica.models import registration
 from .densenet_backbone import DenseNetBackbone
 
-registration = BackboneFactoryRegistry()
+
 
 @keras.saving.register_keras_serializable(package="densenetbase")
 class DenseNetBase(keras.Model):

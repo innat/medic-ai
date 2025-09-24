@@ -24,7 +24,7 @@ class BackboneFactoryRegistry:
 
             return cls
 
-        return decorator  # <-- important to return the decorator
+        return decorator
 
     def get_entry(self, name: str):
         key = name.lower()
