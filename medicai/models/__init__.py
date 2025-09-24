@@ -2,6 +2,15 @@ from medicai.utils import registration
 
 from ..utils.model_utils import BACKBONE_ZOO
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
+from .mit import (
+    MiTBackbone,
+    MixVisionTransformerB0,
+    MixVisionTransformerB1,
+    MixVisionTransformerB2,
+    MixVisionTransformerB3,
+    MixVisionTransformerB4,
+    MixVisionTransformerB5,
+)
 from .resnet import (
     ResNet18,
     ResNet34,
