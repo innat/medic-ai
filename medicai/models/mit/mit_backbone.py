@@ -73,8 +73,8 @@ class MiTBackbone(keras.Model):
         dpr = [x for x in np.linspace(0.0, max_drop_path_rate, sum(depths))]
 
         # initialize model input
-        inputs = parse_model_inputs(input_shape=input_shape, name="mixvit_input")
-        x = inputs
+        input = parse_model_inputs(input_shape=input_shape, name="mixvit_input")
+        x = input
         cur = 0
         pyramid_outputs = {}
 
@@ -114,7 +114,7 @@ class MiTBackbone(keras.Model):
             x = keras.layers.Reshape(current_spatial_dims + [project_dim[i]])(x)
             pyramid_outputs[f"P{i+1}"] = x
 
-        super().__init__(inputs=inputs, outputs=x, name=name or f"mit{spatial_dims}D", **kwargs)
+        super().__init__(inputs=input, outputs=x, name=name or f"mit{spatial_dims}D", **kwargs)
 
         self.pyramid_outputs = pyramid_outputs
         self.project_dim = project_dim

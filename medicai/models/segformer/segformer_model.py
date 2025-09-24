@@ -6,45 +6,45 @@ from medicai.utils import (
     get_conv_layer,
     get_norm_layer,
     get_reshaping_layer,
+    registration,
     resize_volumes,
 )
 
 from .segformer_layers import MixVisionTransformer
 
 
-@keras.utils.register_keras_serializable(package="segformer")
 class SegFormer(keras.Model):
+    """SegFormer model for 2D or 3D semantic segmentation.
+
+    This class implements the full SegFormer architecture, which combines a
+    hierarchical MixVisionTransformer (MiT) encoder with a lightweight MLP decoder
+    head. This design is highly efficient for semantic segmentation tasks on
+    high-resolution images or volumes.
+
+    The encoder progressively downsamples the spatial dimensions and increases the
+    feature dimensions across four stages, producing multi-scale feature maps.
+    The decoder then takes these features, processes them through linear layers,
+    upsamples them to a common resolution, and fuses them to generate a
+    high-resolution segmentation mask.
+    """
+
+    ALLOWED_BACKBONE_FAMILIES = ["mit"]
+
     def __init__(
         self,
-        input_shape,
-        num_classes,
-        decoder_head_embedding_dim=256,
+        *,
+        input_shape=None,
+        encoder_name=None,
+        encoder=None,
+        num_classes=1,
         classifier_activation=None,
-        qkv_bias=True,
+        decoder_head_embedding_dim=256,
         dropout=0.0,
-        project_dim=[32, 64, 160, 256],
-        layerwise_sr_ratios=[4, 2, 1, 1],
-        layerwise_patch_sizes=[7, 3, 3, 3],
-        layerwise_strides=[4, 2, 2, 2],
-        layerwise_num_heads=[1, 2, 5, 8],
-        layerwise_depths=[2, 2, 2, 2],
-        layerwise_mlp_ratios=[4, 4, 4, 4],
         name=None,
         **kwargs,
     ):
         """
-        SegFormer model for 2D or 3D semantic segmentation.
-
-        This class implements the full SegFormer architecture, which combines a
-        hierarchical MixVisionTransformer (MiT) encoder with a lightweight MLP decoder
-        head. This design is highly efficient for semantic segmentation tasks on
-        high-resolution images or volumes.
-
-        The encoder progressively downsamples the spatial dimensions and increases the
-        feature dimensions across four stages, producing multi-scale feature maps.
-        The decoder then takes these features, processes them through linear layers,
-        upsamples them to a common resolution, and fuses them to generate a
-        high-resolution segmentation mask.
+        Initializes the SegFormer model.
 
         Args:
             input_shape (tuple): The shape of the input data, excluding the batch dimension.
@@ -54,60 +54,61 @@ class SegFormer(keras.Model):
             classifier_activation (str, optional): The activation function for the final output layer.
                 Common choices are 'softmax' for multi-class segmentation and 'sigmoid' for multi-label
                 or binary segmentation. Defaults to None.
-            qkv_bias (bool, optional): Whether to include a bias in the query, key, and value projections.
-                Defaults to True.
-            dropout (float, optional): The dropout rate for the decoder head. Defaults to 0.0.
-            project_dim (list[int], optional): A list of feature dimensions for each encoder stage.
-                Defaults to [32, 64, 160, 256].
-            layerwise_sr_ratios (list[int], optional): A list of spatial reduction ratios for each
-                encoder stage's attention layers. Defaults to [4, 2, 1, 1].
-            layerwise_patch_sizes (list[int], optional): A list of patch sizes for the embedding layer
-                in each encoder stage. Defaults to [7, 3, 3, 3].
-            layerwise_strides (list[int], optional): A list of strides for the embedding layer in
-                each encoder stage. Defaults to [4, 2, 2, 2].
-            layerwise_num_heads (list[int], optional): A list of the number of attention heads for
-                each encoder stage. Defaults to [1, 2, 5, 8].
-            layerwise_depths (list[int], optional): A list of the number of transformer blocks for
-                each encoder stage. Defaults to [2, 2, 2, 2].
-            layerwise_mlp_ratios (list[int], optional): A list of MLP expansion ratios for each
-                encoder stage. Defaults to [4, 4, 4, 4].
             name (str, optional): The name of the model. Defaults to None.
             **kwargs: Standard Keras Model keyword arguments.
         """
+        if bool(encoder) == bool(encoder_name):
+            raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
+
+        if encoder is not None:
+            input_shape = encoder.input_shape[1:]
+        elif encoder_name is not None:
+            if not input_shape:
+                raise ValueError(
+                    "Argument `input_shape` must be provided. "
+                    "It should be a tuple of integers specifying the dimensions of the input "
+                    "data, not including the batch size. "
+                    "For 2D data, the format is `(height, width, channels)`. "
+                    "For 3D data, the format is `(depth, height, width, channels)`."
+                )
+
+            if encoder_name.lower() not in registration._registry:
+                raise ValueError(
+                    f"Encoder '{encoder_name}' not found in the registry. Available: {list(registration._registry.keys())}"
+                )
+
+            entry = registration.get_entry(encoder_name)
+            invalid_families = [
+                f for f in entry["family"] if f not in SegFormer.ALLOWED_BACKBONE_FAMILIES
+            ]
+            if invalid_families:
+                raise ValueError(
+                    f"The provided encoder_name='{encoder_name}' uses unsupported families: "
+                    f"{invalid_families}. Allowed families: {SegFormer.ALLOWED_BACKBONE_FAMILIES}"
+                )
+
+            encoder = entry["class"](input_shape=input_shape, include_top=False)
+
+        if not hasattr(encoder, "pyramid_outputs"):
+            raise AttributeError(
+                f"The provided `encoder` must have a `pyramid_outputs` attribute, "
+                f"but the provided encoder of type {type(encoder).__name__} does not."
+            )
+
+        inputs = encoder.input
         spatial_dims = len(input_shape) - 1
+        pyramid_outputs = encoder.pyramid_outputs
 
-        spatial_shapes = list(input_shape[:spatial_dims])
-        if any(dim is None for dim in spatial_shapes):
+        required_keys = {"P1", "P2", "P3", "P4"}
+        if not required_keys.issubset(pyramid_outputs.keys()):
             raise ValueError(
-                f"Input shape {input_shape} is not fully specified. "
-                "SegFormer requires fixed spatial dimensions (e.g., (224, 224, 3) or (128, 128, 128, 1)), "
-                "not `None`."
+                f"The encoder's `pyramid_outputs` is missing one or more required keys. "
+                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
             )
 
-        # Check that the spatial dimensions are all equal.
-        if not all(x == spatial_shapes[0] for x in spatial_shapes):
-            raise ValueError(
-                f"Input shape {input_shape} is not square or cubic. "
-                "SegFormer currently only supports inputs with equal spatial dimensions "
-                "for proper hierarchical downsampling and reshaping."
-            )
+        skips = [pyramid_outputs.get(f"P{i+1}") for i in range(4)]
 
-        # Build the encoder
-        mit_backbone = MixVisionTransformer(
-            input_shape=input_shape,
-            qkv_bias=qkv_bias,
-            project_dim=project_dim,
-            layerwise_sr_ratios=layerwise_sr_ratios,
-            layerwise_patch_sizes=layerwise_patch_sizes,
-            layerwise_strides=layerwise_strides,
-            layerwise_num_heads=layerwise_num_heads,
-            layerwise_depths=layerwise_depths,
-            layerwise_mlp_ratios=layerwise_mlp_ratios,
-        )
-        inputs = mit_backbone.inputs
-        skips = [mit_backbone.get_layer(name=f"mixvit_features{i+1}").output for i in range(4)]
-
-        # Pass self to the build_decoder method
+        # build_decoder method
         decoder_head = self.build_decoder(
             num_classes, decoder_head_embedding_dim, spatial_dims, dropout
         )
@@ -120,40 +121,13 @@ class SegFormer(keras.Model):
             inputs=inputs, outputs=outputs, name=name or f"SegFormer{spatial_dims}D", **kwargs
         )
 
+        self._input_shape = input_shape
         self.num_classes = num_classes
-        self.decoder_head_embedding_dim = decoder_head_embedding_dim
+        self.encoder_name = encoder_name
+        self.encoder = encoder
         self.dropout = dropout
+        self.decoder_head_embedding_dim = decoder_head_embedding_dim
         self.classifier_activation = classifier_activation
-        self.spatial_dims = spatial_dims
-        self.qkv_bias = qkv_bias
-        self.project_dim = project_dim
-        self.layerwise_sr_ratios = layerwise_sr_ratios
-        self.layerwise_patch_sizes = layerwise_patch_sizes
-        self.layerwise_strides = layerwise_strides
-        self.layerwise_num_heads = layerwise_num_heads
-        self.layerwise_depths = layerwise_depths
-        self.layerwise_mlp_ratios = layerwise_mlp_ratios
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "input_shape": self.input_shape[1:],
-                "num_classes": self.num_classes,
-                "decoder_head_embedding_dim": self.decoder_head_embedding_dim,
-                "classifier_activation": self.classifier_activation,
-                "qkv_bias": self.qkv_bias,
-                "dropout": self.dropout,
-                "project_dim": self.project_dim,
-                "layerwise_sr_ratios": self.layerwise_sr_ratios,
-                "layerwise_patch_sizes": self.layerwise_patch_sizes,
-                "layerwise_strides": self.layerwise_strides,
-                "layerwise_num_heads": self.layerwise_num_heads,
-                "layerwise_depths": self.layerwise_depths,
-                "layerwise_mlp_ratios": self.layerwise_mlp_ratios,
-            }
-        )
-        return config
 
     def build_decoder(self, num_classes, decoder_head_embedding_dim, spatial_dims, dropout):
         def apply(inputs):
@@ -236,6 +210,25 @@ class SegFormer(keras.Model):
         elif spatial_dims == 2:
             x = ops.image.resize(x, target_spatial_shape, interpolation="bilinear")
         return x
+
+    def get_config(self):
+        config = {
+            "input_shape": self._input_shape,
+            "encoder_name": self.encoder_name,
+            "num_classes": self.num_classes,
+            "classifier_activation": self.classifier_activation,
+            "decoder_head_embedding_dim": self.decoder_head_embedding_dim,
+        }
+
+        if self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)
 
 
 class ResizeVolume(keras.layers.Lambda):
