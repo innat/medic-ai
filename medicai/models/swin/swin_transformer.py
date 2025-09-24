@@ -4,8 +4,8 @@ hide_warnings()
 
 import keras
 
-from medicai.utils import get_pooling_layer
-from medicai.utils import registration
+from medicai.utils import get_pooling_layer, registration
+
 from .swin_backbone import SwinBackbone
 
 

@@ -1,10 +1,10 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import get_pooling_layer
 from medicai.utils import registration
-from .densenet_backbone import DenseNetBackbone
+from medicai.utils.model_utils import get_pooling_layer
 
+from .densenet_backbone import DenseNetBackbone
 
 
 @keras.saving.register_keras_serializable(package="densenetbase")
@@ -112,7 +112,7 @@ class DenseNetBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="densenet121")
-@registration.register(name="densenet121", family="densenet", aliases=["DenseNet121"])
+@registration.register(name="densenet121", family="densenet")
 class DenseNet121(DenseNetBase):
     """
     A full DenseNet121 model for classification.
@@ -180,7 +180,7 @@ class DenseNet121(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet169")
-@registration.register(name="densenet169", family="densenet", aliases=["DenseNet169"])
+@registration.register(name="densenet169", family="densenet")
 class DenseNet169(DenseNetBase):
     """
     A full DenseNet169 model for classification.
@@ -248,7 +248,7 @@ class DenseNet169(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet201")
-@registration.register(name="densenet201", family="densenet", aliases=["DenseNet201"])
+@registration.register(name="densenet201", family="densenet")
 class DenseNet201(DenseNetBase):
     """
     A full DenseNet201 model for classification.
@@ -313,4 +313,3 @@ class DenseNet201(DenseNetBase):
             name=name,
             **kwargs,
         )
-

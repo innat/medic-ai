@@ -1,8 +1,9 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import get_conv_layer
 from medicai.utils import registration
+from medicai.utils.model_utils import get_conv_layer
+
 from .unet_decoder import UNetDecoder
 
 
@@ -33,7 +34,7 @@ class UNet(keras.Model):
     def __init__(
         self,
         *,
-        input_shape,
+        input_shape=None,
         encoder_name=None,
         encoder=None,
         encoder_depth=5,
@@ -81,27 +82,14 @@ class UNet(keras.Model):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        if encoder is not None and encoder_name is not None:
-            raise ValueError(
-                "Only one of `encoder` or `encoder_name` can be provided, but received both."
-            )
+        if bool(encoder) == bool(encoder_name):
+            raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
 
         # If encoder provided, use it
         if encoder is not None:
-            entry = registration.get_entry(type(encoder).__name__)
-            if not any(f in UNet.ALLOWED_BACKBONE_FAMILIES for f in entry["family"]):
-                raise ValueError(
-                    f"Invalid encoder_name='{encoder_name}'. "
-                    f"Allowed families: {UNet.ALLOWED_BACKBONE_FAMILIES}"
-                )
-        elif encoder_name is not None:
-            entry = registration.get_entry(encoder_name)
-            if not any(f in UNet.ALLOWED_BACKBONE_FAMILIES for f in entry["family"]):
-                raise ValueError(
-                    f"Invalid encoder_name='{encoder_name}'. "
-                    f"Allowed families: {UNet.ALLOWED_BACKBONE_FAMILIES}"
-                )
+            input_shape = encoder.input_shape[1:]
 
+        elif encoder_name is not None:
             if not input_shape:
                 raise ValueError(
                     "Argument `input_shape` must be provided. "
@@ -110,10 +98,23 @@ class UNet(keras.Model):
                     "For 2D data, the format is `(height, width, channels)`. "
                     "For 3D data, the format is `(depth, height, width, channels)`."
                 )
-                
+
+            if encoder_name.lower() not in registration._registry:
+                raise ValueError(
+                    f"Encoder '{encoder_name}' not found in the registry. Available: {list(registration._registry.keys())}"
+                )
+
+            entry = registration.get_entry(encoder_name)
+            invalid_families = [
+                f for f in entry["family"] if f not in UNet.ALLOWED_BACKBONE_FAMILIES
+            ]
+            if invalid_families:
+                raise ValueError(
+                    f"The provided encoder_name='{encoder_name}' uses unsupported families: "
+                    f"{invalid_families}. Allowed families: {UNet.ALLOWED_BACKBONE_FAMILIES}"
+                )
+
             encoder = entry["class"](input_shape=input_shape, include_top=False)
-        else:
-            raise ValueError("Either `encoder` or `encoder_name` must be provided.")
 
         if not hasattr(encoder, "pyramid_outputs"):
             raise AttributeError(
@@ -122,7 +123,7 @@ class UNet(keras.Model):
             )
 
         inputs = encoder.input
-        spatial_dims = len(input_shape) - 1
+        spatial_dims = len(inputs.shape) - 2
         pyramid_outputs = encoder.pyramid_outputs
 
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
@@ -169,6 +170,7 @@ class UNet(keras.Model):
             inputs=inputs, outputs=outputs, name=name or f"UNet{spatial_dims}D", **kwargs
         )
 
+        self._input_shape = input_shape
         self.encoder_name = encoder_name
         self.encoder = encoder
         self.encoder_depth = encoder_depth
@@ -180,7 +182,7 @@ class UNet(keras.Model):
 
     def get_config(self):
         config = {
-            "input_shape": self.input_shape[1:],
+            "input_shape": self._input_shape,
             "encoder_name": self.encoder_name,
             "encoder_depth": self.encoder_depth,
             "num_classes": self.num_classes,
