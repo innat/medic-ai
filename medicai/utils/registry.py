@@ -44,6 +44,8 @@ class BackboneFactoryRegistry:
             key = (name or cls.__name__).lower()
             fam = [family] if isinstance(family, str) else family
             entry = {"class": cls, "family": [f.lower() for f in (fam or [])]}
+            if key in self._registry:
+                raise KeyError(f"Backbone '{key}' is already registered")
             self._registry[key] = entry
             return cls
 
