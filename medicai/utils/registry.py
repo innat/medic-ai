@@ -1,16 +1,41 @@
-from typing import List, Optional, Union
-
-
 class BackboneFactoryRegistry:
+    """A factory registry for backbone models.
+
+    This class provides a centralized system for registering, retrieving, and
+    instantiating backbone models, such as ResNet, DenseNet, etc. It uses a
+    decorator-based approach to automatically register models when their
+    respective modules are imported. This simplifies model management and
+    allows for easy discovery of available backbones.
+    """
+
     def __init__(self):
         self._registry = {}
 
     def register(
         self,
-        name: Optional[str] = None,
-        family: Union[str, List[str]] = None,
+        name=None,
+        family=None,
     ):
-        """Register a backbone model."""
+        """Registers a backbone model using a decorator.
+
+        This method is designed to be used as a decorator on a class. It adds the
+        class to the registry with its name and family. The `name` defaults to
+        the class name if not provided. The `family` argument helps in categorizing
+        backbones and can be a single string or a list of strings.
+
+        Args:
+            name: (Optional) The name to register the class under. Defaults to
+                the class name.
+            family: The family of the backbone, e.g., 'resnet' or ['densenet', 'resnet'].
+
+        Returns:
+            A decorator that registers the class.
+
+        Example:
+            >>> @registration.register(name="resnet18", family="resnet")
+            ... class ResNet18:
+            ...     pass
+        """
 
         def decorator(cls):
             key = (name or cls.__name__).lower()
@@ -22,19 +47,57 @@ class BackboneFactoryRegistry:
         return decorator
 
     def get_entry(self, name: str):
+        """Retrieves a backbone's registry entry by its name.
+
+        Args:
+            name: The name of the backbone to retrieve (case-insensitive).
+
+        Returns:
+            A dictionary containing the class and family of the backbone.
+
+        Raises:
+            KeyError: If the specified backbone is not found in the registry.
+        """
         key = name.lower()
         if key not in self._registry:
             raise KeyError(f"Backbone '{name}' not found. Available: {list(self._registry.keys())}")
         return self._registry[key]
 
     def get(self, name: str):
+        """Retrieves a backbone's class by its name.
+
+        Args:
+            name: The name of the backbone to retrieve (case-insensitive).
+
+        Returns:
+            The Python class object for the specified backbone.
+        """
         return self.get_entry(name)["class"]
 
-    def create(self, name: str, **kwargs):
+    def create(self, name, **kwargs):
+        """Instantiates a backbone model from the registry.
+
+        Args:
+            name: The name of the backbone to instantiate (case-insensitive).
+            **kwargs: Keyword arguments to be passed to the class constructor.
+
+        Returns:
+            An instance of the specified backbone class.
+        """
         cls = self.get(name)
         return cls(**kwargs)
 
-    def list(self, family: Union[str, List[str]] = None, details: bool = False):
+    def list(self, family=None, details=False):
+        """Lists registered backbones.
+
+        Args:
+            family: (Optional) Filters the list to a specific family or families.
+            details: (Optional) If True, returns a list of dictionaries with
+                full entry details. Otherwise, returns a list of names.
+
+        Returns:
+            A list of backbone names or full registry entries.
+        """
         families = [family] if isinstance(family, str) else family
         result = []
         for k, v in self._registry.items():

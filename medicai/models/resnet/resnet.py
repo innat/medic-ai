@@ -150,7 +150,7 @@ class ResNetBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="resnet18")
-@registration.register(name="resnet18", family="resnet")
+@registration.register(family="resnet")
 class ResNet18(ResNetBase):
     """
     ResNet-18 model for classification.
@@ -213,7 +213,7 @@ class ResNet18(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet34")
-@registration.register(name="resnet34", family="resnet")
+@registration.register(family="resnet")
 class ResNet34(ResNetBase):
     """
     ResNet-34 model for classification.
@@ -277,7 +277,7 @@ class ResNet34(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50")
-@registration.register(name="resnet50", family="resnet")
+@registration.register(family="resnet")
 class ResNet50(ResNetBase):
     """
     ResNet-50 model for classification.
@@ -339,7 +339,7 @@ class ResNet50(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet101")
-@registration.register(name="resnet101", family="resnet")
+@registration.register(family="resnet")
 class ResNet101(ResNetBase):
     """
     ResNet-101 model for classification.
@@ -402,7 +402,7 @@ class ResNet101(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet152")
-@registration.register(name="resnet152", family="resnet")
+@registration.register(family="resnet")
 class ResNet152(ResNetBase):
     """
     ResNet-152 model for classification.
@@ -465,7 +465,7 @@ class ResNet152(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50v2")
-@registration.register(name="resnet50v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet50v2(ResNetBase):
     """
     ResNet-50 v2 model for classification.
@@ -528,7 +528,7 @@ class ResNet50v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet101v2")
-@registration.register(name="resnet101v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet101v2(ResNetBase):
     """
     ResNet-101 v2 model for classification.
@@ -590,7 +590,7 @@ class ResNet101v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet152v2")
-@registration.register(name="resnet152v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet152v2(ResNetBase):
     """
     ResNet-152 v2 model for classification.
@@ -653,7 +653,7 @@ class ResNet152v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50vd")
-@registration.register(name="resnet50vd", family="resnet")
+@registration.register(family="resnet")
 class ResNet50vd(ResNetBase):
     """
     ResNet-50 "very deep" (vd) model for classification.
@@ -716,7 +716,7 @@ class ResNet50vd(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet200vd")
-@registration.register(name="resnet200vd", family="resnet")
+@registration.register(family="resnet")
 class ResNet200vd(ResNetBase):
     """
     ResNet-200 "very deep" (vd) model for classification.

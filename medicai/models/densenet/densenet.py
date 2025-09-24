@@ -112,7 +112,7 @@ class DenseNetBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="densenet121")
-@registration.register(name="densenet121", family="densenet")
+@registration.register(family="densenet")
 class DenseNet121(DenseNetBase):
     """
     A full DenseNet121 model for classification.
@@ -180,7 +180,7 @@ class DenseNet121(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet169")
-@registration.register(name="densenet169", family="densenet")
+@registration.register(family="densenet")
 class DenseNet169(DenseNetBase):
     """
     A full DenseNet169 model for classification.
@@ -248,7 +248,7 @@ class DenseNet169(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet201")
-@registration.register(name="densenet201", family="densenet")
+@registration.register(family="densenet")
 class DenseNet201(DenseNetBase):
     """
     A full DenseNet201 model for classification.
