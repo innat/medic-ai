@@ -48,7 +48,7 @@ class MiTBase(keras.Model):
             depths=depths,
             mlp_ratios=mlp_ratios,
         )
-        inputs = backbone.inputs
+        inputs = backbone.input
         x = backbone.output
 
         GlobalAvgPool = get_pooling_layer(
