@@ -10,7 +10,7 @@ from .swin_backbone import SwinBackbone
 
 
 @keras.saving.register_keras_serializable(package="swin.transformer")
-@registration.register(name="swin_s", family="swin", aliases=["SwinTransformer"])
+@registration.register(family="swin")
 class SwinTransformer(keras.Model):
     """A 3D Swin Transformer model for classification.
 

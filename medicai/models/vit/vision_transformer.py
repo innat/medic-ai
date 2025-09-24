@@ -7,7 +7,7 @@ from .vit_backbone import ViTBackbone
 
 
 @keras.saving.register_keras_serializable(package="vit")
-@registration.register(name="vit_s", family="vit", aliases=["ViT"])
+@registration.register(family="vit")
 class ViT(keras.Model):
     def __init__(
         self,
