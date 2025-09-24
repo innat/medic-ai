@@ -29,7 +29,7 @@ class UNet(keras.Model):
 
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
+    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet"]
 
     def __init__(
         self,
@@ -85,10 +85,8 @@ class UNet(keras.Model):
         if bool(encoder) == bool(encoder_name):
             raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
 
-        # If encoder provided, use it
         if encoder is not None:
             input_shape = encoder.input_shape[1:]
-
         elif encoder_name is not None:
             if not input_shape:
                 raise ValueError(
