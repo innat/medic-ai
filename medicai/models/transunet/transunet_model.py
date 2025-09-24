@@ -2,9 +2,7 @@ import keras
 from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
-from medicai.models import DenseNetBackbone
-from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_inputs
-from medicai.utils.model_utils import BACKBONE_ZOO
+from medicai.utils import get_conv_layer, get_reshaping_layer, registration
 
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
@@ -19,37 +17,21 @@ class TransUNet(keras.Model):
     features to produce the final segmentation map using a coarse-to-fine
     attention mechanism and U-Net-style skip connections.
 
-    Args:
-        input_shape (tuple): The shape of the input data. For 2D, it is
-            `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
-        num_classes (int): The number of segmentation classes.
-        patch_size (int or tuple): The size of the patches for the Vision
-            Transformer. Must be a tuple of length `spatial_dims`. Defaults to 3.
-        num_queries (int, optional): The number of learnable queries used in the
-            decoder's attention mechanism. Defaults to 100.
-        classifier_activation (str, optional): Activation function for the final
-            segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
-        num_encoder_layers (int, optional): The number of transformer encoder blocks
-            in the ViT encoder. Defaults to 6.
-        num_heads (int, optional): The number of attention heads in the transformer blocks.
-            Defaults to 8.
-        embed_dim (int, optional): The dimensionality of the token embeddings.
-            Defaults to 256.
-        mlp_dim (int, optional): The hidden dimension of the MLP in the transformer
-            blocks. Defaults to 1024.
-        dropout_rate (float, optional): The dropout rate for regularization.
-            Defaults to 0.1.
-        decoder_projection_filters (int, optional): The number of filters for the
-            convolutional layers in the decoder upsampling path. Defaults to 64.
-        name (str, optional): The name of the model. Defaults to `TransUNetND`.
+    Example:
+    >>> from medicai.models import TransUNet
+    >>> model = TransUNet(input_shape=(96, 96, 1), encoder_name="densenet121")
+    >>> model = TransUNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
     """
+
+    ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet"]
 
     def __init__(
         self,
-        input_shape,
-        num_classes,
+        *,
+        input_shape=None,
         encoder_name=None,
         encoder=None,
+        num_classes=1,
         patch_size=3,
         classifier_activation=None,
         num_encoder_layers=6,
@@ -62,11 +44,82 @@ class TransUNet(keras.Model):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the TransUNet model.
 
-        if any(dim is None for dim in input_shape[:-1]):
-            raise ValueError(
-                "TransUNet requires a fixed spatial input shape. " f"Got input_shape={input_shape}"
+        Args:
+            encoder: (Optional) A Keras model to use as the encoder (backbone).
+                This argument is intended for passing a custom or pre-trained
+                model not available in the `BACKBONE_ZOO`. If provided, the
+                model must have a `pyramid_outputs` attribute, which should be
+                a dictionary of intermediate feature vectors from shallow to
+                deep layers (e.g., `'P1'`, `'P2'`, ...).
+            encoder_name: (Optional) A string specifying the name of a
+                pre-configured backbone from the `BACKBONE_ZOO` to use as the
+                encoder. This is a convenient option for using a backbone from
+                the library without having to instantiate it manually.
+            input_shape (tuple): The shape of the input data. For 2D, it is
+                `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
+            num_classes (int): The number of segmentation classes.
+            patch_size (int or tuple): The size of the patches for the Vision
+                Transformer. Must be a tuple of length `spatial_dims`. Defaults to 3.
+            num_queries (int, optional): The number of learnable queries used in the
+                decoder's attention mechanism. Defaults to 100.
+            classifier_activation (str, optional): Activation function for the final
+                segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
+            num_encoder_layers (int, optional): The number of transformer encoder blocks
+                in the ViT encoder. Defaults to 6.
+            num_heads (int, optional): The number of attention heads in the transformer blocks.
+                Defaults to 8.
+            embed_dim (int, optional): The dimensionality of the token embeddings.
+                Defaults to 256.
+            mlp_dim (int, optional): The hidden dimension of the MLP in the transformer
+                blocks. Defaults to 1024.
+            dropout_rate (float, optional): The dropout rate for regularization.
+                Defaults to 0.1.
+            decoder_projection_filters (int, optional): The number of filters for the
+                convolutional layers in the decoder upsampling path. Defaults to 64.
+            name (str, optional): The name of the model. Defaults to `TransUNetND`.
+        """
+
+        if bool(encoder) == bool(encoder_name):
+            raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
+
+        if encoder is not None:
+            input_shape = encoder.input_shape[1:]
+        elif encoder_name is not None:
+            if not input_shape:
+                raise ValueError(
+                    "Argument `input_shape` must be provided. "
+                    "It should be a tuple of integers specifying the dimensions of the input "
+                    "data, not including the batch size. "
+                    "For 2D data, the format is `(height, width, channels)`. "
+                    "For 3D data, the format is `(depth, height, width, channels)`."
+                )
+
+            if encoder_name.lower() not in registration._registry:
+                raise ValueError(
+                    f"Encoder '{encoder_name}' not found in the registry. Available: {list(registration._registry.keys())}"
+                )
+
+            entry = registration.get_entry(encoder_name)
+            invalid_families = [
+                f for f in entry["family"] if f not in TransUNet.ALLOWED_BACKBONE_FAMILIES
+            ]
+            if invalid_families:
+                raise ValueError(
+                    f"The provided encoder_name='{encoder_name}' uses unsupported families: "
+                    f"{invalid_families}. Allowed families: {TransUNet.ALLOWED_BACKBONE_FAMILIES}"
+                )
+
+            encoder = entry["class"](input_shape=input_shape, include_top=False)
+
+        if not hasattr(encoder, "pyramid_outputs"):
+            raise AttributeError(
+                f"The provided `encoder` must have a `pyramid_outputs` attribute, "
+                f"but the provided encoder of type {type(encoder).__name__} does not."
             )
+
         spatial_dims = len(input_shape) - 1
 
         if isinstance(patch_size, int):
@@ -77,32 +130,9 @@ class TransUNet(keras.Model):
                 f"Got {patch_size} with length {len(patch_size)}"
             )
 
-        if encoder is not None and encoder_name is not None:
-            raise ValueError(
-                "Only one of `encoder` or `encoder_name` can be provided, but received both."
-            )
-
-        # If encoder provided, use it
-        if encoder is not None:
-            backbone = encoder
-            if not hasattr(backbone, "pyramid_outputs"):
-                raise AttributeError(
-                    f"The provided `encoder` must have a `pyramid_outputs` attribute, "
-                    f"but the provided encoder of type {type(backbone).__name__} does not."
-                )
-        elif encoder_name is not None:
-            if encoder_name not in BACKBONE_ZOO:
-                raise ValueError(
-                    f"Backbone `{encoder_name}` not found. Available: {list(BACKBONE_ZOO.keys())}"
-                )
-            BackboneClass = BACKBONE_ZOO[encoder_name]
-            backbone = BackboneClass(input_shape=input_shape, include_top=False)
-        else:
-            raise ValueError("Either `encoder` or `encoder_name` must be provided.")
-
         # Get CNN feature maps from the encoder.
-        inputs = backbone.inputs
-        pyramid_outputs = backbone.pyramid_outputs
+        inputs = encoder.input
+        pyramid_outputs = encoder.pyramid_outputs
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
         if not required_keys.issubset(pyramid_outputs.keys()):
             raise ValueError(

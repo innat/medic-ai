@@ -10,3 +10,5 @@ from medicai.utils.model_utils import (
     get_reshaping_layer,
     parse_model_inputs,
 )
+
+from .registry import registration

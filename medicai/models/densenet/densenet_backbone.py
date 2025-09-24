@@ -69,9 +69,9 @@ class DenseNetBackbone(keras.Model):
             **kwargs: Additional keyword arguments.
         """
         spatial_dims = len(input_shape) - 1
-        inputs = parse_model_inputs(input_shape, input_tensor, name="input_spec")
+        input = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 
-        x = inputs
+        x = input
         if include_rescaling:
             x = layers.Rescaling(1.0 / 255)(x)
 
@@ -118,7 +118,7 @@ class DenseNetBackbone(keras.Model):
         x = layers.Activation("relu", name="final_relu")(x)
 
         super().__init__(
-            inputs=inputs, outputs=x, name=name or f"DenseNetBackbone{spatial_dims}D", **kwargs
+            inputs=input, outputs=x, name=name or f"DenseNetBackbone{spatial_dims}D", **kwargs
         )
 
         self.blocks = blocks

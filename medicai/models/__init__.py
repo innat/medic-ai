@@ -1,3 +1,5 @@
+from medicai.utils import registration
+
 from ..utils.model_utils import BACKBONE_ZOO
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
 from .resnet import (
@@ -19,3 +21,7 @@ from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
 from .vit import ViT, ViTBackbone
+
+
+def list_models(family: str = None):
+    return registration.list(family)

@@ -133,8 +133,8 @@ class ResNetBackbone(keras.Model):
 
         # === Functional Model ===
         spatial_dims = len(input_shape) - 1
-        inputs = parse_model_inputs(input_shape, input_tensor)
-        x = inputs
+        input = parse_model_inputs(input_shape, input_tensor)
+        x = input
 
         if include_rescaling:
             x = layers.Rescaling(1.0 / 255)(x)
@@ -238,7 +238,7 @@ class ResNetBackbone(keras.Model):
             x = layers.Activation("relu", name="post_relu")(x)
 
         super().__init__(
-            inputs=inputs,
+            inputs=input,
             outputs=x,
             name="ResNetBackbone",
             **kwargs,
