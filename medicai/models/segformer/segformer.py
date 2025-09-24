@@ -96,6 +96,7 @@ class SegFormer(keras.Model):
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
+        # SegFormer needs 4 skip connection layers
         required_keys = {"P1", "P2", "P3", "P4"}
         if not required_keys.issubset(pyramid_outputs.keys()):
             raise ValueError(
