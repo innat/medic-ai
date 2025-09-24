@@ -1,5 +1,6 @@
 from tabulate import tabulate
 
+
 class BackboneFactoryRegistry:
     """A factory registry for backbone models.
 
@@ -88,10 +89,9 @@ class BackboneFactoryRegistry:
         """
         cls = self.get(name)
         return cls(**kwargs)
-    
+
     def list(self, family=None):
-        """
-        Lists registered backbones, optionally filtered by family, and returns a
+        """Lists registered backbones, optionally filtered by family, and returns a
         nicely formatted string using the tabulate library.
 
         Args:
@@ -102,7 +102,7 @@ class BackboneFactoryRegistry:
             A string containing a formatted table of backbone names.
         """
         headers = ["Family", "Variants"]
-        
+
         if family is not None:
             names = [name for name, entry in self._registry.items() if family in entry["family"]]
             table_data = [(family, ", ".join(names) if names else "None")]
@@ -111,44 +111,10 @@ class BackboneFactoryRegistry:
             for name, entry in self._registry.items():
                 for fam in entry["family"]:
                     grouped.setdefault(fam, []).append(name)
-            
+
             table_data = [(fam, ", ".join(models)) for fam, models in sorted(grouped.items())]
 
         return tabulate(table_data, headers=headers, tablefmt="psql")
-
-    # def list(self, family=None):
-    #     """Lists registered backbones, optionally filtered by family, and returns a
-    #     nicely formatted string.
-
-    #     Args:
-    #         family: (Optional) A single family name (e.g., 'resnet') to filter
-    #                 the list. If not specified, all backbones are returned.
-
-    #     Returns:
-    #         A string containing a formatted list of backbone names.
-    #     """
-    #     if family is not None:
-    #         # Filter by family and collect names
-    #         names = [name for name, entry in self._registry.items() if family in entry["family"]]
-
-    #         # Format the output for a single family
-    #         lines = ["Family   - Variants", "-" * 20]
-    #         variants = ", ".join(names) if names else "None"
-    #         lines.append(f"{family:<8} - {variants}")
-    #         return "\n".join(lines)
-
-    #     # Group all backbones by family
-    #     grouped = {}
-    #     for name, entry in self._registry.items():
-    #         for fam in entry["family"]:
-    #             grouped.setdefault(fam, []).append(name)
-
-    #     # Pretty table for all families
-    #     lines = ["Family   - Variants", "-" * 20]
-    #     for fam, models in sorted(grouped.items()):
-    #         variants = ", ".join(models)
-    #         lines.append(f"{fam:<8} - {variants}")
-    #     return "\n".join(lines)
 
 
 registration = BackboneFactoryRegistry()
