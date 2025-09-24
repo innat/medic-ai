@@ -48,3 +48,6 @@ class BackboneFactoryRegistry:
             if not families or any(f in v["family"] for f in families):
                 result.append((k, v) if details else k)
         return result
+    
+
+registration = BackboneFactoryRegistry()

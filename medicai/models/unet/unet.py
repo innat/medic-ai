@@ -2,7 +2,7 @@ import keras
 from keras import layers
 
 from medicai.utils.model_utils import get_conv_layer
-from medicai.models import registration
+from medicai.utils import registration
 from .unet_decoder import UNetDecoder
 
 

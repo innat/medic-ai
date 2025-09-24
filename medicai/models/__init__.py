@@ -1,5 +1,4 @@
 from ..utils.model_utils import BACKBONE_ZOO
-from medicai.utils.registry import BackboneFactoryRegistry
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
 from .resnet import (
     ResNet18,
@@ -20,5 +19,3 @@ from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
 from .vit import ViT, ViTBackbone
-
-registration = BackboneFactoryRegistry()

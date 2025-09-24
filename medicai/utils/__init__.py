@@ -1,5 +1,5 @@
 from pathlib import Path
-from .registry import BackboneFactoryRegistry
+from .registry import registration
 from medicai.utils.general import hide_warnings, resize_volumes
 from medicai.utils.inference import SlidingWindowInference, sliding_window_inference
 from medicai.utils.model_utils import (
