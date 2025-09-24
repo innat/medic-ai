@@ -5,12 +5,9 @@ from medicai.utils import (
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
-    get_reshaping_layer,
     registration,
     resize_volumes,
 )
-
-from .segformer_layers import MixVisionTransformer
 
 
 class SegFormer(keras.Model):

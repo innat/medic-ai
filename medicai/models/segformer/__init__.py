@@ -1,1 +1,1 @@
-from .segformer_model import SegFormer
+from .segformer import SegFormer
