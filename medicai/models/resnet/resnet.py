@@ -2,10 +2,10 @@ import keras
 from keras import layers
 
 from medicai.utils import get_pooling_layer
-from medicai.utils.model_utils import BACKBONE_ZOO
-
+from medicai.utils.registry import BackboneFactoryRegistry
 from .resnet_backbone import ResNetBackbone
 
+registration = BackboneFactoryRegistry()
 
 @keras.saving.register_keras_serializable(package="resnetbase")
 class ResNetBase(keras.Model):
@@ -151,6 +151,7 @@ class ResNetBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="resnet18")
+@registration.register(name="resnet18", family="resnet", aliases=["ResNet18"])
 class ResNet18(ResNetBase):
     """
     ResNet-18 model for classification.
@@ -213,6 +214,7 @@ class ResNet18(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet34")
+@registration.register(name="resnet34", family="resnet", aliases=["ResNet34"])
 class ResNet34(ResNetBase):
     """
     ResNet-34 model for classification.
@@ -276,6 +278,7 @@ class ResNet34(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50")
+@registration.register(name="resnet50", family="resnet", aliases=["ResNet50"])
 class ResNet50(ResNetBase):
     """
     ResNet-50 model for classification.
@@ -337,6 +340,7 @@ class ResNet50(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet101")
+@registration.register(name="resnet101", family="resnet", aliases=["ResNet101"])
 class ResNet101(ResNetBase):
     """
     ResNet-101 model for classification.
@@ -399,6 +403,7 @@ class ResNet101(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet152")
+@registration.register(name="resnet152", family="resnet", aliases=["ResNet152"])
 class ResNet152(ResNetBase):
     """
     ResNet-152 model for classification.
@@ -461,6 +466,7 @@ class ResNet152(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50v2")
+@registration.register(name="resnet50v2", family="resnet", aliases=["ResNet50v2"])
 class ResNet50v2(ResNetBase):
     """
     ResNet-50 v2 model for classification.
@@ -523,6 +529,7 @@ class ResNet50v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet101v2")
+@registration.register(name="resnet101v2", family="resnet", aliases=["ResNet101v2"])
 class ResNet101v2(ResNetBase):
     """
     ResNet-101 v2 model for classification.
@@ -584,6 +591,7 @@ class ResNet101v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet152v2")
+@registration.register(name="resnet152v2", family="resnet", aliases=["ResNet152v2"])
 class ResNet152v2(ResNetBase):
     """
     ResNet-152 v2 model for classification.
@@ -646,6 +654,7 @@ class ResNet152v2(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet50vd")
+@registration.register(name="resnet50vd", family="resnet", aliases=["ResNet50vd"])
 class ResNet50vd(ResNetBase):
     """
     ResNet-50 "very deep" (vd) model for classification.
@@ -708,6 +717,7 @@ class ResNet50vd(ResNetBase):
 
 
 @keras.saving.register_keras_serializable(package="resnet200vd")
+@registration.register(name="resnet200vd", family="resnet", aliases=["ResNet200vd"])
 class ResNet200vd(ResNetBase):
     """
     ResNet-200 "very deep" (vd) model for classification.
@@ -767,14 +777,3 @@ class ResNet200vd(ResNetBase):
             **kwargs,
         )
 
-
-BACKBONE_ZOO["resnet18"] = ResNet18
-BACKBONE_ZOO["resnet34"] = ResNet34
-BACKBONE_ZOO["resnet50"] = ResNet50
-BACKBONE_ZOO["resnet101"] = ResNet101
-BACKBONE_ZOO["resnet152"] = ResNet152
-BACKBONE_ZOO["resnet50v2"] = ResNet50v2
-BACKBONE_ZOO["resnet101v2"] = ResNet101v2
-BACKBONE_ZOO["resnet152v2"] = ResNet152v2
-BACKBONE_ZOO["resnet50vd"] = ResNet50vd
-BACKBONE_ZOO["resnet200vd"] = ResNet200vd

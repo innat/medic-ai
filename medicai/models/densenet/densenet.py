@@ -1,10 +1,11 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import BACKBONE_ZOO, get_pooling_layer
-
+from medicai.utils.model_utils import get_pooling_layer
+from medicai.utils.registry import BackboneFactoryRegistry
 from .densenet_backbone import DenseNetBackbone
 
+registration = BackboneFactoryRegistry()
 
 @keras.saving.register_keras_serializable(package="densenetbase")
 class DenseNetBase(keras.Model):
@@ -111,6 +112,7 @@ class DenseNetBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="densenet121")
+@registration.register(name="densenet121", family="densenet", aliases=["DenseNet121"])
 class DenseNet121(DenseNetBase):
     """
     A full DenseNet121 model for classification.
@@ -178,6 +180,7 @@ class DenseNet121(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet169")
+@registration.register(name="densenet169", family="densenet", aliases=["DenseNet169"])
 class DenseNet169(DenseNetBase):
     """
     A full DenseNet169 model for classification.
@@ -245,6 +248,7 @@ class DenseNet169(DenseNetBase):
 
 
 @keras.saving.register_keras_serializable(package="densenet201")
+@registration.register(name="densenet201", family="densenet", aliases=["DenseNet201"])
 class DenseNet201(DenseNetBase):
     """
     A full DenseNet201 model for classification.
@@ -310,7 +314,3 @@ class DenseNet201(DenseNetBase):
             **kwargs,
         )
 
-
-BACKBONE_ZOO["densenet121"] = DenseNet121
-BACKBONE_ZOO["densenet169"] = DenseNet169
-BACKBONE_ZOO["densenet201"] = DenseNet201

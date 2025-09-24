@@ -1,13 +1,11 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import (
-    BACKBONE_ZOO,
-    get_conv_layer,
-)
-
+from medicai.utils.model_utils import get_conv_layer
+from medicai.utils.registry import BackboneFactoryRegistry
 from .unet_decoder import UNetDecoder
 
+registration = BackboneFactoryRegistry()
 
 @keras.saving.register_keras_serializable(package="unet")
 class UNet(keras.Model):
@@ -30,6 +28,8 @@ class UNet(keras.Model):
     >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=3)
 
     """
+
+    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
 
     def __init__(
         self,
@@ -82,15 +82,6 @@ class UNet(keras.Model):
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
-
         if encoder is not None and encoder_name is not None:
             raise ValueError(
                 "Only one of `encoder` or `encoder_name` can be provided, but received both."
@@ -98,26 +89,47 @@ class UNet(keras.Model):
 
         # If encoder provided, use it
         if encoder is not None:
-            backbone = encoder
-            if not hasattr(backbone, "pyramid_outputs"):
-                raise AttributeError(
-                    f"The provided `encoder` must have a `pyramid_outputs` attribute, "
-                    f"but the provided encoder of type {type(backbone).__name__} does not."
+            entry = registration.get_entry(type(encoder).__name__)
+            if not any(f in UNet.ALLOWED_BACKBONE_FAMILIES for f in entry["family"]):
+                raise ValueError(
+                    f"Invalid encoder_name='{encoder_name}'. "
+                    f"Allowed families: {UNet.ALLOWED_BACKBONE_FAMILIES}"
                 )
         elif encoder_name is not None:
-            BackboneClass = BACKBONE_ZOO[encoder_name]
-            backbone = BackboneClass(input_shape=input_shape, include_top=False)
+            entry = registration.get_entry(encoder_name)
+            if not any(f in UNet.ALLOWED_BACKBONE_FAMILIES for f in entry["family"]):
+                raise ValueError(
+                    f"Invalid encoder_name='{encoder_name}'. "
+                    f"Allowed families: {UNet.ALLOWED_BACKBONE_FAMILIES}"
+                )
+
+            if not input_shape:
+                raise ValueError(
+                    "Argument `input_shape` must be provided. "
+                    "It should be a tuple of integers specifying the dimensions of the input "
+                    "data, not including the batch size. "
+                    "For 2D data, the format is `(height, width, channels)`. "
+                    "For 3D data, the format is `(depth, height, width, channels)`."
+                )
+                
+            encoder = entry["class"](input_shape=input_shape, include_top=False)
         else:
             raise ValueError("Either `encoder` or `encoder_name` must be provided.")
 
-        inputs = backbone.input
+        if not hasattr(encoder, "pyramid_outputs"):
+            raise AttributeError(
+                f"The provided `encoder` must have a `pyramid_outputs` attribute, "
+                f"but the provided encoder of type {type(encoder).__name__} does not."
+            )
+
+        inputs = encoder.input
         spatial_dims = len(input_shape) - 1
-        pyramid_outputs = backbone.pyramid_outputs
+        pyramid_outputs = encoder.pyramid_outputs
 
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
         if not required_keys.issubset(pyramid_outputs.keys()):
             raise ValueError(
-                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
+                f"The encoder's `pyramid_outputs` is missing one or more required keys. "
                 f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
             )
 
