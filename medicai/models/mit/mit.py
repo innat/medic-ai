@@ -123,7 +123,7 @@ class MixViTB0(MiTBase):
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[32, 64, 160, 256],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=[4, 2, 1, 1],
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
