@@ -87,23 +87,47 @@ class BackboneFactoryRegistry:
         cls = self.get(name)
         return cls(**kwargs)
 
-    def list(self, family=None, details=False):
+    def list(self, family=None):
         """Lists registered backbones.
 
         Args:
             family: (Optional) Filters the list to a specific family or families.
-            details: (Optional) If True, returns a list of dictionaries with
-                full entry details. Otherwise, returns a list of names.
 
         Returns:
             A list of backbone names or full registry entries.
         """
-        families = [family] if isinstance(family, str) else family
-        result = []
-        for k, v in self._registry.items():
-            if not families or any(f in v["family"] for f in families):
-                result.append((k, v) if details else k)
-        return result
+
+        def list(cls, family=None):
+            # Only pass family model
+            if family is not None:
+                names = [
+                    name
+                    for name, entry in cls._registry.items()
+                    if (entry["family"] == family)
+                    or (isinstance(entry["family"], (list, tuple)) and family in entry["family"])
+                ]
+                # Same pretty style as full listing
+                lines = ["Family   - Variants", "-" * 20]
+                variants = ", ".join(names) if names else "None"
+                lines.append(f"{family:<8} - {variants}")
+                return "\n".join(lines)
+
+            # Group by family
+            grouped = {}
+            for name, entry in cls._registry.items():
+                fam = entry["family"]
+                if isinstance(fam, (list, tuple)):
+                    for f in fam:
+                        grouped.setdefault(f, []).append(name)
+                else:
+                    grouped.setdefault(fam, []).append(name)
+
+            # Pretty table
+            lines = ["Family   - Variants", "-" * 20]
+            for fam, models in grouped.items():
+                variants = ", ".join(models)
+                lines.append(f"{fam:<8} - {variants}")
+            return "\n".join(lines)
 
 
 registration = BackboneFactoryRegistry()
