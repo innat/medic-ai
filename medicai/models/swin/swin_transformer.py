@@ -5,11 +5,12 @@ hide_warnings()
 import keras
 
 from medicai.utils import get_pooling_layer
-
+from medicai.utils import registration
 from .swin_backbone import SwinBackbone
 
 
 @keras.saving.register_keras_serializable(package="swin.transformer")
+@registration.register(name="swin_s", family="swin", aliases=["SwinTransformer"])
 class SwinTransformer(keras.Model):
     """A 3D Swin Transformer model for classification.
 

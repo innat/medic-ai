@@ -1,10 +1,11 @@
 import keras
 from keras import ops
-
+from medicai.utils import registration
 from .vit_backbone import ViTBackbone
 
 
 @keras.saving.register_keras_serializable(package="vit")
+@registration.register(name="vit_s", family="vit", aliases=["ViT"])
 class ViT(keras.Model):
     def __init__(
         self,
