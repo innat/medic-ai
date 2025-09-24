@@ -107,6 +107,7 @@ class SegFormer(keras.Model):
             )
 
         skips = [pyramid_outputs.get(f"P{i+1}") for i in range(4)]
+        skips = skips + [inputs]
 
         # build_decoder method
         decoder_head = self.build_decoder(
@@ -131,7 +132,7 @@ class SegFormer(keras.Model):
 
     def build_decoder(self, num_classes, decoder_head_embedding_dim, spatial_dims, dropout):
         def apply(inputs):
-            c1, c2, c3, c4 = inputs
+            c1, c2, c3, c4, original_input = inputs
 
             # Get target spatial shape from c1
             target_spatial_shape = ops.shape(c1)[1:-1]
@@ -178,7 +179,10 @@ class SegFormer(keras.Model):
             x = get_conv_layer(
                 spatial_dims=spatial_dims, layer_type="conv", filters=num_classes, kernel_size=1
             )(x)
-            x = get_reshaping_layer(spatial_dims=spatial_dims, layer_type="upsampling", size=4)(x)
+
+            # Get output spatial shape from original input
+            output_spatial_shape = ops.shape(original_input)[1:-1]
+            x = self.resize_to_target(x, output_spatial_shape, spatial_dims)
             return x
 
         return apply
