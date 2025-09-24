@@ -2,10 +2,9 @@ import keras
 from keras import layers
 
 from medicai.utils.model_utils import get_conv_layer
-from medicai.utils.registry import BackboneFactoryRegistry
+from medicai.models import registration
 from .unet_decoder import UNetDecoder
 
-registration = BackboneFactoryRegistry()
 
 @keras.saving.register_keras_serializable(package="unet")
 class UNet(keras.Model):
