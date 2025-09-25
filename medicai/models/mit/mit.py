@@ -89,6 +89,7 @@ class MiTBase(keras.Model):
 
         backbone = MiTBackbone(
             input_shape=input_shape,
+            include_rescaling=include_rescaling,
             max_drop_path_rate=max_drop_path_rate,
             layer_norm_epsilon=layer_norm_epsilon,
             qkv_bias=qkv_bias,

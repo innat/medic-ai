@@ -53,6 +53,7 @@ class MiTBackbone(keras.Model):
     def __init__(
         self,
         input_shape,
+        include_rescaling=False,
         max_drop_path_rate=0.1,
         layer_norm_epsilon=1e-5,
         qkv_bias=True,
@@ -71,6 +72,9 @@ class MiTBackbone(keras.Model):
 
         Args:
             input_shape (tuple): The shape of the input data, excluding the batch dimension.
+            include_rescaling: A boolean indicating whether to include a
+                `Rescaling` layer at the beginning of the model. If `True`,
+                the input pixels will be scaled from `[0, 255]` to `[0, 1]`. Defaults to False.
             max_drop_path_rate (float, optional): The maximum rate for stochastic depth.
                 The dropout rate is linearly increased across all transformer blocks. Defaults to 0.1.
             layer_norm_epsilon (float, optional): A small value for numerical stability in layer normalization.
@@ -104,6 +108,9 @@ class MiTBackbone(keras.Model):
         x = input
         cur = 0
         pyramid_outputs = {}
+
+        if include_rescaling:
+            x = keras.layers.Rescaling(1.0 / 255)(x)
 
         # Loop through each hierarchical stage of the model.
         for i in range(num_layers):
@@ -144,6 +151,7 @@ class MiTBackbone(keras.Model):
         super().__init__(inputs=input, outputs=x, name=name or f"mit{spatial_dims}D", **kwargs)
 
         self.pyramid_outputs = pyramid_outputs
+        self.include_rescaling = include_rescaling
         self.project_dim = project_dim
         self.qkv_bias = qkv_bias
         self.patch_sizes = patch_sizes
@@ -160,6 +168,7 @@ class MiTBackbone(keras.Model):
         config.update(
             {
                 "input_shape": self.input_shape[1:],
+                "include_rescaling": self.include_rescaling,
                 "project_dim": self.project_dim,
                 "qkv_bias": self.qkv_bias,
                 "patch_sizes": self.patch_sizes,
