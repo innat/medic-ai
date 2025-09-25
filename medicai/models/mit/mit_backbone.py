@@ -9,6 +9,47 @@ from .mit_layers import HierarchicalTransformerEncoder, OverlappingPatchingAndEm
 
 @keras.utils.register_keras_serializable(package="mit.backbone")
 class MiTBackbone(keras.Model):
+    """MixVisionTransformer (MixViT) Model.
+
+    This class implements the encoder backbone of the SegFormer architecture. It is a
+    hierarchical vision transformer that processes input data (2D images or 3D volumes)
+    through multiple stages. Each stage consists of an overlapping patch embedding layer,
+    followed by a series of efficient transformer encoder blocks. The use of overlapping
+    patches and spatially reduced attention makes the model efficient for high-resolution
+    inputs while capturing both local and global features.
+
+    The model is built using the Keras Functional API, with a progressive
+    downsampling of the spatial dimensions and an increase in the feature dimensions,
+    similar to a convolutional neural network.
+
+    ## Key Features and Strengths:
+    1.  **Efficient Self-Attention:** MiT replaces the standard vision transformer's
+        (ViT) global self-attention with a **Spatially-Reduced Attention (SRA)**
+        mechanism. SRA significantly reduces the computational cost from quadratic
+        to near-linear with respect to image size, allowing it to process high-resolution
+        inputs efficiently.
+    2.  **Multi-Scale Feature Pyramid:** It generates a multi-scale feature pyramid,
+        similar to Convolutional Neural Networks (CNNs), by using four stages with
+        gradually increasing receptive fields. This is achieved through overlapping
+        patch embedding and successive attention blocks, making it ideal as a
+        backbone for downstream tasks (like the UNet or segmentation models).
+    3.  **Lightweight and Configurable:** The architecture is highly parameterizable,
+        allowing for the creation of various models (e.g., MiT-B0 to MiT-B5) by
+        adjusting parameters like embedding dimensions, depth, and attention heads,
+        balancing performance and model size.
+
+    Example:
+    >>> from medicai.models import MiTBackbone
+    >>> # 2D Model (e.g., for ImageNet)
+    >>> model_2d = MiTBackbone(input_shape=(224, 224, 3), project_dim=[32, 64, 160, 256], ...)
+    >>> # 3D Model (e.g., for medical volumes)
+    >>> model_3d = MiTBackbone(input_shape=(64, 64, 64, 1), project_dim=[32, 64, 160, 256], ...)
+
+    Reference:
+        https://github.com/keras-team/keras-hub
+
+    """
+
     def __init__(
         self,
         input_shape,
@@ -26,21 +67,7 @@ class MiTBackbone(keras.Model):
         **kwargs,
     ):
         """
-        MixVisionTransformer (MixViT) Model.
-
-        This class implements the encoder backbone of the SegFormer architecture. It is a
-        hierarchical vision transformer that processes input data (2D images or 3D volumes)
-        through multiple stages. Each stage consists of an overlapping patch embedding layer,
-        followed by a series of efficient transformer encoder blocks. The use of overlapping
-        patches and spatially reduced attention makes the model efficient for high-resolution
-        inputs while capturing both local and global features.
-
-        The model is built using the Keras Functional API, with a progressive
-        downsampling of the spatial dimensions and an increase in the feature dimensions,
-        similar to a convolutional neural network.
-
-        Reference:
-            https://github.com/keras-team/keras-hub
+        Initializes the MiTBackbone model.
 
         Args:
             input_shape (tuple): The shape of the input data, excluding the batch dimension.
