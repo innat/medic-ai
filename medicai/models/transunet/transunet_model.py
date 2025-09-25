@@ -2,8 +2,9 @@ import keras
 from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
-from medicai.utils import get_conv_layer, get_reshaping_layer, registration
+from medicai.utils import get_conv_layer, get_reshaping_layer
 
+from ..encoder_utils import resolve_encoder
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
 
@@ -81,44 +82,12 @@ class TransUNet(keras.Model):
                 convolutional layers in the decoder upsampling path. Defaults to 64.
             name (str, optional): The name of the model. Defaults to `TransUNetND`.
         """
-
-        if bool(encoder) == bool(encoder_name):
-            raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
-
-        if encoder is not None:
-            input_shape = encoder.input_shape[1:]
-        elif encoder_name is not None:
-            if not input_shape:
-                raise ValueError(
-                    "Argument `input_shape` must be provided. "
-                    "It should be a tuple of integers specifying the dimensions of the input "
-                    "data, not including the batch size. "
-                    "For 2D data, the format is `(height, width, channels)`. "
-                    "For 3D data, the format is `(depth, height, width, channels)`."
-                )
-
-            if encoder_name.lower() not in registration._registry:
-                raise ValueError(
-                    f"Encoder '{encoder_name}' not found in the registry. Available: {list(registration._registry.keys())}"
-                )
-
-            entry = registration.get_entry(encoder_name)
-            invalid_families = [
-                f for f in entry["family"] if f not in TransUNet.ALLOWED_BACKBONE_FAMILIES
-            ]
-            if invalid_families:
-                raise ValueError(
-                    f"The provided encoder_name='{encoder_name}' uses unsupported families: "
-                    f"{invalid_families}. Allowed families: {TransUNet.ALLOWED_BACKBONE_FAMILIES}"
-                )
-
-            encoder = entry["class"](input_shape=input_shape, include_top=False)
-
-        if not hasattr(encoder, "pyramid_outputs"):
-            raise AttributeError(
-                f"The provided `encoder` must have a `pyramid_outputs` attribute, "
-                f"but the provided encoder of type {type(encoder).__name__} does not."
-            )
+        encoder, input_shape = resolve_encoder(
+            encoder=encoder,
+            encoder_name=encoder_name,
+            input_shape=input_shape,
+            allowed_families=TransUNet.ALLOWED_BACKBONE_FAMILIES,
+        )
 
         spatial_dims = len(input_shape) - 1
 
