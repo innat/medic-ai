@@ -190,7 +190,7 @@ class UNet(keras.Model):
             "use_attention": self.use_attention,
         }
 
-        if self.encoder is not None:
+        if self.encoder_name is None and self.encoder is not None:
             config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
         return config
 
