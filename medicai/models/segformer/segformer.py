@@ -9,7 +9,7 @@ from medicai.utils import (
     resize_volumes,
 )
 
-
+@keras.saving.register_keras_serializable(package="segformer")
 class SegFormer(keras.Model):
     """SegFormer model for 2D or 3D semantic segmentation.
 
