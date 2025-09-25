@@ -295,9 +295,9 @@ class MixViTB1(MiTBase):
     """
     Mix Transformer B1 (MiT-B1) model.
 
-    MiT-B1 is the smallest and most efficient variant of the **Mix Transformer**
+    MiT-B1 is a small and efficient variant of the **Mix Transformer**
     (MiT) family, providing an excellent trade-off between speed and performance.
-    It is parameterized with the configuration specified for the B0 variant in
+    It is parameterized with the configuration specified for the B1 variant in
     the original SegFormer paper.
 
     This class inherits from `MiTBase` and sets the hyper-parameters for
