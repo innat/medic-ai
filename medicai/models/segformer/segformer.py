@@ -9,6 +9,7 @@ from medicai.utils import (
     resize_volumes,
 )
 
+
 @keras.saving.register_keras_serializable(package="segformer")
 class SegFormer(keras.Model):
     """SegFormer model for 2D or 3D semantic segmentation.
@@ -112,6 +113,17 @@ class SegFormer(keras.Model):
 
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
+
+        # Check that the spatial dimensions are all equal.
+        spatial_shapes = list(input_shape[:spatial_dims])
+        if not all(x == spatial_shapes[0] for x in spatial_shapes):
+            raise ValueError(
+                f"Input shape {input_shape} is not square or cubic. "
+                "SegFormer currently only supports inputs with equal spatial dimensions "
+                "for proper hierarchical downsampling and reshaping."
+            )
+
+        # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
 
         # SegFormer needs 4 skip connection layers
