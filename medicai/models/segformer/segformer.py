@@ -18,11 +18,18 @@ class SegFormer(keras.Model):
     head. This design is highly efficient for semantic segmentation tasks on
     high-resolution images or volumes.
 
-    The encoder progressively downsamples the spatial dimensions and increases the
-    feature dimensions across four stages, producing multi-scale feature maps.
-    The decoder then takes these features, processes them through linear layers,
-    upsamples them to a common resolution, and fuses them to generate a
-    high-resolution segmentation mask.
+    The encoder (MiT) progressively downsamples the spatial dimensions and increases the
+    feature dimensions across four stages, producing multi-scale feature maps (P1, P2, P3, P4).
+    The decoder then takes these features, processes them through a linear layer and upsampling
+    to a common resolution (P1's resolution), fuses them via concatenation and a convolution,
+    and finally generates a high-resolution segmentation mask matching the input size.
+
+    Example:
+    >>> from medicai.models import SegFormer, MixViTB0
+    >>> # 1. Initialize with an encoder class (e.g., MiT-B0)
+    >>> model = SegFormer(encoder=MixViTB0(input_shape=(256, 256, 3), include_top=False), num_classes=2)
+    >>> # 2. Initialize using a registered name
+    >>> model = SegFormer(encoder_name='mit_b2', input_shape=(128, 128, 1), num_classes=5)
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["mit"]
@@ -43,15 +50,26 @@ class SegFormer(keras.Model):
         """
         Initializes the SegFormer model.
 
+        The encoder can be provided either as an instantiated Keras model (`encoder`)
+        or by its registered name (`encoder_name`), in which case `input_shape` must be provided.
+
         Args:
-            input_shape (tuple): The shape of the input data, excluding the batch dimension.
-            num_classes (int): The number of output classes for segmentation.
-            decoder_head_embedding_dim (int, optional): The embedding dimension of the decoder head.
-                Defaults to 256.
+            input_shape (tuple, optional): The shape of the input data, excluding the batch dimension.
+                Required if `encoder_name` is provided. Format is (H, W, C) for 2D or (D, H, W, C) for 3D.
+            encoder_name (str, optional): The name of a registered hierarchical backbone (e.g., 'mit_b0').
+            encoder (keras.Model, optional): An already instantiated hierarchical feature extractor.
+                Must have a `pyramid_outputs` attribute.
+            num_classes (int, optional): The number of output classes for segmentation. Default: 1.
             classifier_activation (str, optional): The activation function for the final output layer.
-                Common choices are 'softmax' for multi-class segmentation and 'sigmoid' for multi-label
-                or binary segmentation. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                Typically 'softmax' for multi-class or 'sigmoid' for multi-label/binary segmentation.
+                Default: None.
+            decoder_head_embedding_dim (int, optional): The hidden dimension used for linear embedding
+                of the feature maps in the decoder head before fusion. Controls the capacity of the
+                lightweight MLP decoder. Default: 256.
+            dropout (float, optional): Dropout rate applied after the fusion convolution in the decoder head.
+                Regularizes the decoder to prevent overfitting. Default: 0.0.
+            name (str, optional): The name of the Keras model.
+                Sets the model's identifier. Default: Auto-generated as "SegFormer{D}D".
             **kwargs: Standard Keras Model keyword arguments.
         """
         if bool(encoder) == bool(encoder_name):
@@ -129,6 +147,32 @@ class SegFormer(keras.Model):
         self.classifier_activation = classifier_activation
 
     def build_decoder(self, num_classes, decoder_head_embedding_dim, spatial_dims, dropout):
+        """
+        Constructs the lightweight MLP decoder head as a callable function.
+
+        This decoder head performs four main steps:
+        1. Linear Embedding: Each of the four multi-scale feature maps (P1-P4) is
+           processed by a 1x1 convolution (implemented as Dense layer after flattening)
+           to unify the channel dimension to `decoder_head_embedding_dim`.
+        2. Upsampling: Feature maps from P2, P3, and P4 are upsampled to the resolution
+           of the highest-resolution feature map (P1).
+        3. Feature Fusion: All four feature maps are concatenated and passed through
+           a single 3x3 (or 3D equivalent) fusion convolution block.
+        4. Final Prediction: A final 1x1 convolution is used to predict the class scores,
+           followed by upsampling to the original input resolution.
+
+        Args:
+            num_classes (int): The number of output channels for the final prediction.
+            decoder_head_embedding_dim (int): The hidden dimension for the MLP/linear
+                embedding layers.
+            spatial_dims (int): 2 for 2D or 3 for 3D inputs.
+            dropout (float): Dropout rate to apply in the decoder fusion block.
+
+        Returns:
+            function: A Keras-style function that takes the list of skip connections
+                      and returns the final segmentation output.
+        """
+
         def apply(inputs):
             c1, c2, c3, c4, original_input = inputs
 
