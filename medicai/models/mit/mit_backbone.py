@@ -126,7 +126,7 @@ class MiTBackbone(keras.Model):
         self.sr_ratios = sr_ratios
         self.max_drop_path_rate = max_drop_path_rate
         self.mlp_ratios = mlp_ratios
-        self.norm_epsilon = layer_norm_epsilon
+        self.layer_norm_epsilon = layer_norm_epsilon
 
     def get_config(self):
         config = super().get_config()
@@ -142,7 +142,7 @@ class MiTBackbone(keras.Model):
                 "sr_ratios": self.sr_ratios,
                 "mlp_ratios": self.mlp_ratios,
                 "max_drop_path_rate": self.max_drop_path_rate,
-                "norm_epsilon": self.norm_epsilon,
+                "layer_norm_epsilon": self.layer_norm_epsilon,
             }
         )
         return config

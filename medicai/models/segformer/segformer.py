@@ -220,6 +220,7 @@ class SegFormer(keras.Model):
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "decoder_head_embedding_dim": self.decoder_head_embedding_dim,
+            "dropout": self.dropout,
         }
 
         if self.encoder is not None:

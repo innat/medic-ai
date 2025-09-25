@@ -101,7 +101,7 @@ class MiTBase(keras.Model):
         return cls(**config)
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b0", family="mit")
 class MixViTB0(MiTBase):
     def __init__(
@@ -139,7 +139,7 @@ class MixViTB0(MiTBase):
         )
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b1", family="mit")
 class MixViTB1(MiTBase):
     def __init__(
@@ -177,7 +177,7 @@ class MixViTB1(MiTBase):
         )
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b2", family="mit")
 class MixViTB2(MiTBase):
     def __init__(
@@ -215,7 +215,7 @@ class MixViTB2(MiTBase):
         )
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b3", family="mit")
 class MixViTB3(MiTBase):
     def __init__(
@@ -253,7 +253,7 @@ class MixViTB3(MiTBase):
         )
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b4", family="mit")
 class MixViTB4(MiTBase):
     def __init__(
@@ -291,7 +291,7 @@ class MixViTB4(MiTBase):
         )
 
 
-@keras.saving.register_keras_serializable(package="mitb0")
+@keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b5", family="mit")
 class MixViTB5(MiTBase):
     def __init__(
