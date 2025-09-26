@@ -27,6 +27,7 @@ class ViTVariantsBase(keras.Model):
         num_heads,
         hidden_dim,
         mlp_dim,
+        use_class_token,
         include_rescaling=False,
         include_top=True,
         pooling="token",
@@ -78,12 +79,12 @@ class ViTVariantsBase(keras.Model):
             hidden_dim=hidden_dim,
             mlp_dim=mlp_dim,
             include_rescaling=include_rescaling,
+            use_class_token=use_class_token,
             dropout_rate=0.0,
             attention_dropout=0.0,
             layer_norm_epsilon=1e-6,
             use_mha_bias=True,
             use_mlp_bias=True,
-            use_class_token=True,
             use_patch_bias=True,
             name=name + "_backbone",
         )
@@ -125,6 +126,7 @@ class ViTVariantsBase(keras.Model):
         self.num_classes = num_classes
         self.pooling = pooling
         self.dropout = dropout
+        self.use_class_token = use_class_token
         self.intermediate_dim = intermediate_dim
         self.classifier_activation = classifier_activation
         self.patch_size = patch_size
@@ -142,6 +144,7 @@ class ViTVariantsBase(keras.Model):
                 "input_shape": self.input_shape[1:],
                 "num_classes": self.num_classes,
                 "pooling": self.pooling,
+                "use_class_token": self.use_class_token,
                 "intermediate_dim": self.intermediate_dim,
                 "classifier_activation": self.classifier_activation,
                 "dropout": self.dropout,
@@ -190,6 +193,7 @@ class ViTBase(ViTVariantsBase):
         include_top=True,
         num_classes=1000,
         pooling="token",
+        use_class_token=True,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -255,6 +259,7 @@ class ViTBase(ViTVariantsBase):
             num_classes=num_classes,
             pooling=pooling,
             classifier_activation=classifier_activation,
+            use_class_token=use_class_token,
             patch_size=16,
             num_layers=12,
             num_heads=12,
@@ -299,6 +304,7 @@ class ViTLarge(ViTVariantsBase):
         include_top=True,
         num_classes=1000,
         pooling="token",
+        use_class_token=True,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -356,6 +362,7 @@ class ViTLarge(ViTVariantsBase):
             num_classes=num_classes,
             pooling=pooling,
             classifier_activation=classifier_activation,
+            use_class_token=use_class_token,
             patch_size=16,
             num_layers=24,
             num_heads=16,
@@ -401,6 +408,7 @@ class ViTHuge(ViTVariantsBase):
         include_top=True,
         num_classes=1000,
         pooling="token",
+        use_class_token=True,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -458,6 +466,7 @@ class ViTHuge(ViTVariantsBase):
             num_classes=num_classes,
             pooling=pooling,
             classifier_activation=classifier_activation,
+            use_class_token=use_class_token,
             patch_size=14,
             num_layers=32,
             num_heads=16,

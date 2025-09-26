@@ -1,7 +1,7 @@
 from medicai.utils import registration
 
 
-def resolve_encoder(encoder, encoder_name, input_shape, allowed_families):
+def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwargs):
     """
     Initializes and validates the backbone encoder for a segmentation model.
 
@@ -54,7 +54,7 @@ def resolve_encoder(encoder, encoder_name, input_shape, allowed_families):
                 f"{invalid_families}. Allowed families: {allowed_families}"
             )
 
-        encoder = entry["class"](input_shape=input_shape, include_top=False)
+        encoder = entry["class"](input_shape=input_shape, include_top=False, **kwargs)
 
     if not hasattr(encoder, "pyramid_outputs"):
         raise AttributeError(

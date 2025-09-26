@@ -109,6 +109,7 @@ class UNETR(keras.Model):
             encoder_name=encoder_name,
             input_shape=input_shape,
             allowed_families=UNETR.ALLOWED_BACKBONE_FAMILIES,
+            use_class_token=False,
         )
         *image_size, _ = input_shape
         feat_size = tuple(img_d // encoder.patch_size for img_d in image_size)

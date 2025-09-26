@@ -24,13 +24,13 @@ class ViTBackbone(keras.Model):
         num_heads,
         hidden_dim,
         mlp_dim,
+        use_class_token,
         include_rescaling=False,
         dropout_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
         use_mha_bias=True,
         use_mlp_bias=True,
-        use_class_token=True,
         use_patch_bias=True,
         name=None,
         **kwargs,
@@ -86,8 +86,7 @@ class ViTBackbone(keras.Model):
 
         # === Spatial dims detection ===
         spatial_dims = len(input_shape) - 1  # 2 or 3
-        image_shape = input_shape[:-1]  # (h, w) or (d, h, w)
-        num_channels = input_shape[-1]
+        *image_shape, num_channels = input_shape
 
         if None in image_shape:
             raise ValueError(
