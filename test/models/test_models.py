@@ -89,14 +89,14 @@ def test_unetr():
 
     # test for 3D
     dummy_input = tf.random.normal((batch_size, D, H, W, C))
-    model = UNETR(input_shape=(D, H, W, C), num_classes=num_classes)
+    model = UNETR(input_shape=(D, H, W, C), num_classes=num_classes, encoder_name="vit_base")
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 96, 1)
     assert output.shape == (batch_size, D, H, W, 3)
 
     # test for 2D
     dummy_input = tf.random.normal((batch_size, H, W, C))
-    model = UNETR(input_shape=(H, W, C), num_classes=num_classes)
+    model = UNETR(input_shape=(H, W, C), num_classes=num_classes, encoder_name="vit_base")
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 1)
     assert output.shape == (batch_size, H, W, 3)

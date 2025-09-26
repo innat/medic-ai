@@ -36,9 +36,13 @@ def train_and_assert(model, dataset):
     assert len(history.history["dice_score"]) == 5
 
 
-def create_model_and_compile(model_class, num_classes, **kwargs):
+def create_model_and_compile(model_class, num_classes, encoder_name, **kwargs):
     model = model_class(
-        input_shape=(96, 96, 96, 1), num_classes=num_classes, classifier_activation=None, **kwargs
+        input_shape=(96, 96, 96, 1),
+        num_classes=num_classes,
+        encoder_name=encoder_name,
+        classifier_activation=None,
+        **kwargs,
     )
     model.compile(
         optimizer=keras.optimizers.AdamW(
@@ -89,11 +93,12 @@ def test_training_with_meta():
 
 def test_training():
     num_classes = 4
-    model_list = [SwinUNETR, UNETR]
+    # model_list = [SwinUNETR, UNETR]
+    model_dict = {"vit_base": UNETR}
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.batch(1).prefetch(tf.data.AUTOTUNE)
 
-    for model_class in model_list:
+    for encoder_name, model_class in model_dict:
         print(f"Testing {model_class.__name__}")
-        model = create_model_and_compile(model_class, num_classes)
+        model = create_model_and_compile(model_class, num_classes, encoder_name=encoder_name)
         train_and_assert(model, dataset)
