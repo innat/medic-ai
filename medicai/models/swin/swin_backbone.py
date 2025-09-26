@@ -26,6 +26,7 @@ class SwinBackbone(keras.Model):
         *,
         input_shape,
         input_tensor=None,
+        include_rescaling=False,
         embed_dim=96,
         patch_size=[2, 4, 4],
         window_size=[8, 7, 7],
@@ -47,6 +48,8 @@ class SwinBackbone(keras.Model):
                 Default is (32, 224, 224, 3).
             input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
                 model input. If None, a new input tensor is created. Default is None.
+            include_rescaling (bool): Whether to include a Rescaling layer at the
+               start to normalize inputs (1/255). Default: False.
             embed_dim (int): Number of linear projection output channels. Default is 96.
             patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 4, 4].
             window_size (list): Size of the attention windows (WD, WH, WW). Default is [8, 7, 7].
@@ -78,8 +81,11 @@ class SwinBackbone(keras.Model):
             )
 
         input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-
+        pyramid_outputs = {}
         x = input_spec
+
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
@@ -110,10 +116,12 @@ class SwinBackbone(keras.Model):
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
+            pyramid_outputs[f"P{i + 1}"] = x
 
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
 
         self.input_tensor = input_tensor
+        self.pyramid_outputs = pyramid_outputs
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.window_size = window_size
