@@ -2,8 +2,7 @@ import keras
 from keras import ops
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-
-from ..encoder_utils import resolve_encoder
+from medicai.utils import resolve_encoder
 
 
 class UNETR(keras.Model):

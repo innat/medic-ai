@@ -9,6 +9,7 @@ from medicai.utils.model_utils import (
     get_pooling_layer,
     get_reshaping_layer,
     parse_model_inputs,
+    resolve_encoder,
 )
 
 from .registry import registration

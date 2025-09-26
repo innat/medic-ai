@@ -6,9 +6,8 @@ from medicai.utils import (
     get_conv_layer,
     get_norm_layer,
     resize_volumes,
+    resolve_encoder,
 )
-
-from ..encoder_utils import resolve_encoder
 
 
 @keras.saving.register_keras_serializable(package="segformer")
