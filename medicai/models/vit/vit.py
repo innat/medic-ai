@@ -370,7 +370,7 @@ class ViTLarge(ViTVariantsBase):
 @registration.register(name="vit_huge", family="vit")
 class ViTHuge(ViTVariantsBase):
     """
-    Vision Transformer Huge (ViT-H/14) model.  colossal
+    Vision Transformer Huge (ViT-H/14) model.
 
     ViT-H/14 is the largest model from the original **Vision Transformer** (ViT)
     family. It boasts the highest capacity, often achieving state-of-the-art
@@ -427,7 +427,7 @@ class ViTHuge(ViTVariantsBase):
             name (str, optional): The name to give the Keras model. Default: Auto-generated.
             **kwargs: Additional keyword arguments passed to the base `ViTVariantsBase` constructor.
 
-        Default Parameters (ViT-Large specific):
+        Default Parameters (ViT-Huge specific):
             patch_size (int): 14
                 *Role:* Defines the size of the square/cube patches (e.g., 14x14 or 14x14x14) extracted
                     from the input.

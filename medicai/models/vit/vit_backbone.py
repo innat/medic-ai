@@ -115,6 +115,7 @@ class ViTBackbone(keras.Model):
         inputs = keras.Input(shape=input_shape, name="images")
         pyramid_outputs = {}
 
+        x = inputs
         if include_rescaling:
             x = layers.Rescaling(1.0 / 255)(x)
 
@@ -126,7 +127,7 @@ class ViTBackbone(keras.Model):
             use_class_token=use_class_token,
             use_patch_bias=use_patch_bias,
             name="vit_patching_and_embedding",
-        )(inputs)
+        )(x)
         pyramid_outputs["P1"] = x
 
         x = keras.layers.Dropout(dropout_rate, name="vit_dropout")(x)

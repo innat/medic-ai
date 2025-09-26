@@ -1,7 +1,3 @@
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
-
 from medicai.utils import registration
 
 from ..utils.model_utils import BACKBONE_ZOO
