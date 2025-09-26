@@ -1,4 +1,5 @@
 import keras
+from keras import layers
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 
@@ -6,12 +7,13 @@ from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 class ViTBackbone(keras.Model):
     def __init__(
         self,
-        input_shape,  # (h, w, c) for 2D or (d, h, w, c) for 3D
+        input_shape,
         patch_size,
         num_layers,
         num_heads,
         hidden_dim,
         mlp_dim,
+        include_rescaling=False,
         dropout_rate=0.0,
         attention_dropout=0.0,
         layer_norm_epsilon=1e-6,
@@ -31,10 +33,10 @@ class ViTBackbone(keras.Model):
 
         Args:
             input_shape (tuple): Shape of the input tensor excluding batch size.
-                                For example, (height, width, channels) for 2D
-                                or (depth, height, width, channels) for 3D.
+                For example, (height, width, channels) for 2D
+                or (depth, height, width, channels) for 3D.
             patch_size (int or tuple): Size of the patches extracted from the input.
-                                    If int, the same size is used for all spatial dims.
+                If int, the same size is used for all spatial dims.
             num_layers (int): Number of transformer encoder layers.
             num_heads (int): Number of attention heads per transformer layer.
             hidden_dim (int): Hidden dimension size of the transformer encoder.
@@ -96,10 +98,13 @@ class ViTBackbone(keras.Model):
                 raise ValueError(f"Image dimension {im_dim} not divisible by patch size {p_dim}.")
 
         # === Functional Model ===
-        inputs = keras.layers.Input(shape=input_shape, name="images")
+        inputs = keras.Input(shape=input_shape, name="images")
+
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
 
         x = ViTPatchingAndEmbedding(
-            image_size=image_shape,  # (h, w) or (d, h, w)
+            image_size=image_shape,
             patch_size=patch_size,
             hidden_dim=hidden_dim,
             num_channels=num_channels,
@@ -137,6 +142,7 @@ class ViTBackbone(keras.Model):
         self.num_heads = num_heads
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
+        self.include_rescaling = include_rescaling
         self.dropout_rate = dropout_rate
         self.attention_dropout = attention_dropout
         self.layer_norm_epsilon = layer_norm_epsilon
@@ -153,6 +159,7 @@ class ViTBackbone(keras.Model):
             "num_heads": self.num_heads,
             "hidden_dim": self.hidden_dim,
             "mlp_dim": self.mlp_dim,
+            "include_rescaling": self.include_rescaling,
             "dropout_rate": self.dropout_rate,
             "attention_dropout": self.attention_dropout,
             "layer_norm_epsilon": self.layer_norm_epsilon,
