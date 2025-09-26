@@ -149,6 +149,8 @@ class UNETR(keras.Model):
         self.norm_name = norm_name
         self.conv_block = conv_block
         self.res_block = res_block
+        self.encoder_name = encoder_name
+        self.encoder = encoder
         self.dropout_rate = dropout_rate
 
     def build_decoder(
@@ -253,8 +255,9 @@ class UNETR(keras.Model):
         return apply
 
     def get_config(self):
-        return {
+        config = {
             "input_shape": self.input_shape[1:],
+            "encoder_name": self.encoder_name,
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
@@ -263,3 +266,12 @@ class UNETR(keras.Model):
             "res_block": self.res_block,
             "dropout_rate": self.dropout_rate,
         }
+        if self.encoder_name is None and self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)
