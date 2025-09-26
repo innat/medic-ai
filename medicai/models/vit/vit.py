@@ -50,6 +50,7 @@ class ViTVariantsBase(keras.Model):
             num_heads (int): Number of attention heads in each transformer layer.
             hidden_dim (int): Hidden dimension size of the transformer encoder (C).
             mlp_dim (int): Hidden dimension size of the MLP in transformer blocks.
+            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
             include_rescaling (bool): Whether to include a Rescaling layer at the
                 start to normalize inputs. Default: False.
             include_top (bool): Whether to include the final classification layer.
@@ -220,6 +221,8 @@ class ViTBase(ViTVariantsBase):
             pooling (str): Pooling strategy for the output if `include_top` is False.
                'token' for the CLS token.
                 *Effect:* Collapses the sequence dimension of the feature map. Default: 'token'.
+            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
+                Default: True.
             classifier_activation (str, optional): Optional activation function for the final
                 Dense classification layer. Only relevant if `include_top` is True.
                 *Effect:* Typically 'softmax' or 'sigmoid'. Default: None.
@@ -328,6 +331,8 @@ class ViTLarge(ViTVariantsBase):
                 'token' for the CLS token. Default: 'token'.
             classifier_activation (str, optional): Activation function for the final
                 Dense classification layer. Default: None.
+            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
+                Default: True.
             name (str, optional): The name to give the Keras model. Default: Auto-generated.
             **kwargs: Additional keyword arguments passed to the base `ViTVariantsBase` constructor.
 
@@ -432,6 +437,8 @@ class ViTHuge(ViTVariantsBase):
                 'token' for the CLS token. Default: 'token'.
             classifier_activation (str, optional): Activation function for the final
                 Dense classification layer. Default: None.
+            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
+                Default: True.
             name (str, optional): The name to give the Keras model. Default: Auto-generated.
             **kwargs: Additional keyword arguments passed to the base `ViTVariantsBase` constructor.
 

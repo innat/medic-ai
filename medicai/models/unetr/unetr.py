@@ -110,25 +110,27 @@ class UNETR(keras.Model):
             input_shape=input_shape,
             allowed_families=UNETR.ALLOWED_BACKBONE_FAMILIES,
             use_class_token=False,
-            pooling=None
+            pooling=None,
         )
         *image_size, _ = input_shape
         feat_size = tuple(img_d // encoder.patch_size for img_d in image_size)
 
         # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
-        required_keys = {"P5", "P8", "P11"}
-        if not required_keys.issubset(pyramid_outputs.keys()):
+        required_keys = {"P5", "P8", "P11"}  # vit-encoder-layer: 3rd, 6th, 9th
+        missing_keys = set(required_keys) - set(pyramid_outputs.keys())
+        if missing_keys:
             raise ValueError(
                 f"The encoder's `pyramid_outputs` is missing one or more required keys. "
-                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+                f"Missing keys: {missing_keys}. "
+                f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
 
         # catch input and intermediate feature vectors
         inputs = encoder.input
-        skips = [pyramid_outputs.get(key) for key in required_keys]
+        skips = [pyramid_outputs[key] for key in required_keys]
 
-        # === Decoder ===
+        # UNETR Decoder
         decoder_head = self.build_decoder(
             num_classes=num_classes,
             feature_size=feature_size,

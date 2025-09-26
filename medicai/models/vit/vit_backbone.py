@@ -49,7 +49,7 @@ class ViTBackbone(keras.Model):
             hidden_dim (int): Hidden dimension size of the transformer encoder (C).
             mlp_dim (int): Hidden dimension size of the MLP in each transformer block.
             include_rescaling (bool): Whether to include a Rescaling layer at the
-                                      start to normalize inputs (1/255). Default: False.
+               start to normalize inputs (1/255). Default: False.
             dropout_rate (float): Dropout rate applied after patch embedding and in MLPs.
             attention_dropout (float): Dropout rate for the attention weights.
             layer_norm_epsilon (float): Epsilon for layer normalization.
