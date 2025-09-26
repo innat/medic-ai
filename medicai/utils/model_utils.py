@@ -5,6 +5,8 @@ hide_warnings()
 import keras
 from keras import activations, layers
 
+from .registry import registration
+
 BACKBONE_ZOO = {}
 
 
@@ -217,9 +219,6 @@ def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
             return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
         else:
             return input_tensor
-
-
-from medicai.utils import registration
 
 
 def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwargs):
