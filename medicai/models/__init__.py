@@ -1,3 +1,7 @@
+from medicai.utils.general import hide_warnings
+
+hide_warnings()
+
 from medicai.utils import registration
 
 from ..utils.model_utils import BACKBONE_ZOO
@@ -29,7 +33,7 @@ from .swin import SwinTransformer, SwinUNETR
 from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
-from .vit import ViT, ViTBackbone
+from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 
 
 def list_models(family: str = None):

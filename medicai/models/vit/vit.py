@@ -7,7 +7,7 @@ from .vit_backbone import ViTBackbone
 
 
 @keras.saving.register_keras_serializable(package="vit")
-class ViTVariantsBase:
+class ViTVariantsBase(keras.Model):
     def __init__(
         self,
         *,
@@ -48,29 +48,23 @@ class ViTVariantsBase:
             use_class_token=True,
             use_patch_bias=True,
             name=name + "_backbone",
-            dtype=None,
         )
         input = backbone.input
         x = backbone.output
 
-        # Optional: intermediate (pre-logits) layer
-        intermediate_layer = None
-        if intermediate_dim is not None:
-            intermediate_layer = keras.layers.Dense(
-                intermediate_dim, activation="tanh", name="pre_logits"
-            )
-
         if include_top:
-            # pre logit layer
-            if intermediate_layer is not None:
+            # Standard ViT output is the CLS token
+            x = x[:, 0]
+
+            # Optional: intermediate (pre-logits) layer
+            if intermediate_dim is not None:
+                intermediate_layer = keras.layers.Dense(
+                    intermediate_dim, activation="tanh", name="pre_logits"
+                )
                 x = intermediate_layer(x)
 
             # output dropout layer
             x = keras.layers.Dropout(rate=dropout, name="output_dropout")(x)
-
-            # gap pooling
-            ndim = len(ops.shape(x))
-            x = ops.mean(x, axis=list(range(1, ndim - 1)))  # mean over spatial dims
 
             # output layer
             output_dense = keras.layers.Dense(
@@ -80,11 +74,14 @@ class ViTVariantsBase:
                 name="predictions",
             )
             x = output_dense(x)
-        elif pooling == "token":
-            x = x[:, 0]  # CLS token
-        elif pooling == "gap":
-            ndim = len(ops.shape(x))
-            x = ops.mean(x, axis=list(range(1, ndim - 1)))  # mean over spatial dims
+        else:
+            if pooling == "token":
+                x = x[:, 0]  # CLS token
+            elif pooling == "gap":
+                ndim = len(ops.shape(x))
+                x = ops.mean(x, axis=list(range(1, ndim - 1)))  # mean over spatial dims
+            else:
+                raise ValueError(f"Invalid pooling type: {pooling}")
 
         super().__init__(inputs=input, outputs=x, name=name, **kwargs)
 
@@ -133,8 +130,8 @@ class ViTBase(ViTVariantsBase):
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
-        pooling=None,
-        classifier_activation="softmax",
+        pooling="token",
+        classifier_activation=None,
         name=None,
         **kwargs,
     ):
@@ -165,8 +162,8 @@ class ViTLarge(ViTVariantsBase):
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
-        pooling=None,
-        classifier_activation="softmax",
+        pooling="token",
+        classifier_activation=None,
         name=None,
         **kwargs,
     ):
@@ -197,8 +194,8 @@ class ViTHuge(ViTVariantsBase):
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
-        pooling=None,
-        classifier_activation="softmax",
+        pooling="token",
+        classifier_activation=None,
         name=None,
         **kwargs,
     ):
