@@ -8,7 +8,7 @@ from medicai.models import (
     SwinUNETR,
     TransUNet,
     UNet,
-    ViT,
+    ViTBase,
 )
 
 
@@ -107,7 +107,7 @@ def test_vit():
     D, H, W, C = 16, 32, 32, 1
     num_classes = 10
 
-    vit2d = ViT(
+    vit2d = ViTBase(
         input_shape=(H, W, 3),
         num_classes=num_classes,
         pooling="token",
@@ -119,7 +119,7 @@ def test_vit():
     y2d = vit2d(x2d)
     assert y2d.shape == (batch_size, num_classes)
 
-    vit3d = ViT(
+    vit3d = ViTBase(
         input_shape=(D, H, W, C),  # D, H, W, C
         num_classes=num_classes,
         pooling="gap",

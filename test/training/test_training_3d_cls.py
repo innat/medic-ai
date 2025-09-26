@@ -1,7 +1,7 @@
 import keras
 import tensorflow as tf
 
-from medicai.models import SwinTransformer, ViT
+from medicai.models import SwinTransformer, ViTBase
 from medicai.transforms import Compose, RandRotate90, Resize, ScaleIntensityRange
 
 
@@ -62,7 +62,7 @@ def create_dummy_dataset(batch_size, num_classes):
 
 def test_training_with_meta():
     num_classes = 1
-    model_list = [SwinTransformer, ViT]
+    model_list = [SwinTransformer, ViTBase]
 
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.map(create_sample_dict, num_parallel_calls=tf.data.AUTOTUNE)
