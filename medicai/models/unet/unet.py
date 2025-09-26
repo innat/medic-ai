@@ -1,9 +1,8 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import get_conv_layer
+from medicai.utils.model_utils import get_conv_layer, resolve_encoder
 
-from ..encoder_utils import resolve_encoder
 from .unet_decoder import UNetDecoder
 
 

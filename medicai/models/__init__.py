@@ -29,7 +29,7 @@ from .swin import SwinTransformer, SwinUNETR
 from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
-from .vit import ViT, ViTBackbone
+from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 
 
 def list_models(family: str = None):

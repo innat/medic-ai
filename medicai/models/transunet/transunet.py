@@ -2,9 +2,8 @@ import keras
 from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
-from medicai.utils import get_conv_layer, get_reshaping_layer
+from medicai.utils import get_conv_layer, get_reshaping_layer, resolve_encoder
 
-from ..encoder_utils import resolve_encoder
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
 

@@ -1,2 +1,2 @@
-from .vision_transformer import ViT
+from .vit import ViTBase, ViTHuge, ViTLarge
 from .vit_backbone import ViTBackbone

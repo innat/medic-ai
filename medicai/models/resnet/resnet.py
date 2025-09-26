@@ -96,7 +96,7 @@ class ResNetBase(keras.Model):
             use_pre_activation=use_pre_activation,
             include_rescaling=include_rescaling,
         )
-        inputs = backbone.inputs
+        inputs = backbone.input
         x = backbone.output
 
         GlobalAvgPool = get_pooling_layer(
