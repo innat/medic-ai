@@ -5,6 +5,17 @@ from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 
 
 class ViTBackbone(keras.Model):
+    """
+    Vision Transformer (ViT) backbone for feature extraction.
+
+    This class implements the core ViT encoder, including patching, embedding,
+    transformer encoder blocks, and final layer normalization. It supports both 2D
+    (H, W, C) and 3D (D, H, W, C) inputs, adapting the patching mechanism accordingly.
+
+    The model output is the sequence of feature tokens (including the CLS token, if used)
+    after the final transformer block and Layer Normalization.
+    """
+
     def __init__(
         self,
         input_shape,
@@ -25,11 +36,7 @@ class ViTBackbone(keras.Model):
         **kwargs,
     ):
         """
-        Vision Transformer (ViT) backbone for feature extraction.
-
-        This class implements the core ViT encoder, including patching, embedding,
-        transformer encoder blocks, and layer normalization. It supports both 2D
-        and 3D inputs.
+        Initializes the ViT backbone model.
 
         Args:
             input_shape (tuple): Shape of the input tensor excluding batch size.
@@ -39,8 +46,10 @@ class ViTBackbone(keras.Model):
                 If int, the same size is used for all spatial dims.
             num_layers (int): Number of transformer encoder layers.
             num_heads (int): Number of attention heads per transformer layer.
-            hidden_dim (int): Hidden dimension size of the transformer encoder.
+            hidden_dim (int): Hidden dimension size of the transformer encoder (C).
             mlp_dim (int): Hidden dimension size of the MLP in each transformer block.
+            include_rescaling (bool): Whether to include a Rescaling layer at the
+                                      start to normalize inputs (1/255). Default: False.
             dropout_rate (float): Dropout rate applied after patch embedding and in MLPs.
             attention_dropout (float): Dropout rate for the attention weights.
             layer_norm_epsilon (float): Epsilon for layer normalization.
@@ -52,7 +61,8 @@ class ViTBackbone(keras.Model):
             **kwargs: Additional keyword arguments passed to keras.Model.
 
         Example:
-            # 2D ViT backbone
+            # 2D ViT backbone (ViT-Base params)
+            from medicai.models import ViTBackbone
             backbone = ViTBackbone(
                 input_shape=(224, 224, 3),
                 patch_size=16,
@@ -63,6 +73,7 @@ class ViTBackbone(keras.Model):
             )
 
             # 3D ViT backbone
+            from medicai.models import ViTBackbone
             backbone3d = ViTBackbone(
                 input_shape=(16, 128, 128, 1),
                 patch_size=(4, 16, 16),
@@ -92,6 +103,9 @@ class ViTBackbone(keras.Model):
                 f"image spatial dims {spatial_dims}."
             )
 
+        if hidden_dim % num_heads != 0:
+            raise ValueError("hidden_size should be divisible by num_heads.")
+
         # Validate divisibility
         for im_dim, p_dim in zip(input_shape, patch_size):
             if im_dim % p_dim != 0:
@@ -99,6 +113,7 @@ class ViTBackbone(keras.Model):
 
         # === Functional Model ===
         inputs = keras.Input(shape=input_shape, name="images")
+        pyramid_outputs = {}
 
         if include_rescaling:
             x = layers.Rescaling(1.0 / 255)(x)
@@ -112,6 +127,7 @@ class ViTBackbone(keras.Model):
             use_patch_bias=use_patch_bias,
             name="vit_patching_and_embedding",
         )(inputs)
+        pyramid_outputs["P1"] = x
 
         x = keras.layers.Dropout(dropout_rate, name="vit_dropout")(x)
 
@@ -128,6 +144,7 @@ class ViTBackbone(keras.Model):
                 name=f"vit_feature{i + 1}",
             )
             x = encoder_block(x)
+            pyramid_outputs[f"P{i+2}"] = x
 
         output = keras.layers.LayerNormalization(
             epsilon=layer_norm_epsilon,
@@ -137,6 +154,7 @@ class ViTBackbone(keras.Model):
         super().__init__(inputs=inputs, outputs=output, name=name or "ViTBackbone", **kwargs)
 
         # === Config ===
+        self.pyramid_outputs = pyramid_outputs
         self.patch_size = patch_size
         self.num_layers = num_layers
         self.num_heads = num_heads

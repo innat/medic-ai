@@ -2,118 +2,142 @@ import keras
 from keras import ops
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-from medicai.models.vit.vit_backbone import ViTBackbone
+
+from ..encoder_utils import resolve_encoder
 
 
 class UNETR(keras.Model):
+    """
+    UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
+
+    UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using
+    projection upsampling blocks and skip connections from intermediate transformer layers.
+    It is designed to leverage the global context-modeling power of Transformers for
+    high-resolution tasks like medical image segmentation.
+
+    The model supports both 2D (H, W, C) and 3D (D, H, W, C) inputs, depending on the
+    dimensional configuration of the injected Vision Transformer encoder.
+
+    Example:
+    >>> import tensorflow as tf # Assuming Keras backend uses TensorFlow for this example
+    >>> from your_module import UNETR
+    >>> # 3D UNETR for 3-class segmentation
+    >>> model_3d = UNETR(
+    ...     input_shape=(16, 128, 128, 1),
+    ...     encoder_name="vit_base", # Automatically resolves and builds the ViT-Base encoder
+    ...     num_classes=3,
+    ...     feature_size=16,
+    ...     norm_name="instance",
+    ... )
+    >>> output_3d = model_3d(tf.random.normal((1, 16, 128, 128, 1)))
+    >>> print(output_3d.shape)
+    (1, 16, 128, 128, 3) # Example output shape for 3D
+
+    >>> # 2D UNETR for binary segmentation (e.g., cell/background)
+    >>> model_2d = UNETR(
+    ...     input_shape=(256, 256, 3),
+    ...     encoder_name="vit_large",
+    ...     num_classes=1,
+    ...     classifier_activation="sigmoid",
+    ...     feature_size=32,
+    ...     norm_name="batch",
+    ... )
+    >>> output_2d = model_2d(tf.random.normal((1, 256, 256, 3)))
+    >>> print(output_2d.shape)
+    (1, 256, 256, 1) # Example output shape for 2D
+
+    Reference:
+        'UNETR: Transformers for 3D Medical Image Segmentation'
+        - Paper: https://arxiv.org/abs/2103.10504
+    """
+
+    ALLOWED_BACKBONE_FAMILIES = ["vit"]
+
     def __init__(
         self,
         *,
-        input_shape,
-        num_classes: int,
+        input_shape=None,
+        encoder_name=None,
+        encoder=None,
+        num_classes=1,
         classifier_activation=None,
-        feature_size: int = 16,
-        hidden_size: int = 768,
-        mlp_dim: int = 3072,
-        num_heads: int = 12,
-        num_layers: int = 12,
-        patch_size: int = 16,
-        norm_name: str = "instance",
-        conv_block: bool = True,
-        res_block: bool = True,
-        dropout_rate: float = 0.0,
-        name: str = "UNETR",
+        feature_size=16,
+        norm_name="instance",
+        conv_block=True,
+        res_block=True,
+        dropout_rate=0.0,
+        name="UNETR",
         **kwargs,
     ):
-        """UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
-
-        UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using
-        projection upsampling blocks and skip connections from intermediate transformer layers.
+        """
+        Initializes the UNETR model by setting up the Vision Transformer encoder and the UNet decoder.
 
         Args:
-            input_shape (tuple): Shape of the input tensor excluding batch size.
-                                For example, (height, width, channels) for 2D
-                                or (depth, height, width, channels) for 3D.
+            input_shape (tuple, optional): Shape of the input tensor excluding batch size.
+                For example, (height, width, channels) for 2D
+                or (depth, height, width, channels) for 3D.
+                *Required if `encoder` is None.*
+            encoder_name (str, optional): The name of a pre-registered ViT encoder variant
+                (e.g., 'vit_base', 'vit_large', 'vit_huge') to use as the backbone.
+                *Used if `encoder` is None.*
+            encoder (keras.Model, optional): An already initialized ViT backbone model.
+                If provided, `input_shape` and `encoder_name` are ignored.
             num_classes (int): Number of output segmentation classes.
+                *Effect:* Sets the channel depth of the final output layer. Default: 1.
             classifier_activation (str, optional): Activation function applied to the output layer.
-            feature_size (int): Base number of feature channels in decoder blocks.
-            hidden_size (int): Hidden size of the transformer encoder.
-            mlp_dim (int): Hidden size of MLPs in transformer blocks.
-            num_heads (int): Number of attention heads per transformer layer.
-            num_layers (int): Number of transformer encoder layers.
-            patch_size (int): Size of the patches extracted from input.
+                *Effect:* Typically 'sigmoid' for binary/multi-label or 'softmax' for multi-class
+                segmentation. Default: None.
+            feature_size (int): Base number of feature channels in decoder blocks. The channels
+                will be scaled up (e.g., `feature_size`, `2*feature_size`, etc.). Default: 16.
             norm_name (str): Type of normalization for decoder blocks ("instance", "batch", etc.).
-            conv_block (bool): Whether to use convolutional blocks in decoder.
-            res_block (bool): Whether to use residual blocks in decoder.
-            dropout_rate (float): Dropout rate applied in backbone and intermediate layers.
-            name (str): Model name.
-            **kwargs: Additional keyword arguments passed to keras.Model.
-
-        Example:
-            # 3D UNETR for 3-class segmentation
-            model = UNETR(
-                input_shape=(16, 128, 128, 1),
-                num_classes=3,
-                feature_size=16,
-                hidden_size=768,
-                mlp_dim=3072,
-                num_heads=12,
-                num_layers=12,
-                patch_size=16,
-                norm_name="instance",
-                conv_block=True,
-                res_block=True,
-                dropout_rate=0.1,
-            )
-
-            # Forward pass
-            output = model(tf.random.normal((1, 16, 128, 128, 1)))
+                Default: "instance".
+            conv_block (bool): Whether to use standard convolutional blocks in the decoder path
+                (in `UnetrPrUpBlock`). Default: True.
+            res_block (bool): Whether to use residual connections within the decoder's
+                convolutional layers (`UnetrBasicBlock` and `UnetrUpBlock`). Default: True.
+            dropout_rate (float): Dropout rate applied in the ViT backbone and intermediate layers.
+                *Effect:* Regularization strength. Must be between 0 and 1. Default: 0.0.
+            name (str): Model name. Default: "UNETR".
+            **kwargs: Additional keyword arguments passed to `keras.Model`.
         """
 
         if not (0 <= dropout_rate <= 1):
             raise ValueError("dropout_rate should be between 0 and 1.")
-        if hidden_size % num_heads != 0:
-            raise ValueError("hidden_size should be divisible by num_heads.")
 
-        *image_size, num_channels = input_shape
-        feat_size = tuple(img_d // patch_size for img_d in image_size)
-
-        # === Backbone ===
-        vit_backbone = ViTBackbone(
+        encoder, input_shape = resolve_encoder(
+            encoder=encoder,
+            encoder_name=encoder_name,
             input_shape=input_shape,
-            patch_size=patch_size,
-            num_layers=num_layers,
-            num_heads=num_heads,
-            hidden_dim=hidden_size,
-            mlp_dim=mlp_dim,
-            dropout_rate=dropout_rate,
-            attention_dropout=0.0,
-            layer_norm_epsilon=1e-6,
-            use_mha_bias=True,
-            use_mlp_bias=True,
-            use_class_token=False,
-            use_patch_bias=True,
-            name=f"{name}_backbone",
+            allowed_families=UNETR.ALLOWED_BACKBONE_FAMILIES,
         )
-        inputs = vit_backbone.input
-        skips = [
-            vit_backbone.get_layer("vit_feature3").output,
-            vit_backbone.get_layer("vit_feature6").output,
-            vit_backbone.get_layer("vit_feature9").output,
-        ]
+        *image_size, _ = input_shape
+        feat_size = tuple(img_d // encoder.patch_size for img_d in image_size)
+
+        # Get intermediate vectores
+        pyramid_outputs = encoder.pyramid_outputs
+        required_keys = {"P5", "P8", "P11"}
+        if not required_keys.issubset(pyramid_outputs.keys()):
+            raise ValueError(
+                f"The encoder's `pyramid_outputs` is missing one or more required keys. "
+                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+            )
+
+        # catch input and intermediate feature vectors
+        inputs = encoder.input
+        skips = [pyramid_outputs.get(key) for key in required_keys]
 
         # === Decoder ===
         decoder_head = self.build_decoder(
             num_classes=num_classes,
             feature_size=feature_size,
-            hidden_size=hidden_size,
+            hidden_size=encoder.hidden_dim,
             feat_size=feat_size,
             norm_name=norm_name,
             conv_block=conv_block,
             res_block=res_block,
             classifier_activation=classifier_activation,
         )
-        last_output = vit_backbone.output
+        last_output = encoder.output
 
         outputs = decoder_head([inputs] + skips + [last_output])
         super().__init__(inputs=inputs, outputs=outputs, name=name, **kwargs)
@@ -122,11 +146,6 @@ class UNETR(keras.Model):
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.feature_size = feature_size
-        self.hidden_size = hidden_size
-        self.mlp_dim = mlp_dim
-        self.num_heads = num_heads
-        self.num_layers = num_layers
-        self.patch_size = patch_size
         self.norm_name = norm_name
         self.conv_block = conv_block
         self.res_block = res_block
@@ -239,11 +258,6 @@ class UNETR(keras.Model):
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
-            "hidden_size": self.hidden_size,
-            "mlp_dim": self.mlp_dim,
-            "num_heads": self.num_heads,
-            "num_layers": self.num_layers,
-            "patch_size": self.patch_size,
             "norm_name": self.norm_name,
             "conv_block": self.conv_block,
             "res_block": self.res_block,

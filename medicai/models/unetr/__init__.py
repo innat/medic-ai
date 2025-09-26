@@ -1,1 +1,1 @@
-from .unetr_model import UNETR
+from .unetr import UNETR
