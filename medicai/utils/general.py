@@ -331,8 +331,11 @@ class DescribeMixin:
     def _format_param(self, k, v, encoder_desc=None, indent="  "):
         # Special case: encoder key
         if k == "encoder" and encoder_desc is not None:
+            irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
             lines = [f"{indent}• {encoder_desc['class']}("]
             for nk, nv in encoder_desc["params"].items():
+                if nk in irrelevant_keys:
+                    continue
                 lines.append(f"{indent}  • {nk}: {nv}")
             lines.append(f"{indent})")
             return "\n".join(lines)
