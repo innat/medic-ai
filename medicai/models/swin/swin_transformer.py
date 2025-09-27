@@ -7,46 +7,34 @@ from .swin_backbone import SwinBackbone
 SWIN_CFG = {
     "2D": {
         "tiny": {
-            "patch_size": [2, 2],
             "depths": [2, 2, 6, 2],
-            "window_size": [7, 7],
             "num_heads": [3, 6, 12, 24],
             "embed_dim": 96,
         },
         "small": {
-            "patch_size": [2, 2],
             "depths": [2, 2, 18, 2],
-            "window_size": [7, 7],
             "num_heads": [3, 6, 12, 24],
             "embed_dim": 96,
         },
         "base": {
-            "patch_size": [2, 2],
             "depths": [2, 2, 18, 2],
-            "window_size": [7, 7],
             "num_heads": [4, 8, 16, 32],
             "embed_dim": 128,
         },
     },
     "3D": {
         "tiny": {
-            "patch_size": [2, 2, 2],
             "depths": [2, 2, 2, 2],
-            "window_size": [7, 7, 7],
             "num_heads": [3, 6, 12, 24],
             "embed_dim": 48,
         },
         "small": {
-            "patch_size": [2, 2, 2],
             "depths": [2, 2, 6, 2],
-            "window_size": [7, 7, 7],
             "num_heads": [3, 6, 12, 24],
             "embed_dim": 48,
         },
         "base": {
-            "patch_size": [2, 2, 2],
             "depths": [2, 2, 6, 2],
-            "window_size": [7, 7, 7],
             "num_heads": [4, 8, 16, 32],
             "embed_dim": 96,
         },
@@ -67,6 +55,8 @@ class SwinVariantsBase(keras.Model):
         input_shape,
         include_rescaling,
         include_top,
+        patch_size,
+        window_size,
         pooling,
         dropout,
         attn_drop_rate,
@@ -118,13 +108,29 @@ class SwinVariantsBase(keras.Model):
 
         cfg = SWIN_CFG.get(f"{spatial_dims}D")[variant]
 
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * spatial_dims
+        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
+            raise ValueError(
+                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {patch_size} with length {len(patch_size)}"
+            )
+
+        if isinstance(window_size, int):
+            window_size = (window_size,) * spatial_dims
+        elif isinstance(window_size, (list, tuple)) and len(window_size) != spatial_dims:
+            raise ValueError(
+                f"window_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {window_size} with length {len(window_size)}"
+            )
+
         backbone = SwinBackbone(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
-            patch_size=cfg["patch_size"],
-            depths=cfg["depths"],
-            window_size=cfg["window_size"],
+            patch_size=patch_size,
+            window_size=window_size,
             num_heads=cfg["num_heads"],
+            depths=cfg["depths"],
             embed_dim=cfg["embed_dim"],
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
@@ -157,6 +163,8 @@ class SwinVariantsBase(keras.Model):
         self.include_rescaling = include_rescaling
         self.include_top = include_top
         self.num_classes = num_classes
+        self.patch_size = patch_size
+        self.window_size = window_size
         self.pooling = pooling
         self.dropout = dropout
         self.attn_drop_rate = attn_drop_rate
@@ -186,6 +194,8 @@ class SwinTiny(SwinVariantsBase):
         input_shape,
         include_rescaling=False,
         include_top=True,
+        patch_size=4,
+        window_size=7,
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
@@ -197,6 +207,8 @@ class SwinTiny(SwinVariantsBase):
             input_shape=input_shape,
             include_rescaling=include_rescaling,
             include_top=include_top,
+            patch_size=patch_size,
+            window_size=window_size,
             num_classes=num_classes,
             pooling=pooling,
             classifier_activation=classifier_activation,
@@ -218,6 +230,8 @@ class SwinSmall(SwinVariantsBase):
         input_shape,
         include_rescaling=False,
         include_top=True,
+        patch_size=4,
+        window_size=7,
         num_classes=1000,
         pooling="avg",
         use_class_token=True,
@@ -232,6 +246,8 @@ class SwinSmall(SwinVariantsBase):
             include_top=include_top,
             num_classes=num_classes,
             pooling=pooling,
+            patch_size=patch_size,
+            window_size=window_size,
             classifier_activation=classifier_activation,
             use_class_token=use_class_token,
             dropout=dropout,
@@ -253,6 +269,8 @@ class SwinBase(SwinVariantsBase):
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
+        patch_size=4,
+        window_size=7,
         pooling="avg",
         use_class_token=True,
         dropout=0.0,
@@ -266,6 +284,8 @@ class SwinBase(SwinVariantsBase):
             include_top=include_top,
             num_classes=num_classes,
             pooling=pooling,
+            patch_size=patch_size,
+            window_size=window_size,
             classifier_activation=classifier_activation,
             use_class_token=use_class_token,
             dropout=dropout,

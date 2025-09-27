@@ -30,6 +30,8 @@ class SwinUNETR(keras.Model):
         encoder_name=None,
         encoder=None,
         num_classes=1,
+        patch_size=2,
+        window_size=7,
         classifier_activation=None,
         feature_size=48,
         res_block=True,
@@ -58,6 +60,8 @@ class SwinUNETR(keras.Model):
             encoder=encoder,
             encoder_name=encoder_name,
             input_shape=input_shape,
+            patch_size=patch_size,
+            window_size=window_size,
             allowed_families=SwinUNETR.ALLOWED_BACKBONE_FAMILIES,
             pooling=None,
         )
@@ -89,6 +93,7 @@ class SwinUNETR(keras.Model):
         super().__init__(inputs=inputs, outputs=outputs, **kwargs)
 
         self.num_classes = num_classes
+        self.patch_size = patch_size
         self.feature_size = feature_size
         self.res_block = res_block
         self.norm_name = norm_name
@@ -236,6 +241,7 @@ class SwinUNETR(keras.Model):
             "input_shape": self.input_shape[1:],
             "encoder_name": self.encoder_name,
             "num_classes": self.num_classes,
+            "patch_size": self.patch_size,
             "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
             "res_block": self.res_block,

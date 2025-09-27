@@ -105,7 +105,7 @@ class SwinBackbone(keras.Model):
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
         x = SwinPatchingAndEmbedding(
-            patch_size=patch_size[:spatial_dims],
+            patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
@@ -121,7 +121,7 @@ class SwinBackbone(keras.Model):
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
-                window_size=window_size[:spatial_dims],
+                window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,
