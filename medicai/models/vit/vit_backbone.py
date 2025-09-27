@@ -2,9 +2,10 @@ import keras
 from keras import layers
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
+from medicai.utils import DescribeMixin
 
 
-class ViTBackbone(keras.Model):
+class ViTBackbone(keras.Model, DescribeMixin):
     """
     Vision Transformer (ViT) backbone for feature extraction.
 

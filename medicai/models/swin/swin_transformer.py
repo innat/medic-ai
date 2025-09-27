@@ -1,6 +1,6 @@
 import keras
 
-from medicai.utils import get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration
 
 from .swin_backbone import SwinBackbone
 
@@ -208,7 +208,7 @@ class SwinVariantsBase(keras.Model):
 
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_tiny", family="swin")
-class SwinTiny(SwinVariantsBase):
+class SwinTiny(SwinVariantsBase, DescribeMixin):
     """Swin Tiny model, a small-scale Swin Transformer for vision tasks.
 
     The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
@@ -283,7 +283,7 @@ class SwinTiny(SwinVariantsBase):
 
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_small", family="swin")
-class SwinSmall(SwinVariantsBase):
+class SwinSmall(SwinVariantsBase, DescribeMixin):
     """Swin Small model, a medium-scale Swin Transformer for vision tasks.
 
     The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
@@ -358,7 +358,7 @@ class SwinSmall(SwinVariantsBase):
 
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_base", family="swin")
-class SwinBase(SwinVariantsBase):
+class SwinBase(SwinVariantsBase, DescribeMixin):
     """Swin Base model, a large-scale Swin Transformer for vision tasks.
 
     The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer

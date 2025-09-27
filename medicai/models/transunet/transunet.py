@@ -2,13 +2,13 @@ import keras
 from keras import layers, ops
 
 from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
-from medicai.utils import get_conv_layer, get_reshaping_layer, resolve_encoder
+from medicai.utils import DescribeMixin, get_conv_layer, get_reshaping_layer, resolve_encoder
 
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
 
 
 @keras.saving.register_keras_serializable(package="transunet")
-class TransUNet(keras.Model):
+class TransUNet(keras.Model, DescribeMixin):
     """3D or 2D TransUNet model for medical image segmentation.
 
     This model combines a 3D or 2D CNN encoder (DenseNet) with a Vision Transformer

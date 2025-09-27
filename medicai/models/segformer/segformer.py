@@ -2,6 +2,7 @@ import keras
 from keras import layers, ops
 
 from medicai.utils import (
+    DescribeMixin,
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
@@ -11,7 +12,7 @@ from medicai.utils import (
 
 
 @keras.saving.register_keras_serializable(package="segformer")
-class SegFormer(keras.Model):
+class SegFormer(keras.Model, DescribeMixin):
     """SegFormer model for 2D or 3D semantic segmentation.
 
     This class implements the full SegFormer architecture, which combines a

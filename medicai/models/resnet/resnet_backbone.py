@@ -1,13 +1,19 @@
 import keras
 from keras import layers, ops
 
-from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer, parse_model_inputs
+from medicai.utils import (
+    DescribeMixin,
+    get_conv_layer,
+    get_pooling_layer,
+    get_reshaping_layer,
+    parse_model_inputs,
+)
 
 from .resnet_layers import apply_resnet_block
 
 
 @keras.saving.register_keras_serializable(package="resnet.backbone")
-class ResNetBackbone(keras.Model):
+class ResNetBackbone(keras.Model, DescribeMixin):
     """ResNet and ResNetV2 core network with hyperparameters.
 
     This class implements a ResNet backbone as described in [Deep Residual

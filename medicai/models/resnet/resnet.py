@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration
 
 from .resnet_backbone import ResNetBackbone
 
@@ -151,7 +151,7 @@ class ResNetBase(keras.Model):
 
 @keras.saving.register_keras_serializable(package="resnet18")
 @registration.register(family="resnet")
-class ResNet18(ResNetBase):
+class ResNet18(ResNetBase, DescribeMixin):
     """
     ResNet-18 model for classification.
 
@@ -214,7 +214,7 @@ class ResNet18(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet34")
 @registration.register(family="resnet")
-class ResNet34(ResNetBase):
+class ResNet34(ResNetBase, DescribeMixin):
     """
     ResNet-34 model for classification.
 
@@ -278,7 +278,7 @@ class ResNet34(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet50")
 @registration.register(family="resnet")
-class ResNet50(ResNetBase):
+class ResNet50(ResNetBase, DescribeMixin):
     """
     ResNet-50 model for classification.
 
@@ -340,7 +340,7 @@ class ResNet50(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet101")
 @registration.register(family="resnet")
-class ResNet101(ResNetBase):
+class ResNet101(ResNetBase, DescribeMixin):
     """
     ResNet-101 model for classification.
 
@@ -403,7 +403,7 @@ class ResNet101(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet152")
 @registration.register(family="resnet")
-class ResNet152(ResNetBase):
+class ResNet152(ResNetBase, DescribeMixin):
     """
     ResNet-152 model for classification.
 
@@ -466,7 +466,7 @@ class ResNet152(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet50v2")
 @registration.register(family="resnet")
-class ResNet50v2(ResNetBase):
+class ResNet50v2(ResNetBase, DescribeMixin):
     """
     ResNet-50 v2 model for classification.
 
@@ -529,7 +529,7 @@ class ResNet50v2(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet101v2")
 @registration.register(family="resnet")
-class ResNet101v2(ResNetBase):
+class ResNet101v2(ResNetBase, DescribeMixin):
     """
     ResNet-101 v2 model for classification.
 
@@ -591,7 +591,7 @@ class ResNet101v2(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet152v2")
 @registration.register(family="resnet")
-class ResNet152v2(ResNetBase):
+class ResNet152v2(ResNetBase, DescribeMixin):
     """
     ResNet-152 v2 model for classification.
 
@@ -654,7 +654,7 @@ class ResNet152v2(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet50vd")
 @registration.register(family="resnet")
-class ResNet50vd(ResNetBase):
+class ResNet50vd(ResNetBase, DescribeMixin):
     """
     ResNet-50 "very deep" (vd) model for classification.
 
@@ -717,7 +717,7 @@ class ResNet50vd(ResNetBase):
 
 @keras.saving.register_keras_serializable(package="resnet200vd")
 @registration.register(family="resnet")
-class ResNet200vd(ResNetBase):
+class ResNet200vd(ResNetBase, DescribeMixin):
     """
     ResNet-200 "very deep" (vd) model for classification.
 

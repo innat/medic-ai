@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration
 
 from .mit_backbone import MiTBackbone
 
@@ -156,7 +156,7 @@ class MiTBase(keras.Model):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b0", family="mit")
-class MixViTB0(MiTBase):
+class MixViTB0(MiTBase, DescribeMixin):
     """
     Mix Transformer B0 (MiT-B0) model.
 
@@ -292,7 +292,7 @@ class MixViTB0(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b1", family="mit")
-class MixViTB1(MiTBase):
+class MixViTB1(MiTBase, DescribeMixin):
     """
     Mix Transformer B1 (MiT-B1) model.
 
@@ -420,7 +420,7 @@ class MixViTB1(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b2", family="mit")
-class MixViTB2(MiTBase):
+class MixViTB2(MiTBase, DescribeMixin):
     """
     Mix Transformer B2 (MiT-B2) model.
 
@@ -549,7 +549,7 @@ class MixViTB2(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b3", family="mit")
-class MixViTB3(MiTBase):
+class MixViTB3(MiTBase, DescribeMixin):
     """
     Mix Transformer B3 (MiT-B3) model.
 
@@ -682,7 +682,7 @@ class MixViTB3(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b4", family="mit")
-class MixViTB4(MiTBase):
+class MixViTB4(MiTBase, DescribeMixin):
     """
     Mix Transformer B4 (MiT-B4) model.
 
@@ -811,7 +811,7 @@ class MixViTB4(MiTBase):
 
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b5", family="mit")
-class MixViTB5(MiTBase):
+class MixViTB5(MiTBase, DescribeMixin):
     """
     Mix Transformer B5 (MiT-B5) model.
 

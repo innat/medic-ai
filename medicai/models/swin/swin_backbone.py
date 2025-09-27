@@ -9,10 +9,10 @@ import numpy as np
 from keras import layers
 
 from medicai.layers import SwinBasicLayer, SwinPatchingAndEmbedding, SwinPatchMerging
-from medicai.utils import parse_model_inputs
+from medicai.utils import DescribeMixin, parse_model_inputs
 
 
-class SwinBackbone(keras.Model):
+class SwinBackbone(keras.Model, DescribeMixin):
     """Swin Transformer backbone for 3D video.
 
     This class implements the Swin Transformer architecture as a backbone for
