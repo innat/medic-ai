@@ -4,10 +4,12 @@ hide_warnings()
 
 from keras import ops
 
+from medicai.utils import DescribeMixin
+
 from .base import BaseDiceMetric
 
 
-class BinaryDiceMetric(BaseDiceMetric):
+class BinaryDiceMetric(BaseDiceMetric, DescribeMixin):
     """Dice metric for binary segmentation tasks.
 
     Calculates the Dice coefficient for binary segmentation by thresholding

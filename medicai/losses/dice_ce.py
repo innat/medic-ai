@@ -5,10 +5,12 @@ hide_warnings()
 import keras
 from keras import ops
 
+from medicai.utils import DescribeMixin
+
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
-class SparseDiceCELoss(SparseDiceLoss):
+class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
     """Combined Sparse Dice and Categorical Cross-Entropy Loss.
 
     This loss function combines the Sparse Dice loss with the Categorical
@@ -61,7 +63,7 @@ class SparseDiceCELoss(SparseDiceLoss):
         return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
 
 
-class CategoricalDiceCELoss(CategoricalDiceLoss):
+class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
     """Combined Categorical Dice and Categorical Cross-Entropy Loss.
 
     This loss function combines the Categorical Dice loss with the standard
@@ -112,7 +114,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss):
         return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
 
 
-class BinaryDiceCELoss(BinaryDiceLoss):
+class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
     """Combined Binary Dice and Binary/Categorical Cross-Entropy Loss.
 
     This loss function combines the Binary Dice loss with either Binary or

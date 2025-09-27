@@ -4,10 +4,12 @@ hide_warnings()
 
 from keras import ops
 
+from medicai.utils import DescribeMixin
+
 from .base import BaseDiceLoss
 
 
-class SparseDiceLoss(BaseDiceLoss):
+class SparseDiceLoss(BaseDiceLoss, DescribeMixin):
     """Dice loss for sparse categorical segmentation labels.
 
     This loss function adapts the Dice loss to work with sparse labels
@@ -43,7 +45,7 @@ class SparseDiceLoss(BaseDiceLoss):
         return y_true
 
 
-class CategoricalDiceLoss(BaseDiceLoss):
+class CategoricalDiceLoss(BaseDiceLoss, DescribeMixin):
     """Dice loss for categorical (one-hot encoded) segmentation labels.
 
     This loss function calculates the Dice loss directly using the provided
@@ -71,7 +73,7 @@ class CategoricalDiceLoss(BaseDiceLoss):
             return y_pred
 
 
-class BinaryDiceLoss(BaseDiceLoss):
+class BinaryDiceLoss(BaseDiceLoss, DescribeMixin):
     """Dice loss for binary segmentation tasks.
 
     This loss function is specifically designed for binary segmentation where

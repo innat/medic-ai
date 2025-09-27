@@ -290,11 +290,11 @@ class DescribeMixin:
                         else ""
                     )
                     # annotation
-                    annot = (
-                        f": {param.annotation.__name__}"
-                        if param.annotation != inspect.Parameter.empty
-                        else ""
-                    )
+                    if param.annotation != inspect.Parameter.empty:
+                        annot_name = getattr(param.annotation, "__name__", repr(param.annotation))
+                        annot = f": {annot_name}"
+                    else:
+                        annot = ""
                     lines.append(f"  {pname}{annot} {default}".rstrip())
             except Exception:
                 lines.append("  <unable to inspect constructor>")
@@ -339,10 +339,7 @@ class DescribeMixin:
 
         params = {}
         if hasattr(self, "get_config") and callable(self.get_config):
-            try:
-                params = self.get_config()
-            except Exception:
-                pass
+            params = self.get_config()
 
         # remove unwanted internal keys
         params = {k: v for k, v in params.items() if k not in self._skip_keys}

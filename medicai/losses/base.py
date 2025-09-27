@@ -1,3 +1,5 @@
+import re
+
 import keras
 from keras import ops
 
@@ -40,9 +42,12 @@ class BaseDiceLoss(keras.losses.Loss):
         squared_pred=False,
         dice_weight=1.0,
         ce_weight=1.0,
-        name="dice_loss",
+        name=None,
         **kwargs,
     ):
+        if name is None and self.__class__ is not BaseDiceLoss:
+            name = re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).lower()
+
         super().__init__(name=name, **kwargs)
 
         if dice_weight < 0.0:

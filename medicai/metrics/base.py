@@ -1,3 +1,5 @@
+import re
+
 import keras
 from keras import ops
 from keras.metrics import Metric
@@ -37,10 +39,13 @@ class BaseDiceMetric(Metric):
         class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
-        name="base_dice",
+        name=None,
         threshold=0.5,
         **kwargs,
     ):
+        if name is None and self.__class__ is not BaseDiceMetric:
+            name = re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).lower()
+
         super().__init__(name=name, **kwargs)
 
         self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
