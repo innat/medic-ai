@@ -7,13 +7,13 @@
 
 ![Static Badge](https://img.shields.io/badge/keras-3.9.0-darkred?style=flat) ![Static Badge](https://img.shields.io/badge/tensorflow-2.19.0-orange?style=flat) ![Static Badge](https://img.shields.io/badge/torch-2.6.0-red?style=flat) ![Static Badge](https://img.shields.io/badge/jax-0.4.23-%233399ff)
 
-**Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical image analysis using machine learning techniques. Its core strengths include:
+**Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical 2D and 3D image analysis using machine learning techniques. Its core strengths include:
 
 - **Backend Agnostic:** Compatible with `tensorflow`, `torch`, and `jax`.
-- **User-Friendly API:** High-level interface for transformations and model creation.
+- **User-Friendly API:** High-level interface for transformations and model creation of both 2D and 3D.
 - **Scalable Execution:** Supports training and inference on **single/multi-GPU** and **TPU-VM** setups.
-- **Essential Components:** Includes standard metrics and losses, such as Dice.
-- **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data
+- **Essential Components:** Includes standard medical specific metrics and losses, such as Dice.
+- **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data.
 
 
 # 📋 Table of Contents
