@@ -1,3 +1,4 @@
+import inspect
 from typing import Any, List, Sequence, Tuple
 
 import numpy as np
@@ -244,3 +245,116 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
         return trilinear_resize(volumes, depth, height, width, align_corners)
     else:
         raise ValueError(f"Unsupported resize method: {method}")
+
+
+class DescriptionObject:
+    def __init__(self, text):
+        self.text = text
+
+    def __str__(self):
+        return self.text
+
+    def __repr__(self):
+        return self.text
+
+
+class DescribeMixin:
+    _skip_keys = {"layers", "input_layers", "output_layers", "weights", "layer_names"}
+
+    @classmethod
+    def class_describe(cls, pretty: bool = True):
+        """Return class-level description including docstring and __init__ args."""
+        base_doc = inspect.cleandoc(cls.__doc__ or "No description available.")
+        name = cls.__name__
+
+        if pretty:
+            lines = [f"📌 Class: {name}", "\n📝 Description:", base_doc]
+
+            # Optional: show allowed backbones if defined
+            if hasattr(cls, "ALLOWED_BACKBONE_FAMILIES"):
+                lines.append("\n🧩 Allowed Backbone Families:")
+                for fam in cls.ALLOWED_BACKBONE_FAMILIES:
+                    lines.append(f"  • {fam}")
+
+            # Constructor arguments
+            lines.append("\n⚙️ Constructor Arguments:")
+            try:
+                sig = inspect.signature(cls.__init__)
+                for pname, param in sig.parameters.items():
+                    if pname == "self":
+                        continue
+                    # default value
+                    default = (
+                        f"= {param.default!r}"
+                        if param.default is not inspect.Parameter.empty
+                        else ""
+                    )
+                    # annotation
+                    annot = (
+                        f": {param.annotation.__name__}"
+                        if param.annotation != inspect.Parameter.empty
+                        else ""
+                    )
+                    lines.append(f"  {pname}{annot} {default}".rstrip())
+            except Exception:
+                lines.append("  <unable to inspect constructor>")
+
+            return DescriptionObject("\n".join(lines))
+
+        # Machine-friendly dict version
+        desc = {"name": name, "doc": base_doc}
+        if hasattr(cls, "ALLOWED_BACKBONE_FAMILIES"):
+            desc["allowed_backbones"] = cls.ALLOWED_BACKBONE_FAMILIES
+        try:
+            desc["args"] = {
+                pname: str(param)
+                for pname, param in inspect.signature(cls.__init__).parameters.items()
+                if pname != "self"
+            }
+        except Exception:
+            desc["args"] = {}
+        return desc
+
+    def _format_param(self, k, v, encoder_desc=None, indent="  "):
+        # Special case: encoder key
+        if k == "encoder" and encoder_desc is not None:
+            lines = [f"{indent}• {encoder_desc['class']}("]
+            for nk, nv in encoder_desc["params"].items():
+                lines.append(f"{indent}  • {nk}: {nv}")
+            lines.append(f"{indent})")
+            return "\n".join(lines)
+        if isinstance(v, (dict, list, tuple)):
+            return f"{indent}• {k}: {v}"
+        else:
+            return f"{indent}• {k}: {v}"
+
+    def instance_describe(self, pretty: bool = True):
+        name = self.__class__.__name__
+
+        # if encoder attribute exists and has instance_describe
+        encoder = getattr(self, "encoder", None)
+        encoder_desc = None
+        if encoder is not None and hasattr(encoder, "instance_describe"):
+            encoder_desc = encoder.instance_describe(pretty=False)
+
+        params = {}
+        if hasattr(self, "get_config") and callable(self.get_config):
+            try:
+                params = self.get_config()
+            except Exception:
+                pass
+
+        # remove unwanted internal keys
+        params = {k: v for k, v in params.items() if k not in self._skip_keys}
+
+        if not pretty:
+            return {"class": name, "params": params}
+
+        # pretty string
+        lines = [f"Instance of {name}"]
+        if not params:
+            lines.append("  • <no config available>")
+        else:
+            for k, v in params.items():
+                lines.append(self._format_param(k, v, encoder_desc=encoder_desc))
+        return DescriptionObject("\n".join(lines))

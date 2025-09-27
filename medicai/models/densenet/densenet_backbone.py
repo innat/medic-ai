@@ -1,12 +1,12 @@
 import keras
 from keras import layers
 
-from ...utils import get_conv_layer, get_pooling_layer, parse_model_inputs
+from ...utils import DescribeMixin, get_conv_layer, get_pooling_layer, parse_model_inputs
 from .densenet_layers import apply_dense_block, apply_transition_layer
 
 
 @keras.utils.register_keras_serializable(package="densenet.backbone")
-class DenseNetBackbone(keras.Model):
+class DenseNetBackbone(keras.Model, DescribeMixin):
     """
     A Dense Convolutional Network (DenseNet) model.
 

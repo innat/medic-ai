@@ -34,3 +34,7 @@ from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 
 def list_models(family: str = None):
     return registration.list(family)
+
+
+def create_model(name: str):
+    return registration.create(name)
