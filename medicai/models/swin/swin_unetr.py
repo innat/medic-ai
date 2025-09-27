@@ -46,6 +46,8 @@ class SwinUNETR(keras.Model):
             classifier_activation (str, optional): The activation function for the final
                 classification layer (e.g., 'softmax'). If None, no activation is applied.
                 Default is None.
+            patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 2, 2].
+            window_size (list): Size of the attention windows (WD, WH, WW). Default is [7, 7, 7].
             feature_size (int): The base feature map size in the decoder. Default is 48.
             res_block (bool): Whether to use residual connections in the decoder blocks.
                 Default is True.

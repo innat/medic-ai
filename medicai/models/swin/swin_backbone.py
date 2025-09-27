@@ -139,6 +139,7 @@ class SwinBackbone(keras.Model):
 
         self.input_tensor = input_tensor
         self.pyramid_outputs = pyramid_outputs
+        self.include_rescaling = include_rescaling
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.window_size = window_size
@@ -158,6 +159,7 @@ class SwinBackbone(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "input_tensor": self.input_tensor,
+            "include_rescaling": self.include_rescaling,
             "embed_dim": self.embed_dim,
             "patch_norm": self.patch_norm,
             "window_size": self.window_size,

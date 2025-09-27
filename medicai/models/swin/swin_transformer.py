@@ -44,9 +44,12 @@ SWIN_CFG = {
 
 @keras.saving.register_keras_serializable(package="swin")
 class SwinVariantsBase(keras.Model):
-    """A 3D Swin Transformer model for classification.
+    """
+    Base class for Swin Transformer models (2D or 3D) for classification or feature extraction.
 
-    ...
+    This class handles the core logic for model configuration, input validation,
+    backbone creation, and adding the classification head or pooling layers.
+    Specific variants (Tiny, Small, Base) should inherit from this class.
     """
 
     def __init__(
@@ -70,13 +73,31 @@ class SwinVariantsBase(keras.Model):
         """Initializes the SwinTransformer model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (depth, height, width, channels).
-                Default is (96, 96, 96, 1).
-            num_classes (int): The number of output classes for classification. Default is 4.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer (e.g., 'softmax'). If None, no activation is applied.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
                 Default is None.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Raises:
+            ValueError: If `input_shape` is not provided, has invalid dimensions, or includes
+                variable spatial dimensions (None).
+            ValueError: If `patch_size` or `window_size` is provided as a tuple/list with an incorrect length.
         """
 
         # Input shape should be provided.
@@ -157,7 +178,7 @@ class SwinVariantsBase(keras.Model):
         elif pooling == "max":
             x = GlobalMaxPool(x)
 
-        super().__init__(inputs=inputs, outputs=x, **kwargs)
+        super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
@@ -188,6 +209,24 @@ class SwinVariantsBase(keras.Model):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_tiny", family="swin")
 class SwinTiny(SwinVariantsBase):
+    """Swin Tiny model, a small-scale Swin Transformer for vision tasks.
+
+    The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Tiny' variant uses a compact
+    configuration suitable for fast experimentation or resource-constrained environments.
+
+    Example:
+    >>> from medicai.models import SwinTiny
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinTiny(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Reference:
+      paper: https://arxiv.org/abs/2103.14030
+    """
+
     def __init__(
         self,
         *,
@@ -203,6 +242,27 @@ class SwinTiny(SwinVariantsBase):
         name=None,
         **kwargs,
     ):
+        """Initializes the Swin Tiny model.
+
+        Args:
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
+            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
+            include_top (bool): Whether to include the final classification layer. Defaults to True.
+            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
+            window_size (int or tuple): The size of the attention window. Defaults to 7.
+            num_classes (int): The number of output classes. Defaults to 1000.
+            pooling (str): Optional pooling type. Defaults to 'avg'.
+            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            classifier_activation (str, optional): The activation function for the final
+                classification layer. Defaults to None.
+            name (str, optional): The name of the model. Defaults to None.
+            **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Default Configuration Details (Swin-Tiny):
+            - **Embedding Dimension:** 96 for 2D, 48 for 3D.
+            - **Depths:** [2, 2, 6, 2] for 2D, [2, 2, 2, 2] for 3D.
+            - **Number of Heads:** [3, 6, 12, 24] same for 2D and 3D.
+        """
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -224,6 +284,24 @@ class SwinTiny(SwinVariantsBase):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_small", family="swin")
 class SwinSmall(SwinVariantsBase):
+    """Swin Small model, a medium-scale Swin Transformer for vision tasks.
+
+    The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Small' variant is a good
+    balance of complexity and accuracy.
+
+    Example:
+    >>> from medicai.models import SwinSmall
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinSmall(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Reference:
+      paper: https://arxiv.org/abs/2103.14030
+    """
+
     def __init__(
         self,
         *,
@@ -234,12 +312,32 @@ class SwinSmall(SwinVariantsBase):
         window_size=7,
         num_classes=1000,
         pooling="avg",
-        use_class_token=True,
         dropout=0.0,
         classifier_activation=None,
         name=None,
         **kwargs,
     ):
+        """Initializes the Swin Small model.
+
+        Args:
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
+            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
+            include_top (bool): Whether to include the final classification layer. Defaults to True.
+            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
+            window_size (int or tuple): The size of the attention window. Defaults to 7.
+            num_classes (int): The number of output classes. Defaults to 1000.
+            pooling (str): Optional pooling type. Defaults to 'avg'.
+            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            classifier_activation (str, optional): The activation function for the final
+                classification layer. Defaults to None.
+            name (str, optional): The name of the model. Defaults to None.
+            **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Default Configuration Details (Swin-Small):
+            - **Embedding Dimension:** 96 for 2D, 48 for 3D.
+            - **Depths:** [2, 2, 18, 2] for 2D, [2, 2, 6, 2] for 3D.
+            - **Number of Heads:** [3, 6, 12, 24]
+        """
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -249,7 +347,6 @@ class SwinSmall(SwinVariantsBase):
             patch_size=patch_size,
             window_size=window_size,
             classifier_activation=classifier_activation,
-            use_class_token=use_class_token,
             dropout=dropout,
             variant="small",
             attn_drop_rate=0.0,
@@ -262,6 +359,24 @@ class SwinSmall(SwinVariantsBase):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_base", family="swin")
 class SwinBase(SwinVariantsBase):
+    """Swin Base model, a large-scale Swin Transformer for vision tasks.
+
+    The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Base' variant offers high
+    capacity suitable for complex tasks and large datasets.
+
+    Example:
+    >>> from medicai.models import SwinBase
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinBase(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Reference:
+      paper: https://arxiv.org/abs/2103.14030
+    """
+
     def __init__(
         self,
         *,
@@ -272,12 +387,32 @@ class SwinBase(SwinVariantsBase):
         patch_size=4,
         window_size=7,
         pooling="avg",
-        use_class_token=True,
         dropout=0.0,
         classifier_activation=None,
         name=None,
         **kwargs,
     ):
+        """Initializes the Swin Base model.
+
+        Args:
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
+            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
+            include_top (bool): Whether to include the final classification layer. Defaults to True.
+            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
+            window_size (int or tuple): The size of the attention window. Defaults to 7.
+            num_classes (int): The number of output classes. Defaults to 1000.
+            pooling (str): Optional pooling type. Defaults to 'avg'.
+            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            classifier_activation (str, optional): The activation function for the final
+                classification layer. Defaults to None.
+            name (str, optional): The name of the model. Defaults to None.
+            **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Default Configuration Details (Swin-Base):
+            - **Embedding Dimension:** 128 for 2D, 96 for 3D.
+            - **Depths:** [2, 2, 18, 2] for 2D, [2, 2, 6, 2] for 3D.
+            - **Number of Heads:** [4, 8, 16, 32] same for 2D and 3D.
+        """
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -287,7 +422,6 @@ class SwinBase(SwinVariantsBase):
             patch_size=patch_size,
             window_size=window_size,
             classifier_activation=classifier_activation,
-            use_class_token=use_class_token,
             dropout=dropout,
             variant="base",
             attn_drop_rate=0.0,
