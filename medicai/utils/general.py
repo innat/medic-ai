@@ -306,8 +306,9 @@ class DescribeMixin:
                         annot = ""
                     lines.append(f"  {pname}{annot} {default}".rstrip())
 
-                init_doc = inspect.cleandoc(cls.__init__.__doc__ or "No description available.")
-                lines.append(f"\n📘 Details Constructor Arguments:\n{init_doc}")
+                init_doc = inspect.cleandoc(cls.__init__.__doc__ or "")
+                if init_doc:
+                    lines.append(f"\n📘 Details Constructor Arguments:\n{init_doc}")
             except Exception:
                 lines.append("  <unable to inspect constructor>")
 
