@@ -6,6 +6,7 @@ hide_warnings()
 import keras
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
+from medicai.utils import resolve_encoder
 
 from .swin_backbone import SwinBackbone
 
@@ -20,16 +21,20 @@ class SwinUNETR(keras.Model):
     to generate segmentation maps.
     """
 
+    ALLOWED_BACKBONE_FAMILIES = ["swin"]
+
     def __init__(
         self,
         *,
-        input_shape,
-        num_classes=4,
+        input_shape=None,
+        encoder_name=None,
+        encoder=None,
+        num_classes=1,
         classifier_activation=None,
         feature_size=48,
         res_block=True,
         norm_name="instance",
-        **kwargs
+        **kwargs,
     ):
         """Initializes the SwinUNETR model.
 
@@ -46,26 +51,30 @@ class SwinUNETR(keras.Model):
                 (e.g., 'instance', 'batch'). Default is "instance".
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+
+        # Compute spatial dimention and resolve encoder arguments
         spatial_dims = len(input_shape) - 1
-        encoder = SwinBackbone(
+        encoder, input_shape = resolve_encoder(
+            encoder=encoder,
+            encoder_name=encoder_name,
             input_shape=input_shape,
-            patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 2],
-            depths=[2, 2, 2, 2],
-            window_size=[7, 7, 7] if spatial_dims == 3 else [7, 7],
-            num_heads=[3, 6, 12, 24],
-            embed_dim=48,
-            attn_drop_rate=0.0,
-            drop_path_rate=0.0,
-            patch_norm=False,
+            allowed_families=SwinUNETR.ALLOWED_BACKBONE_FAMILIES,
+            pooling=None,
         )
+
+        # Get intermediate vectores
+        pyramid_outputs = encoder.pyramid_outputs
+        required_keys = ["P1", "P2", "P3", "P4", "P5"]
+        missing_keys = set(required_keys) - set(pyramid_outputs.keys())
+        if missing_keys:
+            raise ValueError(
+                f"The encoder's `pyramid_outputs` is missing one or more required keys. "
+                f"Missing keys: {missing_keys}. "
+                f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
+            )
+
         inputs = encoder.input
-        skips = [
-            encoder.get_layer("patching_and_embedding").output,
-            encoder.get_layer("swin_feature1").output,
-            encoder.get_layer("swin_feature2").output,
-            encoder.get_layer("swin_feature3").output,
-            encoder.get_layer("swin_feature4").output,
-        ]
+        skips = [pyramid_outputs[key] for key in required_keys]
         unetr_head = self.build_decoder(
             spatial_dims=spatial_dims,
             num_classes=num_classes,
@@ -83,6 +92,9 @@ class SwinUNETR(keras.Model):
         self.feature_size = feature_size
         self.res_block = res_block
         self.norm_name = norm_name
+        self.encoder_name = encoder_name
+        self.encoder = encoder
+        self.classifier_activation = classifier_activation
 
     def build_decoder(
         self,
@@ -222,10 +234,21 @@ class SwinUNETR(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
+            "encoder_name": self.encoder_name,
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
             "res_block": self.res_block,
             "norm_name": self.norm_name,
         }
+
+        if self.encoder_name is None and self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
+
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)

@@ -4,6 +4,55 @@ from medicai.utils import get_pooling_layer, registration
 
 from .swin_backbone import SwinBackbone
 
+SWIN_CFG = {
+    "2D": {
+        "tiny": {
+            "patch_size": [2, 2],
+            "depths": [2, 2, 6, 2],
+            "window_size": [7, 7],
+            "num_heads": [3, 6, 12, 24],
+            "embed_dim": 96,
+        },
+        "small": {
+            "patch_size": [2, 2],
+            "depths": [2, 2, 18, 2],
+            "window_size": [7, 7],
+            "num_heads": [3, 6, 12, 24],
+            "embed_dim": 96,
+        },
+        "base": {
+            "patch_size": [2, 2],
+            "depths": [2, 2, 18, 2],
+            "window_size": [7, 7],
+            "num_heads": [4, 8, 16, 32],
+            "embed_dim": 128,
+        },
+    },
+    "3D": {
+        "tiny": {
+            "patch_size": [2, 2, 2],
+            "depths": [2, 2, 2, 2],
+            "window_size": [7, 7, 7],
+            "num_heads": [3, 6, 12, 24],
+            "embed_dim": 48,
+        },
+        "small": {
+            "patch_size": [2, 2, 2],
+            "depths": [2, 2, 6, 2],
+            "window_size": [7, 7, 7],
+            "num_heads": [3, 6, 12, 24],
+            "embed_dim": 48,
+        },
+        "base": {
+            "patch_size": [2, 2, 2],
+            "depths": [2, 2, 6, 2],
+            "window_size": [7, 7, 7],
+            "num_heads": [4, 8, 16, 32],
+            "embed_dim": 96,
+        },
+    },
+}
+
 
 @keras.saving.register_keras_serializable(package="swin")
 class SwinVariantsBase(keras.Model):
@@ -20,15 +69,11 @@ class SwinVariantsBase(keras.Model):
         include_top,
         pooling,
         dropout,
-        patch_size,
-        depths,
-        window_size,
-        num_heads,
-        embed_dim,
         attn_drop_rate,
         drop_path_rate,
         num_classes=1000,
         classifier_activation=None,
+        variant=None,
         name=None,
         **kwargs,
     ):
@@ -43,23 +88,49 @@ class SwinVariantsBase(keras.Model):
                 Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+
+        # Input shape should be provided.
+        if not input_shape:
+            raise ValueError(
+                "Argument `input_shape` must be provided. "
+                "It should be a tuple of integers specifying the dimensions of the input "
+                "data, not including the batch size. "
+                "For 2D data, the format is `(height, width, channels)`. "
+                "For 3D data, the format is `(depth, height, width, channels)`."
+            )
+
+        # Check that the input video is well specified.
         spatial_dims = len(input_shape) - 1
+        if spatial_dims not in (2, 3):
+            raise ValueError(
+                f"Invalid `input_shape`: {input_shape}. "
+                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
+                f"but got {len(input_shape)}D."
+            )
+        if any(dim is None for dim in input_shape[:-1]):
+            raise ValueError(
+                "Swin Transformer requires a fixed spatial input shape. "
+                f"Got input_shape={input_shape}"
+            )
+
         if name is None and self.__class__ is not SwinVariantsBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
+
+        cfg = SWIN_CFG.get(f"{spatial_dims}D")[variant]
 
         backbone = SwinBackbone(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
-            patch_size=patch_size,
-            depths=depths,
-            window_size=window_size,
-            num_heads=num_heads,
-            embed_dim=embed_dim,
+            patch_size=cfg["patch_size"],
+            depths=cfg["depths"],
+            window_size=cfg["window_size"],
+            num_heads=cfg["num_heads"],
+            embed_dim=cfg["embed_dim"],
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
             patch_norm=False,
         )
-        input = backbone.input
+        inputs = backbone.input
         x = backbone.output
 
         GlobalAvgPool = get_pooling_layer(
@@ -70,6 +141,8 @@ class SwinVariantsBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
+            if dropout > 0.0:
+                x = keras.layers.Dropout(dropout, name="output_dropout")(x)
             x = keras.layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
@@ -78,7 +151,7 @@ class SwinVariantsBase(keras.Model):
         elif pooling == "max":
             x = GlobalMaxPool(x)
 
-        super().__init__(inputs=input, outputs=x, **kwargs)
+        super().__init__(inputs=inputs, outputs=x, **kwargs)
 
         self.pyramid_outputs = backbone.pyramid_outputs
         self.include_rescaling = include_rescaling
@@ -86,11 +159,6 @@ class SwinVariantsBase(keras.Model):
         self.num_classes = num_classes
         self.pooling = pooling
         self.dropout = dropout
-        self.patch_size = patch_size
-        self.depths = depths
-        self.window_size = window_size
-        self.num_heads = num_heads
-        self.embed_dim = embed_dim
         self.attn_drop_rate = attn_drop_rate
         self.drop_path_rate = drop_path_rate
         self.classifier_activation = classifier_activation
@@ -120,28 +188,11 @@ class SwinTiny(SwinVariantsBase):
         include_top=True,
         num_classes=1000,
         pooling="avg",
-        use_class_token=True,
         dropout=0.0,
         classifier_activation=None,
         name=None,
         **kwargs,
     ):
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
-        spatial_dims = len(input_shape) - 1
-        if spatial_dims not in (2, 3):
-            raise ValueError(
-                f"Invalid `input_shape`: {input_shape}. "
-                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
-                f"but got {len(input_shape)}D."
-            )
-
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -149,13 +200,8 @@ class SwinTiny(SwinVariantsBase):
             num_classes=num_classes,
             pooling=pooling,
             classifier_activation=classifier_activation,
-            use_class_token=use_class_token,
             dropout=dropout,
-            patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 4, 4],
-            depths=[2, 2, 2, 2] if spatial_dims == 3 else [2, 2, 6, 2],
-            window_size=[7, 7, 7] if spatial_dims == 3 else [8, 7, 7],
-            num_heads=[3, 6, 12, 24],
-            embed_dim=48 if spatial_dims == 3 else 96,
+            variant="tiny",
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
@@ -180,22 +226,6 @@ class SwinSmall(SwinVariantsBase):
         name=None,
         **kwargs,
     ):
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
-        spatial_dims = len(input_shape) - 1
-        if spatial_dims not in (2, 3):
-            raise ValueError(
-                f"Invalid `input_shape`: {input_shape}. "
-                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
-                f"but got {len(input_shape)}D."
-            )
-
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -205,11 +235,7 @@ class SwinSmall(SwinVariantsBase):
             classifier_activation=classifier_activation,
             use_class_token=use_class_token,
             dropout=dropout,
-            patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 4, 4],
-            depths=[2, 2, 6, 2] if spatial_dims == 3 else [2, 2, 18, 2],
-            window_size=[7, 7, 7] if spatial_dims == 3 else [8, 7, 7],
-            num_heads=[3, 6, 12, 24],
-            embed_dim=48 if spatial_dims == 3 else 96,
+            variant="small",
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
@@ -234,22 +260,6 @@ class SwinBase(SwinVariantsBase):
         name=None,
         **kwargs,
     ):
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
-        spatial_dims = len(input_shape) - 1
-        if spatial_dims not in (2, 3):
-            raise ValueError(
-                f"Invalid `input_shape`: {input_shape}. "
-                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
-                f"but got {len(input_shape)}D."
-            )
-
         super().__init__(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
@@ -259,11 +269,7 @@ class SwinBase(SwinVariantsBase):
             classifier_activation=classifier_activation,
             use_class_token=use_class_token,
             dropout=dropout,
-            patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 4, 4],
-            depths=[2, 2, 6, 2] if spatial_dims == 3 else [2, 2, 18, 2],
-            window_size=[7, 7, 7] if spatial_dims == 3 else [8, 7, 7],
-            num_heads=[3, 6, 12, 24] if spatial_dims == 3 else [4, 8, 16, 32],
-            embed_dim=96 if spatial_dims == 3 else 128,
+            variant="base",
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,

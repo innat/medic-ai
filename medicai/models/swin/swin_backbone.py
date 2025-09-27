@@ -69,11 +69,26 @@ class SwinBackbone(keras.Model):
                 Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+        # Input shape should be provided.
+        if not input_shape:
+            raise ValueError(
+                "Argument `input_shape` must be provided. "
+                "It should be a tuple of integers specifying the dimensions of the input "
+                "data, not including the batch size. "
+                "For 2D data, the format is `(height, width, channels)`. "
+                "For 3D data, the format is `(depth, height, width, channels)`."
+            )
+
         # Parse input specification.
         spatial_dims = len(input_shape) - 1
 
         # Check that the input video is well specified.
-        assert spatial_dims in (2, 3), "input_shape must be (D, H, W) or (D, H, W, C)"
+        if spatial_dims not in (2, 3):
+            raise ValueError(
+                f"Invalid `input_shape`: {input_shape}. "
+                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
+                f"but got {len(input_shape)}D."
+            )
         if any(dim is None for dim in input_shape[:-1]):
             raise ValueError(
                 "Swin Transformer requires a fixed spatial input shape. "
@@ -95,6 +110,8 @@ class SwinBackbone(keras.Model):
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
         )(x)
+        pyramid_outputs["P1"] = x
+
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
@@ -116,7 +133,7 @@ class SwinBackbone(keras.Model):
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
-            pyramid_outputs[f"P{i + 1}"] = x
+            pyramid_outputs[f"P{i + 2}"] = x
 
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
 

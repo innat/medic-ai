@@ -116,7 +116,7 @@ class UNETR(keras.Model):
 
         # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
-        required_keys = {"P5", "P8", "P11"}  # vit-encoder-layer: 3rd, 6th, 9th
+        required_keys = ["P5", "P8", "P11"]  # vit-encoder-layer: 3rd, 6th, 9th
         missing_keys = set(required_keys) - set(pyramid_outputs.keys())
         if missing_keys:
             raise ValueError(
