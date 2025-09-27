@@ -96,6 +96,7 @@ class SwinUNETR(keras.Model):
 
         self.num_classes = num_classes
         self.patch_size = patch_size
+        self.window_size = window_size
         self.feature_size = feature_size
         self.res_block = res_block
         self.norm_name = norm_name
@@ -244,6 +245,7 @@ class SwinUNETR(keras.Model):
             "encoder_name": self.encoder_name,
             "num_classes": self.num_classes,
             "patch_size": self.patch_size,
+            "window_size": self.window_size,
             "classifier_activation": self.classifier_activation,
             "feature_size": self.feature_size,
             "res_block": self.res_block,
