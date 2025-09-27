@@ -71,7 +71,7 @@ class SwinVariantsBase(keras.Model):
         if include_top:
             x = GlobalAvgPool(x)
             x = keras.layers.Dense(
-                num_classes, activation=classifier_activation, name="predictions"
+                num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
         elif pooling == "avg":
             x = GlobalAvgPool(x)
@@ -262,7 +262,7 @@ class SwinBase(SwinVariantsBase):
             patch_size=[2, 2, 2] if spatial_dims == 3 else [2, 4, 4],
             depths=[2, 2, 6, 2] if spatial_dims == 3 else [2, 2, 18, 2],
             window_size=[7, 7, 7] if spatial_dims == 3 else [8, 7, 7],
-            num_heads=[4, 8, 16, 32],
+            num_heads=[3, 6, 12, 24] if spatial_dims == 3 else [4, 8, 16, 32],
             embed_dim=96 if spatial_dims == 3 else 128,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
