@@ -183,52 +183,64 @@ def crop_output(
     return output[tuple(crop_slices)]
 
 
-def resize_volumes(volumes, depth, height, width, method="trilinear"):
-    def trilinear_resize(volumes, depth, height, width):
+def resize_volumes(volumes, depth, height, width, method="trilinear", align_corners=False):
+    def trilinear_resize(volumes, depth, height, width, align_corners):
         original_dtype = volumes.dtype
         volumes = ops.cast(volumes, "float32")
         batch_size, in_d, in_h, in_w, channels = ops.shape(volumes)
 
-        # --- Depth (axis=1) ---
-        z = ops.linspace(0.0, ops.cast(in_d - 1, "float32"), depth)  # (out_d,)
-        z0 = ops.cast(ops.floor(z), "int32")
-        z1 = ops.minimum(z0 + 1, in_d - 1)
-        dz = z - ops.cast(z0, "float32")  # (out_d,)
+        if align_corners:
+            # Map corner to corner
+            z_coords = ops.linspace(0.0, ops.cast(in_d - 1, "float32"), depth)
+            y_coords = ops.linspace(0.0, ops.cast(in_h - 1, "float32"), height)
+            x_coords = ops.linspace(0.0, ops.cast(in_w - 1, "float32"), width)
+        else:
+            # More accurate PyTorch-compatible mapping
+            # Ref: https://pytorch.org/docs/stable/generated/torch.nn.functional.interpolate.html
+            scale_d = ops.cast(in_d, "float32") / ops.cast(depth, "float32")
+            scale_h = ops.cast(in_h, "float32") / ops.cast(height, "float32")
+            scale_w = ops.cast(in_w, "float32") / ops.cast(width, "float32")
 
-        # Gather along depth (axis=1) using 1D indices -> result has depth = out_d
-        lower_d = ops.take(volumes, z0, axis=1)  # (B, out_d, H,  W, C)
-        upper_d = ops.take(volumes, z1, axis=1)  # (B, out_d, H,  W, C)
+            # Create grid with proper alignment
+            z_coords = (ops.arange(depth, dtype="float32") + 0.5) * scale_d - 0.5
+            y_coords = (ops.arange(height, dtype="float32") + 0.5) * scale_h - 0.5
+            x_coords = (ops.arange(width, dtype="float32") + 0.5) * scale_w - 0.5
 
-        dz = ops.reshape(dz, (1, depth, 1, 1, 1))  # broadcast shape
-        interp_d = (1.0 - dz) * lower_d + dz * upper_d  # (B, out_d, H, W, C)
+            # Ensure we don't sample outside the volume
+            z_coords = ops.clip(z_coords, 0.0, ops.cast(in_d - 1, "float32"))
+            y_coords = ops.clip(y_coords, 0.0, ops.cast(in_h - 1, "float32"))
+            x_coords = ops.clip(x_coords, 0.0, ops.cast(in_w - 1, "float32"))
 
-        # --- Height (axis=2) ---
-        y = ops.linspace(0.0, ops.cast(in_h - 1, "float32"), height)  # (out_h,)
-        y0 = ops.cast(ops.floor(y), "int32")
-        y1 = ops.minimum(y0 + 1, in_h - 1)
-        dy = y - ops.cast(y0, "float32")
+        # Helper function for 1D interpolation
+        def interpolate_1d(input_vol, coords, axis):
+            # Get floor and ceil indices
+            idx0 = ops.cast(ops.floor(coords), "int32")
+            idx1 = ops.minimum(idx0 + 1, ops.shape(input_vol)[axis] - 1)
 
-        lower_h = ops.take(interp_d, y0, axis=2)  # (B, out_d, out_h, W, C)
-        upper_h = ops.take(interp_d, y1, axis=2)  # (B, out_d, out_h, W, C)
+            # Get the values at these indices
+            values0 = ops.take(input_vol, idx0, axis=axis)
+            values1 = ops.take(input_vol, idx1, axis=axis)
 
-        dy = ops.reshape(dy, (1, 1, height, 1, 1))
-        interp_h = (1.0 - dy) * lower_h + dy * upper_h  # (B, out_d, out_h, W, C)
+            # Calculate weights
+            weight1 = coords - ops.cast(idx0, "float32")
+            weight0 = 1.0 - weight1
 
-        # --- Width (axis=3) ---
-        x = ops.linspace(0.0, ops.cast(in_w - 1, "float32"), width)  # (out_w,)
-        x0 = ops.cast(ops.floor(x), "int32")
-        x1 = ops.minimum(x0 + 1, in_w - 1)
-        dx = x - ops.cast(x0, "float32")
+            # Reshape for broadcasting
+            new_shape = [1] * 5  # bs, d, h, w, c
+            new_shape[axis] = ops.shape(coords)[0]
+            weight0 = ops.reshape(weight0, new_shape)
+            weight1 = ops.reshape(weight1, new_shape)
 
-        lower_w = ops.take(interp_h, x0, axis=3)  # (B, out_d, out_h, out_w, C)
-        upper_w = ops.take(interp_h, x1, axis=3)  # (B, out_d, out_h, out_w, C)
+            return weight0 * values0 + weight1 * values1
 
-        dx = ops.reshape(dx, (1, 1, 1, width, 1))
-        out = (1.0 - dx) * lower_w + dx * upper_w  # (B, out_d, out_h, out_w, C)
-        out = ops.cast(out, original_dtype)
-        return out
+        # Apply interpolation along each dimension
+        interp_d = interpolate_1d(volumes, z_coords, axis=1)
+        interp_h = interpolate_1d(interp_d, y_coords, axis=2)
+        interp_w = interpolate_1d(interp_h, x_coords, axis=3)
+
+        return ops.cast(interp_w, original_dtype)
 
     if method == "trilinear":
-        return trilinear_resize(volumes, depth, height, width)
+        return trilinear_resize(volumes, depth, height, width, align_corners)
     else:
         raise ValueError(f"Unsupported resize method: {method}")
