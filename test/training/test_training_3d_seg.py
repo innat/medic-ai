@@ -76,8 +76,7 @@ def create_dummy_dataset(batch_size, num_classes):
 
 def test_training_with_meta():
     num_classes = 4
-    # model_list = [SwinUNETR, TransUNet]
-    model_dict = {"densenet121": TransUNet}
+    model_dict = {"densenet121": TransUNet, "swin_tiny": SwinUNETR}
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.map(create_sample_dict, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.map(transformation, num_parallel_calls=tf.data.AUTOTUNE)
@@ -91,8 +90,7 @@ def test_training_with_meta():
 
 def test_training():
     num_classes = 4
-    # model_list = [SwinUNETR, UNETR]
-    model_dict = {"vit_base": UNETR}
+    model_dict = {"vit_base": UNETR, "swin_tiny": SwinUNETR}
     dataset = create_dummy_dataset(1, num_classes)
     dataset = dataset.batch(1).prefetch(tf.data.AUTOTUNE)
 

@@ -26,6 +26,7 @@ class SwinBackbone(keras.Model):
         *,
         input_shape,
         input_tensor=None,
+        include_rescaling=False,
         embed_dim=96,
         patch_size=[2, 4, 4],
         window_size=[8, 7, 7],
@@ -47,6 +48,8 @@ class SwinBackbone(keras.Model):
                 Default is (32, 224, 224, 3).
             input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
                 model input. If None, a new input tensor is created. Default is None.
+            include_rescaling (bool): Whether to include a Rescaling layer at the
+               start to normalize inputs (1/255). Default: False.
             embed_dim (int): Number of linear projection output channels. Default is 96.
             patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 4, 4].
             window_size (list): Size of the attention windows (WD, WH, WW). Default is [8, 7, 7].
@@ -66,11 +69,26 @@ class SwinBackbone(keras.Model):
                 Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
+        # Input shape should be provided.
+        if not input_shape:
+            raise ValueError(
+                "Argument `input_shape` must be provided. "
+                "It should be a tuple of integers specifying the dimensions of the input "
+                "data, not including the batch size. "
+                "For 2D data, the format is `(height, width, channels)`. "
+                "For 3D data, the format is `(depth, height, width, channels)`."
+            )
+
         # Parse input specification.
         spatial_dims = len(input_shape) - 1
 
         # Check that the input video is well specified.
-        assert spatial_dims in (2, 3), "input_shape must be (D, H, W) or (D, H, W, C)"
+        if spatial_dims not in (2, 3):
+            raise ValueError(
+                f"Invalid `input_shape`: {input_shape}. "
+                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
+                f"but got {len(input_shape)}D."
+            )
         if any(dim is None for dim in input_shape[:-1]):
             raise ValueError(
                 "Swin Transformer requires a fixed spatial input shape. "
@@ -78,17 +96,22 @@ class SwinBackbone(keras.Model):
             )
 
         input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-
+        pyramid_outputs = {}
         x = input_spec
+
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
 
         x = SwinPatchingAndEmbedding(
-            patch_size=patch_size[:spatial_dims],
+            patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
         )(x)
+        pyramid_outputs["P1"] = x
+
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
@@ -98,7 +121,7 @@ class SwinBackbone(keras.Model):
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
-                window_size=window_size[:spatial_dims],
+                window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 qk_scale=qk_scale,
@@ -110,10 +133,13 @@ class SwinBackbone(keras.Model):
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
+            pyramid_outputs[f"P{i + 2}"] = x
 
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
 
         self.input_tensor = input_tensor
+        self.pyramid_outputs = pyramid_outputs
+        self.include_rescaling = include_rescaling
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.window_size = window_size
@@ -133,6 +159,7 @@ class SwinBackbone(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "input_tensor": self.input_tensor,
+            "include_rescaling": self.include_rescaling,
             "embed_dim": self.embed_dim,
             "patch_norm": self.patch_norm,
             "window_size": self.window_size,

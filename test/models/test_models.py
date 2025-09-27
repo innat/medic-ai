@@ -4,7 +4,7 @@ from medicai.models import (
     UNETR,
     DenseNet121,
     SegFormer,
-    SwinTransformer,
+    SwinTiny,
     SwinUNETR,
     TransUNet,
     UNet,
@@ -46,7 +46,7 @@ def test_swin_unetr():
     # test for 3D
     num_classes = 4
     input_shape = (96, 96, 96, 1)
-    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes)
+    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes, encoder_name="swin_tiny")
     assert model.input_shape == (None, 96, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 96, 1))
     output = model(dummy_input)
@@ -55,7 +55,7 @@ def test_swin_unetr():
     # test for 2D
     num_classes = 4
     input_shape = (96, 96, 1)
-    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes)
+    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes, encoder_name="swin_tiny")
     assert model.input_shape == (None, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 1))
     output = model(dummy_input)
@@ -66,7 +66,7 @@ def test_swin_transformer():
     # test for 3D
     num_classes = 4
     input_shape = (96, 96, 96, 1)
-    model = SwinTransformer(input_shape=input_shape, num_classes=num_classes)
+    model = SwinTiny(input_shape=input_shape, num_classes=num_classes)
     assert model.input_shape == (None, 96, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 96, 1))
     output = model(dummy_input)
@@ -75,7 +75,7 @@ def test_swin_transformer():
     # test for 2D
     num_classes = 4
     input_shape = (96, 96, 1)
-    model = SwinTransformer(input_shape=input_shape, num_classes=num_classes)
+    model = SwinTiny(input_shape=input_shape, num_classes=num_classes)
     assert model.input_shape == (None, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 1))
     output = model(dummy_input)

@@ -67,7 +67,7 @@ class DenseNetBase(keras.Model):
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
         backbone = DenseNetBackbone(input_shape=input_shape, blocks=blocks)
-        inputs = backbone.inputs
+        inputs = backbone.input
         x = backbone.output
 
         GlobalAvgPool = get_pooling_layer(
@@ -78,7 +78,9 @@ class DenseNetBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
-            x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
+            x = layers.Dense(
+                num_classes, activation=classifier_activation, dtype="float32", name="predictions"
+            )(x)
         elif pooling == "avg":
             x = GlobalAvgPool(x)
         elif pooling == "max":

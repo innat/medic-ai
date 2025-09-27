@@ -25,7 +25,7 @@ from .resnet import (
     ResNetBackbone,
 )
 from .segformer import SegFormer
-from .swin import SwinTransformer, SwinUNETR
+from .swin import SwinBase, SwinSmall, SwinTiny, SwinUNETR
 from .transunet import TransUNet
 from .unet import UNet
 from .unetr import UNETR
