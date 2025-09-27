@@ -1,7 +1,8 @@
 import keras
 from keras import layers
 
-from ...utils import DescribeMixin, get_conv_layer, get_pooling_layer, parse_model_inputs
+from medicai.utils import DescribeMixin, get_conv_layer, get_pooling_layer, parse_model_inputs
+
 from .densenet_layers import apply_dense_block, apply_transition_layer
 
 

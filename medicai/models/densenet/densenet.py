@@ -1,8 +1,8 @@
 import keras
 from keras import layers
 
-from medicai.utils import registration
-from medicai.utils.model_utils import DescribeMixin, get_pooling_layer
+from medicai.utils import DescribeMixin, registration
+from medicai.utils.model_utils import get_pooling_layer
 
 from .densenet_backbone import DenseNetBackbone
 
