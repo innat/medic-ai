@@ -8,8 +8,6 @@ import keras
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
 from medicai.utils import resolve_encoder
 
-from .swin_backbone import SwinBackbone
-
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
 class SwinUNETR(keras.Model):
@@ -57,7 +55,6 @@ class SwinUNETR(keras.Model):
         """
 
         # Compute spatial dimention and resolve encoder arguments
-        spatial_dims = len(input_shape) - 1
         encoder, input_shape = resolve_encoder(
             encoder=encoder,
             encoder_name=encoder_name,
@@ -67,6 +64,7 @@ class SwinUNETR(keras.Model):
             allowed_families=SwinUNETR.ALLOWED_BACKBONE_FAMILIES,
             pooling=None,
         )
+        spatial_dims = len(input_shape) - 1
 
         # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
