@@ -255,6 +255,7 @@ def camel_to_snake(name: str) -> str:
     s2 = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s1)
     return s2.lower()
 
+
 class DescriptionObject:
     def __init__(self, text):
         self.text = text
@@ -304,6 +305,9 @@ class DescribeMixin:
                     else:
                         annot = ""
                     lines.append(f"  {pname}{annot} {default}".rstrip())
+
+                init_doc = inspect.cleandoc(cls.__init__.__doc__ or "No description available.")
+                lines.append("\n📘 Details Constructor Arguments:", init_doc)
             except Exception:
                 lines.append("  <unable to inspect constructor>")
 
