@@ -43,8 +43,12 @@ class BaseDiceMetric(Metric):
         threshold=0.5,
         **kwargs,
     ):
-        if name is None and self.__class__ is not BaseDiceMetric:
-            name = camel_to_snake(self.__class__.__name__)
+        if name is None:
+            name = (
+                "dice_metric"
+                if self.__class__ is BaseDiceMetric
+                else camel_to_snake(self.__class__.__name__)
+            )
 
         super().__init__(name=name, **kwargs)
 
