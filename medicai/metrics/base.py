@@ -1,8 +1,8 @@
-import re
-
 import keras
 from keras import ops
 from keras.metrics import Metric
+
+from medicai.utils import camel_to_snake
 
 
 class BaseDiceMetric(Metric):
@@ -44,7 +44,7 @@ class BaseDiceMetric(Metric):
         **kwargs,
     ):
         if name is None and self.__class__ is not BaseDiceMetric:
-            name = re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).lower()
+            name = camel_to_snake(self.__class__.__name__)
 
         super().__init__(name=name, **kwargs)
 

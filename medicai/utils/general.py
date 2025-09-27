@@ -1,4 +1,5 @@
 import inspect
+import re
 from typing import Any, List, Sequence, Tuple
 
 import numpy as np
@@ -246,6 +247,13 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
     else:
         raise ValueError(f"Unsupported resize method: {method}")
 
+
+def camel_to_snake(name: str) -> str:
+    # Step 1: Put underscore between lower-uppercase or digit-uppercase
+    s1 = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+    # Step 2: Handle acronym + word boundary (e.g., "CE" + "Loss")
+    s2 = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s1)
+    return s2.lower()
 
 class DescriptionObject:
     def __init__(self, text):
