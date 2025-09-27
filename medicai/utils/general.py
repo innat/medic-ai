@@ -226,7 +226,7 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
             weight0 = 1.0 - weight1
 
             # Reshape for broadcasting
-            new_shape = [1] * 5
+            new_shape = [1] * 5  # bs, d, h, w, c
             new_shape[axis] = ops.shape(coords)[0]
             weight0 = ops.reshape(weight0, new_shape)
             weight1 = ops.reshape(weight1, new_shape)
