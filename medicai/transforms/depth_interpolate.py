@@ -17,12 +17,29 @@ def nearest_interpolation(volume, target_depth, depth_axis=0):
     return resized_volume
 
 
-def linear_interpolation(volume, target_depth, depth_axis=0):
+def linear_interpolation(volume, target_depth, depth_axis=0, align_corners=False):
     # Get the original depth size along the specified axis
     original_depth = tf.shape(volume)[depth_axis]
 
+    # Early return if no resizing needed
+    if original_depth == target_depth:
+        return volume
+
     # Generate floating-point indices for the target depth
-    indices = tf.linspace(0.0, tf.cast(original_depth - 1, tf.float32), target_depth)
+    if align_corners:
+        # Corner pixels are aligned: map [0, orig_depth-1] to [0, target_depth-1]
+        indices = tf.linspace(0.0, tf.cast(original_depth - 1, tf.float32), target_depth)
+    else:
+        # Corner pixels are not aligned: use the PyTorch-style mapping
+        # This ensures that the resized tensor has the same geometric information
+        if target_depth > 1:
+            scale = tf.cast(original_depth, tf.float32) / tf.cast(target_depth, tf.float32)
+            indices = (tf.range(target_depth, dtype=tf.float32) + 0.5) * scale - 0.5
+            # Clip to valid range
+            indices = tf.clip_by_value(indices, 0.0, tf.cast(original_depth - 1, tf.float32))
+        else:
+            # Single output - use center
+            indices = tf.constant([(tf.cast(original_depth, tf.float32) - 1) / 2.0])
 
     # Split indices into integer and fractional parts
     lower_indices = tf.cast(tf.floor(indices), tf.int32)
