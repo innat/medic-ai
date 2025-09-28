@@ -1,13 +1,13 @@
 import keras
 from keras import ops
 
-from medicai.utils import registration
+from medicai.utils import DescribeMixin, registration
 
 from .vit_backbone import ViTBackbone
 
 
 @keras.saving.register_keras_serializable(package="vit")
-class ViTVariantsBase(keras.Model):
+class ViTVariantsBase(keras.Model, DescribeMixin):
     """
     Vision Transformer (ViT) Model for classification.
 

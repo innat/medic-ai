@@ -2,13 +2,13 @@ import keras
 import numpy as np
 from keras import ops
 
-from medicai.utils import get_norm_layer, parse_model_inputs
+from medicai.utils import DescribeMixin, get_norm_layer, parse_model_inputs
 
 from .mit_layers import HierarchicalTransformerEncoder, OverlappingPatchingAndEmbedding
 
 
 @keras.utils.register_keras_serializable(package="mit.backbone")
-class MiTBackbone(keras.Model):
+class MiTBackbone(keras.Model, DescribeMixin):
     """MixVisionTransformer (MixViT) Model.
 
     This class implements the encoder backbone of the SegFormer architecture. It is a
@@ -139,7 +139,7 @@ class MiTBackbone(keras.Model):
             cur += depths[i]
 
             # Layer Normalization
-            x = get_norm_layer(norm_name="layer", epsilon=layer_norm_epsilon)(x)
+            x = get_norm_layer(layer_type="layer", epsilon=layer_norm_epsilon)(x)
 
             # Reshape output to a spatial feature map for the next stage.
             n_patches = ops.shape(x)[1]

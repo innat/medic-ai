@@ -2,6 +2,8 @@ import keras
 from keras import ops
 from keras.metrics import Metric
 
+from medicai.utils import camel_to_snake
+
 
 class BaseDiceMetric(Metric):
     """Base class for Dice-based metrics.
@@ -37,10 +39,17 @@ class BaseDiceMetric(Metric):
         class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
-        name="base_dice",
+        name=None,
         threshold=0.5,
         **kwargs,
     ):
+        if name is None:
+            name = (
+                "dice_metric"
+                if self.__class__ is BaseDiceMetric
+                else camel_to_snake(self.__class__.__name__)
+            )
+
         super().__init__(name=name, **kwargs)
 
         self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)

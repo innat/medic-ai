@@ -2,6 +2,7 @@ import keras
 from keras import layers, ops
 
 from medicai.utils import (
+    DescribeMixin,
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
@@ -11,7 +12,7 @@ from medicai.utils import (
 
 
 @keras.saving.register_keras_serializable(package="segformer")
-class SegFormer(keras.Model):
+class SegFormer(keras.Model, DescribeMixin):
     """SegFormer model for 2D or 3D semantic segmentation.
 
     This class implements the full SegFormer architecture, which combines a
@@ -194,8 +195,8 @@ class SegFormer(keras.Model):
                 filters=decoder_head_embedding_dim,
                 kernel_size=1,
             )(x)
-            x = get_norm_layer(norm_name="batch")(x)
-            x = get_act_layer(name="relu")(x)
+            x = get_norm_layer("batch")(x)
+            x = get_act_layer("relu")(x)
             x = layers.Dropout(dropout)(x)
 
             # Final prediction
@@ -215,7 +216,7 @@ class SegFormer(keras.Model):
         num_patches = int(ops.prod(spatial_shape_tensor))
         x = layers.Reshape((num_patches, ops.shape(x)[-1]))(x)
         x = layers.Dense(hidden_dims)(x)
-        x = get_norm_layer(norm_name="layer", epsilon=1e-5)(x)
+        x = get_norm_layer("layer", epsilon=1e-5)(x)
         return x
 
     def reshape_to_spatial(self, x, target_shape):

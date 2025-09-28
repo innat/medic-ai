@@ -1,13 +1,13 @@
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import get_conv_layer, resolve_encoder
+from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .unet_decoder import UNetDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
-class UNet(keras.Model):
+class UNet(keras.Model, DescribeMixin):
     """
     The UNet model for semantic segmentation.
 

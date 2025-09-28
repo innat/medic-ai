@@ -1,6 +1,8 @@
 import keras
 from keras import ops
 
+from medicai.utils import camel_to_snake
+
 
 class BaseDiceLoss(keras.losses.Loss):
     """Base class for Dice-based loss functions.
@@ -40,9 +42,16 @@ class BaseDiceLoss(keras.losses.Loss):
         squared_pred=False,
         dice_weight=1.0,
         ce_weight=1.0,
-        name="dice_loss",
+        name=None,
         **kwargs,
     ):
+        if name is None:
+            name = (
+                "dice_loss"
+                if self.__class__ is BaseDiceLoss
+                else camel_to_snake(self.__class__.__name__)
+            )
+
         super().__init__(name=name, **kwargs)
 
         if dice_weight < 0.0:

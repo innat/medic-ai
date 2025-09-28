@@ -2,10 +2,10 @@ import keras
 from keras import ops
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-from medicai.utils import resolve_encoder
+from medicai.utils import DescribeMixin, resolve_encoder
 
 
-class UNETR(keras.Model):
+class UNETR(keras.Model, DescribeMixin):
     """
     UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
 
