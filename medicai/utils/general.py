@@ -339,6 +339,20 @@ class DescribeMixin:
                 lines.append(f"{indent}  • {nk}: {nv}")
             lines.append(f"{indent})")
             return "\n".join(lines)
+        elif k == "encoder_name" and encoder_desc is not None:
+            # Format the output when an encoder *name* was passed
+            irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
+            lines = [f"{indent}• Encoder Name: {v!r}"]
+
+            # Use the encoder_desc (which is now built from the loaded encoder)
+            lines.append(f"{indent}• Instantiated as {encoder_desc['class']}(")
+            for nk, nv in encoder_desc["params"].items():
+                if nk in irrelevant_keys:
+                    continue
+                lines.append(f"{indent}  • {nk}: {nv!r}")
+            lines.append(f"{indent})")
+            return "\n".join(lines)
+
         if isinstance(v, (dict, list, tuple)):
             return f"{indent}• {k}: {v}"
         else:
@@ -350,8 +364,6 @@ class DescribeMixin:
         # if encoder attribute exists and has instance_describe
         encoder = getattr(self, "encoder", None)
         encoder_desc = None
-        if encoder is not None and hasattr(encoder, "instance_describe"):
-            encoder_desc = encoder.instance_describe(pretty=False)
 
         params = {}
         if hasattr(self, "get_config") and callable(self.get_config):
@@ -359,6 +371,12 @@ class DescribeMixin:
 
         # remove unwanted internal keys
         params = {k: v for k, v in params.items() if k not in self._skip_keys}
+
+        if encoder is not None and hasattr(encoder, "instance_describe"):
+            encoder_desc = encoder.instance_describe(pretty=False)
+        elif "encoder_name" in params:
+            if getattr(self, "encoder", None) and hasattr(self.encoder, "instance_describe"):
+                encoder_desc = self.encoder.instance_describe(pretty=False)
 
         if not pretty:
             return {"class": name, "params": params}
