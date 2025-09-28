@@ -74,7 +74,7 @@ class DescribeMixin:
                 for pname, param in inspect.signature(cls.__init__).parameters.items()
                 if pname != "self"
             }
-        except Exception:
+        except (ValueError, TypeError):
             desc["args"] = {}
         return desc
 

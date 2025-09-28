@@ -199,16 +199,17 @@ def get_norm_layer(layer_type, **kwargs):
     """
     layer_type = layer_type.lower()
 
-    # Lookup table for normalizations
+    if layer_type == "instance":
+        # Instance normalization is implemented via GroupNormalization with specific settings.
+        # Note: Custom kwargs are ignored for this layer type.
+        return layers.GroupNormalization(groups=-1, epsilon=1e-05, scale=False, center=False)
+
+    # Lookup table for other normalizations
     norm_layers = {
         "batch": layers.BatchNormalization,
         "layer": layers.LayerNormalization,
         "unit": layers.UnitNormalization,
         "group": layers.GroupNormalization,
-        # Special case: InstanceNorm via GroupNorm(groups=-1)
-        "instance": lambda **_: layers.GroupNormalization(
-            groups=-1, epsilon=1e-05, scale=False, center=False
-        ),
     }
 
     if layer_type not in norm_layers:
