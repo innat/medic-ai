@@ -57,7 +57,7 @@ class OverlappingPatchingAndEmbedding(keras.layers.Layer):
         self.proj.build(padded_shape)
 
         # Layer normalization to normalize the projected patch embeddings.
-        self.norm = get_norm_layer(norm_name="layer", epsilon=1e-5)
+        self.norm = get_norm_layer(layer_type="layer", epsilon=1e-5)
         norm_input_shape = (input_shape[0], -1, self.project_dim)
         self.norm.build(norm_input_shape)
         self.built = True
@@ -204,7 +204,7 @@ class SegFormerMultiheadAttention(keras.layers.Layer):
                 sr_seq_len *= dim
             sr_output_shape_flat = (B, sr_seq_len, self.project_dim)
 
-            self.norm = get_norm_layer(norm_name="layer", epsilon=1e-5)
+            self.norm = get_norm_layer(layer_type="layer", epsilon=1e-5)
             self.norm.build(sr_output_shape_flat)
 
             # Build K and V layers with reduced sequence length
@@ -357,7 +357,7 @@ class MixFFN(keras.layers.Layer):
                     padding="same",
                     groups=project_dim,
                 ),
-                get_norm_layer(norm_name="batch", name="dwconv_bn"),
+                get_norm_layer(layer_type="batch", name="dwconv_bn"),
             ]
         )
         self.dwconv.build(dwconv_input_shape)
@@ -463,7 +463,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
 
     def build(self, input_shape):
         # Build first layer normalization
-        self.norm1 = get_norm_layer(norm_name="layer", epsilon=self.layer_norm_epsilon)
+        self.norm1 = get_norm_layer(layer_type="layer", epsilon=self.layer_norm_epsilon)
         self.norm1.build(input_shape)
 
         # Build attention block
@@ -482,7 +482,7 @@ class HierarchicalTransformerEncoder(keras.layers.Layer):
         self.drop_path = DropPath(self.drop_prob)
 
         # Build second layer normalization
-        self.norm2 = get_norm_layer(norm_name="layer", epsilon=self.layer_norm_epsilon)
+        self.norm2 = get_norm_layer(layer_type="layer", epsilon=self.layer_norm_epsilon)
         self.norm2.build(input_shape)  # Same input shape
 
         # Build MixFFN block

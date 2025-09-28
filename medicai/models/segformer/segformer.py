@@ -195,8 +195,8 @@ class SegFormer(keras.Model, DescribeMixin):
                 filters=decoder_head_embedding_dim,
                 kernel_size=1,
             )(x)
-            x = get_norm_layer(norm_name="batch")(x)
-            x = get_act_layer(name="relu")(x)
+            x = get_norm_layer(layer_type="batch")(x)
+            x = get_act_layer(layer_type="relu")(x)
             x = layers.Dropout(dropout)(x)
 
             # Final prediction

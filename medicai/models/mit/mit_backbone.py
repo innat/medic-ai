@@ -139,7 +139,7 @@ class MiTBackbone(keras.Model, DescribeMixin):
             cur += depths[i]
 
             # Layer Normalization
-            x = get_norm_layer(norm_name="layer", epsilon=layer_norm_epsilon)(x)
+            x = get_norm_layer(layer_type="layer", epsilon=layer_norm_epsilon)(x)
 
             # Reshape output to a spatial feature map for the next stage.
             n_patches = ops.shape(x)[1]

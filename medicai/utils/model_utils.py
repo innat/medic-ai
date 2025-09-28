@@ -136,48 +136,53 @@ def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
     return LayerClass(**kwargs)
 
 
-def get_act_layer(name, **kwargs):
+def get_act_layer(layer_type, **kwargs):
     """
-    Returns a Keras activation layer based on the provided name and keyword arguments
+    Returns a Keras activation layer based on the provided layer_type and keyword arguments
     using the official keras.activations.get() function.
 
     Args:
-        name (str): The name of the activation function (e.g., 'relu', 'sigmoid', 'leaky_relu').
-                     Can also be a callable activation function.
+        layer_type (str): The name of the activation function (e.g., 'relu', 'sigmoid', 'leaky_relu').
+            Can also be a callable activation function.
         **kwargs: Keyword arguments to be passed to the activation function (if applicable).
 
     Returns:
         A Keras Activation layer.
     """
-    name = name.lower()
-    if name == "leaky_relu":
-        return layers.LeakyReLU(**kwargs)
-    elif name == "prelu":
-        return layers.PReLU(**kwargs)
-    elif name == "elu":
-        return layers.ELU(**kwargs)
-    elif name == "relu":
-        return layers.ReLU(**kwargs)
-    else:
-        activation_fn = activations.get(name)
-        return layers.Activation(activation_fn)
+    # Normalize name
+    layer_type = layer_type.lower()
+
+    # Map of special activations that need dedicated layer classes
+    special_layers = {
+        "leaky_relu": layers.LeakyReLU,
+        "prelu": layers.PReLU,
+        "elu": layers.ELU,
+        "relu": layers.ReLU,
+    }
+
+    if layer_type in special_layers:
+        return special_layers[layer_type](**kwargs)
+
+    # Fallback to standard keras.activations.get
+    activation_fn = activations.get(layer_type)
+    return layers.Activation(activation_fn, **kwargs)
 
 
-def get_norm_layer(norm_name, **kwargs):
+def get_norm_layer(layer_type, **kwargs):
     """
     Returns a Keras normalization layer based on the provided name and keyword arguments.
 
     Args:
-        norm_name (str): The name of the normalization layer to create.
-                           Supported names are: "instance", "batch", "layer", "unit", "group".
+        layer_type (str): The name of the normalization layer to create.
+            Supported names are: "instance", "batch", "layer", "unit", "group".
         **kwargs: Keyword arguments to be passed to the constructor of the
-                  chosen normalization layer.
+            chosen normalization layer.
 
     Returns:
         A Keras normalization layer instance.
 
     Raises:
-        ValueError: If an unsupported `norm_name` is provided.
+        ValueError: If an unsupported `layer_type` is provided.
 
     Examples:
         >>> batch_norm = get_norm_layer("batch", momentum=0.9)
@@ -192,23 +197,27 @@ def get_norm_layer(norm_name, **kwargs):
         ...     print(e)
         Unsupported normalization: unknown
     """
-    norm_name = norm_name.lower()
-    if norm_name == "instance":
-        return layers.GroupNormalization(groups=-1, epsilon=1e-05, scale=False, center=False)
+    layer_type = layer_type.lower()
 
-    elif norm_name == "batch":
-        return layers.BatchNormalization(**kwargs)
+    # Lookup table for normalizations
+    norm_layers = {
+        "batch": layers.BatchNormalization,
+        "layer": layers.LayerNormalization,
+        "unit": layers.UnitNormalization,
+        "group": layers.GroupNormalization,
+        # Special case: InstanceNorm via GroupNorm(groups=-1)
+        "instance": lambda **_: layers.GroupNormalization(
+            groups=-1, epsilon=1e-05, scale=False, center=False
+        ),
+    }
 
-    elif norm_name == "layer":
-        return layers.LayerNormalization(**kwargs)
+    if layer_type not in norm_layers:
+        raise ValueError(f"Unsupported normalization: {layer_type}")
 
-    elif norm_name == "unit":
-        return layers.UnitNormalization(**kwargs)
+    layer_cls = norm_layers[layer_type]
 
-    elif norm_name == "group":
-        return layers.GroupNormalization(**kwargs)
-    else:
-        raise ValueError(f"Unsupported normalization: {norm_name}")
+    # Handle "instance" which is defined as a lambda
+    return layer_cls(**kwargs) if callable(layer_cls) else layer_cls(**kwargs)
 
 
 def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
