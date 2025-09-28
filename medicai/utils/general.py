@@ -328,30 +328,42 @@ class DescribeMixin:
             desc["args"] = {}
         return desc
 
+    def _format_encoder_details(self, encoder_desc, indent="  "):
+        """Helper to format the detailed configuration of an instantiated encoder."""
+        irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
+
+        # Start the description with the encoder's class name
+        lines = [f"{indent}• {encoder_desc['class']}("]
+
+        # Add the parameters, skipping irrelevant ones
+        for nk, nv in encoder_desc["params"].items():
+            if nk in irrelevant_keys:
+                continue
+            # Use !r for repr to handle strings/tuples clearly
+            lines.append(f"{indent}  • {nk}: {nv!r}")
+
+        lines.append(f"{indent})")
+        return lines
+
     def _format_param(self, k, v, encoder_desc=None, indent="  "):
         # Special case: encoder key
-        if k == "encoder" and encoder_desc is not None:
-            irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
-            lines = [f"{indent}• {encoder_desc['class']}("]
-            for nk, nv in encoder_desc["params"].items():
-                if nk in irrelevant_keys:
-                    continue
-                lines.append(f"{indent}  • {nk}: {nv}")
-            lines.append(f"{indent})")
-            return "\n".join(lines)
-        elif k == "encoder_name" and encoder_desc is not None:
-            # Format the output when an encoder *name* was passed
-            irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
-            lines = [f"{indent}• Encoder Name: {v!r}"]
+        # Check if we have encoder details and the current key is one of the encoder keys
+        if encoder_desc is not None and k in {"encoder", "encoder_name"}:
 
-            # Use the encoder_desc (which is now built from the loaded encoder)
-            lines.append(f"{indent}• Instantiated as {encoder_desc['class']}(")
-            for nk, nv in encoder_desc["params"].items():
-                if nk in irrelevant_keys:
-                    continue
-                lines.append(f"{indent}  • {nk}: {nv!r}")
-            lines.append(f"{indent})")
-            return "\n".join(lines)
+            # Get the formatted lines for the encoder config
+            encoder_lines = self._format_encoder_details(encoder_desc, indent)
+
+            if k == "encoder":
+                # For 'encoder' key, the formatted lines IS the output
+                return "\n".join(encoder_lines)
+
+            elif k == "encoder_name":
+                # For 'encoder_name', add the name line, then the config details
+                lines = [f"{indent}• encoder_name: {v!r}"]
+                # The first line of encoder_lines is the class name, we adjust it for clarity
+                encoder_lines[0] = encoder_lines[0].replace("•", "  • Config:")
+                lines.extend(encoder_lines)
+                return "\n".join(lines)
 
         if isinstance(v, (dict, list, tuple)):
             return f"{indent}• {k}: {v}"
