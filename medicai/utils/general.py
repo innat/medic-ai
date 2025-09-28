@@ -361,7 +361,7 @@ class DescribeMixin:
                 # For 'encoder_name', add the name line, then the config details
                 lines = [f"{indent}• encoder_name: {v!r}"]
                 # The first line of encoder_lines is the class name, we adjust it for clarity
-                encoder_lines[0] = encoder_lines[0].replace("•", "  • Config:")
+                encoder_lines[0] = encoder_lines[0].replace("•", "  • encoder:")
                 lines.extend(encoder_lines)
                 return "\n".join(lines)
 
