@@ -309,7 +309,7 @@ class DescribeMixin:
                 init_doc = inspect.cleandoc(cls.__init__.__doc__ or "")
                 if init_doc:
                     lines.append(f"\n📘 Details Constructor Arguments:\n{init_doc}")
-            except Exception:
+            except (ValueError, TypeError):
                 lines.append("  <unable to inspect constructor>")
 
             return DescriptionObject("\n".join(lines))
@@ -332,17 +332,19 @@ class DescribeMixin:
         """Helper to format the detailed configuration of an instantiated encoder."""
         irrelevant_keys = {"num_classes", "classifier_activation", "pooling", "include_top"}
 
-        # Start the description with the encoder's class name
-        lines = [f"{indent}• {encoder_desc['class']}("]
+        # Start the description with the encoder's class name and an opening parenthesis
+        # Note: We use the next level of indentation (indent + "  ") for the parameters
+        lines = [f"{encoder_desc['class']}("]
 
         # Add the parameters, skipping irrelevant ones
         for nk, nv in encoder_desc["params"].items():
             if nk in irrelevant_keys:
                 continue
-            # Use !r for repr to handle strings/tuples clearly
+            # Use !r for repr and double indentation for parameters
             lines.append(f"{indent}  • {nk}: {nv!r}")
 
-        lines.append(f"{indent})")
+        # Add the closing parenthesis
+        lines.append(")")
         return lines
 
     def _format_param(self, k, v, encoder_desc=None, indent="  "):
@@ -350,20 +352,21 @@ class DescribeMixin:
         # Check if we have encoder details and the current key is one of the encoder keys
         if encoder_desc is not None and k in {"encoder", "encoder_name"}:
 
-            # Get the formatted lines for the encoder config
+            # Get the formatted lines for the nested encoder config
+            # Pass the current indent to the helper for correct parameter alignment
             encoder_lines = self._format_encoder_details(encoder_desc, indent)
+            # Start the main block with the 'encoder:' label and the first line of the details
+            lines = [f"{indent}• encoder: {encoder_lines[0]}"]
+            # Add all the detailed parameter lines
+            lines.extend(encoder_lines[1:-1])
+            # Add the closing parenthesis line
+            lines.append(f"{indent}  {encoder_lines[-1]}")
 
-            if k == "encoder":
-                # For 'encoder' key, the formatted lines IS the output
-                return "\n".join(encoder_lines)
+            if k == "encoder_name":
+                # If it was passed by name, append the original 'encoder_name' parameter line at the end
+                lines.append(f"{indent}• encoder_name: {v!r}")
 
-            elif k == "encoder_name":
-                # For 'encoder_name', add the name line, then the config details
-                lines = [f"{indent}• encoder_name: {v!r}"]
-                # The first line of encoder_lines is the class name, we adjust it for clarity
-                encoder_lines[0] = encoder_lines[0].replace("•", "  • encoder:")
-                lines.extend(encoder_lines)
-                return "\n".join(lines)
+            return "\n".join(lines)
 
         if isinstance(v, (dict, list, tuple)):
             return f"{indent}• {k}: {v}"

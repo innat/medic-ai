@@ -215,9 +215,7 @@ def get_norm_layer(layer_type, **kwargs):
         raise ValueError(f"Unsupported normalization: {layer_type}")
 
     layer_cls = norm_layers[layer_type]
-
-    # Handle "instance" which is defined as a lambda
-    return layer_cls(**kwargs) if callable(layer_cls) else layer_cls(**kwargs)
+    return layer_cls(**kwargs)
 
 
 def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
