@@ -195,8 +195,8 @@ class SegFormer(keras.Model, DescribeMixin):
                 filters=decoder_head_embedding_dim,
                 kernel_size=1,
             )(x)
-            x = get_norm_layer(layer_type="batch")(x)
-            x = get_act_layer(layer_type="relu")(x)
+            x = get_norm_layer("batch")(x)
+            x = get_act_layer("relu")(x)
             x = layers.Dropout(dropout)(x)
 
             # Final prediction
@@ -216,7 +216,7 @@ class SegFormer(keras.Model, DescribeMixin):
         num_patches = int(ops.prod(spatial_shape_tensor))
         x = layers.Reshape((num_patches, ops.shape(x)[-1]))(x)
         x = layers.Dense(hidden_dims)(x)
-        x = get_norm_layer(norm_name="layer", epsilon=1e-5)(x)
+        x = get_norm_layer("layer", epsilon=1e-5)(x)
         return x
 
     def reshape_to_spatial(self, x, target_shape):
