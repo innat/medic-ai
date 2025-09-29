@@ -1,5 +1,5 @@
 from .swin_backbone import SwinBackbone, SwinBackboneV2
-from .swin_layrs import (
+from .swin_layers import (
     SwinBasicLayer,
     SwinBasicLayerV2,
     SwinPatchingAndEmbedding,
