@@ -1030,17 +1030,20 @@ class SwinWindowAttentionV2(layers.Layer):
             qkv = qkv + qkv_bias
 
         qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
-        qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])
+        qkv = ops.transpose(qkv, [2, 0, 3, 1, 4]) # 3, bs, num_head, depth, ch/num_head
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
         q = ops.normalize(q, axis=-1, order=2, epsilon=1e-6)
         k = ops.normalize(k, axis=-1, order=2, epsilon=1e-6)
-        attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
+        attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2])) # k: bs, num_head, ch/num_head, depth
+        # bs, num_head, ch/num_head, depth
 
         # Scale with clamped logit scale
         logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
+        print(logit_scale.shape, ' logit scale shape')
+        print(attn.shape, ' attn shape')
         attn = attn * logit_scale
 
         # Relative position bias
