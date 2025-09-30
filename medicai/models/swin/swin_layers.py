@@ -889,16 +889,9 @@ class SwinWindowAttentionV2(layers.Layer):
 
     def build(self, input_shape):
         # logit scale for scaled cosine attention
-        # self.logit_scale = self.add_weight(
-        #     shape=(self.num_heads, 1, 1),
-        #     initializer=keras.initializers.Constant(ops.log(10.0)),
-        #     trainable=True,
-        #     name="logit_scale",
-        # )
-
         self.logit_scale = self.add_weight(
             shape=(self.num_heads, 1, 1),
-            initializer='zeros',
+            initializer=keras.initializers.Constant(ops.log(10.0)),
             trainable=True,
             name="logit_scale",
         )
@@ -915,24 +908,24 @@ class SwinWindowAttentionV2(layers.Layer):
         self.build_relative_coords()
 
         # QKV projection (separate Q and V bias in V2)
-        self.qkv = layers.Dense(self.input_dim * 3, use_bias=False)
+        self.qkv = layers.Dense(self.input_dim * 3, use_bias=self.qkv_bias)
 
-        if self.qkv_bias:
-            self.q_bias = self.add_weight(
-                shape=(self.input_dim,),
-                initializer="zeros",
-                trainable=True,
-                name="q_bias",
-            )
-            self.v_bias = self.add_weight(
-                shape=(self.input_dim,),
-                initializer="zeros",
-                trainable=True,
-                name="v_bias",
-            )
-        else:
-            self.q_bias = None
-            self.v_bias = None
+        # if self.qkv_bias:
+        #     self.q_bias = self.add_weight(
+        #         shape=(self.input_dim,),
+        #         initializer="zeros",
+        #         trainable=True,
+        #         name="q_bias",
+        #     )
+        #     self.v_bias = self.add_weight(
+        #         shape=(self.input_dim,),
+        #         initializer="zeros",
+        #         trainable=True,
+        #         name="v_bias",
+        #     )
+        # else:
+        #     self.q_bias = None
+        #     self.v_bias = None
 
         self.attn_drop = layers.Dropout(self.attn_drop_rate)
         self.proj = layers.Dense(self.input_dim)
@@ -1029,12 +1022,12 @@ class SwinWindowAttentionV2(layers.Layer):
 
         # QKV with manual Q/V biases
         qkv = self.qkv(x)
-        if self.qkv_bias:
-            q_bias = ops.reshape(self.q_bias, [1, 1, -1])
-            v_bias = ops.reshape(self.v_bias, [1, 1, -1])
-            zero_bias = ops.zeros_like(v_bias)
-            qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
-            qkv = qkv + qkv_bias
+        # if self.qkv_bias:
+        #     q_bias = ops.reshape(self.q_bias, [1, 1, -1])
+        #     v_bias = ops.reshape(self.v_bias, [1, 1, -1])
+        #     zero_bias = ops.zeros_like(v_bias)
+        #     qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
+        #     qkv = qkv + qkv_bias
 
         qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
         qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])
