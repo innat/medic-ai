@@ -253,13 +253,8 @@ class SwinPatchMerging(layers.Layer):
         self.reduction.build(reduced_shape)
 
         if self.norm_layer is not None:
-            norm_shape = (
-                (input_shape[0],)
-                + tuple(dim // 2 for dim in input_shape[1:-1])
-                + ((2**self.spatial_dims) * input_shape[-1],)
-            )
             self.norm = self.norm_layer(axis=-1, epsilon=1e-5)
-            self.norm.build(norm_shape)
+            self.norm.build(reduced_shape)
 
         # compute padding if needed
         self.pads = [[0, 0]]
@@ -948,15 +943,15 @@ class SwinWindowAttentionV2(layers.Layer):
         # Create meshgrid for relative coordinates table
         relative_coords_grids = ops.meshgrid(*relative_coords_ranges, indexing="ij")
 
-        # CORRECTION: Stack along first dimension, then transpose
+        # Stack along first dimension, then transpose
         relative_coords_table = ops.stack(
             relative_coords_grids, axis=0
         )  # (spatial_dims, *table_dims)
 
         # Transpose to match PyTorch's .permute(1, 2, 0) - move spatial_dims to last
-        transpose_order = list(range(1, spatial_dims + 1)) + [0]  # move first dim to last
+        transpose_order = list(range(1, spatial_dims + 1)) + [0]
         relative_coords_table = ops.transpose(relative_coords_table, transpose_order)
-        relative_coords_table = relative_coords_table[None, ...]  # Add batch dimension
+        relative_coords_table = relative_coords_table[None, ...]
 
         # Normalize coordinates
         scales = [
@@ -1040,7 +1035,12 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        logit_scale = ops.clip(
+            self.logit_scale,
+            x_min=-1000.0,  # A sufficiently small number
+            x_max=ops.log(1.0 / 0.01),
+        )
         attn = attn * logit_scale
 
         # Relative position bias
@@ -1301,6 +1301,19 @@ class SwinTransformerBlockV2(layers.Layer):
 
 
 class SwinPatchMergingV2(SwinPatchMerging):
+    def build(self, input_shape):
+        super().build(input_shape)
+
+        if self.norm_layer is not None:
+            # The output shape of self.reduction (Dense(2*input_dim)) is:
+            v2_norm_input_shape = (
+                (input_shape[0],)
+                + tuple(dim // 2 for dim in input_shape[1:-1])
+                + (2 * self.input_dim,)
+            )
+            self.norm = self.norm_layer(axis=-1, epsilon=1e-5)
+            self.norm.build(v2_norm_input_shape)
+
     def call(self, x):
         # padding if needed
         x = ops.pad(x, self.pads)
