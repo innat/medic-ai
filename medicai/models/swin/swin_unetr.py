@@ -34,6 +34,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
         feature_size=48,
         res_block=True,
         norm_name="instance",
+        name=None,
         **kwargs,
     ):
         """Initializes the SwinUNETR model.
@@ -90,7 +91,9 @@ class SwinUNETR(keras.Model, DescribeMixin):
 
         # Combine encoder and decoder
         outputs = unetr_head([inputs] + skips)
-        super().__init__(inputs=inputs, outputs=outputs, **kwargs)
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name or f"SwinUNETR{spatial_dims}D", **kwargs
+        )
 
         self.num_classes = num_classes
         self.patch_size = patch_size

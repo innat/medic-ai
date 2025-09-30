@@ -932,6 +932,7 @@ class SwinWindowAttentionV2(layers.Layer):
         self.proj_drop = layers.Dropout(self.proj_drop_rate)
 
         # Build sublayers
+        self.cpb_mlp.build((None, self.spatial_dims))
         self.qkv.build(input_shape)
         self.proj.build(input_shape)
         self.cpb_mlp.build((None, self.spatial_dims))
