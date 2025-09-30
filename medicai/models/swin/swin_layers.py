@@ -1108,7 +1108,6 @@ class SwinTransformerBlockV2(layers.Layer):
         shift_size,
         mlp_ratio=4.0,
         qkv_bias=True,
-        qk_scale=None,
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
@@ -1128,7 +1127,6 @@ class SwinTransformerBlockV2(layers.Layer):
             shift_size (tuple of int): Amount of cyclic shift for each spatial dimension.
             mlp_ratio (float, optional): Ratio of hidden dimension in MLP to input_dim. Default is 4.0.
             qkv_bias (bool, optional): Whether to use bias in QKV projections. Default is True.
-            qk_scale (float or None, optional): Scale factor for QK. Defaults to head_dim**-0.5 if None.
             drop_rate (float, optional): Dropout rate for MLP and attention output. Default is 0.0.
             attn_drop_rate (float, optional): Dropout rate for attention probabilities. Default is 0.0.
             drop_path_rate (float, optional): DropPath rate for stochastic depth. Default is 0.0.
@@ -1151,7 +1149,6 @@ class SwinTransformerBlockV2(layers.Layer):
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
-        self.qk_scale = qk_scale
         self.drop_rate = drop_rate
         self.attn_drop_rate = attn_drop_rate
         self.drop_path_rate = drop_path_rate
@@ -1191,7 +1188,6 @@ class SwinTransformerBlockV2(layers.Layer):
             window_size=self.window_size,
             num_heads=self.num_heads,
             qkv_bias=self.qkv_bias,
-            qk_scale=self.qk_scale,
             attn_drop_rate=self.attn_drop_rate,
             proj_drop_rate=self.drop_rate,
             pretrained_window_size=self.pretrained_window_size,
@@ -1301,7 +1297,6 @@ class SwinBasicLayerV2(SwinBasicLayer):
         window_size,
         mlp_ratio=4.0,
         qkv_bias=False,
-        qk_scale=None,
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.0,
@@ -1317,7 +1312,7 @@ class SwinBasicLayerV2(SwinBasicLayer):
             window_size=window_size,
             mlp_ratio=mlp_ratio,
             qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
+            qk_scale=None,
             drop_rate=drop_rate,
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
@@ -1340,7 +1335,6 @@ class SwinBasicLayerV2(SwinBasicLayer):
                 shift_size=(0,) * spatial_dims if (i % 2 == 0) else self.shift_size,
                 mlp_ratio=self.mlp_ratio,
                 qkv_bias=self.qkv_bias,
-                qk_scale=self.qk_scale,
                 drop_rate=self.drop_rate,
                 attn_drop_rate=self.attn_drop_rate,
                 drop_path_rate=(

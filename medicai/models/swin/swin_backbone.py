@@ -208,7 +208,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         depths=[2, 2, 6, 2],
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
-        qk_scale=None,
         pretrained_window_size=None,
         **kwargs,
     ):
@@ -236,8 +235,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 Default is [3, 6, 12, 24].
             qkv_bias (bool): If True, add a learnable bias to query, key, value.
                 Default is True.
-            qk_scale (float, optional): Override default qk scale of head_dim ** -0.5 if set.
-                Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
         # Input shape should be provided.
@@ -295,7 +292,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
                 drop_rate=drop_rate,
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
@@ -324,7 +320,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         self.num_layers = len(depths)
         self.num_heads = num_heads
         self.qkv_bias = qkv_bias
-        self.qk_scale = qk_scale
         self.depths = depths
         self.pretrained_window_size = pretrained_window_size
 
@@ -345,6 +340,5 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
             "pretrained_window_size": self.pretrained_window_size,
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
-            "qk_scale": self.qk_scale,
         }
         return config
