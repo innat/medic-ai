@@ -18,6 +18,9 @@ def clamp(x, min=None, max=None):
         x = ops.maximum(x, min)
     if max is not None:
         x = ops.minimum(x, max)
+    # Add numerical stability
+    x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+    x = ops.where(ops.isinf(x), ops.zeros_like(x), x)
     return x
 
 
@@ -1044,8 +1047,7 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        # logit_scale = clamp(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
-        logit_scale = ops.clip(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
+        logit_scale = clamp(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
         attn = attn * logit_scale
 
         # Relative position bias
