@@ -935,11 +935,9 @@ class SwinWindowAttentionV2(layers.Layer):
         self.cpb_mlp.build((None, self.spatial_dims))
         self.qkv.build(input_shape)
         self.proj.build(input_shape)
-        self.cpb_mlp.build((None, self.spatial_dims))
         self.built = True
 
     def build_relative_coords(self):
-        """Unified relative coordinates for 2D and 3D"""
         window_size = self.window_size
         spatial_dims = self.spatial_dims
 
@@ -1020,7 +1018,12 @@ class SwinWindowAttentionV2(layers.Layer):
         self.relative_position_index = ops.cast(relative_position_index, "int32")
 
     def call(self, x, mask=None, training=None):
-        batch, depth, channel = ops.shape(x)
+        input_shape = ops.shape(x)
+        batch_size, depth, channel = (
+            input_shape[0],
+            input_shape[1],
+            input_shape[2],
+        )
 
         # QKV with manual Q/V biases
         qkv = self.qkv(x)
@@ -1031,7 +1034,7 @@ class SwinWindowAttentionV2(layers.Layer):
             qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
             qkv = qkv + qkv_bias
 
-        qkv = ops.reshape(qkv, [batch, depth, 3, self.num_heads, channel // self.num_heads])
+        qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
         qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])
         q, k, v = qkv[0], qkv[1], qkv[2]
 
@@ -1046,7 +1049,6 @@ class SwinWindowAttentionV2(layers.Layer):
 
         # Relative position bias
         # Flatten relative_coords_table for MLP input
-        table_shape = ops.shape(self.relative_coords_table)
         rel_coords_flat = ops.reshape(self.relative_coords_table, [-1, self.spatial_dims])
         rel_pos_bias_table = self.cpb_mlp(rel_coords_flat)  # (num_positions, num_heads)
 
@@ -1055,8 +1057,6 @@ class SwinWindowAttentionV2(layers.Layer):
         relative_position_bias = ops.take(rel_pos_bias_table, flat_index, axis=0)
 
         # Reshape back to proper dimensions
-        # window_elements = ops.prod(ops.convert_to_tensor(self.window_size))
-
         window_elements = 1
         for ws in self.window_size:
             window_elements *= ws
@@ -1072,10 +1072,21 @@ class SwinWindowAttentionV2(layers.Layer):
 
         # Apply attention mask
         if mask is not None:
-            nW = ops.shape(mask)[0]
-            attn = ops.reshape(
-                attn, [batch // nW, nW, self.num_heads, depth, depth]
-            ) + ops.expand_dims(ops.expand_dims(mask, axis=0), axis=1)
+            mask_size = ops.shape(mask)[0]
+            mask = ops.cast(mask, dtype=attn.dtype)
+            attn = (
+                ops.reshape(
+                    attn,
+                    [
+                        batch_size // mask_size,
+                        mask_size,
+                        self.num_heads,
+                        depth,
+                        depth,
+                    ],
+                )
+                + mask[:, None, :, :]
+            )
             attn = ops.reshape(attn, [-1, self.num_heads, depth, depth])
 
         attn = ops.softmax(attn, axis=-1)
@@ -1084,7 +1095,7 @@ class SwinWindowAttentionV2(layers.Layer):
         # Output
         x = ops.matmul(attn, v)
         x = ops.transpose(x, [0, 2, 1, 3])
-        x = ops.reshape(x, [batch, depth, channel])
+        x = ops.reshape(x, [batch_size, depth, channel])
 
         x = self.proj(x)
         x = self.proj_drop(x, training=training)
