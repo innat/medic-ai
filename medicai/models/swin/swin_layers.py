@@ -890,7 +890,7 @@ class SwinWindowAttentionV2(layers.Layer):
     def build(self, input_shape):
         # logit scale for scaled cosine attention
         self.logit_scale = self.add_weight(
-            shape=(self.num_heads, 1, 1),
+            shape=(1, 1, 1, 1),
             initializer=keras.initializers.Constant(ops.log(10.0)),
             trainable=True,
             name="logit_scale",
@@ -908,24 +908,24 @@ class SwinWindowAttentionV2(layers.Layer):
         self.build_relative_coords()
 
         # QKV projection (separate Q and V bias in V2)
-        self.qkv = layers.Dense(self.input_dim * 3, use_bias=self.qkv_bias)
+        self.qkv = layers.Dense(self.input_dim * 3, use_bias=False)
 
-        # if self.qkv_bias:
-        #     self.q_bias = self.add_weight(
-        #         shape=(self.input_dim,),
-        #         initializer="zeros",
-        #         trainable=True,
-        #         name="q_bias",
-        #     )
-        #     self.v_bias = self.add_weight(
-        #         shape=(self.input_dim,),
-        #         initializer="zeros",
-        #         trainable=True,
-        #         name="v_bias",
-        #     )
-        # else:
-        #     self.q_bias = None
-        #     self.v_bias = None
+        if self.qkv_bias:
+            self.q_bias = self.add_weight(
+                shape=(self.input_dim,),
+                initializer="zeros",
+                trainable=True,
+                name="q_bias",
+            )
+            self.v_bias = self.add_weight(
+                shape=(self.input_dim,),
+                initializer="zeros",
+                trainable=True,
+                name="v_bias",
+            )
+        else:
+            self.q_bias = None
+            self.v_bias = None
 
         self.attn_drop = layers.Dropout(self.attn_drop_rate)
         self.proj = layers.Dense(self.input_dim)
@@ -1022,28 +1022,24 @@ class SwinWindowAttentionV2(layers.Layer):
 
         # QKV with manual Q/V biases
         qkv = self.qkv(x)
-        # if self.qkv_bias:
-        #     q_bias = ops.reshape(self.q_bias, [1, 1, -1])
-        #     v_bias = ops.reshape(self.v_bias, [1, 1, -1])
-        #     zero_bias = ops.zeros_like(v_bias)
-        #     qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
-        #     qkv = qkv + qkv_bias
+        if self.qkv_bias:
+            q_bias = ops.reshape(self.q_bias, [1, 1, -1])
+            v_bias = ops.reshape(self.v_bias, [1, 1, -1])
+            zero_bias = ops.zeros_like(v_bias)
+            qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
+            qkv = qkv + qkv_bias
 
         qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
         qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
-        q = ops.normalize(q, axis=-1, order=2, epsilon=1e-12)
-        k = ops.normalize(k, axis=-1, order=2, epsilon=1e-12)
+        q = ops.normalize(q, axis=-1, order=2, epsilon=1e-6)
+        k = ops.normalize(k, axis=-1, order=2, epsilon=1e-6)
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
-        # logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
-
-        logit_scale = ops.clip(self.logit_scale, -float('inf'), ops.log(1.0 / 0.01))
-        logit_scale = ops.exp(logit_scale)
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
         attn = attn * logit_scale
 
