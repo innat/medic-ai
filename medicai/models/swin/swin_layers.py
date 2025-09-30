@@ -1055,7 +1055,13 @@ class SwinWindowAttentionV2(layers.Layer):
         relative_position_bias = ops.take(rel_pos_bias_table, flat_index, axis=0)
 
         # Reshape back to proper dimensions
-        window_elements = ops.prod(ops.convert_to_tensor(self.window_size))
+        # window_elements = ops.prod(ops.convert_to_tensor(self.window_size))
+
+        window_elements = 1
+        for ws in self.window_size:
+            window_elements *= ws
+        window_elements = ops.convert_to_tensor(window_elements, dtype="int32")
+
         relative_position_bias = ops.reshape(
             relative_position_bias, [window_elements, window_elements, -1]
         )
