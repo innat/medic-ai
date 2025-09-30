@@ -981,7 +981,7 @@ class SwinWindowAttentionV2(layers.Layer):
             / ops.log2(8.0)
         )  # log2 transformation
 
-        self.relative_coords_table = ops.cast(relative_coords_table, self.compute_dtype)
+        self.relative_coords_table = ops.cast(relative_coords_table, dtype="float32")
 
         # Create relative position index
         coords_ranges = [ops.arange(ws) for ws in window_size]
@@ -1039,7 +1039,8 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(10.0)))
         print('logit scale ', logit_scale)
         attn = attn * logit_scale
 
