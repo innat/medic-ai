@@ -1039,12 +1039,13 @@ class SwinWindowAttentionV2(layers.Layer):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
-        q = keras.utils.normalize(q, axis=-1)
-        k = keras.utils.normalize(k, axis=-1)
+        q = keras.utils.normalize(q, axis=-1, order=2)
+        k = keras.utils.normalize(k, axis=-1, order=2)
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        logit_scale = clamp(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
+        # logit_scale = clamp(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
+        logit_scale = ops.clip(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
         attn = attn * logit_scale
 
         # Relative position bias
@@ -1060,8 +1061,7 @@ class SwinWindowAttentionV2(layers.Layer):
         window_elements = 1
         for ws in self.window_size:
             window_elements *= ws
-        # window_elements = ops.convert_to_tensor(window_elements, dtype="int32")
-
+  
         relative_position_bias = ops.reshape(
             relative_position_bias, [window_elements, window_elements, -1]
         )
