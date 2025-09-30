@@ -2,7 +2,7 @@ import keras
 
 from medicai.utils import DescribeMixin, get_pooling_layer, registration
 
-from .swin_backbone import SwinBackbone
+from .swin_backbone import SwinBackbone, SwinBackboneV2
 
 SWIN_CFG = {
     "2D": {
@@ -51,6 +51,8 @@ class SwinVariantsBase(keras.Model):
     backbone creation, and adding the classification head or pooling layers.
     Specific variants (Tiny, Small, Base) should inherit from this class.
     """
+
+    backbone_cls = None
 
     def __init__(
         self,
@@ -145,7 +147,7 @@ class SwinVariantsBase(keras.Model):
                 f"Got {window_size} with length {len(window_size)}"
             )
 
-        backbone = SwinBackbone(
+        backbone = self.backbone_cls(
             input_shape=input_shape,
             include_rescaling=include_rescaling,
             patch_size=patch_size,
@@ -227,6 +229,8 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
       paper: https://arxiv.org/abs/2103.14030
     """
 
+    backbone_cls = SwinBackbone
+
     def __init__(
         self,
         *,
@@ -301,6 +305,8 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
     Reference:
       paper: https://arxiv.org/abs/2103.14030
     """
+
+    backbone_cls = SwinBackbone
 
     def __init__(
         self,
@@ -377,6 +383,8 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
       paper: https://arxiv.org/abs/2103.14030
     """
 
+    backbone_cls = SwinBackbone
+
     def __init__(
         self,
         *,
@@ -424,6 +432,65 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant="base",
+            attn_drop_rate=0.0,
+            drop_path_rate=0.0,
+            name=name,
+            **kwargs,
+        )
+
+
+@keras.saving.register_keras_serializable(package="swin")
+@registration.register(name="swin_tiny_v2", family="swin")
+class SwinTinyV2(SwinVariantsBase, DescribeMixin):
+    backbone_cls = SwinBackboneV2
+
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        patch_size=4,
+        window_size=7,
+        num_classes=1000,
+        pooling="avg",
+        dropout=0.0,
+        classifier_activation=None,
+        name=None,
+        **kwargs,
+    ):
+        """Initializes the Swin Tiny model.
+
+        Args:
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
+            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
+            include_top (bool): Whether to include the final classification layer. Defaults to True.
+            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
+            window_size (int or tuple): The size of the attention window. Defaults to 7.
+            num_classes (int): The number of output classes. Defaults to 1000.
+            pooling (str): Optional pooling type. Defaults to 'avg'.
+            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            classifier_activation (str, optional): The activation function for the final
+                classification layer. Defaults to None.
+            name (str, optional): The name of the model. Defaults to None.
+            **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Default Configuration Details (Swin-Tiny):
+            - **Embedding Dimension:** 96 for 2D, 48 for 3D.
+            - **Depths:** [2, 2, 6, 2] for 2D, [2, 2, 2, 2] for 3D.
+            - **Number of Heads:** [3, 6, 12, 24] same for 2D and 3D.
+        """
+        super().__init__(
+            input_shape=input_shape,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            patch_size=patch_size,
+            window_size=window_size,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            dropout=dropout,
+            variant="tiny",
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,

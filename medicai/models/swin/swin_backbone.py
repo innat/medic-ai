@@ -34,8 +34,8 @@ class SwinBackbone(keras.Model, DescribeMixin):
         input_tensor=None,
         include_rescaling=False,
         embed_dim=96,
-        patch_size=[2, 4, 4],
-        window_size=[8, 7, 7],
+        patch_size=4,
+        window_size=7,
         mlp_ratio=4.0,
         patch_norm=True,
         drop_rate=0.0,
@@ -109,6 +109,22 @@ class SwinBackbone(keras.Model, DescribeMixin):
             x = layers.Rescaling(1.0 / 255)(x)
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * spatial_dims
+        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
+            raise ValueError(
+                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {patch_size} with length {len(patch_size)}"
+            )
+
+        if isinstance(window_size, int):
+            window_size = (window_size,) * spatial_dims
+        elif isinstance(window_size, (list, tuple)) and len(window_size) != spatial_dims:
+            raise ValueError(
+                f"window_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {window_size} with length {len(window_size)}"
+            )
 
         x = SwinPatchingAndEmbedding(
             patch_size=patch_size,
@@ -198,8 +214,8 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         input_tensor=None,
         include_rescaling=False,
         embed_dim=96,
-        patch_size=[2, 4, 4],
-        window_size=[8, 7, 7],
+        patch_size=4,
+        window_size=7,
         mlp_ratio=4.0,
         patch_norm=True,
         drop_rate=0.0,
@@ -271,6 +287,22 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
             x = layers.Rescaling(1.0 / 255)(x)
 
         norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
+
+        if isinstance(patch_size, int):
+            patch_size = (patch_size,) * spatial_dims
+        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
+            raise ValueError(
+                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {patch_size} with length {len(patch_size)}"
+            )
+
+        if isinstance(window_size, int):
+            window_size = (window_size,) * spatial_dims
+        elif isinstance(window_size, (list, tuple)) and len(window_size) != spatial_dims:
+            raise ValueError(
+                f"window_size must have length {spatial_dims} for {spatial_dims}D input. "
+                f"Got {window_size} with length {len(window_size)}"
+            )
 
         x = SwinPatchingAndEmbedding(
             patch_size=patch_size,

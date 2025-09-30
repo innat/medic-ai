@@ -9,5 +9,5 @@ from .swin_layers import (
     SwinWindowAttention,
     SwinWindowAttentionV2,
 )
-from .swin_transformer import SwinBase, SwinSmall, SwinTiny
+from .swin_transformer import SwinBase, SwinSmall, SwinTiny, SwinTinyV2
 from .swin_unetr import SwinUNETR
