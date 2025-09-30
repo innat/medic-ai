@@ -473,7 +473,7 @@ class SwinWindowAttention(keras.Model):
                         depth,
                     ],
                 )
-                + mask[:, None, :, :]
+                + mask[None, :, None, :, :]
             )
             attn = ops.reshape(attn, [-1, self.num_heads, depth, depth])
 
@@ -885,9 +885,16 @@ class SwinWindowAttentionV2(layers.Layer):
 
     def build(self, input_shape):
         # logit scale for scaled cosine attention
+        # self.logit_scale = self.add_weight(
+        #     shape=(self.num_heads, 1, 1),
+        #     initializer=keras.initializers.Constant(ops.log(10.0)),
+        #     trainable=True,
+        #     name="logit_scale",
+        # )
+
         self.logit_scale = self.add_weight(
             shape=(self.num_heads, 1, 1),
-            initializer=keras.initializers.Constant(ops.log(10.0)),
+            initializer=keras.initializers.Constant(0.0), 
             trainable=True,
             name="logit_scale",
         )
@@ -1056,7 +1063,7 @@ class SwinWindowAttentionV2(layers.Layer):
             relative_position_bias, [window_elements, window_elements, -1]
         )
         relative_position_bias = ops.transpose(relative_position_bias, [2, 0, 1])
-        relative_position_bias = 4 * ops.sigmoid(relative_position_bias)
+        relative_position_bias = 16 * ops.sigmoid(relative_position_bias)
         relative_position_bias = relative_position_bias[None, ...]
         attn = attn + relative_position_bias
 
