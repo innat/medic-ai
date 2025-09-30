@@ -46,6 +46,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
         qk_scale=None,
+        swin_unetr_like_downsampling=False,
         **kwargs,
     ):
         """Initializes the SwinBackbone.
@@ -140,6 +141,13 @@ class SwinBackbone(keras.Model, DescribeMixin):
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
         for i in range(num_layers):
+            if swin_unetr_like_downsampling:
+                downsampling_layer = SwinPatchMerging
+            else:
+                downsampling_layer = (
+                    SwinPatchMerging if (i < num_layers - 1) else None
+                )
+
             layer = SwinBasicLayer(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
@@ -152,10 +160,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                # downsampling_layer=(
-                #     SwinPatchMerging if (i < num_layers - 1) else None
-                # ), 
-                downsampling_layer=SwinPatchMerging, # Same as MONAI.
+                downsampling_layer=downsampling_layer, 
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
@@ -180,6 +185,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
         self.qkv_bias = qkv_bias
         self.qk_scale = qk_scale
         self.depths = depths
+        self.swin_unetr_like_downsampling = swin_unetr_like_downsampling
 
     def get_config(self):
         config = {
@@ -198,6 +204,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
             "qk_scale": self.qk_scale,
+            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
         }
         return config
 
@@ -229,6 +236,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
         pretrained_window_size=None,
+        swin_unetr_like_downsampling=False,
         **kwargs,
     ):
         """Initializes the SwinBackbone.
@@ -321,6 +329,14 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
         for i in range(num_layers):
+            
+            if swin_unetr_like_downsampling:
+                downsampling_layer = SwinPatchMerging
+            else:
+                downsampling_layer = (
+                    SwinPatchMerging if (i < num_layers - 1) else None
+                )
+
             layer = SwinBasicLayerV2(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
@@ -332,10 +348,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                # downsampling_layer=(
-                #     SwinPatchMergingV2 if (i < num_layers - 1) else None
-                # ), 
-                downsampling_layer=SwinPatchMergingV2, # Same as MONAI.
+                downsampling_layer=downsampling_layer,
                 pretrained_window_size=pretrained_window_size,
                 name=f"swin_feature{i + 1}",
             )
@@ -361,6 +374,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         self.qkv_bias = qkv_bias
         self.depths = depths
         self.pretrained_window_size = pretrained_window_size
+        self.swin_unetr_like_downsampling = swin_unetr_like_downsampling
 
     def get_config(self):
         config = {
@@ -379,5 +393,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
             "pretrained_window_size": self.pretrained_window_size,
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
+            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
         }
         return config

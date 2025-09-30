@@ -66,6 +66,7 @@ class SwinVariantsBase(keras.Model):
         dropout,
         attn_drop_rate,
         drop_path_rate,
+        swin_unetr_like_downsampling=False,
         num_classes=1000,
         classifier_activation=None,
         variant=None,
@@ -157,6 +158,7 @@ class SwinVariantsBase(keras.Model):
             embed_dim=cfg["embed_dim"],
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
+            swin_unetr_like_downsampling=swin_unetr_like_downsampling,
             patch_norm=False,
         )
         inputs = backbone.input
@@ -193,12 +195,14 @@ class SwinVariantsBase(keras.Model):
         self.attn_drop_rate = attn_drop_rate
         self.drop_path_rate = drop_path_rate
         self.classifier_activation = classifier_activation
+        self.swin_unetr_like_downsampling = swin_unetr_like_downsampling
         self.name = name
 
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
+            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
             "classifier_activation": self.classifier_activation,
         }
         return config
@@ -243,6 +247,7 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
         pooling="avg",
         dropout=0.0,
         classifier_activation=None,
+        swin_unetr_like_downsampling=False,
         name=None,
         **kwargs,
     ):
@@ -278,6 +283,7 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant="tiny",
+            swin_unetr_like_downsampling=swin_unetr_like_downsampling,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
@@ -319,6 +325,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
+        swin_unetr_like_downsampling=False,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -355,6 +362,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant="small",
+            swin_unetr_like_downsampling=swin_unetr_like_downsampling,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
@@ -396,6 +404,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
         window_size=7,
         pooling="avg",
         dropout=0.0,
+        swin_unetr_like_downsampling=False,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -432,6 +441,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant="base",
+            swin_unetr_like_downsampling=swin_unetr_like_downsampling,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
@@ -455,6 +465,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
+        swin_unetr_like_downsampling=False,
         classifier_activation=None,
         name=None,
         **kwargs,
@@ -491,6 +502,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant="tiny",
+            swin_unetr_like_downsampling=swin_unetr_like_downsampling,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
             name=name,
