@@ -1040,10 +1040,14 @@ class SwinWindowAttentionV2(layers.Layer):
         # bs, num_head, ch/num_head, depth
 
         # Scale with clamped logit scale
-        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        # logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
+
+        logit_scale = ops.clip(self.logit_scale, -float('inf'), ops.log(1.0 / 0.01))  # Clamp BEFORE exp
+        logit_scale = ops.exp(logit_scale) + 1e-8  # Add epsilon
+        logit_scale = ops.where(ops.isnan(logit_scale), ops.ones_like(logit_scale), logit_scale)
+        logit_scale = ops.where(ops.isinf(logit_scale), ops.ones_like(logit_scale), logit_scale)
         logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
-        print(logit_scale.shape, ' logit scale shape')
-        print(attn.shape, ' attn shape')
         attn = attn * logit_scale
 
         # Relative position bias
