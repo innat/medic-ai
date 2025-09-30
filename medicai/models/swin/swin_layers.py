@@ -18,9 +18,6 @@ def clamp(x, min=None, max=None):
         x = ops.maximum(x, min)
     if max is not None:
         x = ops.minimum(x, max)
-    # Add numerical stability
-    x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-    x = ops.where(ops.isinf(x), ops.zeros_like(x), x)
     return x
 
 
@@ -949,15 +946,16 @@ class SwinWindowAttentionV2(layers.Layer):
 
         # Create meshgrid for relative coordinates table
         relative_coords_grids = ops.meshgrid(*relative_coords_ranges, indexing="ij")
-        relative_coords_table = ops.stack(relative_coords_grids, axis=-1)
-        # Shape: (*table_dims, spatial_dims) where table_dims = [2*ws-1 for ws in window_size]
+
+        # CORRECTION: Stack along first dimension, then transpose
+        relative_coords_table = ops.stack(
+            relative_coords_grids, axis=0
+        )  # (spatial_dims, *table_dims)
 
         # Transpose to match PyTorch's .permute(1, 2, 0) - move spatial_dims to last
-        # For 2D: (2, 2*Wh-1, 2*Ww-1) -> (2*Wh-1, 2*Ww-1, 2)
-        # For 3D: (3, 2*Wd-1, 2*Wh-1, 2*Ww-1) -> (2*Wd-1, 2*Wh-1, 2*Ww-1, 3)
         transpose_order = list(range(1, spatial_dims + 1)) + [0]  # move first dim to last
         relative_coords_table = ops.transpose(relative_coords_table, transpose_order)
-        relative_coords_table = ops.expand_dims(relative_coords_table, axis=0)
+        relative_coords_table = relative_coords_table[None, ...]  # Add batch dimension
 
         # Normalize coordinates
         scales = [
@@ -973,7 +971,6 @@ class SwinWindowAttentionV2(layers.Layer):
         normalized_coords = []
         for i in range(spatial_dims):
             normalized_coords.append(relative_coords_table[..., i] / scales[i])
-
         relative_coords_table = ops.stack(normalized_coords, axis=-1)
 
         # Scale and apply log transformation
@@ -987,7 +984,6 @@ class SwinWindowAttentionV2(layers.Layer):
         self.relative_coords_table = ops.cast(relative_coords_table, self.compute_dtype)
 
         # Create relative position index
-        # Create coordinate grids for window positions
         coords_ranges = [ops.arange(ws) for ws in window_size]
         coords_grids = ops.meshgrid(*coords_ranges, indexing="ij")
         coords = ops.stack(coords_grids, axis=0)  # (spatial_dims, *window_dims)
@@ -996,12 +992,8 @@ class SwinWindowAttentionV2(layers.Layer):
         coords_flatten = ops.reshape(coords, [spatial_dims, -1])  # (spatial_dims, num_elements)
 
         # Compute relative coordinates
-        relative_coords = (
-            coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        )  # (spatial_dims, num_elements, num_elements)
-        relative_coords = ops.transpose(
-            relative_coords, [1, 2, 0]
-        )  # (num_elements, num_elements, spatial_dims)
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+        relative_coords = ops.transpose(relative_coords, [1, 2, 0])
         relative_coords = ops.cast(relative_coords, "float32")
 
         # Shift to start from 0
@@ -1047,7 +1039,7 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        logit_scale = clamp(ops.exp(self.logit_scale), max=ops.exp(ops.log(1.0 / 0.01)))
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         attn = attn * logit_scale
 
         # Relative position bias
@@ -1063,14 +1055,14 @@ class SwinWindowAttentionV2(layers.Layer):
         window_elements = 1
         for ws in self.window_size:
             window_elements *= ws
-  
+
         relative_position_bias = ops.reshape(
             relative_position_bias, [window_elements, window_elements, -1]
         )
         relative_position_bias = ops.transpose(relative_position_bias, [2, 0, 1])
         relative_position_bias = 16 * ops.sigmoid(relative_position_bias)
-
-        attn = attn + relative_position_bias[None, ...]
+        relative_position_bias = relative_position_bias[None, ...]
+        attn = attn + relative_position_bias
 
         # Apply attention mask
         if mask is not None:
