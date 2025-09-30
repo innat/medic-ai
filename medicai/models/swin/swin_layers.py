@@ -1035,12 +1035,7 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
-        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
-        logit_scale = ops.clip(
-            self.logit_scale,
-            x_min=-1000.0,  # A sufficiently small number
-            x_max=ops.log(1.0 / 0.01),
-        )
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         attn = attn * logit_scale
 
         # Relative position bias
@@ -1061,7 +1056,7 @@ class SwinWindowAttentionV2(layers.Layer):
             relative_position_bias, [window_elements, window_elements, -1]
         )
         relative_position_bias = ops.transpose(relative_position_bias, [2, 0, 1])
-        relative_position_bias = 16 * ops.sigmoid(relative_position_bias)
+        relative_position_bias = 4 * ops.sigmoid(relative_position_bias)
         relative_position_bias = relative_position_bias[None, ...]
         attn = attn + relative_position_bias
 
