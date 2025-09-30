@@ -1079,7 +1079,7 @@ class SwinWindowAttentionV2(layers.Layer):
                         depth,
                     ],
                 )
-                + mask[:, None, :, :]
+                + mask[None, :, None, :, :]
             )
             attn = ops.reshape(attn, [-1, self.num_heads, depth, depth])
 
