@@ -15,6 +15,7 @@ from .swin_layers import (
     SwinBasicLayerV2,
     SwinPatchingAndEmbedding,
     SwinPatchMerging,
+    SwinPatchMergingV2,
 )
 
 
@@ -328,7 +329,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                downsampling_layer=SwinPatchMerging,
+                downsampling_layer=SwinPatchMergingV2,
                 pretrained_window_size=pretrained_window_size,
                 name=f"swin_feature{i + 1}",
             )

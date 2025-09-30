@@ -4,6 +4,7 @@ from .swin_layers import (
     SwinBasicLayerV2,
     SwinPatchingAndEmbedding,
     SwinPatchMerging,
+    SwinPatchMergingV2,
     SwinTransformerBlock,
     SwinTransformerBlockV2,
     SwinWindowAttention,

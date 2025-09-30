@@ -664,6 +664,7 @@ class SwinTransformerBlock(keras.Model):
 
         # Remove any padding
         x = self.crop_layer(x)
+        x = self.drop_path(x)
         return x
 
     def second_forward(self, x, training):
@@ -675,7 +676,7 @@ class SwinTransformerBlock(keras.Model):
     def call(self, x, mask_matrix=None, training=None):
         shortcut = x
         x = self.first_forward(x, mask_matrix, training)
-        x = shortcut + self.drop_path(x)
+        x = shortcut + x
         x = x + self.second_forward(x, training)
         return x
 
@@ -1288,7 +1289,6 @@ class SwinTransformerBlockV2(layers.Layer):
                 "shift_size": self.shift_size,
                 "mlp_ratio": self.mlp_ratio,
                 "qkv_bias": self.qkv_bias,
-                "qk_scale": self.qk_scale,
                 "drop_rate": self.drop_rate,
                 "attn_drop_rate": self.attn_drop_rate,
                 "drop_path_rate": self.drop_path_rate,
@@ -1298,6 +1298,32 @@ class SwinTransformerBlockV2(layers.Layer):
             }
         )
         return config
+
+
+class SwinPatchMergingV2(SwinPatchMerging):
+    def call(self, x):
+        # padding if needed
+        x = ops.pad(x, self.pads)
+        if self.spatial_dims == 3:
+            x0 = x[:, 0::2, 0::2, 0::2, :]
+            x1 = x[:, 1::2, 0::2, 0::2, :]
+            x2 = x[:, 0::2, 1::2, 0::2, :]
+            x3 = x[:, 0::2, 0::2, 1::2, :]
+            x4 = x[:, 1::2, 1::2, 0::2, :]
+            x5 = x[:, 1::2, 0::2, 1::2, :]
+            x6 = x[:, 0::2, 1::2, 1::2, :]
+            x7 = x[:, 1::2, 1::2, 1::2, :]
+            x = ops.concatenate([x0, x1, x2, x3, x4, x5, x6, x7], axis=-1)
+        else:
+            x0 = x[:, 0::2, 0::2, :]
+            x1 = x[:, 1::2, 0::2, :]
+            x2 = x[:, 0::2, 1::2, :]
+            x3 = x[:, 1::2, 1::2, :]
+            x = ops.concatenate([x0, x1, x2, x3], axis=-1)
+        x = self.reduction(x)
+        if self.norm_layer is not None:
+            x = self.norm(x)
+        return x
 
 
 class SwinBasicLayerV2(SwinBasicLayer):
