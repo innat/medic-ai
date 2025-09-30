@@ -950,6 +950,13 @@ class SwinWindowAttentionV2(layers.Layer):
         relative_coords_table = ops.stack(relative_coords_grids, axis=-1)
         # Shape: (*table_dims, spatial_dims) where table_dims = [2*ws-1 for ws in window_size]
 
+        # Transpose to match PyTorch's .permute(1, 2, 0) - move spatial_dims to last
+        # For 2D: (2, 2*Wh-1, 2*Ww-1) -> (2*Wh-1, 2*Ww-1, 2)
+        # For 3D: (3, 2*Wd-1, 2*Wh-1, 2*Ww-1) -> (2*Wd-1, 2*Wh-1, 2*Ww-1, 3)
+        transpose_order = list(range(1, spatial_dims + 1)) + [0]  # move first dim to last
+        relative_coords_table = ops.transpose(relative_coords_table, transpose_order)
+        relative_coords_table = ops.expand_dims(relative_coords_table, axis=0)
+
         # Normalize coordinates
         scales = [
             (
@@ -971,8 +978,8 @@ class SwinWindowAttentionV2(layers.Layer):
         relative_coords_table = relative_coords_table * 8  # scale to [-8, 8]
         relative_coords_table = (
             ops.sign(relative_coords_table)
-            * ops.log(ops.abs(relative_coords_table) + 1.0)
-            / ops.log(2.0)
+            * ops.log2(ops.abs(relative_coords_table) + 1.0)
+            / ops.log2(8.0)
         )  # log2 transformation
 
         self.relative_coords_table = ops.cast(relative_coords_table, self.compute_dtype)
@@ -1179,7 +1186,7 @@ class SwinTransformerBlockV2(layers.Layer):
         self.norm2.build((*input_shape[:-1], self.input_dim))
 
         # Window-based self-attention
-        self.attn = SwinWindowAttention(
+        self.attn = SwinWindowAttentionV2(
             self.input_dim,
             window_size=self.window_size,
             num_heads=self.num_heads,
@@ -1187,7 +1194,7 @@ class SwinTransformerBlockV2(layers.Layer):
             qk_scale=self.qk_scale,
             attn_drop_rate=self.attn_drop_rate,
             proj_drop_rate=self.drop_rate,
-            pretrained_window_size=pretrained_window_size,
+            pretrained_window_size=self.pretrained_window_size,
         )
         self.attn.build((None, None, self.input_dim))
 
@@ -1370,3 +1377,12 @@ class SwinBasicLayerV2(SwinBasicLayer):
         self.attn_mask = compute_mask(padded_shape, self.window_size, self.shift_size)
 
         self.built = True
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "pretrained_window_size": self.pretrained_window_size,
+            }
+        )
+        return config
