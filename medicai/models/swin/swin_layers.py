@@ -889,9 +889,16 @@ class SwinWindowAttentionV2(layers.Layer):
 
     def build(self, input_shape):
         # logit scale for scaled cosine attention
+        # self.logit_scale = self.add_weight(
+        #     shape=(self.num_heads, 1, 1),
+        #     initializer=keras.initializers.Constant(ops.log(10.0)),
+        #     trainable=True,
+        #     name="logit_scale",
+        # )
+
         self.logit_scale = self.add_weight(
             shape=(self.num_heads, 1, 1),
-            initializer=keras.initializers.Constant(ops.log(10.0)),
+            initializer='zeros',
             trainable=True,
             name="logit_scale",
         )
