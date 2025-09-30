@@ -152,9 +152,10 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                downsampling_layer=(
-                    SwinPatchMerging if (i < num_layers - 1) else None
-                ),
+                # downsampling_layer=(
+                #     SwinPatchMerging if (i < num_layers - 1) else None
+                # ), 
+                downsampling_layer=SwinPatchMerging, # Same as MONAI.
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
@@ -331,9 +332,10 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                downsampling_layer=(
-                    SwinPatchMergingV2 if (i < num_layers - 1) else None
-                ),
+                # downsampling_layer=(
+                #     SwinPatchMergingV2 if (i < num_layers - 1) else None
+                # ), 
+                downsampling_layer=SwinPatchMergingV2, # Same as MONAI.
                 pretrained_window_size=pretrained_window_size,
                 name=f"swin_feature{i + 1}",
             )

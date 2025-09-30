@@ -14,6 +14,10 @@ from ...layers.mlp import SwinMLP
 
 
 def clamp(x, min=None, max=None):
+    if min is not None and max is not None and min > max:
+        # PyTorch behavior: if min > max → all values set to max
+        return ops.full_like(x, max)
+
     if min is not None:
         x = ops.maximum(x, min)
     if max is not None:
@@ -885,16 +889,9 @@ class SwinWindowAttentionV2(layers.Layer):
 
     def build(self, input_shape):
         # logit scale for scaled cosine attention
-        # self.logit_scale = self.add_weight(
-        #     shape=(self.num_heads, 1, 1),
-        #     initializer=keras.initializers.Constant(ops.log(10.0)),
-        #     trainable=True,
-        #     name="logit_scale",
-        # )
-
         self.logit_scale = self.add_weight(
             shape=(self.num_heads, 1, 1),
-            initializer=keras.initializers.Constant(0.0), 
+            initializer=keras.initializers.Constant(ops.log(10.0)),
             trainable=True,
             name="logit_scale",
         )
@@ -1037,12 +1034,13 @@ class SwinWindowAttentionV2(layers.Layer):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
-        q = keras.utils.normalize(q, axis=-1, order=2)
-        k = keras.utils.normalize(k, axis=-1, order=2)
+        q = ops.normalize(q, axis=-1, order=2, epsilon=1e-12)
+        k = ops.normalize(k, axis=-1, order=2, epsilon=1e-12)
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
         logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        print('logit scale ', logit_scale)
         attn = attn * logit_scale
 
         # Relative position bias
