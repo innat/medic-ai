@@ -24,10 +24,21 @@ def clamp(x, min=None, max=None):
         x = ops.minimum(x, max)
     return x
 
+# def safe_normalize(x, axis=-1, epsilon=1e-6):
+#     # L2 norm
+#     norm = ops.sqrt(ops.maximum(ops.sum(ops.square(x), axis=axis, keepdims=True), epsilon))
+#     return x / norm
+
 def safe_normalize(x, axis=-1, epsilon=1e-6):
-    # L2 norm
-    norm = ops.sqrt(ops.maximum(ops.sum(ops.square(x), axis=axis, keepdims=True), epsilon))
+    square_sum = ops.sum(ops.square(x), axis=axis, keepdims=True)
+    safe_square_sum = ops.where(
+        square_sum < epsilon,
+        epsilon * ops.ones_like(square_sum),
+        square_sum
+    )
+    norm = ops.sqrt(safe_square_sum)
     return x / norm
+
 
 
 def window_partition(x, window_size):
