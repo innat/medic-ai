@@ -1265,7 +1265,18 @@ class SwinTransformerBlockV2(layers.Layer):
         self.built = True
 
     def first_forward(self, x, mask_matrix, training):
+        if training:
+            print("=== first_forward DEBUG ===")
+            if ops.any(ops.isnan(x)):
+                print("❌ NaN in first_forward INPUT")
+                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = ops.pad(x, self.pads)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after padding")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
 
         # Apply cyclic shift if needed
@@ -1278,13 +1289,30 @@ class SwinTransformerBlockV2(layers.Layer):
             shifted_x = x
             attn_mask = None
 
+        if training and ops.any(ops.isnan(shifted_x)):
+            print("❌ NaN after cyclic shift")
+            shifted_x = ops.where(ops.isnan(shifted_x), ops.zeros_like(shifted_x), shifted_x)
+
         # Partition windows and compute attention
         x_windows = window_partition(shifted_x, self.window_size)
+
+        if training and ops.any(ops.isnan(x_windows)):
+            print("❌ NaN after window partition")
+            x_windows = ops.where(ops.isnan(x_windows), ops.zeros_like(x_windows), x_windows)
+
         attn_windows = self.attn(x_windows, mask=attn_mask, training=training)
+
+        if training and ops.any(ops.isnan(attn_windows)):
+            print("❌ NaN from attention layer")
+            attn_windows = ops.where(ops.isnan(attn_windows), ops.zeros_like(attn_windows), attn_windows)
 
         # Reverse windows to original spatial arrangement
         batch_size = ops.shape(x)[0]
         x = window_reverse(attn_windows, self.window_size, batch_size, spatial_shape_pad)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after window reverse")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
 
         # Reverse cyclic shift
         if self.apply_cyclic_shift:
@@ -1292,23 +1320,93 @@ class SwinTransformerBlockV2(layers.Layer):
                 x, shift=[s for s in self.shift_size], axis=list(range(1, self.spatial_dims + 1))
             )
 
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after reverse cyclic shift")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         # Remove any padding
         x = self.crop_layer(x)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after cropping")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = self.norm1(x)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after norm1")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = self.drop_path(x, training=training)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after drop_path")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
+        if training:
+            print("=== first_forward END ===")
+
         return x
 
     def second_forward(self, x, training):
+        if training:
+            print("=== second_forward DEBUG ===")
+            if ops.any(ops.isnan(x)):
+                print("❌ NaN in second_forward INPUT")
+                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = self.mlp(x)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN from MLP")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = self.norm2(x)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after norm2")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = self.drop_path(x, training=training)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after drop_path")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+            
+        if training:
+            print("=== second_forward END ===")
+
         return x
 
     def call(self, x, mask_matrix=None, training=None):
+        if training:
+            print("🚀 SwinBlock CALL START")
+            if ops.any(ops.isnan(x)):
+                print("❌ NaN in block INPUT")
+                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         shortcut = x
         x = self.first_forward(x, mask_matrix, training)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after first_forward")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = shortcut + x
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after first residual")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         x = x + self.second_forward(x, training)
+
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN after second_forward")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
+        if training:
+            print("🏁 SwinBlock CALL END")
+
         return x
 
     def get_config(self):
