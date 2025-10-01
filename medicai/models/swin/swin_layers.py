@@ -1225,7 +1225,7 @@ class SwinTransformerBlockV2(layers.Layer):
         self.norm1 = self.norm_layer(axis=-1, epsilon=1e-5)
         self.norm1.build(input_shape)
         self.norm2 = self.norm_layer(axis=-1, epsilon=1e-5)
-        self.norm2.build((*input_shape[:-1], self.input_dim))
+        self.norm2.build(input_shape)
 
         # Window-based self-attention
         self.attn = SwinWindowAttentionV2(
