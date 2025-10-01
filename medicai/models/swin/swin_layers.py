@@ -24,21 +24,14 @@ def clamp(x, min=None, max=None):
         x = ops.minimum(x, max)
     return x
 
-# def safe_normalize(x, axis=-1, epsilon=1e-6):
-#     # L2 norm
-#     norm = ops.sqrt(ops.maximum(ops.sum(ops.square(x), axis=axis, keepdims=True), epsilon))
-#     return x / norm
 
 def safe_normalize(x, axis=-1, epsilon=1e-6):
     square_sum = ops.sum(ops.square(x), axis=axis, keepdims=True)
     safe_square_sum = ops.where(
-        square_sum < epsilon,
-        epsilon * ops.ones_like(square_sum),
-        square_sum
+        square_sum < epsilon, epsilon * ops.ones_like(square_sum), square_sum
     )
     norm = ops.sqrt(safe_square_sum)
     return x / norm
-
 
 
 def window_partition(x, window_size):
@@ -1047,14 +1040,13 @@ class SwinWindowAttentionV2(layers.Layer):
             qkv = qkv + qkv_bias
 
         qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
-        qkv = ops.transpose(qkv, [2, 0, 3, 1, 4]) # 3, bs, num_head, depth, ch/num_head
+        qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])  # 3, bs, num_head, depth, ch/num_head
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
         q = safe_normalize(q, axis=-1, epsilon=1e-6)
         k = safe_normalize(k, axis=-1, epsilon=1e-6)
-        attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2])) # k: bs, num_head, ch/num_head, depth
-        # bs, num_head, ch/num_head, depth
+        attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
 
         # Scale with clamped logit scale
         logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))

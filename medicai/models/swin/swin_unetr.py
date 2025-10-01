@@ -63,8 +63,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             patch_size=patch_size,
             window_size=window_size,
             allowed_families=SwinUNETR.ALLOWED_BACKBONE_FAMILIES,
+            downsampling_strategy="swin_unetr_like",
             pooling=None,
-            swin_unetr_like_downsampling=True,
         )
         spatial_dims = len(input_shape) - 1
 

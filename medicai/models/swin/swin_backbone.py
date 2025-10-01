@@ -46,7 +46,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
         qk_scale=None,
-        swin_unetr_like_downsampling=False,
+        downsampling_strategy="swin_transformer_like",
         **kwargs,
     ):
         """Initializes the SwinBackbone.
@@ -103,15 +103,6 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 f"Got input_shape={input_shape}"
             )
 
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-        pyramid_outputs = {}
-        x = input_spec
-
-        if include_rescaling:
-            x = layers.Rescaling(1.0 / 255)(x)
-
-        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
-
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * spatial_dims
         elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
@@ -128,6 +119,27 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 f"Got {window_size} with length {len(window_size)}"
             )
 
+        if downsampling_strategy not in ("swin_unetr_like", "swin_transformer_like"):
+            raise ValueError(
+                f"Invalid `downsampling_strategy`: {downsampling_strategy}. "
+                "Expected one of: "
+                "'swin_transformer_like' (for 2D/3D classification tasks) or "
+                "'swin_unetr_like' (for 2D/3D segmentation tasks)."
+            )
+
+        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
+        pyramid_outputs = {}  # To store the swin-basic features
+        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
+        num_layers = len(depths)
+        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
+
+        x = input_spec
+
+        # rescaling
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
+
+        # patch embedding
         x = SwinPatchingAndEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
@@ -136,18 +148,19 @@ class SwinBackbone(keras.Model, DescribeMixin):
         )(x)
         pyramid_outputs["P1"] = x
 
+        # stem / early dropout
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
-        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
-        num_layers = len(depths)
+        # Iterating over each stage of swin transformer
         for i in range(num_layers):
-            if swin_unetr_like_downsampling:
+
+            # swin-transformer and swin-unetr uses bit different downsampling strategy.
+            if downsampling_strategy == "swin_unetr_like":
                 downsampling_layer = SwinPatchMerging
             else:
-                downsampling_layer = (
-                    SwinPatchMerging if (i < num_layers - 1) else None
-                )
+                downsampling_layer = SwinPatchMerging if (i < num_layers - 1) else None
 
+            # basic building block
             layer = SwinBasicLayer(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
@@ -160,7 +173,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
                 norm_layer=norm_layer,
-                downsampling_layer=downsampling_layer, 
+                downsampling_layer=downsampling_layer,
                 name=f"swin_feature{i + 1}",
             )
             x = layer(x)
@@ -185,7 +198,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
         self.qkv_bias = qkv_bias
         self.qk_scale = qk_scale
         self.depths = depths
-        self.swin_unetr_like_downsampling = swin_unetr_like_downsampling
+        self.downsampling_strategy = downsampling_strategy
 
     def get_config(self):
         config = {
@@ -204,7 +217,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
             "qk_scale": self.qk_scale,
-            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
+            "downsampling_strategy": self.downsampling_strategy,
         }
         return config
 
@@ -236,7 +249,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
         pretrained_window_size=None,
-        swin_unetr_like_downsampling=False,
+        downsampling_strategy="swin_transformer_like",
         **kwargs,
     ):
         """Initializes the SwinBackbone.
@@ -291,15 +304,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 f"Got input_shape={input_shape}"
             )
 
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-        pyramid_outputs = {}
-        x = input_spec
-
-        if include_rescaling:
-            x = layers.Rescaling(1.0 / 255)(x)
-
-        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
-
         if isinstance(patch_size, int):
             patch_size = (patch_size,) * spatial_dims
         elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
@@ -316,27 +320,50 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 f"Got {window_size} with length {len(window_size)}"
             )
 
+        if downsampling_strategy not in ("swin_unetr_like", "swin_transformer_like"):
+            raise ValueError(
+                f"Invalid `downsampling_strategy`: {downsampling_strategy}. "
+                "Expected one of: "
+                "'swin_transformer_like' (for 2D/3D classification tasks) or "
+                "'swin_unetr_like' (for 2D/3D segmentation tasks)."
+            )
+
+        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
+        pyramid_outputs = {}
+        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
+        num_layers = len(depths)
+
+        x = input_spec
+        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
+
+        # rescale
+        if include_rescaling:
+            x = layers.Rescaling(1.0 / 255)(x)
+
+        # patch embedding
         x = SwinPatchingAndEmbedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
         )(x)
+
+        # store intermediate layers / features
         pyramid_outputs["P1"] = x
 
+        # early or stem dropout
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
-        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
-        num_layers = len(depths)
+        # Iterating over the swin basic blocks
         for i in range(num_layers):
-            
-            if swin_unetr_like_downsampling:
-                downsampling_layer = SwinPatchMerging
-            else:
-                downsampling_layer = (
-                    SwinPatchMerging if (i < num_layers - 1) else None
-                )
 
+            # swin-transformer and swin-unetr uses bit different downsampling strategy.
+            if downsampling_strategy == "swin_unetr_like":
+                downsampling_layer = SwinPatchMergingV2
+            else:
+                downsampling_layer = SwinPatchMergingV2 if (i < num_layers - 1) else None
+
+            # Each basic or stage of swin-transformer
             layer = SwinBasicLayerV2(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
@@ -374,7 +401,7 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
         self.qkv_bias = qkv_bias
         self.depths = depths
         self.pretrained_window_size = pretrained_window_size
-        self.swin_unetr_like_downsampling = swin_unetr_like_downsampling
+        self.downsampling_strategy = downsampling_strategy
 
     def get_config(self):
         config = {
@@ -393,6 +420,6 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
             "pretrained_window_size": self.pretrained_window_size,
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
-            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
+            "downsampling_strategy": self.downsampling_strategy,
         }
         return config
