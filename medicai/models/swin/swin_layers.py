@@ -1047,8 +1047,8 @@ class SwinWindowAttentionV2(layers.Layer):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
-        q = ops.normalize(q, axis=-1, order=2, epsilon=1e-6)
-        k = ops.normalize(k, axis=-1, order=2, epsilon=1e-6)
+        # q = ops.normalize(q, axis=-1, order=2, epsilon=1e-6)
+        # k = ops.normalize(k, axis=-1, order=2, epsilon=1e-6)
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2])) # k: bs, num_head, ch/num_head, depth
         # bs, num_head, ch/num_head, depth
 
@@ -1066,7 +1066,7 @@ class SwinWindowAttentionV2(layers.Layer):
                 print("❌ NaN in logit_scale")
                 print(f"Raw logit_scale: {self.logit_scale}")
 
-        attn = attn #* logit_scale
+        attn = attn * logit_scale
 
         if training and ops.any(ops.isnan(attn)):
             print("❌ NaN after logit scale multiplication")
