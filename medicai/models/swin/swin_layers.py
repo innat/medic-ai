@@ -890,7 +890,7 @@ class SwinWindowAttentionV2(layers.Layer):
     def build(self, input_shape):
         # logit scale for scaled cosine attention
         self.logit_scale = self.add_weight(
-            shape=(1, self.num_heads, 1, 1),
+            shape=(self.num_heads, 1, 1),
             initializer=keras.initializers.Constant(ops.log(10.0)),
             trainable=True,
             name="logit_scale",
@@ -1020,8 +1020,21 @@ class SwinWindowAttentionV2(layers.Layer):
             input_shape[2],
         )
 
+        if training:
+            print("=== DEBUG START ===")
+
+        # 1. Check input
+        if training and ops.any(ops.isnan(x)):
+            print("❌ NaN in INPUT")
+            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
+
         # QKV with manual Q/V biases
         qkv = self.qkv(x)
+
+        if training and ops.any(ops.isnan(qkv)):
+            print("❌ NaN in QKV projection")
+            qkv = ops.where(ops.isnan(qkv), ops.zeros_like(qkv), qkv)
+
         if self.qkv_bias:
             q_bias = ops.reshape(self.q_bias, [1, 1, -1])
             v_bias = ops.reshape(self.v_bias, [1, 1, -1])
@@ -1039,21 +1052,33 @@ class SwinWindowAttentionV2(layers.Layer):
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2])) # k: bs, num_head, ch/num_head, depth
         # bs, num_head, ch/num_head, depth
 
-        # Scale with clamped logit scale
-        # logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
-        # logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
+        if training and ops.any(ops.isnan(attn)):
+            print("❌ NaN in attention scores")
+            print(f"Attention range: [{ops.min(attn):.6f}, {ops.max(attn):.6f}]")
 
-        logit_scale = ops.clip(self.logit_scale, -float('inf'), ops.log(1.0 / 0.01))  # Clamp BEFORE exp
-        logit_scale = ops.exp(logit_scale) + 1e-8  # Add epsilon
-        logit_scale = ops.where(ops.isnan(logit_scale), ops.ones_like(logit_scale), logit_scale)
-        logit_scale = ops.where(ops.isinf(logit_scale), ops.ones_like(logit_scale), logit_scale)
+        # Scale with clamped logit scale
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
+
+        if training:
+            print(f"Logit scale range: [{ops.min(logit_scale):.6f}, {ops.max(logit_scale):.6f}]")
+            if ops.any(ops.isnan(logit_scale)):
+                print("❌ NaN in logit_scale")
+                print(f"Raw logit_scale: {self.logit_scale}")
+
         attn = attn * logit_scale
+
+        if training and ops.any(ops.isnan(attn)):
+            print("❌ NaN after logit scale multiplication")
+            print(f"Attention after scale: [{ops.min(attn):.6f}, {ops.max(attn):.6f}]")
 
         # Relative position bias
         # Flatten relative_coords_table for MLP input
         rel_coords_flat = ops.reshape(self.relative_coords_table, [-1, self.spatial_dims])
         rel_pos_bias_table = self.cpb_mlp(rel_coords_flat)  # (num_positions, num_heads)
+
+        if training and ops.any(ops.isnan(rel_pos_bias_table)):
+            print("❌ NaN in relative position bias table")
 
         # Gather relative position bias using the index
         flat_index = ops.reshape(self.relative_position_index, [-1])
