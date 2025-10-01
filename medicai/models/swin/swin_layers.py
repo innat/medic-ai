@@ -24,6 +24,11 @@ def clamp(x, min=None, max=None):
         x = ops.minimum(x, max)
     return x
 
+def safe_normalize(x, axis=-1, epsilon=1e-6):
+    # L2 norm
+    norm = ops.sqrt(ops.maximum(ops.sum(ops.square(x), axis=axis, keepdims=True), epsilon))
+    return x / norm
+
 
 def window_partition(x, window_size):
     input_shape = ops.shape(x)
@@ -1020,20 +1025,8 @@ class SwinWindowAttentionV2(layers.Layer):
             input_shape[2],
         )
 
-        if training:
-            print("=== DEBUG START ===")
-
-        # 1. Check input
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN in INPUT")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         # QKV with manual Q/V biases
         qkv = self.qkv(x)
-
-        if training and ops.any(ops.isnan(qkv)):
-            print("❌ NaN in QKV projection")
-            qkv = ops.where(ops.isnan(qkv), ops.zeros_like(qkv), qkv)
 
         if self.qkv_bias:
             q_bias = ops.reshape(self.q_bias, [1, 1, -1])
@@ -1047,38 +1040,20 @@ class SwinWindowAttentionV2(layers.Layer):
         q, k, v = qkv[0], qkv[1], qkv[2]
 
         # Cosine attention
-        # q = ops.normalize(q, axis=-1, order=2, epsilon=1e-6)
-        # k = ops.normalize(k, axis=-1, order=2, epsilon=1e-6)
+        q = safe_normalize(q, axis=-1, epsilon=1e-6)
+        k = safe_normalize(k, axis=-1, epsilon=1e-6)
         attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2])) # k: bs, num_head, ch/num_head, depth
         # bs, num_head, ch/num_head, depth
-
-        if training and ops.any(ops.isnan(attn)):
-            print("❌ NaN in attention scores")
-            print(f"Attention range: [{ops.min(attn):.6f}, {ops.max(attn):.6f}]")
 
         # Scale with clamped logit scale
         logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
         logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
-
-        if training:
-            print(f"Logit scale range: [{ops.min(logit_scale):.6f}, {ops.max(logit_scale):.6f}]")
-            if ops.any(ops.isnan(logit_scale)):
-                print("❌ NaN in logit_scale")
-                print(f"Raw logit_scale: {self.logit_scale}")
-
         attn = attn * logit_scale
-
-        if training and ops.any(ops.isnan(attn)):
-            print("❌ NaN after logit scale multiplication")
-            print(f"Attention after scale: [{ops.min(attn):.6f}, {ops.max(attn):.6f}]")
 
         # Relative position bias
         # Flatten relative_coords_table for MLP input
         rel_coords_flat = ops.reshape(self.relative_coords_table, [-1, self.spatial_dims])
         rel_pos_bias_table = self.cpb_mlp(rel_coords_flat)  # (num_positions, num_heads)
-
-        if training and ops.any(ops.isnan(rel_pos_bias_table)):
-            print("❌ NaN in relative position bias table")
 
         # Gather relative position bias using the index
         flat_index = ops.reshape(self.relative_position_index, [-1])
@@ -1265,18 +1240,7 @@ class SwinTransformerBlockV2(layers.Layer):
         self.built = True
 
     def first_forward(self, x, mask_matrix, training):
-        if training:
-            print("=== first_forward DEBUG ===")
-            if ops.any(ops.isnan(x)):
-                print("❌ NaN in first_forward INPUT")
-                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = ops.pad(x, self.pads)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after padding")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
 
         # Apply cyclic shift if needed
@@ -1289,30 +1253,13 @@ class SwinTransformerBlockV2(layers.Layer):
             shifted_x = x
             attn_mask = None
 
-        if training and ops.any(ops.isnan(shifted_x)):
-            print("❌ NaN after cyclic shift")
-            shifted_x = ops.where(ops.isnan(shifted_x), ops.zeros_like(shifted_x), shifted_x)
-
         # Partition windows and compute attention
         x_windows = window_partition(shifted_x, self.window_size)
-
-        if training and ops.any(ops.isnan(x_windows)):
-            print("❌ NaN after window partition")
-            x_windows = ops.where(ops.isnan(x_windows), ops.zeros_like(x_windows), x_windows)
-
         attn_windows = self.attn(x_windows, mask=attn_mask, training=training)
-
-        if training and ops.any(ops.isnan(attn_windows)):
-            print("❌ NaN from attention layer")
-            attn_windows = ops.where(ops.isnan(attn_windows), ops.zeros_like(attn_windows), attn_windows)
 
         # Reverse windows to original spatial arrangement
         batch_size = ops.shape(x)[0]
         x = window_reverse(attn_windows, self.window_size, batch_size, spatial_shape_pad)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after window reverse")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
 
         # Reverse cyclic shift
         if self.apply_cyclic_shift:
@@ -1320,93 +1267,23 @@ class SwinTransformerBlockV2(layers.Layer):
                 x, shift=[s for s in self.shift_size], axis=list(range(1, self.spatial_dims + 1))
             )
 
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after reverse cyclic shift")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         # Remove any padding
         x = self.crop_layer(x)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after cropping")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = self.norm1(x)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after norm1")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = self.drop_path(x, training=training)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after drop_path")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
-        if training:
-            print("=== first_forward END ===")
-
         return x
 
     def second_forward(self, x, training):
-        if training:
-            print("=== second_forward DEBUG ===")
-            if ops.any(ops.isnan(x)):
-                print("❌ NaN in second_forward INPUT")
-                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = self.mlp(x)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN from MLP")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = self.norm2(x)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after norm2")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = self.drop_path(x, training=training)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after drop_path")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-            
-        if training:
-            print("=== second_forward END ===")
-
         return x
 
     def call(self, x, mask_matrix=None, training=None):
-        if training:
-            print("🚀 SwinBlock CALL START")
-            if ops.any(ops.isnan(x)):
-                print("❌ NaN in block INPUT")
-                x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         shortcut = x
         x = self.first_forward(x, mask_matrix, training)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after first_forward")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = shortcut + x
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after first residual")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
         x = x + self.second_forward(x, training)
-
-        if training and ops.any(ops.isnan(x)):
-            print("❌ NaN after second_forward")
-            x = ops.where(ops.isnan(x), ops.zeros_like(x), x)
-
-        if training:
-            print("🏁 SwinBlock CALL END")
-
         return x
 
     def get_config(self):
