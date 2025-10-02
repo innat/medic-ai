@@ -19,14 +19,10 @@ from .swin_layers import (
 )
 
 
-class SwinBackbone(keras.Model, DescribeMixin):
-    """Swin Transformer backbone for 3D video.
-
-    This class implements the Swin Transformer architecture as a backbone for
-    video understanding tasks. It consists of patch embedding, multiple Swin
-    Transformer layers with window-based multi-head self-attention and shifted
-    window partitioning, and patch merging for downsampling.
-    """
+class SwinBackboneBase(keras.Model):
+    patch_embedding = None
+    patch_merging = None
+    swin_basic_block = None
 
     def __init__(
         self,
@@ -45,7 +41,6 @@ class SwinBackbone(keras.Model, DescribeMixin):
         depths=[2, 2, 6, 2],
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
-        qk_scale=None,
         downsampling_strategy="swin_transformer_like",
         **kwargs,
     ):
@@ -73,61 +68,14 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 Default is [3, 6, 12, 24].
             qkv_bias (bool): If True, add a learnable bias to query, key, value.
                 Default is True.
-            qk_scale (float, optional): Override default qk scale of head_dim ** -0.5 if set.
-                Default is None.
             **kwargs: Additional keyword arguments passed to the base Model class.
         """
-        # Input shape should be provided.
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
 
-        # Parse input specification.
-        spatial_dims = len(input_shape) - 1
+        input_shape, patch_size, window_size, downsampling_strategy = self.resolve_input_params(
+            input_shape, patch_size, window_size, downsampling_strategy
+        )
+        input_spec = parse_model_inputs(input_shape, input_tensor, name="swin_input")
 
-        # Check that the input video is well specified.
-        if spatial_dims not in (2, 3):
-            raise ValueError(
-                f"Invalid `input_shape`: {input_shape}. "
-                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
-                f"but got {len(input_shape)}D."
-            )
-        if any(dim is None for dim in input_shape[:-1]):
-            raise ValueError(
-                "Swin Transformer requires a fixed spatial input shape. "
-                f"Got input_shape={input_shape}"
-            )
-
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * spatial_dims
-        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
-            raise ValueError(
-                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {patch_size} with length {len(patch_size)}"
-            )
-
-        if isinstance(window_size, int):
-            window_size = (window_size,) * spatial_dims
-        elif isinstance(window_size, (list, tuple)) and len(window_size) != spatial_dims:
-            raise ValueError(
-                f"window_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {window_size} with length {len(window_size)}"
-            )
-
-        if downsampling_strategy not in ("swin_unetr_like", "swin_transformer_like"):
-            raise ValueError(
-                f"Invalid `downsampling_strategy`: {downsampling_strategy}. "
-                "Expected one of: "
-                "'swin_transformer_like' (for 2D/3D classification tasks) or "
-                "'swin_unetr_like' (for 2D/3D segmentation tasks)."
-            )
-
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
         pyramid_outputs = {}  # To store the swin-basic features
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)
@@ -140,7 +88,7 @@ class SwinBackbone(keras.Model, DescribeMixin):
             x = layers.Rescaling(1.0 / 255)(x)
 
         # patch embedding
-        x = SwinPatchingAndEmbedding(
+        x = self.patch_embedding(
             patch_size=patch_size,
             embed_dim=embed_dim,
             norm_layer=norm_layer if patch_norm else None,
@@ -156,19 +104,18 @@ class SwinBackbone(keras.Model, DescribeMixin):
 
             # swin-transformer and swin-unetr uses bit different downsampling strategy.
             if downsampling_strategy == "swin_unetr_like":
-                downsampling_layer = SwinPatchMerging
+                downsampling_layer = self.patch_merging
             else:
-                downsampling_layer = SwinPatchMerging if (i < num_layers - 1) else None
+                downsampling_layer = self.patch_merging if (i < num_layers - 1) else None
 
             # basic building block
-            layer = SwinBasicLayer(
+            layer_kwargs = dict(
                 input_dim=int(embed_dim * 2**i),
                 depth=depths[i],
                 num_heads=num_heads[i],
                 window_size=window_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
                 drop_rate=drop_rate,
                 attn_drop_rate=attn_drop_rate,
                 drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
@@ -176,6 +123,9 @@ class SwinBackbone(keras.Model, DescribeMixin):
                 downsampling_layer=downsampling_layer,
                 name=f"swin_feature{i + 1}",
             )
+            layer_kwargs.update(self.extra_block_kwargs())
+
+            layer = self.swin_basic_block(**layer_kwargs)
             x = layer(x)
             pyramid_outputs[f"P{i + 2}"] = x
 
@@ -196,89 +146,12 @@ class SwinBackbone(keras.Model, DescribeMixin):
         self.num_layers = len(depths)
         self.num_heads = num_heads
         self.qkv_bias = qkv_bias
-        self.qk_scale = qk_scale
         self.depths = depths
         self.downsampling_strategy = downsampling_strategy
 
-    def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "input_tensor": self.input_tensor,
-            "include_rescaling": self.include_rescaling,
-            "embed_dim": self.embed_dim,
-            "patch_norm": self.patch_norm,
-            "window_size": self.window_size,
-            "patch_size": self.patch_size,
-            "mlp_ratio": self.mlp_ratio,
-            "drop_rate": self.drop_rate,
-            "drop_path_rate": self.drop_path_rate,
-            "attn_drop_rate": self.attn_drop_rate,
-            "depths": self.depths,
-            "num_heads": self.num_heads,
-            "qkv_bias": self.qkv_bias,
-            "qk_scale": self.qk_scale,
-            "downsampling_strategy": self.downsampling_strategy,
-        }
-        return config
+    def resolve_input_params(self, input_shape, patch_size, window_size, downsampling_strategy):
 
-
-class SwinBackboneV2(keras.Model, DescribeMixin):
-    """Swin Transformer V2 backbone for 3D video.
-
-    This class implements the Swin Transformer architecture as a backbone for
-    video understanding tasks. It consists of patch embedding, multiple Swin
-    Transformer layers with window-based multi-head self-attention and shifted
-    window partitioning, and patch merging for downsampling.
-    """
-
-    def __init__(
-        self,
-        *,
-        input_shape,
-        input_tensor=None,
-        include_rescaling=False,
-        embed_dim=96,
-        patch_size=4,
-        window_size=7,
-        mlp_ratio=4.0,
-        patch_norm=True,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.2,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
-        qkv_bias=True,
-        pretrained_window_size=None,
-        downsampling_strategy="swin_transformer_like",
-        **kwargs,
-    ):
-        """Initializes the SwinBackbone.
-
-        Args:
-            input_shape (tuple): Shape of the input video tensor (D, H, W, C).
-                Default is (32, 224, 224, 3).
-            input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
-                model input. If None, a new input tensor is created. Default is None.
-            include_rescaling (bool): Whether to include a Rescaling layer at the
-               start to normalize inputs (1/255). Default: False.
-            embed_dim (int): Number of linear projection output channels. Default is 96.
-            patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 4, 4].
-            window_size (list): Size of the attention windows (WD, WH, WW). Default is [8, 7, 7].
-            mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default is 4.0.
-            patch_norm (bool): If True, apply LayerNormalization after patch embedding.
-                Default is True.
-            drop_rate (float): Dropout rate. Default is 0.0.
-            attn_drop_rate (float): Attention dropout rate. Default is 0.0.
-            drop_path_rate (float): Stochastic depth rate per layer. Default is 0.2.
-            depths (list): Number of Swin Transformer blocks in each of the stages.
-                Default is [2, 2, 6, 2].
-            num_heads (list): Number of attention heads in different layers.
-                Default is [3, 6, 12, 24].
-            qkv_bias (bool): If True, add a learnable bias to query, key, value.
-                Default is True.
-            **kwargs: Additional keyword arguments passed to the base Model class.
-        """
-        # Input shape should be provided.
+        # Input shape must be provided.
         if not input_shape:
             raise ValueError(
                 "Argument `input_shape` must be provided. "
@@ -328,80 +201,11 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
                 "'swin_unetr_like' (for 2D/3D segmentation tasks)."
             )
 
-        input_spec = parse_model_inputs(input_shape, input_tensor, name="videos")
-        pyramid_outputs = {}
-        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
-        num_layers = len(depths)
+        return input_shape, patch_size, window_size, downsampling_strategy
 
-        x = input_spec
-        norm_layer = partial(layers.LayerNormalization, epsilon=1e-05)
-
-        # rescale
-        if include_rescaling:
-            x = layers.Rescaling(1.0 / 255)(x)
-
-        # patch embedding
-        x = SwinPatchingAndEmbedding(
-            patch_size=patch_size,
-            embed_dim=embed_dim,
-            norm_layer=norm_layer if patch_norm else None,
-            name="patching_and_embedding",
-        )(x)
-
-        # store intermediate layers / features
-        pyramid_outputs["P1"] = x
-
-        # early or stem dropout
-        x = layers.Dropout(drop_rate, name="pos_drop")(x)
-
-        # Iterating over the swin basic blocks
-        for i in range(num_layers):
-
-            # swin-transformer and swin-unetr uses bit different downsampling strategy.
-            if downsampling_strategy == "swin_unetr_like":
-                downsampling_layer = SwinPatchMergingV2
-            else:
-                downsampling_layer = SwinPatchMergingV2 if (i < num_layers - 1) else None
-
-            # Each basic or stage of swin-transformer
-            layer = SwinBasicLayerV2(
-                input_dim=int(embed_dim * 2**i),
-                depth=depths[i],
-                num_heads=num_heads[i],
-                window_size=window_size,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                drop_rate=drop_rate,
-                attn_drop_rate=attn_drop_rate,
-                drop_path_rate=dpr[sum(depths[:i]) : sum(depths[: i + 1])],
-                norm_layer=norm_layer,
-                downsampling_layer=downsampling_layer,
-                pretrained_window_size=pretrained_window_size,
-                name=f"swin_feature{i + 1}",
-            )
-            x = layer(x)
-            pyramid_outputs[f"P{i + 2}"] = x
-
-        super().__init__(inputs=input_spec, outputs=x, **kwargs)
-
-        self.input_tensor = input_tensor
-        self.pyramid_outputs = pyramid_outputs
-        self.include_rescaling = include_rescaling
-        self.embed_dim = embed_dim
-        self.patch_size = patch_size
-        self.window_size = window_size
-        self.mlp_ratio = mlp_ratio
-        self.norm_layer = norm_layer
-        self.patch_norm = patch_norm
-        self.drop_rate = drop_rate
-        self.attn_drop_rate = attn_drop_rate
-        self.drop_path_rate = drop_path_rate
-        self.num_layers = len(depths)
-        self.num_heads = num_heads
-        self.qkv_bias = qkv_bias
-        self.depths = depths
-        self.pretrained_window_size = pretrained_window_size
-        self.downsampling_strategy = downsampling_strategy
+    def extra_block_kwargs(self):
+        # Subclasses (V1/V2) override to pass extra args to SwinBasicBlock.
+        return {}
 
     def get_config(self):
         config = {
@@ -417,9 +221,88 @@ class SwinBackboneV2(keras.Model, DescribeMixin):
             "drop_path_rate": self.drop_path_rate,
             "attn_drop_rate": self.attn_drop_rate,
             "depths": self.depths,
-            "pretrained_window_size": self.pretrained_window_size,
             "num_heads": self.num_heads,
             "qkv_bias": self.qkv_bias,
             "downsampling_strategy": self.downsampling_strategy,
         }
         return config
+
+
+class SwinBackbone(SwinBackboneBase, DescribeMixin):
+    """Swin Transformer backbone for 2d and 3D data.
+
+    This class implements the Swin Transformer architecture as a backbone for
+    2D and 3D medical understanding tasks. It consists of patch embedding, multiple Swin
+    Transformer layers with window-based multi-head self-attention and shifted
+    window partitioning, and patch merging for downsampling.
+
+    Components:
+        - Patch embedding (`SwinPatchingAndEmbedding`)
+        - Multiple Swin Transformer layers (`SwinBasicLayer`) with
+          window-based multi-head self-attention and shifted window partitioning
+        - Patch merging (`SwinPatchMerging`) for downsampling
+
+    Args:
+        qk_scale (float, optional): Scaling factor applied to query-key dot
+            products in the attention computation. Defaults to ``None``, in
+            which case the scale is computed as ``head_dim ** -0.5``.
+        *args: Additional positional arguments passed to the parent.
+        **kwargs: Additional keyword arguments passed to the parent.
+    """
+
+    patch_embedding = SwinPatchingAndEmbedding
+    patch_merging = SwinPatchMerging
+    swin_basic_block = SwinBasicLayer
+
+    def __init__(self, *args, qk_scale=None, **kwargs):
+        self.qk_scale = qk_scale
+        super().__init__(*args, **kwargs)
+
+    def extra_block_kwargs(self):
+        return {"qk_scale": self.qk_scale}
+
+    def get_config(self):
+        config = super().get_config()
+        config["qk_scale"] = self.qk_scale
+        return config
+
+
+class SwinBackboneV2(SwinBackboneBase, DescribeMixin):
+    """
+    Swin Transformer V2 backbone for 2D and 3D medical data understanding.
+
+    This class implements the Swin Transformer V2 backbone, which introduces
+    improvements such as continuous relative position bias and scaled cosine
+    attention. It is typically used for advanced medical data understanding
+    tasks such as 3D classification or segmentation.
+
+    Components:
+        - Patch embedding (`SwinPatchingAndEmbedding`)
+        - Multiple Swin Transformer V2 layers (`SwinBasicLayerV2`) with
+          enhanced attention mechanisms
+        - Patch merging (`SwinPatchMergingV2`) for hierarchical downsampling
+
+    Args:
+        pretrained_window_size (tuple[int] or None): Size of the attention
+            window used during pretraining, enabling interpolation of relative
+            position bias when transferring to different input resolutions.
+            Defaults to ``None``.
+        *args: Additional positional arguments passed to the parent.
+        **kwargs: Additional keyword arguments passed to the parent.
+    """
+
+    patch_embedding = SwinPatchingAndEmbedding
+    patch_merging = SwinPatchMergingV2
+    swin_basic_block = SwinBasicLayerV2
+
+    def __init__(self, *args, pretrained_window_size=None, **kwargs):
+        self.pretrained_window_size = pretrained_window_size
+        super().__init__(*args, **kwargs)
+
+    def extra_block_kwargs(self):
+        return {"pretrained_window_size": self.pretrained_window_size}
+
+    def get_config(self):
+        cfg = super().get_config()
+        cfg["pretrained_window_size"] = self.pretrained_window_size
+        return cfg

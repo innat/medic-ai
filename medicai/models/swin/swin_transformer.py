@@ -207,7 +207,6 @@ class SwinVariantsBase(keras.Model):
         config = {
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
-            "swin_unetr_like_downsampling": self.swin_unetr_like_downsampling,
             "classifier_activation": self.classifier_activation,
         }
         return config

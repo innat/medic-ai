@@ -1294,8 +1294,8 @@ class SwinTransformerBlockV2(layers.Layer):
         config.update(
             {
                 "input_dim": self.input_dim,
-                "window_size": self.num_heads,
-                "num_heads": self.window_size,
+                "window_size": self.window_size,
+                "num_heads": self.num_heads,
                 "shift_size": self.shift_size,
                 "mlp_ratio": self.mlp_ratio,
                 "qkv_bias": self.qkv_bias,
