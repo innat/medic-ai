@@ -9,8 +9,32 @@ import keras
 import numpy as np
 from keras import layers, ops
 
-from .drop_path import DropPath
-from .mlp import SwinMLP
+from ...layers.drop_path import DropPath
+from ...layers.mlp import SwinMLP
+
+
+def clamp(x, min=None, max=None):
+    if min is not None and max is not None and min > max:
+        # PyTorch behavior: if min > max → all values set to max
+        return ops.full_like(x, max)
+
+    if min is not None:
+        x = ops.maximum(x, min)
+    if max is not None:
+        x = ops.minimum(x, max)
+    return x
+
+
+def safe_normalize(x, axis=-1, epsilon=1e-6):
+    """
+    Safe normalization for empty slice.
+    """
+    square_sum = ops.sum(ops.square(x), axis=axis, keepdims=True)
+    safe_square_sum = ops.where(
+        square_sum < epsilon, epsilon * ops.ones_like(square_sum), square_sum
+    )
+    norm = ops.sqrt(safe_square_sum)
+    return x / norm
 
 
 def window_partition(x, window_size):
@@ -245,13 +269,8 @@ class SwinPatchMerging(layers.Layer):
         self.reduction.build(reduced_shape)
 
         if self.norm_layer is not None:
-            norm_shape = (
-                (input_shape[0],)
-                + tuple(dim // 2 for dim in input_shape[1:-1])
-                + ((2**self.spatial_dims) * input_shape[-1],)
-            )
             self.norm = self.norm_layer(axis=-1, epsilon=1e-5)
-            self.norm.build(norm_shape)
+            self.norm.build(reduced_shape)
 
         # compute padding if needed
         self.pads = [[0, 0]]
@@ -345,7 +364,7 @@ class SwinWindowAttention(keras.Model):
         self.num_heads = num_heads
         head_dim = input_dim // num_heads
         self.qk_scale = qk_scale
-        self.scale = head_dim**-0.5  # qk_scale or head_dim**-0.5
+        self.scale = qk_scale or head_dim**-0.5
         self.qkv_bias = qkv_bias
         self.attn_drop_rate = attn_drop_rate
         self.proj_drop_rate = proj_drop_rate
@@ -470,7 +489,7 @@ class SwinWindowAttention(keras.Model):
                         depth,
                     ],
                 )
-                + mask[:, None, :, :]
+                + mask[None, :, None, :, :]
             )
             attn = ops.reshape(attn, [-1, self.num_heads, depth, depth])
 
@@ -625,7 +644,7 @@ class SwinTransformerBlock(keras.Model):
 
         self.built = True
 
-    def first_forward(self, x, mask_matrix, training):
+    def apply_attention(self, x, mask_matrix, training):
         x = self.norm1(x)
         x = ops.pad(x, self.pads)
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
@@ -656,9 +675,10 @@ class SwinTransformerBlock(keras.Model):
 
         # Remove any padding
         x = self.crop_layer(x)
+        x = self.drop_path(x, training=training)
         return x
 
-    def second_forward(self, x, training):
+    def apply_mlp(self, x, training):
         x = self.norm2(x)
         x = self.mlp(x)
         x = self.drop_path(x, training=training)
@@ -666,9 +686,9 @@ class SwinTransformerBlock(keras.Model):
 
     def call(self, x, mask_matrix=None, training=None):
         shortcut = x
-        x = self.first_forward(x, mask_matrix, training)
-        x = shortcut + self.drop_path(x)
-        x = x + self.second_forward(x, training)
+        x = self.apply_attention(x, mask_matrix, training)
+        x = shortcut + x
+        x = x + self.apply_mlp(x, training)
         return x
 
     def get_config(self):
@@ -844,6 +864,653 @@ class SwinBasicLayer(keras.Model):
                 "drop_rate": self.drop_rate,
                 "attn_drop_rate": self.attn_drop_rate,
                 "drop_path_rate": self.drop_path_rate,
+            }
+        )
+        return config
+
+
+class SwinWindowAttentionV2(layers.Layer):
+    """
+    Swin Transformer V2 Window Attention layer (SW-MSA).
+
+    This layer implements the core window attention mechanism from the Swin
+    Transformer V2 paper, featuring:
+    1. Scaled Cosine Attention for stability.
+    2. Continuous Relative Position Bias (CPB) implemented via an MLP.
+    3. Separate Q and V biases (qkv_bias=True) for better performance.
+    It supports attention for both 2D and 3D inputs (e.g., [H, W, C] or [D, H, W, C]).
+    """
+
+    def __init__(
+        self,
+        input_dim,
+        window_size,
+        num_heads,
+        qkv_bias=True,
+        attn_drop_rate=0.0,
+        proj_drop_rate=0.0,
+        pretrained_window_size=None,
+        **kwargs,
+    ):
+        """
+        Swin Transformer V2 Window Attention with continuous relative position bias
+        and scaled cosine attention. Supports both 2D and 3D inputs.
+
+        Args:
+            input_dim (int): Number of input channels.
+            window_size (tuple or list of int): Size of the attention window
+                in each spatial dimension (e.g., (7, 7) for 2D, or (7, 7, 7) for 3D).
+            num_heads (int): Number of attention heads.
+            qkv_bias (bool): If True, adds separate learnable biases to Q and V projections.
+                (K projection uses a zero bias if this is True). Defaults to True.
+            attn_drop_rate (float): Dropout rate for attention weights. Defaults to 0.0.
+            proj_drop_rate (float): Dropout rate for the output projection. Defaults to 0.0.
+            pretrained_window_size (tuple or list of int, optional): Window size
+                used during pretraining. Used for scaling the continuous relative
+                position bias when fine-tuning on a different window size. Defaults to None.
+            **kwargs: Additional keyword arguments for the base Keras layer.
+        """
+        super().__init__(**kwargs)
+        self.input_dim = input_dim
+        self.window_size = window_size
+        self.num_heads = num_heads
+        self.attn_drop_rate = attn_drop_rate
+        self.proj_drop_rate = proj_drop_rate
+        self.qkv_bias = qkv_bias
+        self.spatial_dims = len(window_size)
+
+        if pretrained_window_size is None:
+            self.pretrained_window_size = (0,) * self.spatial_dims
+        else:
+            self.pretrained_window_size = pretrained_window_size
+
+    def build(self, input_shape):
+        # logit scale for scaled cosine attention
+        self.logit_scale = self.add_weight(
+            shape=(self.num_heads, 1, 1),
+            initializer=keras.initializers.Constant(ops.log(10.0)),
+            trainable=True,
+            name="logit_scale",
+        )
+
+        # Continuous relative position bias MLP
+        self.cpb_mlp = keras.Sequential(
+            [
+                layers.Dense(512, activation="relu", use_bias=True),
+                layers.Dense(self.num_heads, use_bias=False),
+            ]
+        )
+
+        # Relative coordinates table/index
+        self.build_relative_coords()
+
+        # QKV projection (separate Q and V bias in V2)
+        self.qkv = layers.Dense(self.input_dim * 3, use_bias=False)
+
+        if self.qkv_bias:
+            self.q_bias = self.add_weight(
+                shape=(self.input_dim,),
+                initializer="zeros",
+                trainable=True,
+                name="q_bias",
+            )
+            self.v_bias = self.add_weight(
+                shape=(self.input_dim,),
+                initializer="zeros",
+                trainable=True,
+                name="v_bias",
+            )
+        else:
+            self.q_bias = None
+            self.v_bias = None
+
+        self.attn_drop = layers.Dropout(self.attn_drop_rate)
+        self.proj = layers.Dense(self.input_dim)
+        self.proj_drop = layers.Dropout(self.proj_drop_rate)
+
+        # Build sublayers
+        self.cpb_mlp.build((None, self.spatial_dims))
+        self.qkv.build(input_shape)
+        self.proj.build(input_shape)
+        self.built = True
+
+    def build_relative_coords(self):
+        window_size = self.window_size
+        spatial_dims = self.spatial_dims
+
+        # Create relative coordinates ranges for each dimension
+        relative_coords_ranges = [ops.arange(-(ws - 1), ws, dtype="float32") for ws in window_size]
+
+        # Create meshgrid for relative coordinates table
+        relative_coords_grids = ops.meshgrid(*relative_coords_ranges, indexing="ij")
+
+        # Stack along first dimension, then transpose
+        relative_coords_table = ops.stack(
+            relative_coords_grids, axis=0
+        )  # (spatial_dims, *table_dims)
+
+        # Transpose to match PyTorch's .permute(1, 2, 0) - move spatial_dims to last
+        transpose_order = list(range(1, spatial_dims + 1)) + [0]
+        relative_coords_table = ops.transpose(relative_coords_table, transpose_order)
+        relative_coords_table = relative_coords_table[None, ...]
+
+        # Normalize coordinates
+        scales = [
+            (
+                self.pretrained_window_size[i] - 1
+                if self.pretrained_window_size[i] > 0
+                else window_size[i] - 1
+            )
+            for i in range(spatial_dims)
+        ]
+
+        # Normalize each dimension
+        normalized_coords = []
+        for i in range(spatial_dims):
+            normalized_coords.append(relative_coords_table[..., i] / scales[i])
+        relative_coords_table = ops.stack(normalized_coords, axis=-1)
+
+        # Scale and apply log transformation
+        relative_coords_table = relative_coords_table * 8  # scale to [-8, 8]
+        relative_coords_table = (
+            ops.sign(relative_coords_table)
+            * ops.log2(ops.abs(relative_coords_table) + 1.0)
+            / ops.log2(8.0)
+        )  # log2 transformation
+
+        self.relative_coords_table = ops.cast(relative_coords_table, dtype="float32")
+
+        # Create relative position index
+        coords_ranges = [ops.arange(ws) for ws in window_size]
+        coords_grids = ops.meshgrid(*coords_ranges, indexing="ij")
+        coords = ops.stack(coords_grids, axis=0)  # (spatial_dims, *window_dims)
+
+        # Flatten coordinates
+        coords_flatten = ops.reshape(coords, [spatial_dims, -1])  # (spatial_dims, num_elements)
+
+        # Compute relative coordinates
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]
+        relative_coords = ops.transpose(relative_coords, [1, 2, 0])
+        relative_coords = ops.cast(relative_coords, "float32")
+
+        # Shift to start from 0
+        shifts = ops.convert_to_tensor([ws - 1 for ws in window_size], dtype="float32")
+        shifts = ops.reshape(shifts, [1, 1, spatial_dims])
+        relative_coords = relative_coords + shifts
+
+        # Compute multipliers for flattened index
+        multipliers = [1]
+        for i in reversed(range(1, spatial_dims)):
+            multiplier = multipliers[0] * (2 * window_size[i] - 1)
+            multipliers.insert(0, multiplier)
+        multipliers = ops.convert_to_tensor(multipliers, dtype="float32")
+
+        # Compute flattened relative position index
+        relative_position_index = ops.sum(relative_coords * multipliers, axis=-1)
+        self.relative_position_index = ops.cast(relative_position_index, "int32")
+
+    def call(self, x, mask=None, training=None):
+        input_shape = ops.shape(x)
+        batch_size, depth, channel = (
+            input_shape[0],
+            input_shape[1],
+            input_shape[2],
+        )
+
+        # QKV with manual Q/V biases
+        qkv = self.qkv(x)
+
+        if self.qkv_bias:
+            q_bias = ops.reshape(self.q_bias, [1, 1, -1])
+            v_bias = ops.reshape(self.v_bias, [1, 1, -1])
+            zero_bias = ops.zeros_like(v_bias)
+            qkv_bias = ops.concatenate([q_bias, zero_bias, v_bias], axis=-1)
+            qkv = qkv + qkv_bias
+
+        qkv = ops.reshape(qkv, [batch_size, depth, 3, self.num_heads, channel // self.num_heads])
+        qkv = ops.transpose(qkv, [2, 0, 3, 1, 4])  # 3, bs, num_head, depth, ch/num_head
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        # Cosine attention
+        q = safe_normalize(q, axis=-1, epsilon=1e-6)
+        k = safe_normalize(k, axis=-1, epsilon=1e-6)
+        attn = ops.matmul(q, ops.transpose(k, [0, 1, 3, 2]))
+
+        # Scale with clamped logit scale
+        logit_scale = ops.exp(clamp(self.logit_scale, max=ops.log(1.0 / 0.01)))
+        logit_scale = ops.cast(logit_scale, dtype=attn.dtype)
+        attn = attn * logit_scale
+
+        # Relative position bias
+        # Flatten relative_coords_table for MLP input
+        rel_coords_flat = ops.reshape(self.relative_coords_table, [-1, self.spatial_dims])
+        rel_pos_bias_table = self.cpb_mlp(rel_coords_flat)  # (num_positions, num_heads)
+
+        # Gather relative position bias using the index
+        flat_index = ops.reshape(self.relative_position_index, [-1])
+        relative_position_bias = ops.take(rel_pos_bias_table, flat_index, axis=0)
+
+        # Reshape back to proper dimensions
+        window_elements = 1
+        for ws in self.window_size:
+            window_elements *= ws
+
+        relative_position_bias = ops.reshape(
+            relative_position_bias, [window_elements, window_elements, -1]
+        )
+        relative_position_bias = ops.transpose(relative_position_bias, [2, 0, 1])
+        relative_position_bias = 16 * ops.sigmoid(relative_position_bias)
+        relative_position_bias = relative_position_bias[None, ...]
+        attn = attn + relative_position_bias
+
+        # Apply attention mask
+        if mask is not None:
+            mask_size = ops.shape(mask)[0]
+            mask = ops.cast(mask, dtype=attn.dtype)
+            attn = (
+                ops.reshape(
+                    attn,
+                    [
+                        batch_size // mask_size,
+                        mask_size,
+                        self.num_heads,
+                        depth,
+                        depth,
+                    ],
+                )
+                + mask[None, :, None, :, :]
+            )
+            attn = ops.reshape(attn, [-1, self.num_heads, depth, depth])
+
+        attn = ops.softmax(attn, axis=-1)
+        attn = self.attn_drop(attn, training=training)
+
+        # Output
+        x = ops.matmul(attn, v)
+        x = ops.transpose(x, [0, 2, 1, 3])
+        x = ops.reshape(x, [batch_size, depth, channel])
+
+        x = self.proj(x)
+        x = self.proj_drop(x, training=training)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "input_dim": self.input_dim,
+                "window_size": self.window_size,
+                "num_heads": self.num_heads,
+                "qkv_bias": self.qkv_bias,
+                "attn_drop_rate": self.attn_drop_rate,
+                "proj_drop_rate": self.proj_drop_rate,
+                "pretrained_window_size": self.pretrained_window_size,
+            }
+        )
+        return config
+
+
+class SwinTransformerBlockV2(layers.Layer):
+    """
+    Implements a single Swin Transformer Block with window-based multi-head self-attention
+    and a feed-forward MLP, supporting optional shifted windows (cyclic shift) for 2D or 3D data.
+    """
+
+    def __init__(
+        self,
+        input_dim,
+        num_heads,
+        window_size,
+        shift_size,
+        mlp_ratio=4.0,
+        qkv_bias=True,
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+        drop_path_rate=0.0,
+        activation="gelu",
+        norm_layer=layers.LayerNormalization,
+        pretrained_window_size=None,
+        **kwargs,
+    ):
+        """
+        Args:
+            input_dim (int): Number of input channels.
+            num_heads (int): Number of attention heads.
+            window_size (tuple of int): Spatial size of each attention window, e.g., (D, H, W) for 3D.
+            shift_size (tuple of int): Amount of cyclic shift for each spatial dimension.
+            mlp_ratio (float, optional): Ratio of hidden dimension in MLP to input_dim. Default is 4.0.
+            qkv_bias (bool, optional): Whether to use bias in QKV projections. Default is True.
+            drop_rate (float, optional): Dropout rate for MLP and attention output. Default is 0.0.
+            attn_drop_rate (float, optional): Dropout rate for attention probabilities. Default is 0.0.
+            drop_path_rate (float, optional): DropPath rate for stochastic depth. Default is 0.0.
+            activation (str, optional): Activation function for MLP. Default is "gelu".
+            norm_layer (Layer, optional): Normalization layer, e.g., LayerNormalization.
+                Default is keras.layers.LayerNormalization.
+            **kwargs: Additional keyword arguments for keras.Model.
+
+        Input shape:
+            - 4D tensor for 2D data: (batch_size, H, W, C)
+            - 5D tensor for 3D data: (batch_size, D, H, W, C)
+
+        Output shape:
+            Same as input shape: (batch_size, ..., C)
+        """
+        super().__init__(**kwargs)
+        # variables
+        self.input_dim = input_dim
+        self.num_heads = num_heads
+        self.window_size = window_size
+        self.shift_size = shift_size
+        self.mlp_ratio = mlp_ratio
+        self.qkv_bias = qkv_bias
+        self.drop_rate = drop_rate
+        self.attn_drop_rate = attn_drop_rate
+        self.drop_path_rate = drop_path_rate
+        self.mlp_hidden_dim = int(input_dim * mlp_ratio)
+        self.norm_layer = norm_layer
+        self._activation_identifier = activation
+        self.pretrained_window_size = pretrained_window_size
+        self.spatial_dims = len(window_size)
+
+        # Ensure valid shift sizes
+        for i, (shift, window) in enumerate(zip(self.shift_size, self.window_size)):
+            if not (0 <= shift < window):
+                raise ValueError(
+                    f"shift_size[{i}] must be in the range 0 to less than "
+                    f"window_size[{i}], but got shift_size[{i}]={shift} "
+                    f"and window_size[{i}]={window}."
+                )
+
+    def build(self, input_shape):
+        # determine if cyclic shift is needed
+        self.apply_cyclic_shift = any(i > 0 for i in self.shift_size)
+
+        # DropPath or Identity
+        self.drop_path = (
+            DropPath(self.drop_path_rate) if self.drop_path_rate > 0.0 else layers.Identity()
+        )
+
+        # LayerNorm layers
+        self.norm1 = self.norm_layer(axis=-1, epsilon=1e-5)
+        self.norm1.build(input_shape)
+        self.norm2 = self.norm_layer(axis=-1, epsilon=1e-5)
+        self.norm2.build(input_shape)
+
+        # Window-based self-attention
+        self.attn = SwinWindowAttentionV2(
+            self.input_dim,
+            window_size=self.window_size,
+            num_heads=self.num_heads,
+            qkv_bias=self.qkv_bias,
+            attn_drop_rate=self.attn_drop_rate,
+            proj_drop_rate=self.drop_rate,
+            pretrained_window_size=self.pretrained_window_size,
+        )
+        self.attn.build((None, None, self.input_dim))
+
+        # Feed-forward MLP
+        self.mlp = SwinMLP(
+            output_dim=self.input_dim,
+            hidden_dim=self.mlp_hidden_dim,
+            activation=self._activation_identifier,
+            drop_rate=self.drop_rate,
+        )
+        self.mlp.build((*input_shape[:-1], self.input_dim))
+
+        # Compute padding for all spatial dimensions to match window sizes
+        self.pads = [[0, 0]]  # batch dim
+        for i, size in enumerate(self.window_size):
+            dim = input_shape[i + 1]
+            pad = ops.mod(-dim + size, size)
+            self.pads.append([0, pad])
+        self.pads.append([0, 0])  # channel dim
+
+        # Cropping layer to remove padding after attention
+        cropping = [(0, int(p[1])) for p in self.pads[1:-1]]
+        self.crop_layer = get_reshaping_layer(
+            spatial_dims=len(self.window_size), layer_type="cropping", cropping=cropping
+        )
+
+        self.built = True
+
+    def apply_attention(self, x, mask_matrix, training):
+        x = ops.pad(x, self.pads)
+        spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
+
+        # Apply cyclic shift if needed
+        if self.apply_cyclic_shift:
+            shifted_x = ops.roll(
+                x, shift=[-s for s in self.shift_size], axis=list(range(1, self.spatial_dims + 1))
+            )
+            attn_mask = mask_matrix
+        else:
+            shifted_x = x
+            attn_mask = None
+
+        # Partition windows and compute attention
+        x_windows = window_partition(shifted_x, self.window_size)
+        attn_windows = self.attn(x_windows, mask=attn_mask, training=training)
+
+        # Reverse windows to original spatial arrangement
+        batch_size = ops.shape(x)[0]
+        x = window_reverse(attn_windows, self.window_size, batch_size, spatial_shape_pad)
+
+        # Reverse cyclic shift
+        if self.apply_cyclic_shift:
+            x = ops.roll(
+                x, shift=[s for s in self.shift_size], axis=list(range(1, self.spatial_dims + 1))
+            )
+
+        # Remove any padding
+        x = self.crop_layer(x)
+        x = self.norm1(x)
+        x = self.drop_path(x, training=training)
+        return x
+
+    def apply_mlp(self, x, training):
+        x = self.mlp(x)
+        x = self.norm2(x)
+        x = self.drop_path(x, training=training)
+        return x
+
+    def call(self, x, mask_matrix=None, training=None):
+        shortcut = x
+        x = self.apply_attention(x, mask_matrix, training)
+        x = shortcut + x
+        x = x + self.apply_mlp(x, training)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "input_dim": self.input_dim,
+                "window_size": self.window_size,
+                "num_heads": self.num_heads,
+                "shift_size": self.shift_size,
+                "mlp_ratio": self.mlp_ratio,
+                "qkv_bias": self.qkv_bias,
+                "drop_rate": self.drop_rate,
+                "attn_drop_rate": self.attn_drop_rate,
+                "drop_path_rate": self.drop_path_rate,
+                "mlp_hidden_dim": self.mlp_hidden_dim,
+                "activation": self._activation_identifier,
+                "pretrained_window_size": self.pretrained_window_size,
+            }
+        )
+        return config
+
+
+class SwinPatchMergingV2(SwinPatchMerging):
+    """
+    Patch Merging Layer for Swin Transformer V2 (Post-Normalization).
+
+    This layer performs downsampling and channel expansion, which is the
+    equivalent of the V2 'Patch Merging' layer used between stages.
+
+    It differs from the original Swin V1 implementation by applying Layer
+    Normalization *after* the linear reduction layer (Post-Normalization) for
+    improved training stability, following the standard V2 design.
+    """
+
+    def build(self, input_shape):
+        super().build(input_shape)
+
+        if self.norm_layer is not None:
+            # The output shape of self.reduction (Dense(2*input_dim)) is:
+            v2_norm_input_shape = (
+                (input_shape[0],)
+                + tuple(dim // 2 for dim in input_shape[1:-1])
+                + (2 * self.input_dim,)
+            )
+            self.norm = self.norm_layer(axis=-1, epsilon=1e-5)
+            self.norm.build(v2_norm_input_shape)
+
+    def call(self, x):
+        # padding if needed
+        x = ops.pad(x, self.pads)
+        if self.spatial_dims == 3:
+            x0 = x[:, 0::2, 0::2, 0::2, :]
+            x1 = x[:, 1::2, 0::2, 0::2, :]
+            x2 = x[:, 0::2, 1::2, 0::2, :]
+            x3 = x[:, 0::2, 0::2, 1::2, :]
+            x4 = x[:, 1::2, 1::2, 0::2, :]
+            x5 = x[:, 1::2, 0::2, 1::2, :]
+            x6 = x[:, 0::2, 1::2, 1::2, :]
+            x7 = x[:, 1::2, 1::2, 1::2, :]
+            x = ops.concatenate([x0, x1, x2, x3, x4, x5, x6, x7], axis=-1)
+        else:
+            x0 = x[:, 0::2, 0::2, :]
+            x1 = x[:, 1::2, 0::2, :]
+            x2 = x[:, 0::2, 1::2, :]
+            x3 = x[:, 1::2, 1::2, :]
+            x = ops.concatenate([x0, x1, x2, x3], axis=-1)
+        x = self.reduction(x)
+        if self.norm_layer is not None:
+            x = self.norm(x)
+        return x
+
+
+class SwinBasicLayerV2(SwinBasicLayer):
+    """
+    Swin Transformer V2 Basic Layer (Stage).
+
+    This layer constitutes one stage of the Swin Transformer V2 network, containing
+    a sequence of SwinTransformerBlockV2 layers with alternating window-based
+    (W-MSA) and shifted window-based (SW-MSA) self-attention. It optionally includes
+    a downsampling layer (Patch Merging) at the beginning of the stage (except for the first stage).
+
+    It passes the 'pretrained_window_size' argument to the V2 blocks for proper
+    scaling of the Continuous Relative Position Bias (CPB).
+    """
+
+    def __init__(
+        self,
+        input_dim,
+        depth,
+        num_heads,
+        window_size,
+        mlp_ratio=4.0,
+        qkv_bias=False,
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+        drop_path_rate=0.0,
+        norm_layer=None,
+        downsampling_layer=None,
+        pretrained_window_size=None,
+        **kwargs,
+    ):
+        """
+        Initializes a Swin Transformer V2 Basic Layer.
+
+        Args:
+            input_dim (int): Number of input channels.
+            depth (int): Number of Swin Transformer Blocks in this layer.
+            num_heads (int): Number of attention heads.
+            window_size (tuple of int): Size of the attention window (e.g., (7, 7)).
+            mlp_ratio (float, optional): Ratio of MLP hidden dimension to input_dim. Defaults to 4.0.
+            qkv_bias (bool, optional): Whether to use bias in QKV projections. Defaults to False.
+            drop_rate (float, optional): Dropout rate for MLP and attention output. Defaults to 0.0.
+            attn_drop_rate (float, optional): Dropout rate for attention probabilities. Defaults to 0.0.
+            drop_path_rate (float or list/tuple of float, optional): Stochastic depth rate.
+                Can be a single value for all blocks or a list of values. Defaults to 0.0.
+            norm_layer (Layer, optional): Normalization layer class (e.g., keras.layers.LayerNormalization). Defaults to None.
+            downsampling_layer (Layer, optional): Downsampling layer class (e.g., SwinPatchMergingV2)
+                to be applied before the blocks. Defaults to None.
+            pretrained_window_size (tuple of int, optional): Window size used during pretraining,
+                for CPB scaling in V2 blocks. Defaults to None.
+            **kwargs: Additional keyword arguments for the base Keras layer.
+        """
+        super().__init__(
+            input_dim=input_dim,
+            depth=depth,
+            num_heads=num_heads,
+            window_size=window_size,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            qk_scale=None,
+            drop_rate=drop_rate,
+            attn_drop_rate=attn_drop_rate,
+            drop_path_rate=drop_path_rate,
+            norm_layer=norm_layer,
+            downsampling_layer=downsampling_layer,
+            **kwargs,
+        )
+
+        # Save the additional argument
+        self.pretrained_window_size = pretrained_window_size
+
+    def build(self, input_shape):
+        spatial_dims = len(input_shape) - 2
+        # Create SwinTransformerBlocks with alternating shift sizes
+        self.blocks = [
+            SwinTransformerBlockV2(
+                self.input_dim,
+                num_heads=self.num_heads,
+                window_size=self.window_size,
+                shift_size=(0,) * spatial_dims if (i % 2 == 0) else self.shift_size,
+                mlp_ratio=self.mlp_ratio,
+                qkv_bias=self.qkv_bias,
+                drop_rate=self.drop_rate,
+                attn_drop_rate=self.attn_drop_rate,
+                drop_path_rate=(
+                    self.drop_path_rate[i]
+                    if isinstance(self.drop_path_rate, list)
+                    else self.drop_path_rate
+                ),
+                norm_layer=self.norm_layer,
+                pretrained_window_size=self.pretrained_window_size,
+            )
+            for i in range(self.depth)
+        ]
+
+        # Optional downsampling layer
+        if self.downsampling_layer:
+            self.downsample = self.downsampling_layer(
+                input_dim=self.input_dim, norm_layer=self.norm_layer
+            )
+            self.downsample.build(input_shape)
+
+        # Build all transformer blocks
+        for blk in self.blocks:
+            blk.build(input_shape)
+
+        # Compute padded spatial dimensions
+        spatial_shape = input_shape[1:-1]
+        padded_shape = tuple(
+            self._compute_dim_padded(d, w) for d, w in zip(spatial_shape, self.window_size)
+        )
+
+        # Precompute attention mask for shifted windows
+        self.attn_mask = compute_mask(padded_shape, self.window_size, self.shift_size)
+
+        self.built = True
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "pretrained_window_size": self.pretrained_window_size,
             }
         )
         return config

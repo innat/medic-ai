@@ -5,6 +5,7 @@ from medicai.models import (
     DenseNet121,
     SegFormer,
     SwinTiny,
+    SwinTinyV2,
     SwinUNETR,
     TransUNet,
     UNet,
@@ -55,7 +56,7 @@ def test_swin_unetr():
     # test for 2D
     num_classes = 4
     input_shape = (96, 96, 1)
-    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes, encoder_name="swin_tiny")
+    model = SwinUNETR(input_shape=input_shape, num_classes=num_classes, encoder_name="swin_tiny_v2")
     assert model.input_shape == (None, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 1))
     output = model(dummy_input)
@@ -66,7 +67,7 @@ def test_swin_transformer():
     # test for 3D
     num_classes = 4
     input_shape = (96, 96, 96, 1)
-    model = SwinTiny(input_shape=input_shape, num_classes=num_classes)
+    model = SwinTinyV2(input_shape=input_shape, num_classes=num_classes)
     assert model.input_shape == (None, 96, 96, 96, 1)
     dummy_input = tf.random.normal((1, 96, 96, 96, 1))
     output = model(dummy_input)
