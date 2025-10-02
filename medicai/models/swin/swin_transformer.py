@@ -2,7 +2,7 @@ import keras
 
 from medicai.utils import DescribeMixin, get_pooling_layer, registration
 
-from .swin_backbone import SwinBackbone, SwinBackboneV2
+from .swin_backbone import SwinBackbone, SwinBackboneV2, resolve_input_params
 
 SWIN_CFG = {
     "2D": {
@@ -108,50 +108,18 @@ class SwinVariantsBase(keras.Model):
             ValueError: If `patch_size` or `window_size` is provided as a tuple/list with an incorrect length.
         """
 
-        # Input shape should be provided.
-        if not input_shape:
-            raise ValueError(
-                "Argument `input_shape` must be provided. "
-                "It should be a tuple of integers specifying the dimensions of the input "
-                "data, not including the batch size. "
-                "For 2D data, the format is `(height, width, channels)`. "
-                "For 3D data, the format is `(depth, height, width, channels)`."
-            )
-
-        # Check that the input video is well specified.
+        # Check that the input is well specified.
+        input_shape, patch_size, window_size, downsampling_strategy = resolve_input_params(
+            input_shape, patch_size, window_size, downsampling_strategy
+        )
         spatial_dims = len(input_shape) - 1
-        if spatial_dims not in (2, 3):
-            raise ValueError(
-                f"Invalid `input_shape`: {input_shape}. "
-                f"Expected 3D (H, W, C) for 2D data or 4D (D, H, W, C) for 3D data, "
-                f"but got {len(input_shape)}D."
-            )
-        if any(dim is None for dim in input_shape[:-1]):
-            raise ValueError(
-                "Swin Transformer requires a fixed spatial input shape. "
-                f"Got input_shape={input_shape}"
-            )
 
-        if name is None and self.__class__ is not SwinVariantsBase:
-            name = f"{self.__class__.__name__}{spatial_dims}D"
-
+        # Get variant specific config
         cfg = SWIN_CFG.get(f"{spatial_dims}D")[variant]
 
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * spatial_dims
-        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
-            raise ValueError(
-                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {patch_size} with length {len(patch_size)}"
-            )
-
-        if isinstance(window_size, int):
-            window_size = (window_size,) * spatial_dims
-        elif isinstance(window_size, (list, tuple)) and len(window_size) != spatial_dims:
-            raise ValueError(
-                f"window_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {window_size} with length {len(window_size)}"
-            )
+        # Get and set class name
+        if name is None and self.__class__ is not SwinVariantsBase:
+            name = f"{self.__class__.__name__}{spatial_dims}D"
 
         backbone = self.backbone_cls(
             input_shape=input_shape,

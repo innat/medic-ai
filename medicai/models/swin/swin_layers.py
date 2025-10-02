@@ -641,7 +641,7 @@ class SwinTransformerBlock(keras.Model):
 
         self.built = True
 
-    def first_forward(self, x, mask_matrix, training):
+    def apply_attention(self, x, mask_matrix, training):
         x = self.norm1(x)
         x = ops.pad(x, self.pads)
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
@@ -672,10 +672,10 @@ class SwinTransformerBlock(keras.Model):
 
         # Remove any padding
         x = self.crop_layer(x)
-        x = self.drop_path(x)
+        x = self.drop_path(x, training=training)
         return x
 
-    def second_forward(self, x, training):
+    def apply_mlp(self, x, training):
         x = self.norm2(x)
         x = self.mlp(x)
         x = self.drop_path(x, training=training)
@@ -683,9 +683,9 @@ class SwinTransformerBlock(keras.Model):
 
     def call(self, x, mask_matrix=None, training=None):
         shortcut = x
-        x = self.first_forward(x, mask_matrix, training)
+        x = self.apply_attention(x, mask_matrix, training)
         x = shortcut + x
-        x = x + self.second_forward(x, training)
+        x = x + self.apply_mlp(x, training)
         return x
 
     def get_config(self):
@@ -1242,7 +1242,7 @@ class SwinTransformerBlockV2(layers.Layer):
 
         self.built = True
 
-    def first_forward(self, x, mask_matrix, training):
+    def apply_attention(self, x, mask_matrix, training):
         x = ops.pad(x, self.pads)
         spatial_shape_pad = [ops.shape(x)[i + 1] for i in range(self.spatial_dims)]
 
@@ -1276,7 +1276,7 @@ class SwinTransformerBlockV2(layers.Layer):
         x = self.drop_path(x, training=training)
         return x
 
-    def second_forward(self, x, training):
+    def apply_mlp(self, x, training):
         x = self.mlp(x)
         x = self.norm2(x)
         x = self.drop_path(x, training=training)
@@ -1284,9 +1284,9 @@ class SwinTransformerBlockV2(layers.Layer):
 
     def call(self, x, mask_matrix=None, training=None):
         shortcut = x
-        x = self.first_forward(x, mask_matrix, training)
+        x = self.apply_attention(x, mask_matrix, training)
         x = shortcut + x
-        x = x + self.second_forward(x, training)
+        x = x + self.apply_mlp(x, training)
         return x
 
     def get_config(self):
