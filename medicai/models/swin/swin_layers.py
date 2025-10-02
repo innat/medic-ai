@@ -24,8 +24,10 @@ def clamp(x, min=None, max=None):
         x = ops.minimum(x, max)
     return x
 
-
 def safe_normalize(x, axis=-1, epsilon=1e-6):
+    """
+    Safe normalization for empty slice.
+    """
     square_sum = ops.sum(ops.square(x), axis=axis, keepdims=True)
     safe_square_sum = ops.where(
         square_sum < epsilon, epsilon * ops.ones_like(square_sum), square_sum
