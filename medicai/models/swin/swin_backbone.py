@@ -248,7 +248,7 @@ class SwinBackbone(SwinBackboneBase, DescribeMixin):
             window_size (int | tuple): Attention window size. Default: 7.
             mlp_ratio (float): Ratio of MLP hidden dim to embedding dim. Default: 4.0.
             patch_norm (bool): If True, apply LayerNormalization after patch embedding.
-                Default: True.
+                Default: False.
             drop_rate (float): Dropout rate. Default: 0.0.
             attn_drop_rate (float): Attention dropout rate. Default: 0.0.
             drop_path_rate (float): Stochastic depth rate per layer. Default: 0.2.
@@ -346,7 +346,7 @@ class SwinBackboneV2(SwinBackboneBase, DescribeMixin):
             window_size (int | tuple): Attention window size. Default: 7.
             mlp_ratio (float): Ratio of MLP hidden dim to embedding dim. Default: 4.0.
             patch_norm (bool): If True, apply LayerNormalization after patch embedding.
-                Default: True.
+                Default: False.
             drop_rate (float): Dropout rate. Default: 0.0.
             attn_drop_rate (float): Attention dropout rate. Default: 0.0.
             drop_path_rate (float): Stochastic depth rate per layer. Default: 0.2.
