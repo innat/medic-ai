@@ -23,7 +23,7 @@ model = SwinTiny(input_shape=(96,96,96,1))
 # To build 2D model
 model = SwinTiny(input_shape=(96,96,1))
 
-# Arbitrary input shape
+# Arbitrary input shape on 3D case.
 model = SwinTiny(
     input_shape=(8, 224, 256, 3), 
     num_classes=1,

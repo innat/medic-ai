@@ -9,7 +9,7 @@ import numpy as np
 from keras import layers
 
 from medicai.blocks import UnetrBasicBlock
-from medicai.utils import DescribeMixin, parse_model_inputs
+from medicai.utils import DescribeMixin, get_norm_layer, parse_model_inputs
 
 from .swin_layers import (
     SwinBasicLayer,
@@ -47,7 +47,7 @@ class SwinBackboneBase(keras.Model):
         patch_size=4,
         window_size=7,
         mlp_ratio=4.0,
-        patch_norm=True,
+        patch_norm=False,
         drop_rate=0.0,
         attn_drop_rate=0.0,
         drop_path_rate=0.2,
@@ -87,13 +87,13 @@ class SwinBackboneBase(keras.Model):
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
         # patch embedding feature
-        pyramid_outputs["P1"] = x
+        pyramid_outputs["P1"] = get_norm_layer(layer_type="layer", epsilon=1e-5)(x)
 
         # if True, apply residual convolution from SwinUNETR-V2
         if stage_wise_conv:
             x = UnetrBasicBlock(
                 spatial_dims,
-                out_channels=embed_dim * 2,
+                out_channels=embed_dim,
                 kernel_size=3,
                 stride=1,
                 norm_name="instance",
@@ -104,7 +104,7 @@ class SwinBackboneBase(keras.Model):
         for i in range(num_layers):
 
             # if True, apply residual convolution, used in SwinUNETR-V2
-            if stage_wise_conv:
+            if stage_wise_conv and i > 0:  # Skip for i=0 since we already processed P1
                 x = UnetrBasicBlock(
                     spatial_dims,
                     out_channels=embed_dim * 2**i,
@@ -139,8 +139,12 @@ class SwinBackboneBase(keras.Model):
             layer = self.swin_basic_block(**layer_kwargs)
             x = layer(x)
 
-            # swin features
-            pyramid_outputs[f"P{i + 2}"] = x
+            # swin features.
+            # swin-v1 -> patch-merging use `norm -> reduction`
+            # swin-v2 (`stage_wise_conv=True``) -> patch-merging use `reduction -> norm`
+            pyramid_outputs[f"P{i + 2}"] = (
+                x if stage_wise_conv else get_norm_layer(layer_type="layer", epsilon=1e-5)(x)
+            )
 
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
 
