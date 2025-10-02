@@ -507,12 +507,12 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_tiny_v2", family="swin")
 class SwinTinyV2(SwinVariantsBase, DescribeMixin):
-    """Swin Tiny V2 model, a large-scale Swin Transformer V2 for vision tasks.
+    """Swin Tiny V2 model, a small-scale Swin Transformer V2 for vision tasks.
 
     The Swin Transformer V2, based on shifted windows, is a hierarchical Vision Transformer
     that excels in general-purpose vision tasks, offering both efficiency and performance
-    for 2D (images) and 3D (volumetric/video) data. The 'Base' variant offers high
-    capacity suitable for complex tasks and large datasets.
+    for 2D (images) and 3D (volumetric/video) data.  The 'Tiny' variant offers a
+    compact configuration suitable for fast experimentation.
 
     Example:
     >>> from medicai.models import SwinTinyV2
@@ -623,12 +623,12 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_small_v2", family="swin")
 class SwinSmallV2(SwinVariantsBase, DescribeMixin):
-    """Swin Small V2 model, a large-scale Swin Transformer V2 for vision tasks.
+    """Swin Small V2 model, a medium-scale Swin Transformer V2 for vision tasks.
 
     The Swin Transformer V2, based on shifted windows, is a hierarchical Vision Transformer
     that excels in general-purpose vision tasks, offering both efficiency and performance
-    for 2D (images) and 3D (volumetric/video) data. The 'Small' variant offers high
-    capacity suitable for complex tasks and large datasets.
+    for 2D (images) and 3D (volumetric/video) data. The 'Small' variant offers a
+    good balance between model capacity and computational cost.
 
     Example:
     >>> from medicai.models import SwinSmallV2
@@ -796,7 +796,7 @@ class SwinBaseV2(SwinVariantsBase, DescribeMixin):
         name=None,
         **kwargs,
     ):
-        """Initializes the Swin Small model.
+        """Initializes the Swin Base V2 model.
 
         Args:
             input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
