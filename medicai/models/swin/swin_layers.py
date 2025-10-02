@@ -364,7 +364,7 @@ class SwinWindowAttention(keras.Model):
         self.num_heads = num_heads
         head_dim = input_dim // num_heads
         self.qk_scale = qk_scale
-        self.scale = head_dim**-0.5  # qk_scale or head_dim**-0.5
+        self.scale = qk_scale or head_dim**-0.5
         self.qkv_bias = qkv_bias
         self.attn_drop_rate = attn_drop_rate
         self.proj_drop_rate = proj_drop_rate
@@ -870,6 +870,17 @@ class SwinBasicLayer(keras.Model):
 
 
 class SwinWindowAttentionV2(layers.Layer):
+    """
+    Swin Transformer V2 Window Attention layer (SW-MSA).
+
+    This layer implements the core window attention mechanism from the Swin
+    Transformer V2 paper, featuring:
+    1. Scaled Cosine Attention for stability.
+    2. Continuous Relative Position Bias (CPB) implemented via an MLP.
+    3. Separate Q and V biases (qkv_bias=True) for better performance.
+    It supports attention for both 2D and 3D inputs (e.g., [H, W, C] or [D, H, W, C]).
+    """
+
     def __init__(
         self,
         input_dim,
@@ -884,6 +895,20 @@ class SwinWindowAttentionV2(layers.Layer):
         """
         Swin Transformer V2 Window Attention with continuous relative position bias
         and scaled cosine attention. Supports both 2D and 3D inputs.
+
+        Args:
+            input_dim (int): Number of input channels.
+            window_size (tuple or list of int): Size of the attention window
+                in each spatial dimension (e.g., (7, 7) for 2D, or (7, 7, 7) for 3D).
+            num_heads (int): Number of attention heads.
+            qkv_bias (bool): If True, adds separate learnable biases to Q and V projections.
+                (K projection uses a zero bias if this is True). Defaults to True.
+            attn_drop_rate (float): Dropout rate for attention weights. Defaults to 0.0.
+            proj_drop_rate (float): Dropout rate for the output projection. Defaults to 0.0.
+            pretrained_window_size (tuple or list of int, optional): Window size
+                used during pretraining. Used for scaling the continuous relative
+                position bias when fine-tuning on a different window size. Defaults to None.
+            **kwargs: Additional keyword arguments for the base Keras layer.
         """
         super().__init__(**kwargs)
         self.input_dim = input_dim
@@ -1126,6 +1151,11 @@ class SwinWindowAttentionV2(layers.Layer):
 
 
 class SwinTransformerBlockV2(layers.Layer):
+    """
+    Implements a single Swin Transformer Block with window-based multi-head self-attention
+    and a feed-forward MLP, supporting optional shifted windows (cyclic shift) for 2D or 3D data.
+    """
+
     def __init__(
         self,
         input_dim,
@@ -1143,9 +1173,6 @@ class SwinTransformerBlockV2(layers.Layer):
         **kwargs,
     ):
         """
-        Implements a single Swin Transformer Block with window-based multi-head self-attention
-        and a feed-forward MLP, supporting optional shifted windows (cyclic shift) for 2D or 3D data.
-
         Args:
             input_dim (int): Number of input channels.
             num_heads (int): Number of attention heads.
@@ -1157,7 +1184,8 @@ class SwinTransformerBlockV2(layers.Layer):
             attn_drop_rate (float, optional): Dropout rate for attention probabilities. Default is 0.0.
             drop_path_rate (float, optional): DropPath rate for stochastic depth. Default is 0.0.
             activation (str, optional): Activation function for MLP. Default is "gelu".
-            norm_layer (Layer, optional): Normalization layer, e.g., LayerNormalization. Default is keras.layers.LayerNormalization.
+            norm_layer (Layer, optional): Normalization layer, e.g., LayerNormalization.
+                Default is keras.layers.LayerNormalization.
             **kwargs: Additional keyword arguments for keras.Model.
 
         Input shape:
@@ -1314,6 +1342,17 @@ class SwinTransformerBlockV2(layers.Layer):
 
 
 class SwinPatchMergingV2(SwinPatchMerging):
+    """
+    Patch Merging Layer for Swin Transformer V2 (Post-Normalization).
+
+    This layer performs downsampling and channel expansion, which is the
+    equivalent of the V2 'Patch Merging' layer used between stages.
+
+    It differs from the original Swin V1 implementation by applying Layer
+    Normalization *after* the linear reduction layer (Post-Normalization) for
+    improved training stability, following the standard V2 design.
+    """
+
     def build(self, input_shape):
         super().build(input_shape)
 
@@ -1353,6 +1392,18 @@ class SwinPatchMergingV2(SwinPatchMerging):
 
 
 class SwinBasicLayerV2(SwinBasicLayer):
+    """
+    Swin Transformer V2 Basic Layer (Stage).
+
+    This layer constitutes one stage of the Swin Transformer V2 network, containing
+    a sequence of SwinTransformerBlockV2 layers with alternating window-based
+    (W-MSA) and shifted window-based (SW-MSA) self-attention. It optionally includes
+    a downsampling layer (Patch Merging) at the beginning of the stage (except for the first stage).
+
+    It passes the 'pretrained_window_size' argument to the V2 blocks for proper
+    scaling of the Continuous Relative Position Bias (CPB).
+    """
+
     def __init__(
         self,
         input_dim,
@@ -1369,6 +1420,27 @@ class SwinBasicLayerV2(SwinBasicLayer):
         pretrained_window_size=None,
         **kwargs,
     ):
+        """
+        Initializes a Swin Transformer V2 Basic Layer.
+
+        Args:
+            input_dim (int): Number of input channels.
+            depth (int): Number of Swin Transformer Blocks in this layer.
+            num_heads (int): Number of attention heads.
+            window_size (tuple of int): Size of the attention window (e.g., (7, 7)).
+            mlp_ratio (float, optional): Ratio of MLP hidden dimension to input_dim. Defaults to 4.0.
+            qkv_bias (bool, optional): Whether to use bias in QKV projections. Defaults to False.
+            drop_rate (float, optional): Dropout rate for MLP and attention output. Defaults to 0.0.
+            attn_drop_rate (float, optional): Dropout rate for attention probabilities. Defaults to 0.0.
+            drop_path_rate (float or list/tuple of float, optional): Stochastic depth rate.
+                Can be a single value for all blocks or a list of values. Defaults to 0.0.
+            norm_layer (Layer, optional): Normalization layer class (e.g., keras.layers.LayerNormalization). Defaults to None.
+            downsampling_layer (Layer, optional): Downsampling layer class (e.g., SwinPatchMergingV2)
+                to be applied before the blocks. Defaults to None.
+            pretrained_window_size (tuple of int, optional): Window size used during pretraining,
+                for CPB scaling in V2 blocks. Defaults to None.
+            **kwargs: Additional keyword arguments for the base Keras layer.
+        """
         super().__init__(
             input_dim=input_dim,
             depth=depth,

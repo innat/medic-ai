@@ -69,45 +69,11 @@ class SwinVariantsBase(keras.Model):
         downsampling_strategy,
         num_classes=1000,
         classifier_activation=None,
+        stage_wise_conv=False,
         variant=None,
         name=None,
         **kwargs,
     ):
-        """Initializes the SwinTransformer model.
-
-        Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
-                excluding the batch size. Must have fixed spatial dimensions.
-            include_rescaling (bool): Whether to include a rescaling layer at the input.
-            include_top (bool): Whether to include the final classification layer.
-            patch_size (int or tuple): The size of the non-overlapping patches.
-                Should be (patch_size,) * spatial_dims.
-            window_size (int or tuple): The size of the attention window.
-                Should be (window_size,) * spatial_dims.
-            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
-                Must be 'avg' or 'max'. Ignored if `include_top` is True.
-            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
-            attn_drop_rate (float): Dropout rate for the attention layers.
-            drop_path_rate (float): Stochastic depth rate for the residual paths.
-            num_classes (int): The number of output classes for classification. Default is 1000.
-            classifier_activation (str, optional): The activation function for the final
-                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
-                Default is None.
-            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
-                It should be either "swin_unetr_like" or "swin_transformer_like".
-                'swin_transformer_like' (for 2D/3D classification tasks).
-                'swin_unetr_like' (for 2D/3D segmentation tasks).
-                Default: "swin_transformer_like".
-            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
-            name (str, optional): The name of the model. Default is automatically generated.
-            **kwargs: Additional keyword arguments passed to the base Model class.
-
-        Raises:
-            ValueError: If `input_shape` is not provided, has invalid dimensions, or includes
-                variable spatial dimensions (None).
-            ValueError: If `patch_size` or `window_size` is provided as a tuple/list with an incorrect length.
-        """
-
         # Check that the input is well specified.
         input_shape, patch_size, window_size, downsampling_strategy = resolve_input_params(
             input_shape, patch_size, window_size, downsampling_strategy
@@ -132,6 +98,7 @@ class SwinVariantsBase(keras.Model):
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=attn_drop_rate,
             drop_path_rate=drop_path_rate,
+            stage_wise_conv=stage_wise_conv,
             patch_norm=False,
         )
         inputs = backbone.input
@@ -167,6 +134,7 @@ class SwinVariantsBase(keras.Model):
         self.dropout = dropout
         self.attn_drop_rate = attn_drop_rate
         self.drop_path_rate = drop_path_rate
+        self.stage_wise_conv = stage_wise_conv
         self.classifier_activation = classifier_activation
         self.downsampling_strategy = downsampling_strategy
         self.name = name
@@ -195,7 +163,8 @@ class SwinVariantsBase(keras.Model):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_tiny", family="swin")
 class SwinTiny(SwinVariantsBase, DescribeMixin):
-    """Swin Tiny model, a small-scale Swin Transformer for vision tasks.
+    """
+    Swin Tiny model, a small-scale Swin Transformer for vision tasks.
 
     The Swin Transformer, based on shifted windows, is a hierarchical Vision Transformer
     that excels in general-purpose vision tasks, offering both efficiency and performance
@@ -207,6 +176,25 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
     >>> import numpy as np
     >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
     >>> model = SwinTiny(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinTiny
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinTiny(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
     >>> output = model(input_data)
 
     Reference:
@@ -228,30 +216,41 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
         pooling="avg",
         dropout=0.0,
         classifier_activation=None,
+        stage_wise_conv=False,
         downsampling_strategy="swin_transformer_like",
         name=None,
         **kwargs,
     ):
-        """Initializes the Swin Tiny model.
+        """Initializes the SwinTiny model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
-
-        Default Configuration Details (Swin-Tiny):
-            - **Embedding Dimension:** 96 for 2D, 48 for 3D.
-            - **Depths:** [2, 2, 6, 2] for 2D, [2, 2, 2, 2] for 3D.
-            - **Number of Heads:** [3, 6, 12, 24] same for 2D and 3D.
         """
         super().__init__(
             input_shape=input_shape,
@@ -264,6 +263,7 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -289,6 +289,25 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
     >>> model = SwinSmall(input_shape=(96, 96, 1), num_classes=5)
     >>> output = model(input_data)
 
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinSmall
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinSmall(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
+    >>> output = model(input_data)
+
     Reference:
       paper: https://arxiv.org/abs/2103.14030
     """
@@ -308,6 +327,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
         pooling="avg",
         dropout=0.0,
         classifier_activation=None,
+        stage_wise_conv=False,
         downsampling_strategy="swin_transformer_like",
         name=None,
         **kwargs,
@@ -315,17 +335,32 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
         """Initializes the Swin Small model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
 
         Default Configuration Details (Swin-Small):
@@ -344,6 +379,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -369,6 +405,25 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
     >>> model = SwinBase(input_shape=(96, 96, 1), num_classes=5)
     >>> output = model(input_data)
 
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinBase
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinBase(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
+    >>> output = model(input_data)
+
     Reference:
       paper: https://arxiv.org/abs/2103.14030
     """
@@ -387,6 +442,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
         window_size=7,
         pooling="avg",
         dropout=0.0,
+        stage_wise_conv=False,
         classifier_activation=None,
         downsampling_strategy="swin_transformer_like",
         name=None,
@@ -395,17 +451,32 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
         """Initializes the Swin Base model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
 
         Default Configuration Details (Swin-Base):
@@ -424,6 +495,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -435,6 +507,43 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_tiny_v2", family="swin")
 class SwinTinyV2(SwinVariantsBase, DescribeMixin):
+    """Swin Tiny V2 model, a large-scale Swin Transformer V2 for vision tasks.
+
+    The Swin Transformer V2, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Base' variant offers high
+    capacity suitable for complex tasks and large datasets.
+
+    Example:
+    >>> from medicai.models import SwinTinyV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinTinyV2(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinTinyV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinTinyV2(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
+    >>> output = model(input_data)
+
+    Reference:
+      - paper: https://arxiv.org/abs/2111.09883
+    """
+
     backbone_cls = SwinBackboneV2
     variant = "tiny"
 
@@ -449,6 +558,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
+        stage_wise_conv=False,
         classifier_activation=None,
         downsampling_strategy="swin_transformer_like",
         name=None,
@@ -457,17 +567,32 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
         """Initializes the Swin Tiny model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
 
         Default Configuration Details (Swin-Tiny):
@@ -486,6 +611,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -497,6 +623,43 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_small_v2", family="swin")
 class SwinSmallV2(SwinVariantsBase, DescribeMixin):
+    """Swin Small V2 model, a large-scale Swin Transformer V2 for vision tasks.
+
+    The Swin Transformer V2, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Small' variant offers high
+    capacity suitable for complex tasks and large datasets.
+
+    Example:
+    >>> from medicai.models import SwinSmallV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinSmallV2(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinSmallV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinSmallV2(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
+    >>> output = model(input_data)
+
+    Reference:
+      - paper: https://arxiv.org/abs/2111.09883
+    """
+
     backbone_cls = SwinBackboneV2
     variant = "small"
 
@@ -511,6 +674,7 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
+        stage_wise_conv=False,
         classifier_activation=None,
         downsampling_strategy="swin_transformer_like",
         name=None,
@@ -519,17 +683,32 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
         """Initializes the Swin Small model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
 
         Default Configuration Details (Swin-Small):
@@ -548,6 +727,7 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -559,6 +739,43 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="swin")
 @registration.register(name="swin_base_v2", family="swin")
 class SwinBaseV2(SwinVariantsBase, DescribeMixin):
+    """Swin Base V2 model, a large-scale Swin Transformer V2 for vision tasks.
+
+    The Swin Transformer V2, based on shifted windows, is a hierarchical Vision Transformer
+    that excels in general-purpose vision tasks, offering both efficiency and performance
+    for 2D (images) and 3D (volumetric/video) data. The 'Base' variant offers high
+    capacity suitable for complex tasks and large datasets.
+
+    Example:
+    >>> from medicai.models import SwinBaseV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinBaseV2(input_shape=(96, 96, 1), num_classes=5)
+    >>> output = model(input_data)
+
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Example:
+    >>> from medicai.models import SwinBaseV2
+    >>> import numpy as np
+    >>> input_data = np.ones((1, 96, 96, 1), dtype=np.float32)
+    >>> model = SwinBaseV2(input_shape=(96, 96, 1), num_classes=5, stage_wise_conv=True)
+    >>> output = model(input_data)
+
+    Reference:
+      - paper: https://arxiv.org/abs/2111.09883
+    """
+
     backbone_cls = SwinBackboneV2
     variant = "base"
 
@@ -573,25 +790,41 @@ class SwinBaseV2(SwinVariantsBase, DescribeMixin):
         num_classes=1000,
         pooling="avg",
         dropout=0.0,
+        stage_wise_conv=False,
         classifier_activation=None,
         downsampling_strategy="swin_transformer_like",
         name=None,
         **kwargs,
     ):
-        """Initializes the Swin Base model.
+        """Initializes the Swin Small model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D.
-            include_rescaling (bool): Whether to include a rescaling layer at the input. Defaults to False.
-            include_top (bool): Whether to include the final classification layer. Defaults to True.
-            patch_size (int or tuple): The size of the non-overlapping patches. Defaults to 4.
-            window_size (int or tuple): The size of the attention window. Defaults to 7.
-            num_classes (int): The number of output classes. Defaults to 1000.
-            pooling (str): Optional pooling type. Defaults to 'avg'.
-            dropout (float): Dropout rate for the classification head. Defaults to 0.0.
+            input_shape (tuple): The shape of the input tensor (H, W, C) for 2D or (D, H, W, C) for 3D,
+                excluding the batch size. Must have fixed spatial dimensions.
+            include_rescaling (bool): Whether to include a rescaling layer at the input.
+            include_top (bool): Whether to include the final classification layer.
+            patch_size (int or tuple): The size of the non-overlapping patches.
+                Should be (patch_size,) * spatial_dims.
+            window_size (int or tuple): The size of the attention window.
+                Should be (window_size,) * spatial_dims.
+            pooling (str): Optional pooling type applied to the backbone output when `include_top` is False.
+                Must be 'avg' or 'max'. Ignored if `include_top` is True.
+            dropout (float): Dropout rate for the classification head. Ignored if `include_top` is False.
+            attn_drop_rate (float): Dropout rate for the attention layers.
+            drop_path_rate (float): Stochastic depth rate for the residual paths.
+            num_classes (int): The number of output classes for classification. Default is 1000.
             classifier_activation (str, optional): The activation function for the final
-                classification layer. Defaults to None.
-            name (str, optional): The name of the model. Defaults to None.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
+                Default is None.
+            downsampling_strategy: swin-transformer and swin-unetr uses bit different downsampling strategy.
+                It should be either "swin_unetr_like" or "swin_transformer_like".
+                'swin_transformer_like' (for 2D/3D classification tasks).
+                'swin_unetr_like' (for 2D/3D segmentation tasks).
+                Default: "swin_transformer_like".
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with convolutional residual blocks
+                before each stage. Default: False.
+            variant (str): The specific Swin configuration variant to use ('tiny', 'small', or 'base').
+            name (str, optional): The name of the model. Default is automatically generated.
             **kwargs: Additional keyword arguments passed to the base Model class.
 
         Default Configuration Details (Swin-Base):
@@ -610,6 +843,7 @@ class SwinBaseV2(SwinVariantsBase, DescribeMixin):
             classifier_activation=classifier_activation,
             dropout=dropout,
             variant=self.variant,
+            stage_wise_conv=stage_wise_conv,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,

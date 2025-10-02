@@ -8,6 +8,7 @@ import keras
 import numpy as np
 from keras import layers
 
+from medicai.blocks import UnetrBasicBlock
 from medicai.utils import DescribeMixin, parse_model_inputs
 
 from .swin_layers import (
@@ -21,7 +22,15 @@ from .swin_layers import (
 
 class SwinBackboneBase(keras.Model):
     """
-    Swin Transformer Backbone base class for 2D and 3D task.
+    Base class for Swin Transformer backbone in 2D and 3D tasks. This class will be
+    used for building SwinBackbone and SwinBackboneV2 class.
+
+    This backbone implements the hierarchical Swin Transformer design, consisting of:
+      - Patch embedding to convert the input volume/image into non-overlapping patches
+      - Dropout applied to the embedded patches
+      - Multiple Swin Transformer stages, each made of shifted window attention
+        and MLP blocks
+      - Optional patch merging (downsampling) between stages
     """
 
     patch_embedding = None
@@ -45,40 +54,15 @@ class SwinBackboneBase(keras.Model):
         depths=[2, 2, 6, 2],
         num_heads=[3, 6, 12, 24],
         qkv_bias=True,
+        stage_wise_conv=False,
         downsampling_strategy="swin_transformer_like",
         **kwargs,
     ):
-        """Initializes the SwinBackbone.
-
-        Args:
-            input_shape (tuple): Shape of the input video tensor (D, H, W, C).
-                Default is (32, 224, 224, 3).
-            input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
-                model input. If None, a new input tensor is created. Default is None.
-            include_rescaling (bool): Whether to include a Rescaling layer at the
-               start to normalize inputs (1/255). Default: False.
-            embed_dim (int): Number of linear projection output channels. Default is 96.
-            patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 4, 4].
-            window_size (list): Size of the attention windows (WD, WH, WW). Default is [8, 7, 7].
-            mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default is 4.0.
-            patch_norm (bool): If True, apply LayerNormalization after patch embedding.
-                Default is True.
-            drop_rate (float): Dropout rate. Default is 0.0.
-            attn_drop_rate (float): Attention dropout rate. Default is 0.0.
-            drop_path_rate (float): Stochastic depth rate per layer. Default is 0.2.
-            depths (list): Number of Swin Transformer blocks in each of the stages.
-                Default is [2, 2, 6, 2].
-            num_heads (list): Number of attention heads in different layers.
-                Default is [3, 6, 12, 24].
-            qkv_bias (bool): If True, add a learnable bias to query, key, value.
-                Default is True.
-            **kwargs: Additional keyword arguments passed to the base Model class.
-        """
-
         # Check that the input is well specified.
         input_shape, patch_size, window_size, downsampling_strategy = resolve_input_params(
             input_shape, patch_size, window_size, downsampling_strategy
         )
+        spatial_dims = len(input_shape) - 1
         input_spec = parse_model_inputs(input_shape, input_tensor, name="swin_input")
 
         pyramid_outputs = {}  # To store the swin-basic features
@@ -99,13 +83,36 @@ class SwinBackboneBase(keras.Model):
             norm_layer=norm_layer if patch_norm else None,
             name="patching_and_embedding",
         )(x)
-        pyramid_outputs["P1"] = x
-
         # stem / early dropout
         x = layers.Dropout(drop_rate, name="pos_drop")(x)
 
+        # patch embedding feature
+        pyramid_outputs["P1"] = x
+
+        # if True, apply residual convolution from SwinUNETR-V2
+        if stage_wise_conv:
+            x = UnetrBasicBlock(
+                spatial_dims,
+                out_channels=embed_dim * 2,
+                kernel_size=3,
+                stride=1,
+                norm_name="instance",
+                res_block=True,
+            )(x)
+
         # Iterating over each stage of swin transformer
         for i in range(num_layers):
+
+            # if True, apply residual convolution, used in SwinUNETR-V2
+            if stage_wise_conv:
+                x = UnetrBasicBlock(
+                    spatial_dims,
+                    out_channels=embed_dim * 2**i,
+                    kernel_size=3,
+                    stride=1,
+                    norm_name="instance",
+                    res_block=True,
+                )(x)
 
             # swin-transformer and swin-unetr uses bit different downsampling strategy.
             if downsampling_strategy == "swin_unetr_like":
@@ -129,9 +136,10 @@ class SwinBackboneBase(keras.Model):
                 name=f"swin_feature{i + 1}",
             )
             layer_kwargs.update(self.extra_block_kwargs())
-
             layer = self.swin_basic_block(**layer_kwargs)
             x = layer(x)
+
+            # swin features
             pyramid_outputs[f"P{i + 2}"] = x
 
         super().__init__(inputs=input_spec, outputs=x, **kwargs)
@@ -180,25 +188,40 @@ class SwinBackboneBase(keras.Model):
 
 
 class SwinBackbone(SwinBackboneBase, DescribeMixin):
-    """Swin Transformer backbone for 2D and 3D data.
+    """
+    Swin Transformer V1 backbone in 2D and 3D tasks.
 
-    This class implements the Swin Transformer architecture as a backbone for
-    2D and 3D medical understanding tasks. It consists of patch embedding, multiple Swin
-    Transformer layers with window-based multi-head self-attention and shifted
-    window partitioning, and patch merging for downsampling.
+    This backbone implements the hierarchical Swin Transformer design, consisting of:
+    - Patch embedding to convert the input volume/image into non-overlapping patches
+    - Dropout applied to the embedded patches
+    - Multiple Swin Transformer stages, each made of shifted window attention
+        and MLP blocks
+    - Optional patch merging (downsampling) between stages
 
-    Components:
-        - Patch embedding (`SwinPatchingAndEmbedding`)
-        - Multiple Swin Transformer layers (`SwinBasicLayer`) with
-          window-based multi-head self-attention and shifted window partitioning
-        - Patch merging (`SwinPatchMerging`) for downsampling
+    Features:
+        - Supports both 2D and 3D inputs
+        - Optional normalization after patch embedding (`patch_norm`)
+        - Stochastic depth (`drop_path_rate`)
+        - Attention dropout (`attn_drop_rate`)
+        - Flexible downsampling strategy (`swin_transformer_like` or `swin_unetr_like`)
+        - Optional stage-wise convolutional residual blocks (`stage_wise_conv=True`),
+        following the SwinUNETR-V2 design
 
-    Args:
-        qk_scale (float, optional): Scaling factor applied to query-key dot
-            products in the attention computation. Defaults to ``None``, in
-            which case the scale is computed as ``head_dim ** -0.5``.
-        *args: Additional positional arguments passed to the parent.
-        **kwargs: Additional keyword arguments passed to the parent.
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Reference:
+        - https://arxiv.org/abs/2103.14030 (Swin Transformer V1)
+        - https://github.com/Project-MONAI/MONAI (SwinUNETR-V2)
     """
 
     patch_embedding = SwinPatchingAndEmbedding
@@ -206,6 +229,44 @@ class SwinBackbone(SwinBackboneBase, DescribeMixin):
     swin_basic_block = SwinBasicLayer
 
     def __init__(self, *args, qk_scale=None, **kwargs):
+        """
+        Initializes the SwinBackbone model.
+
+        Args:
+            input_shape (tuple): Shape of the input tensor.
+                For 3D: (D, H, W, C), for 2D: (H, W, C).
+            input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
+                model input. If None, a new input tensor is created. Default is None.
+            include_rescaling (bool): Whether to include a Rescaling layer at the
+                start to normalize inputs (1/255). Default: False.
+            embed_dim (int): Number of linear projection output channels. Default: 96.
+            patch_size (int | tuple): Patch size for embedding. Default: 4.
+            window_size (int | tuple): Attention window size. Default: 7.
+            mlp_ratio (float): Ratio of MLP hidden dim to embedding dim. Default: 4.0.
+            patch_norm (bool): If True, apply LayerNormalization after patch embedding.
+                Default: True.
+            drop_rate (float): Dropout rate. Default: 0.0.
+            attn_drop_rate (float): Attention dropout rate. Default: 0.0.
+            drop_path_rate (float): Stochastic depth rate per layer. Default: 0.2.
+            depths (list): Number of Swin Transformer blocks in each stage.
+                Default: [2, 2, 6, 2].
+            num_heads (list): Number of attention heads per stage.
+                Default: [3, 6, 12, 24].
+            qkv_bias (bool): If True, add a learnable bias to query, key, and value.
+                Default: True.
+            qk_scale (float, optional): Scaling factor applied to query-key dot
+                products in the attention computation. Defaults to ``None``, in
+                which case the scale is computed as ``head_dim ** -0.5``.
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with
+                convolutional residual blocks before each stage.
+                Default: False.
+            downsampling_strategy (str): Strategy for downsampling between stages.
+                - "swin_transformer_like": standard Swin Transformer, mainly for
+                    classification task.
+                - "swin_unetr_like": Swin-UNETR-style patch merging, mainly for
+                    segmentation task.
+            **kwargs: Additional keyword arguments passed to `keras.Model`.
+        """
         self.qk_scale = qk_scale
         super().__init__(*args, **kwargs)
 
@@ -220,26 +281,45 @@ class SwinBackbone(SwinBackboneBase, DescribeMixin):
 
 class SwinBackboneV2(SwinBackboneBase, DescribeMixin):
     """
-    Swin Transformer V2 backbone for 2D and 3D medical data understanding.
+    Swin Transformer V2 backbone in 2D and 3D tasks.
 
-    This class implements the Swin Transformer V2 backbone, which introduces
-    improvements such as continuous relative position bias and scaled cosine
-    attention. It is typically used for advanced medical data understanding
-    tasks such as 3D classification or segmentation.
+    Key Difference from Swin V1:
+        - Uses **SwinBasicLayerV2**, which incorporates scaled cosine attention,
+          log-spaced continuous relative position bias, and improved numerical stability.
+        - Post-Norm + Residual Scaling in SwinTransformerBlockV2.
+        - Patch merging is performed with **SwinPatchMergingV2** for enhanced stability.
 
-    Components:
-        - Patch embedding (`SwinPatchingAndEmbedding`)
-        - Multiple Swin Transformer V2 layers (`SwinBasicLayerV2`) with
-          enhanced attention mechanisms
-        - Patch merging (`SwinPatchMergingV2`) for hierarchical downsampling
+    This backbone implements the hierarchical Swin Transformer design, consisting of:
+    - Patch embedding to convert the input volume/image into non-overlapping patches
+    - Dropout applied to the embedded patches
+    - Multiple Swin Transformer stages, each made of shifted window attention
+        and MLP blocks
+    - Optional patch merging (downsampling) between stages
 
-    Args:
-        pretrained_window_size (tuple[int] or None): Size of the attention
-            window used during pretraining, enabling interpolation of relative
-            position bias when transferring to different input resolutions.
-            Defaults to ``None``.
-        *args: Additional positional arguments passed to the parent.
-        **kwargs: Additional keyword arguments passed to the parent.
+    Features:
+        - Supports both 2D and 3D inputs
+        - Optional normalization after patch embedding (`patch_norm`)
+        - Stochastic depth (`drop_path_rate`)
+        - Attention dropout (`attn_drop_rate`)
+        - Flexible downsampling strategy (`swin_transformer_like` or `swin_unetr_like`)
+        - Optional stage-wise convolutional residual blocks (`stage_wise_conv=True`),
+        following the SwinUNETR-V2 design
+
+    Stage-wise Residual Convolution (SwinUNETR-V2):
+        If `stage_wise_conv=True`, an additional convolutional residual block
+        (`UnetrBasicBlock`) is inserted at the **beginning of each Swin stage**.
+        This improves local feature extraction before self-attention.
+
+        Data flow with `stage_wise_conv=True`:
+            PatchEmbed → Dropout
+            └─ Stage 0: [UnetrBasicBlock] → SwinBasicLayer(0)
+            └─ Stage 1: [UnetrBasicBlock] → SwinBasicLayer(1)
+            └─ Stage 2: [UnetrBasicBlock] → SwinBasicLayer(2)
+            └─ Stage 3: [UnetrBasicBlock] → SwinBasicLayer(3)
+
+    Reference:
+        - https://arxiv.org/abs/2111.09883 (Swin Transformer V2)
+        - https://github.com/Project-MONAI/MONAI (SwinUNETR-V2)
     """
 
     patch_embedding = SwinPatchingAndEmbedding
@@ -247,6 +327,43 @@ class SwinBackboneV2(SwinBackboneBase, DescribeMixin):
     swin_basic_block = SwinBasicLayerV2
 
     def __init__(self, *args, pretrained_window_size=None, **kwargs):
+        """
+        Initializes the SwinBackbone V2 model.
+
+        Args:
+            input_shape (tuple): Shape of the input tensor.
+                For 3D: (D, H, W, C), for 2D: (H, W, C).
+            input_tensor (tf.Tensor, optional): Optional Keras tensor to use as
+                model input. If None, a new input tensor is created. Default is None.
+            include_rescaling (bool): Whether to include a Rescaling layer at the
+                start to normalize inputs (1/255). Default: False.
+            embed_dim (int): Number of linear projection output channels. Default: 96.
+            patch_size (int | tuple): Patch size for embedding. Default: 4.
+            window_size (int | tuple): Attention window size. Default: 7.
+            mlp_ratio (float): Ratio of MLP hidden dim to embedding dim. Default: 4.0.
+            patch_norm (bool): If True, apply LayerNormalization after patch embedding.
+                Default: True.
+            drop_rate (float): Dropout rate. Default: 0.0.
+            attn_drop_rate (float): Attention dropout rate. Default: 0.0.
+            drop_path_rate (float): Stochastic depth rate per layer. Default: 0.2.
+            depths (list): Number of Swin Transformer blocks in each stage.
+                Default: [2, 2, 6, 2].
+            num_heads (list): Number of attention heads per stage.
+                Default: [3, 6, 12, 24].
+            qkv_bias (bool): If True, add a learnable bias to query, key, and value.
+                Default: True.
+            pretrained_window_size (int | tuple | None): Pretrained window size(s)
+                used for positional bias interpolation. Default: None.
+            stage_wise_conv (bool): If True, use the SwinUNETR-V2 variant with
+                convolutional residual blocks before each stage.
+                Default: False.
+            downsampling_strategy (str): Strategy for downsampling between stages.
+                - "swin_transformer_like": standard Swin Transformer, mainly for
+                    classification task.
+                - "swin_unetr_like": Swin-UNETR-style patch merging, mainly for
+                    segmentation task.
+            **kwargs: Additional keyword arguments passed to `keras.Model`.
+        """
         self.pretrained_window_size = pretrained_window_size
         super().__init__(*args, **kwargs)
 

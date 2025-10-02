@@ -83,4 +83,28 @@ custom_encoder = SwinBackboneV2(
 swin_unetr = SwinUNETR(encoder=custom_encoder)
 ```
 
-## Swin-UNETR-V2 [WIP]
+## Swin-UNETR-V2
+
+In `SwinUNETR-V2`, a convolutional layer is used to adjust channel dimensions at the start of each swin stage.
+
+```python
+from medicai.models import SwinUNETR
+
+# Build with string encoder identifier.
+swin_unetr = SwinUNETR(
+    encoder_name='swin_tiny'  # 'swin_tiny', 'swin_small', ...
+    input_shape=(96, 96, 96, 1),
+    num_classes=1,
+    stage_wise_conv=True,
+    classifier_activation='sigmoid',
+)
+
+# Build model with swin-v2 model.
+swin_unetr = SwinUNETR(
+    encoder_name='swin_tiny_v2'  # 'swin_tiny_v2', 'swin_small_v2', ...
+    input_shape=(96, 96, 96, 1),
+    num_classes=1,
+    stage_wise_conv=True,
+    classifier_activation='sigmoid',
+)
+```

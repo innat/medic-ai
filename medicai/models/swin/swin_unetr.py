@@ -34,25 +34,39 @@ class SwinUNETR(keras.Model, DescribeMixin):
         feature_size=48,
         res_block=True,
         norm_name="instance",
+        stage_wise_conv=False,
         name=None,
         **kwargs,
     ):
-        """Initializes the SwinUNETR model.
+        """
+        Initializes the SwinUNETR model.
 
         Args:
-            input_shape (tuple): The shape of the input tensor (depth, height, width, channels).
-            num_classes (int): The number of segmentation classes. Default is 4.
+            input_shape (tuple): The shape of the input tensor. Must be 4D (H, W, C) for 2D or
+                5D (D, H, W, C) for 3D inputs. The batch dimension is excluded.
+            encoder_name (str, optional): Name of the Swin Transformer backbone preset (e.g., 'swin_tiny').
+                Required if 'encoder' is None.
+            encoder (keras.Model, optional): A pre-instantiated Swin Transformer encoder model.
+                If provided, 'encoder_name' is ignored.
+            num_classes (int): The number of segmentation classes. Default is 1.
+            patch_size (int or tuple): Size of the non-overlapping patches used by the Swin Encoder.
+                Can be a single int or a tuple (PD, PH, PW) or (PH, PW). Default is 2.
+            window_size (int or tuple): Size of the attention windows (WD, WH, WW) or (WH, WW). Default is 7.
             classifier_activation (str, optional): The activation function for the final
-                classification layer (e.g., 'softmax'). If None, no activation is applied.
+                classification layer (e.g., 'softmax', 'sigmoid'). If None, no activation is applied.
                 Default is None.
-            patch_size (list): Size of the video patches (PD, PH, PW). Default is [2, 2, 2].
-            window_size (list): Size of the attention windows (WD, WH, WW). Default is [7, 7, 7].
-            feature_size (int): The base feature map size in the decoder. Default is 48.
-            res_block (bool): Whether to use residual connections in the decoder blocks.
-                Default is True.
+            feature_size (int): The base feature map size in the decoder. The decoder channels
+                will be scaled relative to this. Default is 48.
+            res_block (bool): Whether to use residual connections in the decoder blocks. Default is True.
             norm_name (str): The type of normalization to use in the decoder blocks
                 (e.g., 'instance', 'batch'). Default is "instance".
+            stage_wise_conv (bool): If True, a convolutional layer is used to adjust channel dimensions
+                at the start of each Swin stage, matching the original SwinUNETR-V2 structure. Default is False.
+            name (str, optional): Name of the model. Defaults to "SwinUNETR2D" or "SwinUNETR3D".
             **kwargs: Additional keyword arguments passed to the base Model class.
+
+        Raises:
+            ValueError: If the encoder does not provide the required pyramid outputs (P1 to P5).
         """
 
         # Compute spatial dimention and resolve encoder arguments
@@ -64,6 +78,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
             window_size=window_size,
             allowed_families=SwinUNETR.ALLOWED_BACKBONE_FAMILIES,
             downsampling_strategy="swin_unetr_like",
+            stage_wise_conv=stage_wise_conv,
             pooling=None,
         )
         spatial_dims = len(input_shape) - 1
