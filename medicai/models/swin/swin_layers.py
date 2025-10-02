@@ -24,6 +24,7 @@ def clamp(x, min=None, max=None):
         x = ops.minimum(x, max)
     return x
 
+
 def safe_normalize(x, axis=-1, epsilon=1e-6):
     """
     Safe normalization for empty slice.

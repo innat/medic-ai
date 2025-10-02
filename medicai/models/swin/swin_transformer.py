@@ -176,6 +176,14 @@ class SwinVariantsBase(keras.Model):
             "input_shape": self.input_shape[1:],
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
+            "include_rescaling": self.include_rescaling,
+            "include_top": self.include_top,
+            "patch_size": self.patch_size,
+            "window_size": self.window_size,
+            "pooling": self.pooling,
+            "dropout": self.dropout,
+            "downsampling_strategy": self.downsampling_strategy,
+            "name": self.name,
         }
         return config
 
@@ -206,6 +214,7 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
     """
 
     backbone_cls = SwinBackbone
+    variant = "tiny"
 
     def __init__(
         self,
@@ -254,7 +263,7 @@ class SwinTiny(SwinVariantsBase, DescribeMixin):
             pooling=pooling,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="tiny",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -285,6 +294,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
     """
 
     backbone_cls = SwinBackbone
+    variant = "small"
 
     def __init__(
         self,
@@ -333,7 +343,7 @@ class SwinSmall(SwinVariantsBase, DescribeMixin):
             window_size=window_size,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="small",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -364,6 +374,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
     """
 
     backbone_cls = SwinBackbone
+    variant = "base"
 
     def __init__(
         self,
@@ -412,7 +423,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
             window_size=window_size,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="base",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -425,6 +436,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
 @registration.register(name="swin_tiny_v2", family="swin")
 class SwinTinyV2(SwinVariantsBase, DescribeMixin):
     backbone_cls = SwinBackboneV2
+    variant = "tiny"
 
     def __init__(
         self,
@@ -473,7 +485,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
             pooling=pooling,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="tiny",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -486,6 +498,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
 @registration.register(name="swin_small_v2", family="swin")
 class SwinSmallV2(SwinVariantsBase, DescribeMixin):
     backbone_cls = SwinBackboneV2
+    variant = "small"
 
     def __init__(
         self,
@@ -534,7 +547,7 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
             pooling=pooling,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="small",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,
@@ -547,6 +560,7 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
 @registration.register(name="swin_base_v2", family="swin")
 class SwinBaseV2(SwinVariantsBase, DescribeMixin):
     backbone_cls = SwinBackboneV2
+    variant = "base"
 
     def __init__(
         self,
@@ -595,7 +609,7 @@ class SwinBaseV2(SwinVariantsBase, DescribeMixin):
             pooling=pooling,
             classifier_activation=classifier_activation,
             dropout=dropout,
-            variant="base",
+            variant=self.variant,
             downsampling_strategy=downsampling_strategy,
             attn_drop_rate=0.0,
             drop_path_rate=0.0,

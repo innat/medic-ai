@@ -180,7 +180,7 @@ class SwinBackboneBase(keras.Model):
 
 
 class SwinBackbone(SwinBackboneBase, DescribeMixin):
-    """Swin Transformer backbone for 2d and 3D data.
+    """Swin Transformer backbone for 2D and 3D data.
 
     This class implements the Swin Transformer architecture as a backbone for
     2D and 3D medical understanding tasks. It consists of patch embedding, multiple Swin
