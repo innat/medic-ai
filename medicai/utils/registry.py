@@ -113,14 +113,15 @@ class BackboneFactoryRegistry:
 
     def list(self, family=None):
         # Initialize a rich Table object
-        table = Table(title="Available Models", show_header=True, header_style="bold cyan")
+        table = Table(
+            title="Available Models", show_header=True, header_style="bold cyan", show_lines=True
+        )
 
         # Add the columns
-        table.add_column("Family", style="dim", width=15)
-        # We don't need a strict width for Variants; rich handles wrapping
-        table.add_column("Variants", style="magenta")
+        table.add_column("Models", style="dim", width=15)
+        table.add_column("Encoder Name", style="magenta")
 
-        # --- Data Aggregation Logic (Same as before) ---
+        # Data Aggregation Logic
         if family is not None:
             names = [name for name, entry in self._registry.items() if family in entry["family"]]
             grouped = {family: names} if names else {}
@@ -130,7 +131,7 @@ class BackboneFactoryRegistry:
                 for fam in entry["family"]:
                     grouped.setdefault(fam, []).append(name)
 
-        # --- Rich Table Population Logic ---
+        # Rich Table Population Logic
         for fam, models in sorted(grouped.items()):
             if not models:
                 variants_content = "None"
