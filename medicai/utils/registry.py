@@ -92,29 +92,52 @@ class BackboneFactoryRegistry:
         cls = self.get(name)
         return cls(**kwargs)
 
+    # def list(self, family=None):
+    #     """Lists registered backbones, optionally filtered by family, and returns a
+    #     nicely formatted string using the tabulate library.
+
+    #     Args:
+    #         family: (Optional) A single family name (e.g., 'resnet') to filter
+    #                 the list. If not specified, all backbones are listed.
+
+    #     Returns:
+    #         A string containing a formatted table of backbone names.
+    #     """
+    #     headers = ["Family", "Variants"]
+
+    #     if family is not None:
+    #         names = [name for name, entry in self._registry.items() if family in entry["family"]]
+    #         table_data = [(family, "\n".join(names) if names else "None")]
+    #     else:
+    #         grouped = {}
+    #         for name, entry in self._registry.items():
+    #             for fam in entry["family"]:
+    #                 grouped.setdefault(fam, []).append(name)
+
+    #         table_data = [(fam, "\n".join(models)) for fam, models in sorted(grouped.items())]
+
+    #     return tabulate(table_data, headers=headers, tablefmt="mixed_outline")
+    
     def list(self, family=None):
-        """Lists registered backbones, optionally filtered by family, and returns a
-        nicely formatted string using the tabulate library.
-
-        Args:
-            family: (Optional) A single family name (e.g., 'resnet') to filter
-                    the list. If not specified, all backbones are listed.
-
-        Returns:
-            A string containing a formatted table of backbone names.
-        """
-        headers = ["Family", "Variants"]
+        headers = ["Family", "Variant"]
 
         if family is not None:
-            names = [name for name, entry in self._registry.items() if family in entry["family"]]
-            table_data = [(family, ", ".join(names) if names else "None")]
+            grouped = {
+                family: [name for name, entry in self._registry.items() if family in entry["family"]]
+            }
         else:
             grouped = {}
             for name, entry in self._registry.items():
                 for fam in entry["family"]:
                     grouped.setdefault(fam, []).append(name)
 
-            table_data = [(fam, "\n".join(models)) for fam, models in sorted(grouped.items())]
+        # Build rows: each variant is its own row
+        table_data = []
+        for fam, models in sorted(grouped.items()):
+            models = sorted(models)  # keep alphabetical inside family
+            table_data.append([fam, models[0]])
+            for variant in models[1:]:
+                table_data.append(["", variant])  # blank family for subsequent rows
 
         return tabulate(table_data, headers=headers, tablefmt="mixed_outline")
 
