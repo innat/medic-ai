@@ -84,6 +84,101 @@ custom_encoder = SwinBackboneV2(
 model = SwinUNETR(encoder=custom_encoder)
 ```
 
+The available `model/encoder` can be listed down, showing below.
+
+```python
+import medicai
+medicai.models.list_models()
+
+          Available Models           
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Models          ┃ Encoder Name    ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ densenet        │ • densenet121   │
+│                 │ • densenet169   │
+│                 │ • densenet201   │
+├─────────────────┼─────────────────┤
+│ mit             │ • mit_b0        │
+│                 │ • mit_b1        │
+│                 │ • mit_b2        │
+│                 │ • mit_b3        │
+│                 │ • mit_b4        │
+│                 │ • mit_b5        │
+├─────────────────┼─────────────────┤
+│ resnet          │ • resnet18      │
+│                 │ • resnet34      │
+│                 │ • resnet50      │
+│                 │ • resnet101     │
+│                 │ • resnet152     │
+│                 │ • resnet50v2    │
+│                 │ • resnet101v2   │
+│                 │ • resnet152v2   │
+│                 │ • resnet50vd    │
+│                 │ • resnet200vd   │
+├─────────────────┼─────────────────┤
+│ swin            │ • swin_tiny     │
+│                 │ • swin_small    │
+│                 │ • swin_base     │
+│                 │ • swin_tiny_v2  │
+│                 │ • swin_small_v2 │
+│                 │ • swin_base_v2  │
+├─────────────────┼─────────────────┤
+│ vit             │ • vit_base      │
+│                 │ • vit_large     │
+│                 │ • vit_huge      │
+└─────────────────┴─────────────────┘
+```
+
+Each model class provides `class_describe` and `instance_describe` attributes, which offer helpful documentation and display the default built-in parameters. Here is an example:
+
+```python
+from medicai.models import TransUNet
+
+# `.class_describe()` will return helpful docstring
+TransUNet.class_describe()
+'''
+📌 Class: TransUNet
+
+Example:
+>>> from medicai.models import TransUNet
+>>> model = TransUNet(...)
+>>> model = TransUNet(...)
+
+🧩 Allowed Backbone Families:
+  • densenet
+  • resnet
+'''
+```
+```python
+# `.instance_describe()` will return default parameter.
+model = TransUNet(
+    encoder_name='resnet18', 
+    input_shape=(96, 96, 96, 1)
+)
+model.instance_describe()
+'''
+Instance of TransUNet
+  • input_shape: (96, 96, 96, 1)
+  • num_classes: 1
+  • num_queries: 100
+  • encoder: ResNet18(
+    • name: 'ResNet183D'
+    • trainable: True
+    • input_shape: (96, 96, 96, 1)
+    • include_rescaling: False
+    )
+  • encoder_name: 'resnet18'
+  • classifier_activation: None
+  • patch_size: (3, 3, 3)
+  • num_encoder_layers: 6
+  • num_heads: 8
+  • embed_dim: 256
+  • mlp_dim: 1024
+  • dropout_rate: 0.1
+  • decoder_projection_filters: 64
+'''
+```
+
 # 📊 Features
 
 **Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
