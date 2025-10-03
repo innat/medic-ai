@@ -33,30 +33,63 @@ PyPI version:
 !pip install medicai
 ```
 
-Installing from source GitHub:
+Installing from source GitHub: (**recommended**)
 
 ```bash
 !pip install git+https://github.com/innat/medic-ai.git
+```
+
+# Quick Start
+
+```python
+from medicai.models import SwinUNETR, UNet
+from medicai.models import SwinTiny, SwinTinyV2
+from medicai.models import SwinBackbone, SwinBackboneV2
+
+# Build 3D model.
+model = SwinUNETR(encoder_name='swin_tiny_v2', input_shape=(96,96,96,1))
+model = UNet(encoder_name='densenet121', input_shape=(96,96,96,1))
+
+# Build 2D model.
+model = SwinUNETR(encoder_name='swin_tiny_v2', input_shape=(96,96,1))
+model = UNet(encoder_name='swin_tiny_v2', input_shape=(96,96,1))
+```
+```python
+# Build with pre-built encoder.
+encoder = SwinTiny(
+    input_shape=(96,96,96,1),
+    patch_size=2, 
+    downsampling_strategy='swin_unetr_like'
+)
+model = SwinUNETR(encoder=encoder)
+
+# Build with custom encoder.
+custom_encoder = SwinBackboneV2(
+    input_shape=(64, 128, 128, 1),
+    embed_dim=48,
+    window_size=8,
+    patch_size=2,
+    downsampling_strategy='swin_unetr_like'
+)
+model = SwinUNETR(encoder=custom_encoder)
 ```
 
 # 📊 Features
 
 **Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
 
-| Model        | Supported Modalities | Primary Task   | Architecture Type         |
-| ------------ | -------------------- | -------------- | ------------------------- |
-| DenseNet121     | 2D, 3D               | Classification | CNN                       |
-| DenseNet169     | 2D, 3D               | Classification | CNN                       |
-| DenseNet201     | 2D, 3D               | Classification | CNN                       |
-| ViT          | 2D, 3D               | Classification | Transformer               |
- Swin Transformer          | 2D, 3D               | Classification | Transformer               |
-| DenseUNet121 | 2D, 3D               | Segmentation   | CNN                       |
-| DenseUNet169 | 2D, 3D               | Segmentation   | CNN                       |
-| DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
-| UNETR        | 2D, 3D               | Segmentation   | Transformer               |
-| SwinUNETR    | 2D, 3D               | Segmentation   | Transformer               |
-| TransUNet    | 2D, 3D               | Segmentation   | Transformer |
-| SegFormer    | 2D, 3D               | Segmentation   | Transformer |
+| Model | Supported Modalities | Primary Task | Architecture Type |
+| :--- | :--- | :--- | :--- |
+| **DenseNet** | 2D, 3D | Classification | CNN |
+| **ResNet (V1/V2)** | 2D, 3D | Classification | CNN |
+| **ViT** | 2D, 3D | Classification | Transformer |
+| **MiT** | 2D, 3D | Classification | Transformer |
+| **Swin Transformer (V1/V2)** | 2D, 3D | Classification | Transformer |
+| **UNet** | 2D, 3D | Segmentation | CNN |
+| **UNETR** | 2D, 3D | Segmentation | Transformer |
+| **SwinUNETR** | 2D, 3D | Segmentation | Transformer |
+| **TransUNet** | 2D, 3D | Segmentation | Transformer |
+| **SegFormer** | 2D, 3D | Segmentation | Transformer |
 
 **Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with **TensorFlow** operations. It can be used in the `tf.data` API or a Python data generator and is fully compatible with multiple backends, `tf`, `torch`, `jax` in training and inference, supporting both GPUs and TPUs.
 
