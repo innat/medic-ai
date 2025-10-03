@@ -61,7 +61,7 @@ model = SwinUNETR(
     encoder_name='swin_tiny_v2', input_shape=(96,96,1)
 )
 model = UNet(
-    encoder_name='swin_tiny_v2', input_shape=(96,96,1)
+    encoder_name='densenet121', input_shape=(96,96,1)
 )
 ```
 ```python
