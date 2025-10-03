@@ -47,12 +47,20 @@ from medicai.models import SwinTiny, SwinTinyV2
 from medicai.models import SwinBackbone, SwinBackboneV2
 
 # Build 3D model.
-model = SwinUNETR(encoder_name='swin_tiny_v2', input_shape=(96,96,96,1))
-model = UNet(encoder_name='densenet121', input_shape=(96,96,96,1))
+model = SwinUNETR(
+    encoder_name='swin_tiny_v2', input_shape=(96,96,96,1)
+)
+model = UNet(
+    encoder_name='densenet121', input_shape=(96,96,96,1)
+)
 
 # Build 2D model.
-model = SwinUNETR(encoder_name='swin_tiny_v2', input_shape=(96,96,1))
-model = UNet(encoder_name='swin_tiny_v2', input_shape=(96,96,1))
+model = SwinUNETR(
+    encoder_name='swin_tiny_v2', input_shape=(96,96,1)
+)
+model = UNet(
+    encoder_name='swin_tiny_v2', input_shape=(96,96,1)
+)
 ```
 ```python
 # Build with pre-built encoder.
