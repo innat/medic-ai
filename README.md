@@ -41,6 +41,8 @@ Installing from source GitHub: (**recommended**)
 
 # Quick Start
 
+For details end-to-end training workflow, please check the [guide](#-guides) section.
+
 ```python
 from medicai.models import SwinUNETR, UNet
 from medicai.models import SwinTiny, SwinTinyV2
