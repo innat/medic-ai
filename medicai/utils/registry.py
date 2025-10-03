@@ -1,6 +1,23 @@
-import textwrap
+from rich.console import Console
+from rich.table import Table
 
-from tabulate import tabulate
+
+class TabularOutput:
+    def __init__(self, table):
+        self.table = table
+
+    def _repr_html_(self):
+        # Use a Console to capture the rendered table as HTML
+        console = Console(record=True, force_terminal=False)
+        return console.export_html(inline_styles=True)
+
+    # Optional: Keep __repr__ for non-Jupyter environments (like simple Python console)
+    def __repr__(self):
+        console = Console()
+        # This will still print the text version once if not in Jupyter,
+        # or if explicitly called. In Jupyter, _repr_html_ takes priority.
+        console.print(self.table)
+        return ""
 
 
 class BackboneFactoryRegistry:
@@ -95,78 +112,38 @@ class BackboneFactoryRegistry:
         return cls(**kwargs)
 
     def list(self, family=None):
-        """Lists registered backbones, optionally filtered by family, and returns a
-        nicely formatted string using the tabulate library and textwrap.
+        # Initialize a rich Table object
+        table = Table(title="Available Models", show_header=True, header_style="bold cyan")
 
-        Args:
-            family: (Optional) A single family name (e.g., 'resnet') to filter
-                    the list. If not specified, all backbones are listed.
+        # Add the columns
+        table.add_column("Family", style="dim", width=15)
+        # We don't need a strict width for Variants; rich handles wrapping
+        table.add_column("Variants", style="magenta")
 
-        Returns:
-            A string containing a formatted table of backbone names.
-        """
-        headers = ["Family", "Variants"]
-
-        # Define a width for wrapping the variants text (e.g., 60 characters)
-        # Adjust this value based on your typical console width.
-        WRAP_WIDTH = 60
-
+        # --- Data Aggregation Logic (Same as before) ---
         if family is not None:
             names = [name for name, entry in self._registry.items() if family in entry["family"]]
-
-            long_string = ", ".join(names)
-            wrapped_variants = textwrap.fill(
-                long_string, width=WRAP_WIDTH, break_on_hyphens=False, subsequent_indent=""
-            )
-            table_data = [(family, wrapped_variants if names else "None")]
-
+            grouped = {family: names} if names else {}
         else:
             grouped = {}
             for name, entry in self._registry.items():
                 for fam in entry["family"]:
                     grouped.setdefault(fam, []).append(name)
 
-            table_data = []
-            for fam, models in sorted(grouped.items()):
-                long_string = ", ".join(models)
+        # --- Rich Table Population Logic ---
+        for fam, models in sorted(grouped.items()):
+            if not models:
+                variants_content = "None"
+            else:
+                # Format variants as a simple list separated by newlines
+                # Rich will automatically render this with clean wrapping/spacing
+                variants_content = "\n".join([f"• [green]{model}[/]" for model in models])
 
-                # Use textwrap.fill to break the long string into multiple lines
-                wrapped_variants = textwrap.fill(
-                    long_string,
-                    width=WRAP_WIDTH,
-                    break_on_hyphens=False,
-                    subsequent_indent="",  # Ensures text wraps cleanly without extra indent
-                )
+            # Add the row to the rich Table
+            table.add_row(fam, variants_content)
 
-                table_data.append((fam, wrapped_variants))
-
-        return tabulate(table_data, headers=headers, tablefmt="mixed_outline")
-
-    # def list(self, family=None):
-    #     """Lists registered backbones, optionally filtered by family, and returns a
-    #     nicely formatted string using the tabulate library.
-
-    #     Args:
-    #         family: (Optional) A single family name (e.g., 'resnet') to filter
-    #                 the list. If not specified, all backbones are listed.
-
-    #     Returns:
-    #         A string containing a formatted table of backbone names.
-    #     """
-    #     headers = ["Family", "Variants"]
-
-    #     if family is not None:
-    #         names = [name for name, entry in self._registry.items() if family in entry["family"]]
-    #         table_data = [(family, ", ".join(names) if names else "None")]
-    #     else:
-    #         grouped = {}
-    #         for name, entry in self._registry.items():
-    #             for fam in entry["family"]:
-    #                 grouped.setdefault(fam, []).append(name)
-
-    #         table_data = [(fam, ", ".join(models)) for fam, models in sorted(grouped.items())]
-
-    #     return tabulate(table_data, headers=headers, tablefmt="mixed_outline")
+        # Return the wrapper object containing the rich Table
+        return TabularOutput(table)
 
 
 registration = BackboneFactoryRegistry()
