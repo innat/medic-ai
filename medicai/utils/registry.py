@@ -116,7 +116,7 @@ class BackboneFactoryRegistry:
 
             table_data = [(fam, ", ".join(models)) for fam, models in sorted(grouped.items())]
 
-        return tabulate(table_data, headers=headers, tablefmt="mixed_outline")
+        return tabulate(table_data, headers=headers, tablefmt="mixed_outline", maxcolwidths=[None, 80])
 
 
 registration = BackboneFactoryRegistry()
