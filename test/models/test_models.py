@@ -3,6 +3,7 @@ import tensorflow as tf
 from medicai.models import (
     UNETR,
     DenseNet121,
+    EfficientNetB0,
     SegFormer,
     SwinTiny,
     SwinTinyV2,
@@ -38,6 +39,21 @@ def test_densenet():
 
     input_shape = (64, 64, 1)
     model = DenseNet121(input_shape=input_shape, num_classes=num_classes)
+    dummy_input = tf.random.normal((1, 64, 64, 1))
+    output = model(dummy_input)
+    assert output.shape == (1, num_classes)
+
+
+def test_efficientnet():
+    num_classes = 1
+    input_shape = (64, 64, 64, 1)
+    model = EfficientNetB0(input_shape=input_shape, num_classes=num_classes)
+    dummy_input = tf.random.normal((1, 64, 64, 64, 1))
+    output = model(dummy_input)
+    assert output.shape == (1, num_classes)
+
+    input_shape = (64, 64, 1)
+    model = EfficientNetB0(input_shape=input_shape, num_classes=num_classes)
     dummy_input = tf.random.normal((1, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, num_classes)
