@@ -97,7 +97,6 @@ DENSE_KERNEL_INITIALIZER = {
 def EfficientNetBlock(
     activation="swish",
     drop_rate=0.0,
-    name="",
     filters_in=32,
     filters_out=16,
     kernel_size=3,
@@ -105,6 +104,7 @@ def EfficientNetBlock(
     expand_ratio=1,
     se_ratio=0.0,
     id_skip=True,
+    name="",
 ):
 
     def apply(inputs):
@@ -144,6 +144,7 @@ def EfficientNetBlock(
             spatial_dims=spatial_dims,
             layer_type="depthwise_conv",
             kernel_size=kernel_size,
+            strides=strides,
             padding=conv_pad,
             use_bias=False,
             depthwise_initializer=CONV_KERNEL_INITIALIZER,
@@ -200,7 +201,8 @@ def EfficientNetBlock(
 
         if id_skip and strides == 1 and filters_in == filters_out:
             if drop_rate > 0:
-                x = layers.Dropout(drop_rate, name=name + "drop")(x)
+                noise_shape = (None, 1, 1, 1) if spatial_dims == 2 else (None, 1, 1, 1, 1)
+                x = layers.Dropout(drop_rate, noise_shape=noise_shape, name=name + "drop")(x)
             x = layers.add([x, inputs], name=name + "add")
 
         return x

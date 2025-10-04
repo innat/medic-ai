@@ -7,6 +7,7 @@ from keras import layers
 from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_inputs
 
 from .efficientnet_layers import (
+    CONV_KERNEL_INITIALIZER,
     DEFAULT_BLOCKS_ARGS,
     DENSE_KERNEL_INITIALIZER,
     EfficientNetBlock,
@@ -59,7 +60,7 @@ class EfficientNetBackbone(keras.Model):
             strides=2,
             padding="valid",
             use_bias=False,
-            kernel_initializer="he_normal",
+            kernel_initializer=CONV_KERNEL_INITIALIZER,
             name="stem_conv",
         )(x)
         x = layers.BatchNormalization(axis=-1, name="stem_bn")(x)
@@ -67,6 +68,9 @@ class EfficientNetBackbone(keras.Model):
 
         # Blocks
         blocks_args = copy.deepcopy(blocks_args)
+        pyramid_outputs = {"P1": x}
+        pyramid_level = 2
+
         b = 0
         blocks = float(
             sum(self.round_repeats(args["repeats"], depth_coefficient) for args in blocks_args)
@@ -84,12 +88,18 @@ class EfficientNetBackbone(keras.Model):
                 if j > 0:
                     args["strides"] = 1
                     args["filters_in"] = args["filters_out"]
+
                 x = EfficientNetBlock(
                     activation,
                     drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
                     **args,
                 )(x)
+
+                if args["strides"] != 1:
+                    pyramid_outputs[f"P{pyramid_level}"] = x
+                    pyramid_level += 1
+
                 b += 1
 
         # Top
@@ -102,15 +112,38 @@ class EfficientNetBackbone(keras.Model):
             kernel_size=1,
             padding="same",
             use_bias=False,
-            kernel_initializer="he_normal",
+            kernel_initializer=CONV_KERNEL_INITIALIZER,
             name="top_conv",
         )(x)
         x = layers.BatchNormalization(axis=-1, name="top_bn")(x)
         x = layers.Activation(activation, name="top_activation")(x)
-
         super().__init__(
             inputs=inputs, outputs=x, name=name or f"EfficientNetBackbone{spatial_dims}D", **kwargs
         )
+
+        self.pyramid_outputs = pyramid_outputs
+        self.width_coefficient = width_coefficient
+        self.depth_coefficient = depth_coefficient
+        self.drop_connect_rate = drop_connect_rate
+        self.depth_divisor = depth_divisor
+        self.activation = activation
+        self.blocks_args = blocks_args
+        self.include_rescaling = include_rescaling
+        self.name = name
+
+    def get_config(self):
+        config = {
+            "input_shape": self.input_shape[1:],
+            "width_coefficient": self.width_coefficient,
+            "depth_coefficient": self.depth_coefficient,
+            "drop_connect_rate": self.drop_connect_rate,
+            "depth_divisor": self.depth_divisor,
+            "activation": self.activation,
+            "blocks_args": self.blocks_args,
+            "include_rescaling": self.include_rescaling,
+            "name": self.name,
+        }
+        return config
 
     def round_filters(self, filters, divisor, width_coefficient):
         filters *= width_coefficient
