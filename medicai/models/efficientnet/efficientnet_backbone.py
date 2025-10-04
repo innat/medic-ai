@@ -7,7 +7,6 @@ from keras import layers
 from medicai.utils import get_conv_layer, get_reshaping_layer, parse_model_inputs
 
 from .efficientnet_layers import (
-    CONV_KERNEL_INITIALIZER,
     DEFAULT_BLOCKS_ARGS,
     DENSE_KERNEL_INITIALIZER,
     EfficientNetBlock,
@@ -80,17 +79,16 @@ class EfficientNetBackbone(keras.Model):
             args["filters_out"] = self.round_filters(
                 args["filters_out"], divisor=depth_divisor, width_coefficient=width_coefficient
             )
-            repeats = self.round_repeats(args["repeats"], depth_coefficient)
-            for j in range(repeats):
-                block_args = args.copy()
+
+            for j in range(self.round_repeats(args.pop("repeats"), depth_coefficient)):
                 if j > 0:
-                    block_args["strides"] = 1
-                    block_args["filters_in"] = block_args["filters_out"]
+                    args["strides"] = 1
+                    args["filters_in"] = args["filters_out"]
                 x = EfficientNetBlock(
                     activation,
                     drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
-                    **block_args,
+                    **args,
                 )(x)
                 b += 1
 

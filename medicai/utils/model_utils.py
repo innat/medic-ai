@@ -59,7 +59,9 @@ def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
         if spatial_dims == 2:
             ConvClass = layers.DepthwiseConv2D
         else:
-            raise ValueError("DepthwiseConv is only available in 2D.")
+            from medicai.layers import DepthwiseConv3D
+
+            ConvClass = DepthwiseConv3D
 
     else:
         raise ValueError(

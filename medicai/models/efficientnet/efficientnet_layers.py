@@ -1,5 +1,7 @@
 from keras import layers
 
+from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer
+
 DEFAULT_BLOCKS_ARGS = [
     {
         "kernel_size": 3,
@@ -106,13 +108,16 @@ def EfficientNetBlock(
 ):
 
     def apply(inputs):
+        spatial_dims = len(inputs.shape) - 2
 
         # Expansion phase
         filters = filters_in * expand_ratio
         if expand_ratio != 1:
-            x = layers.Conv2D(
-                filters,
-                1,
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=filters,
+                kernel_size=1,
                 padding="same",
                 use_bias=False,
                 kernel_initializer=CONV_KERNEL_INITIALIZER,
@@ -125,16 +130,20 @@ def EfficientNetBlock(
 
         # Depthwise Convolution
         if strides == 2:
-            x = layers.ZeroPadding2D(
+            x = get_reshaping_layer(
+                spatial_dims=spatial_dims,
+                layer_type="padding",
                 padding=correct_pad(x, kernel_size),
                 name=name + "dwconv_pad",
             )(x)
             conv_pad = "valid"
         else:
             conv_pad = "same"
-        x = layers.DepthwiseConv2D(
-            kernel_size,
-            strides=strides,
+
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="depthwise_conv",
+            kernel_size=kernel_size,
             padding=conv_pad,
             use_bias=False,
             depthwise_initializer=CONV_KERNEL_INITIALIZER,
@@ -146,20 +155,29 @@ def EfficientNetBlock(
         # Squeeze and Excitation phase
         if 0 < se_ratio <= 1:
             filters_se = max(1, int(filters_in * se_ratio))
-            se = layers.GlobalAveragePooling2D(name=name + "se_squeeze")(x)
-            se_shape = (1, 1, filters)
+            se = get_pooling_layer(
+                spatial_dims=spatial_dims,
+                layer_type="avg",
+                global_pool=True,
+                name=name + "se_squeeze",
+            )(x)
+            se_shape = (1, 1, filters) if spatial_dims == 2 else (1, 1, 1, filters)
             se = layers.Reshape(se_shape, name=name + "se_reshape")(se)
-            se = layers.Conv2D(
-                filters_se,
-                1,
+            se = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=filters_se,
+                kernel_size=1,
                 padding="same",
                 activation=activation,
                 kernel_initializer=CONV_KERNEL_INITIALIZER,
                 name=name + "se_reduce",
             )(se)
-            se = layers.Conv2D(
-                filters,
-                1,
+            se = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=filters,
+                kernel_size=1,
                 padding="same",
                 activation="sigmoid",
                 kernel_initializer=CONV_KERNEL_INITIALIZER,
@@ -168,19 +186,23 @@ def EfficientNetBlock(
             x = layers.multiply([x, se], name=name + "se_excite")
 
         # Output phase
-        x = layers.Conv2D(
-            filters_out,
-            1,
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=filters_out,
+            kernel_size=1,
             padding="same",
             use_bias=False,
             kernel_initializer=CONV_KERNEL_INITIALIZER,
             name=name + "project_conv",
         )(x)
         x = layers.BatchNormalization(axis=-1, name=name + "project_bn")(x)
+
         if id_skip and strides == 1 and filters_in == filters_out:
             if drop_rate > 0:
-                x = layers.Dropout(drop_rate, noise_shape=(None, 1, 1, 1), name=name + "drop")(x)
+                x = layers.Dropout(drop_rate, name=name + "drop")(x)
             x = layers.add([x, inputs], name=name + "add")
+
         return x
 
     return apply
