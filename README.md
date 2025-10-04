@@ -33,30 +33,168 @@ PyPI version:
 !pip install medicai
 ```
 
-Installing from source GitHub:
+Installing from source GitHub: (**recommended**)
 
 ```bash
 !pip install git+https://github.com/innat/medic-ai.git
+```
+
+# Quick Start
+
+For details end-to-end training workflow, please check the [guide](#-guides) section.
+
+```python
+from medicai.models import SwinUNETR, UNet
+from medicai.models import SwinTiny, SwinTinyV2
+from medicai.models import SwinBackbone, SwinBackboneV2
+
+# Build 3D model.
+model = SwinUNETR(
+    encoder_name='swin_tiny_v2', input_shape=(96,96,96,1)
+)
+model = UNet(
+    encoder_name='densenet121', input_shape=(96,96,96,1)
+)
+
+# Build 2D model.
+model = SwinUNETR(
+    encoder_name='swin_tiny_v2', input_shape=(96,96,1)
+)
+model = UNet(
+    encoder_name='densenet121', input_shape=(96,96,1)
+)
+```
+```python
+# Build with pre-built encoder.
+encoder = SwinTiny(
+    input_shape=(96,96,96,1),
+    patch_size=2, 
+    downsampling_strategy='swin_unetr_like'
+)
+model = SwinUNETR(encoder=encoder)
+
+# Build with custom encoder.
+custom_encoder = SwinBackboneV2(
+    input_shape=(64, 128, 128, 1),
+    embed_dim=48,
+    window_size=8,
+    patch_size=2,
+    downsampling_strategy='swin_unetr_like'
+)
+model = SwinUNETR(encoder=custom_encoder)
+```
+
+The available `model/encoder` can be listed down, showing below.
+
+```python
+import medicai
+medicai.models.list_models()
+
+          Available Models           
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Models          ┃ Encoder Name    ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ densenet        │ • densenet121   │
+│                 │ • densenet169   │
+│                 │ • densenet201   │
+├─────────────────┼─────────────────┤
+│ mit             │ • mit_b0        │
+│                 │ • mit_b1        │
+│                 │ • mit_b2        │
+│                 │ • mit_b3        │
+│                 │ • mit_b4        │
+│                 │ • mit_b5        │
+├─────────────────┼─────────────────┤
+│ resnet          │ • resnet18      │
+│                 │ • resnet34      │
+│                 │ • resnet50      │
+│                 │ • resnet101     │
+│                 │ • resnet152     │
+│                 │ • resnet50v2    │
+│                 │ • resnet101v2   │
+│                 │ • resnet152v2   │
+│                 │ • resnet50vd    │
+│                 │ • resnet200vd   │
+├─────────────────┼─────────────────┤
+│ swin            │ • swin_tiny     │
+│                 │ • swin_small    │
+│                 │ • swin_base     │
+│                 │ • swin_tiny_v2  │
+│                 │ • swin_small_v2 │
+│                 │ • swin_base_v2  │
+├─────────────────┼─────────────────┤
+│ vit             │ • vit_base      │
+│                 │ • vit_large     │
+│                 │ • vit_huge      │
+└─────────────────┴─────────────────┘
+```
+
+Each model class provides `class_describe` and `instance_describe` attributes, which offer helpful documentation and display the default built-in parameters. Here is an example:
+
+```python
+from medicai.models import TransUNet
+
+# `.class_describe()` will return helpful docstring
+TransUNet.class_describe()
+'''
+📌 Class: TransUNet
+
+Example:
+>>> from medicai.models import TransUNet
+>>> model = TransUNet(...)
+>>> model = TransUNet(...)
+
+🧩 Allowed Backbone Families:
+  • densenet
+  • resnet
+'''
+```
+```python
+# `.instance_describe()` will return default parameter.
+model = TransUNet(
+    encoder_name='resnet18', 
+    input_shape=(96, 96, 96, 1)
+)
+model.instance_describe()
+'''
+Instance of TransUNet
+  • input_shape: (96, 96, 96, 1)
+  • num_classes: 1
+  • num_queries: 100
+  • encoder: ResNet18(
+    • name: 'ResNet183D'
+    • trainable: True
+    • input_shape: (96, 96, 96, 1)
+    • include_rescaling: False
+    )
+  • encoder_name: 'resnet18'
+  • classifier_activation: None
+  • patch_size: (3, 3, 3)
+  • num_encoder_layers: 6
+  • num_heads: 8
+  • embed_dim: 256
+  • mlp_dim: 1024
+  • dropout_rate: 0.1
+  • decoder_projection_filters: 64
+'''
 ```
 
 # 📊 Features
 
 **Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
 
-| Model        | Supported Modalities | Primary Task   | Architecture Type         |
-| ------------ | -------------------- | -------------- | ------------------------- |
-| DenseNet121     | 2D, 3D               | Classification | CNN                       |
-| DenseNet169     | 2D, 3D               | Classification | CNN                       |
-| DenseNet201     | 2D, 3D               | Classification | CNN                       |
-| ViT          | 2D, 3D               | Classification | Transformer               |
- Swin Transformer          | 2D, 3D               | Classification | Transformer               |
-| DenseUNet121 | 2D, 3D               | Segmentation   | CNN                       |
-| DenseUNet169 | 2D, 3D               | Segmentation   | CNN                       |
-| DenseUNet201 | 2D, 3D               | Segmentation   | CNN                       |
-| UNETR        | 2D, 3D               | Segmentation   | Transformer               |
-| SwinUNETR    | 2D, 3D               | Segmentation   | Transformer               |
-| TransUNet    | 2D, 3D               | Segmentation   | Transformer |
-| SegFormer    | 2D, 3D               | Segmentation   | Transformer |
+| Model | Supported Modalities | Primary Task | Architecture Type |
+| :--- | :--- | :--- | :--- |
+| **DenseNet** | 2D, 3D | Classification | CNN |
+| **ResNet (V1/V2)** | 2D, 3D | Classification | CNN |
+| **ViT** | 2D, 3D | Classification | Transformer |
+| **MiT** | 2D, 3D | Classification | Transformer |
+| **Swin Transformer (V1/V2)** | 2D, 3D | Classification | Transformer |
+| **UNet** | 2D, 3D | Segmentation | CNN |
+| **UNETR** | 2D, 3D | Segmentation | Transformer |
+| **SwinUNETR** | 2D, 3D | Segmentation | Transformer |
+| **TransUNet** | 2D, 3D | Segmentation | Transformer |
+| **SegFormer** | 2D, 3D | Segmentation | Transformer |
 
 **Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with **TensorFlow** operations. It can be used in the `tf.data` API or a Python data generator and is fully compatible with multiple backends, `tf`, `torch`, `jax` in training and inference, supporting both GPUs and TPUs.
 
