@@ -2,7 +2,19 @@ from medicai.utils import registration
 
 from ..utils.model_utils import BACKBONE_ZOO
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
-from .efficientnet import EfficientNetBackbone
+from .efficientnet import (
+    EfficientNetB0,
+    EfficientNetB1,
+    EfficientNetB2,
+    EfficientNetB3,
+    EfficientNetB4,
+    EfficientNetB5,
+    EfficientNetB6,
+    EfficientNetB7,
+    EfficientNetB8,
+    EfficientNetBackbone,
+    EfficientNetL2,
+)
 from .mit import (
     MiTBackbone,
     MixViTB0,
