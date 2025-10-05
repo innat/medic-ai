@@ -147,7 +147,7 @@ def MBConvBlock(
     se_ratio=0.0,
     bn_momentum=0.9,
     activation="swish",
-    survival_probability=0.8,
+    drop_rate=0.0,
     name=None,
 ):
     if name is None:
@@ -243,8 +243,8 @@ def MBConvBlock(
         x = layers.BatchNormalization(axis=-1, momentum=bn_momentum, name=name + "project_bn")(x)
 
         if strides == 1 and input_filters == output_filters:
-            if survival_probability:
-                x = DropPath(rate=survival_probability, name=name + "drop")(x)
+            if drop_rate:
+                x = DropPath(rate=drop_rate, name=name + "drop")(x)
             x = layers.add([x, inputs], name=name + "add")
 
         return x
@@ -261,7 +261,7 @@ def FusedMBConvBlock(
     se_ratio=0.0,
     bn_momentum=0.9,
     activation="swish",
-    survival_probability=0.8,
+    drop_rate=0.0,
     name=None,
 ):
 
@@ -342,11 +342,9 @@ def FusedMBConvBlock(
 
         # Residual:
         if strides == 1 and input_filters == output_filters:
-            if survival_probability:
-                noise_shape = (None,) + (1,) * spatial_dims + (1,)
-                x = layers.Dropout(
-                    survival_probability,
-                    noise_shape=noise_shape,
+            if drop_rate:
+                x = DropPath(
+                    drop_rate,
                     name=name + "drop",
                 )(x)
             x = layers.add([x, inputs], name=name + "add")

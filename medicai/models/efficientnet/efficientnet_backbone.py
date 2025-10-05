@@ -307,7 +307,7 @@ class EfficientNetBackboneV2(keras.Model):
                 x = block(
                     activation=activation,
                     bn_momentum=bn_momentum,
-                    survival_probability=drop_connect_rate * b / blocks,
+                    drop_rate=drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
                     **args,
                 )(x)
