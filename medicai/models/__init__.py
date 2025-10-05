@@ -13,7 +13,15 @@ from .efficientnet import (
     EfficientNetB7,
     EfficientNetB8,
     EfficientNetBackbone,
+    EfficientNetBackboneV2,
     EfficientNetL2,
+    EfficientNetV2B0,
+    EfficientNetV2B1,
+    EfficientNetV2B2,
+    EfficientNetV2B3,
+    EfficientNetV2L,
+    EfficientNetV2M,
+    EfficientNetV2S,
 )
 from .mit import (
     MiTBackbone,
