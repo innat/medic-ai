@@ -1,6 +1,7 @@
 import keras
 from keras import layers
 
+from medicai.layers import DropPath
 from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer
 
 CONV_KERNEL_INITIALIZER = {
@@ -129,8 +130,7 @@ def EfficientNetV1Block(
 
         if id_skip and strides == 1 and filters_in == filters_out:
             if drop_rate > 0:
-                noise_shape = (None,) + (1,) * spatial_dims + (1,)
-                x = layers.Dropout(drop_rate, noise_shape=noise_shape, name=name + "drop")(x)
+                x = DropPath(rate=drop_rate, name=name + "drop")(x)
             x = layers.add([x, inputs], name=name + "add")
 
         return x
@@ -244,12 +244,7 @@ def MBConvBlock(
 
         if strides == 1 and input_filters == output_filters:
             if survival_probability:
-                noise_shape = (None,) + (1,) * spatial_dims + (1,)
-                x = layers.Dropout(
-                    survival_probability,
-                    noise_shape=noise_shape,
-                    name=name + "drop",
-                )(x)
+                x = DropPath(rate=survival_probability, name=name + "drop")(x)
             x = layers.add([x, inputs], name=name + "add")
 
         return x

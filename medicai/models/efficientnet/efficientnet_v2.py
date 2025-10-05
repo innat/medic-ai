@@ -84,6 +84,7 @@ class EfficientNetBaseV2(keras.Model):
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
+            "blocks_args": self.blocks_args,
             "include_top": self.include_top,
             "include_rescaling": self.include_rescaling,
             "num_classes": self.num_classes,

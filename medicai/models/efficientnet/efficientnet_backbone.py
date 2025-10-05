@@ -17,80 +17,14 @@ from .efficientnet_layers import (
 )
 
 
+@keras.saving.register_keras_serializable(package="efficientnet")
 class EfficientNetBackbone(keras.Model):
-    """
-    EfficientNet backbone model supporting both 2D and 3D inputs.
-
-    This class implements the feature extraction (backbone) part of the EfficientNet architecture,
-    which scales width, depth, and resolution uniformly using compound scaling.
-    It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
-    (e.g., volumetric data of shape `(D, H, W, C)`).
-
-    The backbone produces multi-scale feature maps that can be used for downstream
-    tasks such as classification, detection, or segmentation.
-
-    References:
-        - Tan, M. and Le, Q. V. (2019). "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks".
-          ICML 2019. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
-
-    '''
-    Example (2D):
-        >>> model = EfficientNetBackbone(
-        ...     width_coefficient=1.0,
-        ...     depth_coefficient=1.0,
-        ...     input_shape=(224, 224, 3),
-        ...     include_rescaling=True,
-        ... )
-        >>> x = tf.random.normal((1, 224, 224, 3))
-        >>> y = model(x)
-        >>> y.shape
-        TensorShape([1, 7, 7, 1280])
-
-    Example (3D):
-        >>> model = EfficientNetBackbone(
-        ...     width_coefficient=1.0,
-        ...     depth_coefficient=1.0,
-        ...     input_shape=(32, 224, 224, 3),
-        ...     include_rescaling=True,
-        ... )
-        >>> x = tf.random.normal((1, 32, 224, 224, 3))
-        >>> y = model(x)
-        >>> y.shape
-        TensorShape([1, 1, 7, 7, 1280])
-    '''
-
-    Initializes the EfficientNetBackbone model.
-        Args:
-            width_coefficient (float):
-                Scaling coefficient for network width (number of filters per layer).
-            depth_coefficient (float):
-                Scaling coefficient for network depth (number of repeated blocks).
-            input_tensor (tf.Tensor, optional):
-                Optional tensor to use as model input. If None, a new input tensor is created.
-            input_shape (tuple, optional):
-                Shape of the input tensor. Must include the channel dimension.
-                For 2D: `(H, W, C)`, for 3D: `(D, H, W, C)`.
-            drop_connect_rate (float, default=0.2):
-                Drop connect (stochastic depth) rate applied within MBConv blocks.
-            depth_divisor (int, default=8):
-                Ensures the number of filters is divisible by this value after scaling.
-            activation (str, default="swish"):
-                Activation function used throughout the model.
-            blocks_args (list or str, default="default"):
-                Configuration for the sequence of MBConv blocks. If "default", uses the
-                standard EfficientNet block structure.
-            include_rescaling (bool, default=False):
-                If True, includes input rescaling (1/255) and normalization layers.
-            name (str, default="efficientnet"):
-                Model name.
-    """
-
     def __init__(
         self,
         width_coefficient,
         depth_coefficient,
+        input_shape,
         input_tensor=None,
-        input_shape=None,
         drop_connect_rate=0.2,
         depth_divisor=8,
         activation="swish",
@@ -101,6 +35,9 @@ class EfficientNetBackbone(keras.Model):
     ):
         if blocks_args == "default":
             blocks_args = DEFAULT_BLOCKS_ARGS_V1
+
+        # Preserve the original blocks_args for configuration/serialization.
+        config_blocks_args = copy.deepcopy(blocks_args)
 
         # Input
         inputs = parse_model_inputs(input_shape, input_tensor)
@@ -136,16 +73,30 @@ class EfficientNetBackbone(keras.Model):
         x = layers.Activation(activation, name="stem_activation")(x)
 
         # Blocks
-        blocks_args = copy.deepcopy(blocks_args)
+        # Create a separate working copy for mutation during construction.
+        working_blocks_args = copy.deepcopy(blocks_args)
+
+        # P1 is the output after the Stem block
         pyramid_outputs = {"P1": x}
         pyramid_level = 2
 
         b = 0
+        # Calculate total blocks using the untouched 'config_blocks_args' (to ensure 'repeats' is present)
         blocks = float(
-            sum(self.round_repeats(args["repeats"], depth_coefficient) for args in blocks_args)
+            sum(
+                self.round_repeats(args["repeats"], depth_coefficient)
+                for args in config_blocks_args
+            )
         )
-        for i, args in enumerate(blocks_args):
+
+        # Iterate over the working copy
+        for i, args in enumerate(working_blocks_args):
             assert args["repeats"] > 0
+
+            # Store repeats before removing it from the working args dictionary
+            repeats = args.pop("repeats")
+
+            # Round filters (mutates the working copy)
             args["filters_in"] = self.round_filters(
                 args["filters_in"], divisor=depth_divisor, width_coefficient=width_coefficient
             )
@@ -153,19 +104,25 @@ class EfficientNetBackbone(keras.Model):
                 args["filters_out"], divisor=depth_divisor, width_coefficient=width_coefficient
             )
 
-            for j in range(self.round_repeats(args.pop("repeats"), depth_coefficient)):
+            for j in range(self.round_repeats(repeats, depth_coefficient)):
+
+                # Use a fresh, temporary copy of args for the inner block to handle strides reset
+                block_args = args.copy()
+
                 if j > 0:
-                    args["strides"] = 1
-                    args["filters_in"] = args["filters_out"]
+                    # These mutations only affect the temporary 'block_args'
+                    block_args["strides"] = 1
+                    block_args["filters_in"] = block_args["filters_out"]
 
                 x = EfficientNetV1Block(
                     activation,
                     drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
-                    **args,
+                    **block_args,
                 )(x)
 
-                if args["strides"] != 1:
+                # Store the pyramid output after the downsampling block (strides=2)
+                if block_args["strides"] != 1:
                     pyramid_outputs[f"P{pyramid_level}"] = x
                     pyramid_level += 1
 
@@ -186,22 +143,35 @@ class EfficientNetBackbone(keras.Model):
         )(x)
         x = layers.BatchNormalization(axis=-1, name="top_bn")(x)
         x = layers.Activation(activation, name="top_activation")(x)
+
         super().__init__(
             inputs=inputs,
             outputs=x,
             name=name or f"EfficientNetV1Backbone{spatial_dims}D",
             **kwargs,
         )
-
+        # Store instance variables
         self.pyramid_outputs = pyramid_outputs
         self.width_coefficient = width_coefficient
         self.depth_coefficient = depth_coefficient
         self.drop_connect_rate = drop_connect_rate
         self.depth_divisor = depth_divisor
         self.activation = activation
-        self.blocks_args = blocks_args
+        self.blocks_args = config_blocks_args
         self.include_rescaling = include_rescaling
         self.name = name
+
+    @staticmethod
+    def round_filters(filters, divisor, width_coefficient):
+        filters *= width_coefficient
+        new_filters = max(divisor, int(filters + divisor / 2) // divisor * divisor)
+        if new_filters < 0.9 * filters:
+            new_filters += divisor
+        return int(new_filters)
+
+    @staticmethod
+    def round_repeats(repeats, depth_coefficient):
+        return int(math.ceil(depth_coefficient * repeats))
 
     def get_config(self):
         config = {
@@ -217,26 +187,19 @@ class EfficientNetBackbone(keras.Model):
         }
         return config
 
-    @staticmethod
-    def round_filters(filters, divisor, width_coefficient):
-        filters *= width_coefficient
-        new_filters = max(divisor, int(filters + divisor / 2) // divisor * divisor)
-        if new_filters < 0.9 * filters:
-            new_filters += divisor
-        return int(new_filters)
-
-    @staticmethod
-    def round_repeats(repeats, depth_coefficient):
-        return int(math.ceil(depth_coefficient * repeats))
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
 
+@keras.saving.register_keras_serializable(package="efficientnet")
 class EfficientNetBackboneV2(keras.Model):
     def __init__(
         self,
         width_coefficient,
         depth_coefficient,
+        input_shape,
         input_tensor=None,
-        input_shape=None,
         drop_connect_rate=0.2,
         depth_divisor=8,
         min_depth=8,
@@ -247,8 +210,6 @@ class EfficientNetBackboneV2(keras.Model):
         name="efficientnet_v2",
         **kwargs,
     ):
-
-        # Handle blocks_args as config key
         if isinstance(blocks_args, str):
             if blocks_args in DEFAULT_BLOCKS_ARGS_V2:
                 blocks_args = DEFAULT_BLOCKS_ARGS_V2[blocks_args]
@@ -258,7 +219,6 @@ class EfficientNetBackboneV2(keras.Model):
                     f"Unknown blocks_args configuration: '{blocks_args}'. "
                     f"Available configurations: {available_keys}"
                 )
-        # If blocks_args is already a list (custom config)
         elif isinstance(blocks_args, list):
             pass
         else:
@@ -266,6 +226,9 @@ class EfficientNetBackboneV2(keras.Model):
                 f"blocks_args must be str (config key) or list (custom config). "
                 f"Got {type(blocks_args)}"
             )
+
+        # Preserve the original (resolved) blocks_args for configuration/serialization.
+        config_blocks_args = copy.deepcopy(blocks_args)
 
         # Input
         inputs = parse_model_inputs(input_shape, input_tensor)
@@ -300,17 +263,21 @@ class EfficientNetBackboneV2(keras.Model):
         x = layers.Activation(activation, name="stem_activation")(x)
 
         # Blocks
-        blocks_args = copy.deepcopy(blocks_args)
+        # Create a separate working copy for mutation during construction.
+        working_blocks_args = copy.deepcopy(blocks_args)
+
         pyramid_outputs = {"P1": x}
         pyramid_level = 2
 
         b = 0
-        blocks = float(sum(args["num_repeat"] for args in blocks_args))
+        # Calculate blocks count using the preserved copy
+        blocks = float(sum(args["num_repeat"] for args in config_blocks_args))
 
-        for i, args in enumerate(blocks_args):
+        for i, args in enumerate(working_blocks_args):
             assert args["num_repeat"] > 0
 
             # Update block input and output filters based on depth multiplier.
+            # This is a mutation on the working copy
             args["input_filters"] = self.round_filters(
                 filters=args["input_filters"],
                 width_coefficient=width_coefficient,
@@ -324,7 +291,7 @@ class EfficientNetBackboneV2(keras.Model):
                 depth_divisor=depth_divisor,
             )
 
-            # Determine which conv type to use:
+            # Pop operations on 'args' (part of working_blocks_args)
             block = {0: MBConvBlock, 1: FusedMBConvBlock}[args.pop("conv_type")]
             repeats = self.round_repeats(
                 repeats=args.pop("num_repeat"), depth_coefficient=depth_coefficient
@@ -332,6 +299,8 @@ class EfficientNetBackboneV2(keras.Model):
 
             for j in range(repeats):
                 if j > 0:
+                    # These mutations affect the 'args' dictionary in the
+                    # 'working_blocks_args' list, but the original 'config_blocks_args' is safe.
                     args["strides"] = 1
                     args["input_filters"] = args["output_filters"]
 
@@ -369,6 +338,7 @@ class EfficientNetBackboneV2(keras.Model):
         )(x)
         x = layers.BatchNormalization(axis=-1, name="top_bn")(x)
         x = layers.Activation(activation, name="top_activation")(x)
+
         super().__init__(
             inputs=inputs,
             outputs=x,
@@ -376,13 +346,14 @@ class EfficientNetBackboneV2(keras.Model):
             **kwargs,
         )
 
+        # Store instance variables
         self.pyramid_outputs = pyramid_outputs
         self.width_coefficient = width_coefficient
         self.depth_coefficient = depth_coefficient
         self.drop_connect_rate = drop_connect_rate
         self.depth_divisor = depth_divisor
         self.activation = activation
-        self.blocks_args = blocks_args
+        self.blocks_args = config_blocks_args
         self.include_rescaling = include_rescaling
         self.name = name
 
@@ -399,6 +370,10 @@ class EfficientNetBackboneV2(keras.Model):
             "name": self.name,
         }
         return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     @staticmethod
     def round_filters(filters, width_coefficient, min_depth, depth_divisor):
@@ -488,7 +463,7 @@ EfficientNetBackboneV1_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
     name="EfficientNetBackbone",
     default_blocks="default",
     default_name="efficientnet",
-    extra_args=""
+    extra_args="",
 )
 
 EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
@@ -500,7 +475,7 @@ EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
         Minimum number of filters in any layer after scaling.
     bn_momentum (float, default=0.9):
         Momentum used for batch normalization layers.
-"""
+""",
 )
 
 # attach
