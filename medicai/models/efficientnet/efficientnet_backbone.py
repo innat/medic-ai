@@ -58,25 +58,8 @@ class EfficientNetBackbone(keras.Model):
         >>> y.shape
         TensorShape([1, 1, 7, 7, 1280])
     '''
-    """
 
-    def __init__(
-        self,
-        width_coefficient,
-        depth_coefficient,
-        input_tensor=None,
-        input_shape=None,
-        drop_connect_rate=0.2,
-        depth_divisor=8,
-        activation="swish",
-        blocks_args="default",
-        include_rescaling=False,
-        name=None,
-        **kwargs,
-    ):
-        """
-        Initializes the EfficientNetBackbone model.
-
+    Initializes the EfficientNetBackbone model.
         Args:
             width_coefficient (float):
                 Scaling coefficient for network width (number of filters per layer).
@@ -100,7 +83,22 @@ class EfficientNetBackbone(keras.Model):
                 If True, includes input rescaling (1/255) and normalization layers.
             name (str, default="efficientnet"):
                 Model name.
-        """
+    """
+
+    def __init__(
+        self,
+        width_coefficient,
+        depth_coefficient,
+        input_tensor=None,
+        input_shape=None,
+        drop_connect_rate=0.2,
+        depth_divisor=8,
+        activation="swish",
+        blocks_args="default",
+        include_rescaling=False,
+        name=None,
+        **kwargs,
+    ):
         if blocks_args == "default":
             blocks_args = DEFAULT_BLOCKS_ARGS_V1
 
@@ -249,6 +247,7 @@ class EfficientNetBackboneV2(keras.Model):
         name="efficientnet_v2",
         **kwargs,
     ):
+
         # Handle blocks_args as config key
         if isinstance(blocks_args, str):
             if blocks_args in DEFAULT_BLOCKS_ARGS_V2:
@@ -309,7 +308,7 @@ class EfficientNetBackboneV2(keras.Model):
         blocks = float(sum(args["num_repeat"] for args in blocks_args))
 
         for i, args in enumerate(blocks_args):
-            assert args["repeats"] > 0
+            assert args["num_repeat"] > 0
 
             # Update block input and output filters based on depth multiplier.
             args["input_filters"] = self.round_filters(
@@ -414,3 +413,96 @@ class EfficientNetBackboneV2(keras.Model):
     @staticmethod
     def round_repeats(repeats, depth_coefficient):
         return int(math.ceil(depth_coefficient * repeats))
+
+
+EfficientNetBackbone_DOCSTRING = """
+{name} model supporting both 2D and 3D inputs.
+
+This class implements the backbone part of the EfficientNet architecture,
+which scales width, depth, and resolution uniformly using compound scaling.
+It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
+(e.g., volumetric data of shape `(D, H, W, C)`).
+
+The backbone produces multi-scale feature maps that can be used for downstream
+tasks such as classification, detection, or segmentation.
+
+References:
+    - Tan, M. and Le, Q. V. (2019). "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks".
+      ICML 2019. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
+
+Example (2D):
+    >>> model = {name}(
+    ...     width_coefficient=1.0,
+    ...     depth_coefficient=1.0,
+    ...     input_shape=(224, 224, 3),
+    ...     include_rescaling=True,
+    ... )
+    >>> x = tf.random.normal((1, 224, 224, 3))
+    >>> y = model(x)
+    >>> y.shape
+    TensorShape([1, 7, 7, 1280])
+
+Example (3D):
+    >>> model = {name}(
+    ...     width_coefficient=1.0,
+    ...     depth_coefficient=1.0,
+    ...     input_shape=(32, 224, 224, 3),
+    ...     include_rescaling=True,
+    ... )
+    >>> x = tf.random.normal((1, 32, 224, 224, 3))
+    >>> y = model(x)
+    >>> y.shape
+    TensorShape([1, 1, 7, 7, 1280])
+
+Args:
+    width_coefficient (float):
+        Scaling coefficient for network width (number of filters per layer).
+    depth_coefficient (float):
+        Scaling coefficient for network depth (number of repeated blocks).
+    input_tensor (tf.Tensor, optional):
+        Optional tensor to use as model input. If None, a new input tensor is created.
+    input_shape (tuple, optional):
+        Shape of the input tensor. Must include the channel dimension.
+        For 2D: `(H, W, C)`, for 3D: `(D, H, W, C)`.
+    drop_connect_rate (float, default=0.2):
+        Drop connect (stochastic depth) rate applied within MBConv blocks.
+    depth_divisor (int, default=8):
+        Ensures the number of filters is divisible by this value after scaling.
+    activation (str, default="swish"):
+        Activation function used throughout the model.
+    blocks_args (list or str, default="{default_blocks}"):
+        Configuration for the sequence of MBConv/FusedMBConv blocks.
+        - If "default", uses the standard EfficientNet block structure.
+        - If a string key (e.g., "efficientnetv2-s"), loads the corresponding preset from
+          `DEFAULT_BLOCKS_ARGS_V2`.
+        - If a list, expects a custom block configuration dict.
+    include_rescaling (bool, default=False):
+        If True, includes input rescaling (1/255) and normalization layers.
+    name (str, default="{default_name}"):
+        Model name.
+{extra_args}
+"""
+
+# --- version-specific extensions ---
+EfficientNetBackboneV1_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
+    name="EfficientNetBackbone",
+    default_blocks="default",
+    default_name="efficientnet",
+    extra_args=""
+)
+
+EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
+    name="EfficientNetBackboneV2",
+    default_blocks="efficientnetv2-s",
+    default_name="efficientnet_v2",
+    extra_args="""
+    min_depth (int, default=8):
+        Minimum number of filters in any layer after scaling.
+    bn_momentum (float, default=0.9):
+        Momentum used for batch normalization layers.
+"""
+)
+
+# attach
+EfficientNetBackbone.__doc__ = EfficientNetBackboneV1_DOCSTRING
+EfficientNetBackboneV2.__doc__ = EfficientNetBackboneV2_DOCSTRING
