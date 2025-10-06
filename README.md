@@ -126,7 +126,7 @@ medicai.models.list_models()
 │ vit             │ • vit_base      │
 │                 │ • vit_large     │
 │                 │ • vit_huge      │
-└─────────────────┴─────────────────┘
+...
 ```
 
 Each model class provides `class_describe` and `instance_describe` attributes, which offer helpful documentation and display the default built-in parameters. Here is an example:
@@ -141,7 +141,6 @@ TransUNet.class_describe()
 
 Example:
 >>> from medicai.models import TransUNet
->>> model = TransUNet(...)
 >>> model = TransUNet(...)
 
 🧩 Allowed Backbone Families:
@@ -187,6 +186,7 @@ Instance of TransUNet
 | :--- | :--- | :--- | :--- |
 | **DenseNet** | 2D, 3D | Classification | CNN |
 | **ResNet (V1/V2)** | 2D, 3D | Classification | CNN |
+| **EfficientNet (V1/V2)** | 2D, 3D | Classification | CNN |
 | **ViT** | 2D, 3D | Classification | Transformer |
 | **MiT** | 2D, 3D | Classification | Transformer |
 | **Swin Transformer (V1/V2)** | 2D, 3D | Classification | Transformer |
