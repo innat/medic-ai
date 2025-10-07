@@ -391,32 +391,48 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
         interp_w = interpolate_1d(interp_h, x_coords, axis=3)
 
         return ops.cast(interp_w, original_dtype)
-
+    
     def nearest(volumes, depth, height, width):
         bs, d, h, w, c = ops.shape(volumes)
+        
+        # Use TensorFlow operations instead of Python if statements
+        # For depth
+        z = ops.cond(
+            ops.equal(depth, d),
+            lambda: ops.arange(d, dtype="int32"),
+            lambda: ops.cast(
+                ops.round(
+                    ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)
+                ), "int32"
+            )
+        )
+        z = ops.minimum(z, d - 1)
+        
+        # For height
+        y = ops.cond(
+            ops.equal(height, h),
+            lambda: ops.arange(h, dtype="int32"),
+            lambda: ops.cast(
+                ops.round(
+                    ops.linspace(0.0, ops.cast(h - 1, "float32"), height)
+                ), "int32"
+            )
+        )
+        y = ops.minimum(y, h - 1)
+        
+        # For width
+        x = ops.cond(
+            ops.equal(width, w),
+            lambda: ops.arange(w, dtype="int32"),
+            lambda: ops.cast(
+                ops.round(
+                    ops.linspace(0.0, ops.cast(w - 1, "float32"), width)
+                ), "int32"
+            )
+        )
+        x = ops.minimum(x, w - 1)
 
-        if depth == d:
-            z = ops.arange(d, dtype="int32")
-        else:
-            z = ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)
-            z = ops.cast(ops.round(z), "int32")
-            z = ops.minimum(z, d - 1)
-
-        if height == h:
-            y = ops.arange(h, dtype="int32")
-        else:
-            y = ops.linspace(0.0, ops.cast(h - 1, "float32"), height)
-            y = ops.cast(ops.round(y), "int32")
-            y = ops.minimum(y, h - 1)
-
-        if width == w:
-            x = ops.arange(w, dtype="int32")
-        else:
-            x = ops.linspace(0.0, ops.cast(w - 1, "float32"), width)
-            x = ops.cast(ops.round(x), "int32")
-            x = ops.minimum(x, w - 1)
-
-        # reate 3D grid
+        # Create 3D grid
         Z, Y, X = ops.meshgrid(z, y, x, indexing="ij")
 
         # indices
