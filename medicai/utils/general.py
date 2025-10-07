@@ -392,8 +392,61 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
 
         return ops.cast(interp_w, original_dtype)
 
+    def nearest(volumes, depth, height, width):
+        bs, d, h, w, c = ops.shape(volumes)
+
+        if depth == d:
+            z = ops.arange(d, dtype="int32")
+        else:
+            z = ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)
+            z = ops.cast(ops.round(z), "int32")
+            z = ops.minimum(z, d - 1)
+
+        if height == h:
+            y = ops.arange(h, dtype="int32")
+        else:
+            y = ops.linspace(0.0, ops.cast(h - 1, "float32"), height)
+            y = ops.cast(ops.round(y), "int32")
+            y = ops.minimum(y, h - 1)
+
+        if width == w:
+            x = ops.arange(w, dtype="int32")
+        else:
+            x = ops.linspace(0.0, ops.cast(w - 1, "float32"), width)
+            x = ops.cast(ops.round(x), "int32")
+            x = ops.minimum(x, w - 1)
+
+        # reate 3D grid
+        Z, Y, X = ops.meshgrid(z, y, x, indexing="ij")
+
+        # indices
+        Z = ops.reshape(Z, (-1,))
+        Y = ops.reshape(Y, (-1,))
+        X = ops.reshape(X, (-1,))
+
+        # Batch replication
+        batch_idx = ops.repeat(ops.arange(bs), ops.shape(Z)[0])
+        Z = ops.tile(Z, [bs])
+        Y = ops.tile(Y, [bs])
+        X = ops.tile(X, [bs])
+
+        # Flatten input
+        flat = ops.reshape(volumes, (bs * d * h * w, c))
+
+        # Compute linear indices
+        indices = (batch_idx * d * h * w) + (Z * h * w) + (Y * w) + X
+        result = ops.take(flat, indices, axis=0)
+
+        # Reshape to final size
+        result = ops.reshape(result, (bs, depth, height, width, c))
+        return result
+
     if method == "trilinear":
         return trilinear_resize(volumes, depth, height, width, align_corners)
+
+    elif method == "nearest":
+        return nearest(volumes, depth, height, width)
+
     else:
         raise ValueError(f"Unsupported resize method: {method}")
 

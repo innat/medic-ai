@@ -1,6 +1,7 @@
 import keras
 from keras import layers
 
+from medicai.layers import SpatialResize
 from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .unet_decoder import UNetDecoder
@@ -39,9 +40,11 @@ class UNet(keras.Model, DescribeMixin):
         encoder_depth=5,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
+        decoder_interpolation="nearest",
+        decoder_use_batchnorm=True,
+        decoder_use_attention=False,
         num_classes=1,
         classifier_activation="sigmoid",
-        use_attention=False,
         name=None,
         **kwargs,
     ):
@@ -87,16 +90,17 @@ class UNet(keras.Model, DescribeMixin):
             input_shape=input_shape,
             allowed_families=UNet.ALLOWED_BACKBONE_FAMILIES,
         )
-
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
-        if not required_keys.issubset(pyramid_outputs.keys()):
+        missing_keys = set(required_keys) - set(pyramid_outputs.keys())
+        if missing_keys:
             raise ValueError(
                 f"The encoder's `pyramid_outputs` is missing one or more required keys. "
-                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+                f"Missing keys: {missing_keys}. "
+                f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
 
         pyramid_outputs = list(pyramid_outputs.values())
@@ -110,19 +114,22 @@ class UNet(keras.Model, DescribeMixin):
             )
 
         # Ensure we only use up to `encoder_depth` stages
-        pyramid_outputs = pyramid_outputs[:encoder_depth][
-            ::-1
-        ]  # reverse for decoder (deep → shallow)
-        bottleneck = pyramid_outputs[0]
-        skip_layers = pyramid_outputs[1:]
+        pyramid_outputs = pyramid_outputs[::-1]  # reverse for decoder (deep (P5) → shallow (P1))
+        pyramid_outputs = pyramid_outputs[:encoder_depth]
+
+        # decoder filters
         decoder_filters = decoder_filters[:encoder_depth]
 
+        # decoder block
+        bottleneck = encoder.output
         decoder = UNetDecoder(
-            skip_layers,
+            pyramid_outputs,
             decoder_filters,
             spatial_dims,
             block_type=decoder_block_type,
-            use_attention=use_attention,
+            use_attention=decoder_use_attention,
+            use_batchnorm=decoder_use_batchnorm,
+            interpolation=decoder_interpolation,
         )
         x = decoder(bottleneck)
 
@@ -144,7 +151,9 @@ class UNet(keras.Model, DescribeMixin):
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.use_attention = use_attention
+        self.decoder_use_attention = decoder_use_attention
+        self.decoder_interpolation = decoder_interpolation
+        self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):
         config = {
@@ -155,7 +164,9 @@ class UNet(keras.Model, DescribeMixin):
             "classifier_activation": self.classifier_activation,
             "decoder_block_type": self.decoder_block_type,
             "decoder_filters": self.decoder_filters,
-            "use_attention": self.use_attention,
+            "decoder_interpolation": self.decoder_interpolation,
+            "decoder_use_batchnorm": self.decoder_use_batchnorm,
+            "decoder_use_attention": self.decoder_use_attention,
         }
 
         if self.encoder_name is None and self.encoder is not None:
