@@ -348,7 +348,7 @@ References:
 Example:
     # TensorFlow / Keras - 2D cases.
     >>> import tensorflow as tf
-    >>> from your_module import {name}
+    >>> from medicai.models import {name}
     >>> model = {name}(input_shape=(224, 224, 3), include_top=False)
     >>> x = tf.random.normal((1, 224, 224, 3))
     >>> y = model(x)
@@ -356,7 +356,7 @@ Example:
 
     # PyTorch - 2D cases.
     >>> import torch
-    >>> from your_module import {name}
+    >>> from medicai.models import {name}
     >>> model = {name}(input_shape=(224, 224, 3), include_top=False)
     >>> x = torch.randn(1, 224, 224, 3)
     >>> y = model(x)
@@ -364,7 +364,7 @@ Example:
 
     # PyTorch - 3D cases
     >>> import torch
-    >>> from your_module import {name}
+    >>> from medicai.models import {name}
     >>> model = {name}(input_shape=(96, 96, 96, 1), include_top=False)
     >>> x = torch.randn(1, 96, 96, 96, 1)
     >>> y = model(x)

@@ -298,21 +298,25 @@ class EfficientNetBackboneV2(keras.Model):
             )
 
             for j in range(repeats):
+
+                # Use a fresh, temporary copy of args for the inner block to handle strides reset
+                block_args = args.copy()
+
                 if j > 0:
                     # These mutations affect the 'args' dictionary in the
                     # 'working_blocks_args' list, but the original 'config_blocks_args' is safe.
-                    args["strides"] = 1
-                    args["input_filters"] = args["output_filters"]
+                    block_args["strides"] = 1
+                    block_args["input_filters"] = block_args["output_filters"]
 
                 x = block(
                     activation=activation,
                     bn_momentum=bn_momentum,
                     drop_rate=drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
-                    **args,
+                    **block_args,
                 )(x)
 
-                if args["strides"] != 1:
+                if block_args["strides"] != 1:
                     pyramid_outputs[f"P{pyramid_level}"] = x
                     pyramid_level += 1
 
