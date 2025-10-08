@@ -9,8 +9,7 @@ class SpatialResize(layers.Layer):
 
         if interpolation not in ("nearest", "bilinear", "trilinear"):
             raise ValueError(
-                f"Interpolation must be one of ('nearest', 'bilinear', 'trilinear') "
-                "Got {interpolation}"
+                f"Interpolation must be one of ('nearest', 'bilinear', 'trilinear') but got '{interpolation}'"
             )
 
         self.target_shape = target_shape
