@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.layers import SpatialResample
+from medicai.layers import ResizingND
 from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .unet_decoder import UNetDecoder
@@ -118,6 +118,21 @@ class UNet(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
+        if decoder_block_type not in ("upsampling", "transpose"):
+            raise ValueError(
+                f"Invalid decoder_block_type: '{decoder_block_type}'. "
+                "Expected one of ('upsampling', 'transpose')."
+            )
+
+        # Validate decoder_interpolation
+        allowed = {2: ("nearest", "bilinear"), 3: ("nearest", "trilinear")}
+        if encoder_depth < 5:
+            if decoder_interpolation not in allowed.get(spatial_dims, ()):
+                raise ValueError(
+                    f"decoder_interpolation='{decoder_interpolation}' invalid for {spatial_dims}D input. "
+                    f"Allowed: {allowed.get(spatial_dims, 'n/a')}"
+                )
+
         # get skip layers
         pyramid_outputs = list(pyramid_outputs.values())
         bottleneck = pyramid_outputs[-1]
@@ -137,7 +152,7 @@ class UNet(keras.Model, DescribeMixin):
 
         # Final upsampling to input size (if needed, especially for encoder_depth < 5)
         if x.shape[1:-1] != inputs.shape[1:-1]:
-            x = SpatialResample(
+            x = ResizingND(
                 target_shape=inputs.shape[1:-1],
                 interpolation=decoder_interpolation,
                 name="spatial_resample",

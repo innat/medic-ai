@@ -1,7 +1,7 @@
 from keras import layers, ops
 
 from medicai.layers import AttentionGate
-from medicai.utils import get_conv_layer, get_reshaping_layer
+from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
 
 def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
@@ -16,14 +16,12 @@ def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
     Returns:
         function: A function that applies the convolutional block to an input tensor.
     """
-    BatchNorm = layers.BatchNormalization
     dim_str = f"{spatial_dims}D"
 
     def apply(x):
         conv_name = f"{name_prefix}_conv3x3_{dim_str}"
         bn_name = f"{name_prefix}_bn_{dim_str}"
         relu_name = f"{name_prefix}_relu"
-
         x = get_conv_layer(
             spatial_dims,
             layer_type="conv",
@@ -35,8 +33,8 @@ def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
             name=conv_name,
         )(x)
         if use_batchnorm:
-            x = BatchNorm(axis=-1, name=bn_name)(x)
-        x = layers.Activation("relu", name=relu_name)(x)
+            x = get_norm_layer(layer_type="batch", axis=-1, name=bn_name)(x)
+        x = get_act_layer(layer_type="relu", name=relu_name)(x)
         return x
 
     return apply
@@ -51,59 +49,68 @@ def DecoderBlock(
     stage_idx=0,
 ):
     """
-    Builds a decoder block that upsamples an input tensor and optionally concatenates with a skip connection.
+    Builds a decoder block that upsamples the feature map and optionally merges with a skip connection.
 
     Args:
-        filters (int): Number of filters for the convolutional layers.
         spatial_dims (int): Dimensionality of the operation (2 for 2D, 3 for 3D).
-        block_type (str): Upsampling strategy — either 'upsample' (interpolation) or 'transpose' (learned).
-        use_batchnorm (bool): Whether to use BatchNormalization in convolutional blocks.
+        filters (int): Number of filters for convolutional layers.
+        block_type (str): Type of upsampling — 'upsampling' (interpolation) or 'transpose' (learned).
+        use_batchnorm (bool): Whether to include BatchNormalization layers.
+        use_attention (bool): Whether to apply an attention gate on the skip connection.
+        stage_idx (int): Index for naming the decoder stage.
 
     Returns:
-        function: A function that applies the decoder block to a pair of input and optional skip tensors.
+        function: A callable that applies the decoder block to an input and optional skip tensor.
     """
     dim_str = f"{spatial_dims}D"
-    stage_prefix = f"dec_stage{stage_idx}"
+    stage_prefix = f"decoder_stage{stage_idx}"
+
+    def upsample_block(x):
+        return get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
+
+    def transpose_block(x):
+        x = get_conv_layer(
+            spatial_dims,
+            layer_type="conv_transpose",
+            filters=filters,
+            kernel_size=4,
+            strides=2,
+            padding="same",
+            name=f"{stage_prefix}_upconv_{dim_str}",
+        )(x)
+        if use_batchnorm:
+            x = get_norm_layer(layer_type="batch", axis=-1, name=f"{stage_prefix}_bn_{dim_str}")(x)
+        return get_act_layer(layer_type="relu", name=f"{stage_prefix}_relu")(x)
 
     def apply(x, skip=None):
+        # Upsample path
         if block_type == "transpose":
-            x = get_conv_layer(
-                spatial_dims,
-                layer_type="conv_transpose",
-                filters=filters,
-                kernel_size=4,
-                strides=2,
-                padding="same",
-                name=f"{stage_prefix}_upconv_{dim_str}",
-            )(x)
-            if use_batchnorm:
-                x = layers.BatchNormalization(axis=-1, name=f"{stage_prefix}_bn_{dim_str}")(x)
-            x = layers.Activation("relu", name=f"{stage_prefix}_relu")(x)
-
+            x = transpose_block(x)
+        elif block_type == "upsampling":
+            x = upsample_block(x)
         else:
-            x = get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
+            raise ValueError(
+                f"Invalid block_type '{block_type}'. Must be 'upsampling' or 'transpose'."
+            )
 
+        # Skip connection (with optional attention)
         if skip is not None:
-            # Make Attention-UNet.
             if use_attention:
-                attention_name = f"{stage_prefix}_attention_gate"
-                skip = AttentionGate(filters=filters, name=attention_name)(
+                # Attention-UNet.
+                skip = AttentionGate(filters=filters, name=f"{stage_prefix}_attention_gate")(
                     [skip, x]
-                )  # gating signal = current decoder x
+                )
             x = layers.Concatenate(axis=-1, name=f"{stage_prefix}_concat")([x, skip])
 
-        x = Conv3x3BnReLU(
-            spatial_dims=spatial_dims,
-            filters=filters,
-            use_batchnorm=use_batchnorm,
-            name_prefix=f"{stage_prefix}_conv_1",
-        )(x)
-        x = Conv3x3BnReLU(
-            spatial_dims=spatial_dims,
-            filters=filters,
-            use_batchnorm=use_batchnorm,
-            name_prefix=f"{stage_prefix}_conv_2",
-        )(x)
+        # Double convolution block
+        for i in range(1, 3):
+            x = Conv3x3BnReLU(
+                spatial_dims=spatial_dims,
+                filters=filters,
+                use_batchnorm=use_batchnorm,
+                name_prefix=f"{stage_prefix}_conv_{i}",
+            )(x)
+
         return x
 
     return apply
@@ -125,6 +132,8 @@ def UNetDecoder(
         decoder_filters (list or tuple): Number of filters for each decoder stage.
         dim (int): Dimensionality of the model — 2 for 2D or 3 for 3D.
         block_type (str): Decoder block type, either 'upsampling' or 'transpose'.
+        use_batchnorm (bool): Whether to include BatchNormalization layers.
+        use_attention (bool): Whether to apply an attention gate on the skip connection.
 
     Returns:
         function: A decoder function that takes the encoder output and returns the final decoded tensor.

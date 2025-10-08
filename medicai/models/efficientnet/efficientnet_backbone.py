@@ -33,6 +33,14 @@ class EfficientNetBackbone(keras.Model):
         name=None,
         **kwargs,
     ):
+        # Should be 2D or 3D.
+        spatial_dims = len(input_shape) - 1
+        if spatial_dims not in (2, 3):
+            raise ValueError(
+                f"{self.__class__.__name__} only supports 2D or 3D inputs. "
+                f"Received input_shape={input_shape} (spatial_dims={spatial_dims})"
+            )
+
         if blocks_args == "default":
             blocks_args = DEFAULT_BLOCKS_ARGS_V1
 
@@ -41,7 +49,6 @@ class EfficientNetBackbone(keras.Model):
 
         # Input
         inputs = parse_model_inputs(input_shape, input_tensor)
-        spatial_dims = len(input_shape) - 1
 
         # Stem
         x = inputs
@@ -211,6 +218,14 @@ class EfficientNetBackboneV2(keras.Model):
         name="efficientnet_v2",
         **kwargs,
     ):
+        # Should be 2D or 3D.
+        spatial_dims = len(input_shape) - 1
+        if spatial_dims not in (2, 3):
+            raise ValueError(
+                f"{self.__class__.__name__} only supports 2D or 3D inputs. "
+                f"Received input_shape={input_shape} (spatial_dims={spatial_dims})"
+            )
+
         if isinstance(blocks_args, str):
             if blocks_args in DEFAULT_BLOCKS_ARGS_V2:
                 blocks_args = DEFAULT_BLOCKS_ARGS_V2[blocks_args]

@@ -3,7 +3,7 @@ from keras import layers, ops
 from medicai.utils import resize_volumes
 
 
-class SpatialResample(layers.Layer):
+class ResizingND(layers.Layer):
     def __init__(self, target_shape, interpolation="nearest", **kwargs):
         super().__init__(**kwargs)
 
@@ -20,7 +20,8 @@ class SpatialResample(layers.Layer):
         self.channels = input_shape[-1]
         if self.spatial_dims not in (2, 3):
             raise ValueError(
-                f"SpatialResize only supports 2D or 3D inputs. Got spatial_dims={self.spatial_dims}"
+                f"{self.__class__.__name__} only supports 2D or 3D inputs. "
+                f"Got spatial_dims={self.spatial_dims}"
             )
         super().build(input_shape)
 
