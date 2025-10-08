@@ -133,10 +133,14 @@ class UNet(keras.Model, DescribeMixin):
                     f"Allowed: {allowed.get(spatial_dims, 'n/a')}"
                 )
 
-        # get skip layers
-        pyramid_outputs = list(pyramid_outputs.values())
-        bottleneck = pyramid_outputs[-1]
-        skip_layers = pyramid_outputs[-(encoder_depth):-1][::-1]
+        bottleneck = pyramid_outputs["P5"]
+        skip_layers = [
+            pyramid_outputs["P4"],  # deepest skip
+            pyramid_outputs["P3"],
+            pyramid_outputs["P2"],
+            pyramid_outputs["P1"],  # shallowest skip
+        ]
+        skip_layers = skip_layers[: encoder_depth - 1]
         decoder_filters = decoder_filters[: len(skip_layers) + 1]
 
         # unet decoder blocks
