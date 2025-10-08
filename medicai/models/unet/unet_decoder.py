@@ -1,7 +1,7 @@
 from keras import layers, ops
 
-from medicai.layers import AttentionGate, SpatialResize
-from medicai.utils import get_conv_layer, get_reshaping_layer, resize_volumes
+from medicai.layers import AttentionGate
+from medicai.utils import get_conv_layer, get_reshaping_layer
 
 
 def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
@@ -43,12 +43,11 @@ def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
 
 
 def DecoderBlock(
+    spatial_dims,
     filters,
-    spatial_dims=2,
     block_type="upsampling",
     use_batchnorm=True,
     use_attention=False,
-    interpolation="nearest",
     stage_idx=0,
 ):
     """
@@ -80,23 +79,16 @@ def DecoderBlock(
             if use_batchnorm:
                 x = layers.BatchNormalization(axis=-1, name=f"{stage_prefix}_bn_{dim_str}")(x)
             x = layers.Activation("relu", name=f"{stage_prefix}_relu")(x)
+
         else:
             x = get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
 
         if skip is not None:
-            # Resize skip if spatial shapes don’t match
-            if x.shape[1:-1] != skip.shape[1:-1]:
-                skip = SpatialResize(
-                    target_shape=ops.shape(x)[1:-1],
-                    interpolation=interpolation,
-                    name=f"{stage_prefix}_skip_resize",
-                )(skip)
-
             # Make Attention-UNet.
             if use_attention:
                 attention_name = f"{stage_prefix}_attention_gate"
-                skip = AttentionGate(filters, spatial_dims, name=attention_name)(
-                    skip, x
+                skip = AttentionGate(filters=filters, name=attention_name)(
+                    [skip, x]
                 )  # gating signal = current decoder x
             x = layers.Concatenate(axis=-1, name=f"{stage_prefix}_concat")([x, skip])
 
@@ -118,13 +110,12 @@ def DecoderBlock(
 
 
 def UNetDecoder(
+    spatial_dims,
     skip_layers,
     decoder_filters,
-    spatial_dims,
     block_type="upsampling",
     use_attention=False,
     use_batchnorm=True,
-    interpolation="nearest",
 ):
     """
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
@@ -146,12 +137,11 @@ def UNetDecoder(
             stage_idx = num_stages - i
             skip = skip_layers[i] if i < len(skip_layers) else None
             x = DecoderBlock(
-                filters,
                 spatial_dims,
+                filters,
                 block_type,
                 use_batchnorm,
                 use_attention,
-                interpolation,
                 stage_idx=stage_idx,
             )(x, skip)
         return x

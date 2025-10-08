@@ -11,10 +11,10 @@ from medicai.utils.model_utils import get_conv_layer
 class AttentionGate(keras.layers.Layer):
     """https://arxiv.org/abs/1804.03999"""
 
-    def __init__(self, filters, spatial_dims=2, **kwargs):
+    def __init__(self, filters, **kwargs):
         super().__init__(**kwargs)
+        # variable
         self.filters = filters
-        self.spatial_dims = spatial_dims
         # ops
         self.relu = layers.Activation("relu")
         self.sigmoid = layers.Activation("sigmoid")
@@ -22,6 +22,12 @@ class AttentionGate(keras.layers.Layer):
         self.add = layers.Add()
 
     def build(self, input_shape):
+        self.spatial_dims = len(input_shape[0]) - 2
+        if self.spatial_dims not in (2, 3):
+            raise ValueError(
+                f"SpatialResize only supports 2D or 3D inputs. Got spatial_dims={self.spatial_dims}"
+            )
+
         # input_shape = [x_shape, g_shape]
         self.theta_x = get_conv_layer(
             self.spatial_dims,

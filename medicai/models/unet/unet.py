@@ -103,8 +103,6 @@ class UNet(keras.Model, DescribeMixin):
                 f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
 
-        pyramid_outputs = list(pyramid_outputs.values())
-
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
 
@@ -113,25 +111,30 @@ class UNet(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
-        # Ensure we only use up to `encoder_depth` stages
-        pyramid_outputs = pyramid_outputs[::-1]  # reverse for decoder (deep (P5) → shallow (P1))
-        pyramid_outputs = pyramid_outputs[:encoder_depth]
+        # get skip layers
+        pyramid_outputs = list(pyramid_outputs.values())
+        bottleneck = pyramid_outputs[-1]
+        skip_layers = pyramid_outputs[-(encoder_depth):-1][::-1]
+        decoder_filters = decoder_filters[: len(skip_layers) + 1]
 
-        # decoder filters
-        decoder_filters = decoder_filters[:encoder_depth]
-
-        # decoder block
-        bottleneck = encoder.output
+        # unet decoder blocks
         decoder = UNetDecoder(
-            pyramid_outputs,
-            decoder_filters,
             spatial_dims,
+            skip_layers,
+            decoder_filters,
             block_type=decoder_block_type,
             use_attention=decoder_use_attention,
             use_batchnorm=decoder_use_batchnorm,
-            interpolation=decoder_interpolation,
         )
         x = decoder(bottleneck)
+
+        # Final upsampling to input size (if needed, especially for encoder_depth < 5)
+        if x.shape[1:-1] != inputs.shape[1:-1]:
+            x = SpatialResize(
+                target_shape=inputs.shape[1:-1],
+                interpolation=decoder_interpolation,
+                name="final_resize",
+            )(x)
 
         # Final segmentation head
         x = get_conv_layer(

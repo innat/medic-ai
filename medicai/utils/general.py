@@ -391,44 +391,38 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
         interp_w = interpolate_1d(interp_h, x_coords, axis=3)
 
         return ops.cast(interp_w, original_dtype)
-    
+
     def nearest(volumes, depth, height, width):
         bs, d, h, w, c = ops.shape(volumes)
-        
+
         # Use TensorFlow operations instead of Python if statements
         # For depth
         z = ops.cond(
             ops.equal(depth, d),
             lambda: ops.arange(d, dtype="int32"),
             lambda: ops.cast(
-                ops.round(
-                    ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)
-                ), "int32"
-            )
+                ops.round(ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)), "int32"
+            ),
         )
         z = ops.minimum(z, d - 1)
-        
+
         # For height
         y = ops.cond(
             ops.equal(height, h),
             lambda: ops.arange(h, dtype="int32"),
             lambda: ops.cast(
-                ops.round(
-                    ops.linspace(0.0, ops.cast(h - 1, "float32"), height)
-                ), "int32"
-            )
+                ops.round(ops.linspace(0.0, ops.cast(h - 1, "float32"), height)), "int32"
+            ),
         )
         y = ops.minimum(y, h - 1)
-        
+
         # For width
         x = ops.cond(
             ops.equal(width, w),
             lambda: ops.arange(w, dtype="int32"),
             lambda: ops.cast(
-                ops.round(
-                    ops.linspace(0.0, ops.cast(w - 1, "float32"), width)
-                ), "int32"
-            )
+                ops.round(ops.linspace(0.0, ops.cast(w - 1, "float32"), width)), "int32"
+            ),
         )
         x = ops.minimum(x, w - 1)
 

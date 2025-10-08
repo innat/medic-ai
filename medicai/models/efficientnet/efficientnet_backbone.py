@@ -76,9 +76,9 @@ class EfficientNetBackbone(keras.Model):
         # Create a separate working copy for mutation during construction.
         working_blocks_args = copy.deepcopy(blocks_args)
 
-        # P1 is the output after the Stem block
-        pyramid_outputs = {"P1": x}
-        pyramid_level = 2
+        # Placeholder for feature pyramid layers
+        pyramid_outputs = {}
+        pyramid_level = 1
 
         b = 0
         # Calculate total blocks using the untouched 'config_blocks_args' (to ensure 'repeats' is present)
@@ -114,17 +114,17 @@ class EfficientNetBackbone(keras.Model):
                     block_args["strides"] = 1
                     block_args["filters_in"] = block_args["filters_out"]
 
+                # Store the pyramid output after the downsampling block (strides=2)
+                if block_args["strides"] != 1:
+                    pyramid_outputs[f"P{pyramid_level}"] = x
+                    pyramid_level += 1
+
                 x = EfficientNetV1Block(
                     activation,
                     drop_connect_rate * b / blocks,
                     name=f"block{i + 1}{chr(j + 97)}_",
                     **block_args,
                 )(x)
-
-                # Store the pyramid output after the downsampling block (strides=2)
-                if block_args["strides"] != 1:
-                    pyramid_outputs[f"P{pyramid_level}"] = x
-                    pyramid_level += 1
 
                 b += 1
 
@@ -143,6 +143,7 @@ class EfficientNetBackbone(keras.Model):
         )(x)
         x = layers.BatchNormalization(axis=-1, name="top_bn")(x)
         x = layers.Activation(activation, name="top_activation")(x)
+        pyramid_outputs[f"P{pyramid_level}"] = x
 
         super().__init__(
             inputs=inputs,
@@ -266,8 +267,9 @@ class EfficientNetBackboneV2(keras.Model):
         # Create a separate working copy for mutation during construction.
         working_blocks_args = copy.deepcopy(blocks_args)
 
-        pyramid_outputs = {"P1": x}
-        pyramid_level = 2
+        # Placeholder for feature pyramid layers
+        pyramid_outputs = {}
+        pyramid_level = 1
 
         b = 0
         # Calculate blocks count using the preserved copy
@@ -308,6 +310,11 @@ class EfficientNetBackboneV2(keras.Model):
                     block_args["strides"] = 1
                     block_args["input_filters"] = block_args["output_filters"]
 
+                # Store the pyramid output after the downsampling block (strides=2)
+                if block_args["strides"] != 1:
+                    pyramid_outputs[f"P{pyramid_level}"] = x
+                    pyramid_level += 1
+
                 x = block(
                     activation=activation,
                     bn_momentum=bn_momentum,
@@ -315,10 +322,6 @@ class EfficientNetBackboneV2(keras.Model):
                     name=f"block{i + 1}{chr(j + 97)}_",
                     **block_args,
                 )(x)
-
-                if block_args["strides"] != 1:
-                    pyramid_outputs[f"P{pyramid_level}"] = x
-                    pyramid_level += 1
 
                 b += 1
 
@@ -342,6 +345,7 @@ class EfficientNetBackboneV2(keras.Model):
         )(x)
         x = layers.BatchNormalization(axis=-1, name="top_bn")(x)
         x = layers.Activation(activation, name="top_activation")(x)
+        pyramid_outputs[f"P{pyramid_level}"] = x
 
         super().__init__(
             inputs=inputs,
