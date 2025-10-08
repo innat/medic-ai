@@ -114,7 +114,7 @@ class EfficientNetBackbone(keras.Model):
                     block_args["strides"] = 1
                     block_args["filters_in"] = block_args["filters_out"]
 
-                # Store the pyramid output after the downsampling block (strides=2)
+                # Store the pyramid output before the downsampling block (strides!=1) for skip connections
                 if block_args["strides"] != 1:
                     pyramid_outputs[f"P{pyramid_level}"] = x
                     pyramid_level += 1
@@ -310,7 +310,7 @@ class EfficientNetBackboneV2(keras.Model):
                     block_args["strides"] = 1
                     block_args["input_filters"] = block_args["output_filters"]
 
-                # Store the pyramid output after the downsampling block (strides=2)
+                # Store the pyramid output before the downsampling block (strides!=1) for skip connections
                 if block_args["strides"] != 1:
                     pyramid_outputs[f"P{pyramid_level}"] = x
                     pyramid_level += 1
@@ -361,6 +361,8 @@ class EfficientNetBackboneV2(keras.Model):
         self.drop_connect_rate = drop_connect_rate
         self.depth_divisor = depth_divisor
         self.activation = activation
+        self.min_depth = min_depth
+        self.bn_momentum = bn_momentum
         self.blocks_args = config_blocks_args
         self.include_rescaling = include_rescaling
         self.name = name
@@ -372,6 +374,8 @@ class EfficientNetBackboneV2(keras.Model):
             "depth_coefficient": self.depth_coefficient,
             "drop_connect_rate": self.drop_connect_rate,
             "depth_divisor": self.depth_divisor,
+            "min_depth": self.min_depth,
+            "bn_momentum": self.bn_momentum,
             "activation": self.activation,
             "blocks_args": self.blocks_args,
             "include_rescaling": self.include_rescaling,
