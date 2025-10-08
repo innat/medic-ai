@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.layers import SpatialResize
+from medicai.layers import SpatialResample
 from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .unet_decoder import UNetDecoder
@@ -71,6 +71,13 @@ class UNet(keras.Model, DescribeMixin):
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
                 "transpose" uses a `ConvNDTranspose` layer.
+            decoder_interpolation: Interpolation method used for the final upsampling
+                operation. When `encoder_depth < 5`, the model performs fewer upsampling
+                steps in the decoder, which may result in an output resolution smaller than
+                the input. This parameter specifies the interpolation method
+                ('nearest', 'bilinear', 'trilinear', etc.) used
+                in the final upsampling layer that ensures the output spatial dimensions match
+                the input dimensions, regardless of the encoder depth.
             decoder_filters: A tuple of integers specifying the number of
                 filters for each block in the decoder path. The number of
                 filters should correspond to the `encoder_depth`.
@@ -130,10 +137,10 @@ class UNet(keras.Model, DescribeMixin):
 
         # Final upsampling to input size (if needed, especially for encoder_depth < 5)
         if x.shape[1:-1] != inputs.shape[1:-1]:
-            x = SpatialResize(
+            x = SpatialResample(
                 target_shape=inputs.shape[1:-1],
                 interpolation=decoder_interpolation,
-                name="final_resize",
+                name="spatial_resample",
             )(x)
 
         # Final segmentation head

@@ -3,7 +3,7 @@ from keras import layers, ops
 from medicai.utils import resize_volumes
 
 
-class SpatialResize(layers.Layer):
+class SpatialResample(layers.Layer):
     def __init__(self, target_shape, interpolation="nearest", **kwargs):
         super().__init__(**kwargs)
 
