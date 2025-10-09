@@ -83,6 +83,14 @@ def DecoderBlock(
         return get_act_layer(layer_type="relu", name=f"{stage_prefix}_relu")(x)
 
     def apply(x, skip=None):
+        # Skip connection
+        if skip is not None:
+            if use_attention:
+                # Attention-UNet.
+                skip = AttentionGate(filters=filters, name=f"{stage_prefix}_attention_gate")(
+                    [skip, x]
+                )
+
         # Upsample path
         if block_type == "transpose":
             x = transpose_block(x)
@@ -93,13 +101,7 @@ def DecoderBlock(
                 f"Invalid block_type '{block_type}'. Must be 'upsampling' or 'transpose'."
             )
 
-        # Skip connection (with optional attention)
         if skip is not None:
-            if use_attention:
-                # Attention-UNet.
-                skip = AttentionGate(filters=filters, name=f"{stage_prefix}_attention_gate")(
-                    [skip, x]
-                )
             x = layers.Concatenate(axis=-1, name=f"{stage_prefix}_concat")([x, skip])
 
         # Double convolution block
