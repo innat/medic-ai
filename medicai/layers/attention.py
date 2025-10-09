@@ -5,7 +5,7 @@ hide_warnings()
 import keras
 from keras import layers
 
-from medicai.utils.model_utils import get_act_layer, get_conv_layer, get_norm_layer
+from medicai.utils.model_utils import get_act_layer, get_conv_layer, get_reshaping_layer
 
 
 class AttentionGate(keras.layers.Layer):
@@ -35,10 +35,14 @@ class AttentionGate(keras.layers.Layer):
             layer_type="conv",
             filters=self.filters,
             kernel_size=1,
-            strides=1,
+            strides=2,
             padding="same",
         )
-        self.theta_x_norm = get_norm_layer(layer_type="batch")
+        self.upsampling = get_reshaping_layer(
+            self.spatial_dims,
+            layer_type="upsampling",
+            size=2,
+        )
 
         self.phi_g = get_conv_layer(
             self.spatial_dims,
@@ -48,8 +52,6 @@ class AttentionGate(keras.layers.Layer):
             strides=1,
             padding="same",
         )
-        self.phi_g_norm = get_norm_layer(layer_type="batch")
-
         self.psi = get_conv_layer(
             self.spatial_dims,
             layer_type="conv",
@@ -58,20 +60,20 @@ class AttentionGate(keras.layers.Layer):
             strides=1,
             padding="same",
         )
-        self.psi_norm = get_norm_layer(layer_type="batch")
         self.built = True
 
     def call(self, inputs):
         # expect list [x, g]
         x, g = inputs
 
-        theta_x = self.theta_x_norm(self.theta_x(x))
-        phi_g = self.phi_g_norm(self.phi_g(g))
+        theta_x = self.theta_x(x)
+        phi_g = self.phi_g(g)
         add = self.add([theta_x, phi_g])
 
         relu = self.relu(add)
-        psi = self.psi_norm(self.psi(relu))
+        psi = self.psi(relu)
         alpha = self.sigmoid(psi)
+        alpha = self.upsampling(alpha)
 
         return self.mul([x, alpha])  # gated skip
 

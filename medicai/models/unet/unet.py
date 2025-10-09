@@ -40,7 +40,7 @@ class UNet(keras.Model, DescribeMixin):
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
         decoder_use_batchnorm=True,
-        decoder_attentio_gate=False,
+        decoder_attention_gate=False,
         num_classes=1,
         classifier_activation="sigmoid",
         name=None,
@@ -74,13 +74,6 @@ class UNet(keras.Model, DescribeMixin):
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
                 "transpose" uses a `ConvNDTranspose` layer.
-            decoder_interpolation: Interpolation method used for the final upsampling
-                operation. When `encoder_depth < 5`, the model performs fewer upsampling
-                steps in the decoder, which may result in an output resolution smaller than
-                the input. This parameter specifies the interpolation method
-                ('nearest', 'bilinear', 'trilinear', etc.) used
-                in the final upsampling layer that ensures the output spatial dimensions match
-                the input dimensions, regardless of the encoder depth.
             decoder_filters: A tuple of integers specifying the number of
                 filters for each block in the decoder path. The number of
                 filters should correspond to the `encoder_depth`.
@@ -140,7 +133,7 @@ class UNet(keras.Model, DescribeMixin):
             skip_layers,
             decoder_filters,
             block_type=decoder_block_type,
-            use_attention=decoder_attentio_gate,
+            use_attention=decoder_attention_gate,
             use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
@@ -163,7 +156,7 @@ class UNet(keras.Model, DescribeMixin):
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.decoder_attentio_gate = decoder_attentio_gate
+        self.decoder_attention_gate = decoder_attention_gate
         self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):
@@ -176,7 +169,7 @@ class UNet(keras.Model, DescribeMixin):
             "decoder_block_type": self.decoder_block_type,
             "decoder_filters": self.decoder_filters,
             "decoder_use_batchnorm": self.decoder_use_batchnorm,
-            "decoder_attentio_gate": self.decoder_attentio_gate,
+            "decoder_attention_gate": self.decoder_attention_gate,
         }
 
         if self.encoder_name is None and self.encoder is not None:
