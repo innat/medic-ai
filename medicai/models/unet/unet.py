@@ -40,7 +40,6 @@ class UNet(keras.Model, DescribeMixin):
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
         decoder_use_batchnorm=True,
-        decoder_attention_gate=False,
         num_classes=1,
         classifier_activation="sigmoid",
         name=None,
@@ -81,9 +80,6 @@ class UNet(keras.Model, DescribeMixin):
                 final segmentation mask.
             classifier_activation: A string specifying the activation function
                 for the final classification layer.
-            decoder_attentio_gate: A boolean indicating whether to use attention blocks
-                in the decoder. If it is enabled, the UNet will be built as
-                Attention-UNet. Default: False.
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
@@ -128,6 +124,7 @@ class UNet(keras.Model, DescribeMixin):
         decoder_filters = decoder_filters[:encoder_depth]
 
         # unet decoder blocks
+        decoder_attention_gate = getattr(self, "decoder_attention_gate", False)
         decoder = UNetDecoder(
             spatial_dims,
             skip_layers,
@@ -169,7 +166,6 @@ class UNet(keras.Model, DescribeMixin):
             "decoder_block_type": self.decoder_block_type,
             "decoder_filters": self.decoder_filters,
             "decoder_use_batchnorm": self.decoder_use_batchnorm,
-            "decoder_attention_gate": self.decoder_attention_gate,
         }
 
         if self.encoder_name is None and self.encoder is not None:

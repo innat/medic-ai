@@ -3,6 +3,8 @@ from keras import layers
 from medicai.layers import AttentionGate
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
+INVALID_BLOCK_TYPE_MSG = "Invalid block_type '{}'. Must be 'upsampling' or 'transpose'."
+
 
 def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
     """
@@ -66,7 +68,12 @@ def DecoderBlock(
     stage_prefix = f"decoder_stage{stage_idx}"
 
     def upsample_block(x):
-        return get_reshaping_layer(spatial_dims, layer_type="upsampling", size=2)(x)
+        return get_reshaping_layer(
+            spatial_dims,
+            layer_type="upsampling",
+            size=2,
+            name=f"{stage_prefix}_upsampling_{dim_str}",
+        )(x)
 
     def transpose_block(x):
         x = get_conv_layer(
@@ -76,7 +83,7 @@ def DecoderBlock(
             kernel_size=4,
             strides=2,
             padding="same",
-            name=f"{stage_prefix}_upconv_{dim_str}",
+            name=f"{stage_prefix}_transpose_conv_{dim_str}",
         )(x)
         if use_batchnorm:
             x = get_norm_layer(layer_type="batch", axis=-1, name=f"{stage_prefix}_bn_{dim_str}")(x)
@@ -97,9 +104,7 @@ def DecoderBlock(
         elif block_type == "upsampling":
             x = upsample_block(x)
         else:
-            raise ValueError(
-                f"Invalid block_type '{block_type}'. Must be 'upsampling' or 'transpose'."
-            )
+            raise ValueError(INVALID_BLOCK_TYPE_MSG.format(block_type))
 
         if skip is not None:
             x = layers.Concatenate(axis=-1, name=f"{stage_prefix}_concat")([x, skip])

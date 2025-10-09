@@ -58,7 +58,7 @@ from .swin import (
     SwinUNETR,
 )
 from .transunet import TransUNet
-from .unet import UNet
+from .unet import AttentionUNet, UNet
 from .unetr import UNETR
 from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 
