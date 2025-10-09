@@ -18,10 +18,20 @@ class ResizingND(layers.Layer):
     def build(self, input_shape):
         self.spatial_dims = len(input_shape) - 2
         self.channels = input_shape[-1]
+
         if self.spatial_dims not in (2, 3):
             raise ValueError(
                 f"{self.__class__.__name__} only supports 2D or 3D inputs. "
                 f"Got spatial_dims={self.spatial_dims}"
+            )
+
+        if self.spatial_dims == 2 and self.interpolation not in ("nearest", "bilinear"):
+            raise ValueError(
+                f"For 2D inputs, interpolation must be one of ('nearest', 'bilinear'), but got '{self.interpolation}'."
+            )
+        if self.spatial_dims == 3 and self.interpolation not in ("nearest", "trilinear"):
+            raise ValueError(
+                f"For 3D inputs, interpolation must be one of ('nearest', 'trilinear'), but got '{self.interpolation}'."
             )
         super().build(input_shape)
 

@@ -1,7 +1,6 @@
 import keras
 from keras import layers
 
-from medicai.layers import ResizingND
 from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .unet_decoder import UNetDecoder
@@ -25,6 +24,7 @@ class UNet(keras.Model, DescribeMixin):
     >>> from medicai.models import UNet
     >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121")
     >>> model = UNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
+    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=3)
 
     """
 
@@ -36,10 +36,11 @@ class UNet(keras.Model, DescribeMixin):
         input_shape=None,
         encoder_name=None,
         encoder=None,
+        encoder_depth=5,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
         decoder_use_batchnorm=True,
-        decoder_use_attention=False,
+        decoder_attentio_gate=False,
         num_classes=1,
         classifier_activation="sigmoid",
         name=None,
@@ -61,10 +62,25 @@ class UNet(keras.Model, DescribeMixin):
                 pre-configured backbone from the `BACKBONE_ZOO` to use as the
                 encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
+            encoder_depth: An integer specifying how many stages of the encoder
+                backbone to use. A number of stages used in encoder in range [3, 5].
+                Expected available intermediate or pyramid level, P1, P2, ... P5.
+                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
+                be used for skip connection. If `encoder_depth=4`, bottleneck key
+                would be P4, and P3..P1 will be used for skip connection.
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
+                reduce the size of the model. Default: 5.
             decoder_block_type: A string specifying the type of decoder block
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
                 "transpose" uses a `ConvNDTranspose` layer.
+            decoder_interpolation: Interpolation method used for the final upsampling
+                operation. When `encoder_depth < 5`, the model performs fewer upsampling
+                steps in the decoder, which may result in an output resolution smaller than
+                the input. This parameter specifies the interpolation method
+                ('nearest', 'bilinear', 'trilinear', etc.) used
+                in the final upsampling layer that ensures the output spatial dimensions match
+                the input dimensions, regardless of the encoder depth.
             decoder_filters: A tuple of integers specifying the number of
                 filters for each block in the decoder path. The number of
                 filters should correspond to the `encoder_depth`.
@@ -72,7 +88,7 @@ class UNet(keras.Model, DescribeMixin):
                 final segmentation mask.
             classifier_activation: A string specifying the activation function
                 for the final classification layer.
-            decoder_use_attention: A boolean indicating whether to use attention blocks
+            decoder_attentio_gate: A boolean indicating whether to use attention blocks
                 in the decoder. If it is enabled, the UNet will be built as
                 Attention-UNet. Default: False.
             name: (Optional) The name of the model.
@@ -97,19 +113,26 @@ class UNet(keras.Model, DescribeMixin):
                 f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
 
+        if not (3 <= encoder_depth <= 5):
+            raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
+
+        if len(decoder_filters) < encoder_depth:
+            raise ValueError(
+                f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
+            )
+
         if decoder_block_type not in ("upsampling", "transpose"):
             raise ValueError(
                 f"Invalid decoder_block_type: '{decoder_block_type}'. "
                 "Expected one of ('upsampling', 'transpose')."
             )
 
-        bottleneck = pyramid_outputs["P5"]
-        skip_layers = [
-            pyramid_outputs["P4"],  # deepest skip
-            pyramid_outputs["P3"],
-            pyramid_outputs["P2"],
-            pyramid_outputs["P1"],  # shallowest skip
-        ]
+        # prepare head and skip layers
+        bottleneck_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
+        bottleneck_index = 5 - encoder_depth
+        bottleneck = pyramid_outputs[bottleneck_keys[bottleneck_index]]
+        skip_layers = [pyramid_outputs[key] for key in bottleneck_keys[bottleneck_index + 1 :]]
+        decoder_filters = decoder_filters[:encoder_depth]
 
         # unet decoder blocks
         decoder = UNetDecoder(
@@ -117,7 +140,7 @@ class UNet(keras.Model, DescribeMixin):
             skip_layers,
             decoder_filters,
             block_type=decoder_block_type,
-            use_attention=decoder_use_attention,
+            use_attention=decoder_attentio_gate,
             use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
@@ -135,23 +158,25 @@ class UNet(keras.Model, DescribeMixin):
         self._input_shape = input_shape
         self.encoder_name = encoder_name
         self.encoder = encoder
+        self.encoder_depth = encoder_depth
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.decoder_use_attention = decoder_use_attention
+        self.decoder_attentio_gate = decoder_attentio_gate
         self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):
         config = {
             "input_shape": self._input_shape,
             "encoder_name": self.encoder_name,
+            "encoder_depth": self.encoder_depth,
             "num_classes": self.num_classes,
             "classifier_activation": self.classifier_activation,
             "decoder_block_type": self.decoder_block_type,
             "decoder_filters": self.decoder_filters,
             "decoder_use_batchnorm": self.decoder_use_batchnorm,
-            "decoder_use_attention": self.decoder_use_attention,
+            "decoder_attentio_gate": self.decoder_attentio_gate,
         }
 
         if self.encoder_name is None and self.encoder is not None:

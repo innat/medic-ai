@@ -3,7 +3,7 @@ from medicai.utils.general import hide_warnings
 hide_warnings()
 
 import keras
-from keras import layers, ops
+from keras import layers
 
 from medicai.utils.model_utils import get_conv_layer
 
