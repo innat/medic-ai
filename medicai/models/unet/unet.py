@@ -124,13 +124,13 @@ class UNet(keras.Model, DescribeMixin):
         decoder_filters = decoder_filters[:encoder_depth]
 
         # unet decoder blocks
-        decoder_attention_gate = getattr(self, "decoder_attention_gate", False)
+        use_attention = getattr(self, "decoder_attention_gate", False)
         decoder = UNetDecoder(
             spatial_dims,
             skip_layers,
             decoder_filters,
             block_type=decoder_block_type,
-            use_attention=decoder_attention_gate,
+            use_attention=use_attention,
             use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
@@ -153,7 +153,6 @@ class UNet(keras.Model, DescribeMixin):
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.decoder_attention_gate = decoder_attention_gate
         self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):

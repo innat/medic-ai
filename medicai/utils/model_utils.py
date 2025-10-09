@@ -7,8 +7,6 @@ from keras import activations, layers
 
 from .registry import registration
 
-BACKBONE_ZOO = {}
-
 
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
     """

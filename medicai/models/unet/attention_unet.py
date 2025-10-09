@@ -1,21 +1,26 @@
 import keras
 
+from medicai.utils import DescribeMixin
+
 from .unet import UNet
 
 
 @keras.saving.register_keras_serializable(package="unet")
-class AttentionUNet(UNet):
+class AttentionUNet(UNet, DescribeMixin):
     """
-    Attention-UNet model for semantic segmentation.
+    Attention U-Net model for semantic segmentation.
 
-    This is a subclass of UNet that automatically enables attention gates
-    in the decoder for improved feature selection and boundary detection.
+    Extends the UNet architecture by integrating Attention Gates in the decoder path,
+    allowing the network to focus on relevant spatial regions.
 
-    Reference: https://arxiv.org/abs/1804.03999
+    Reference:
+        Oktay et al., "Attention U-Net: Learning Where to Look for the Pancreas"
+        (https://arxiv.org/abs/1804.03999)
 
     Example:
     >>> from medicai.models import AttentionUNet
     >>> model = AttentionUNet(input_shape=(96, 96, 1), encoder_name="densenet121")
+    >>> model = AttentionUNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=4)
     >>> model = AttentionUNet(input_shape=(96, 96, 96, 1), encoder_name="efficientnet_b0")
     """
 
@@ -36,7 +41,7 @@ class AttentionUNet(UNet):
     ):
         # decoder_attentio_gate: A boolean indicating whether to use attention
         # blocks in the decoder.
-        self.use_attention_gates = True
+        self.decoder_attention_gate = True
         super().__init__(
             input_shape=input_shape,
             encoder_name=encoder_name,
@@ -53,6 +58,7 @@ class AttentionUNet(UNet):
 
     def get_config(self):
         config = super().get_config()
+        config.update({"decoder_attention_gate": True})
         return config
 
     @classmethod

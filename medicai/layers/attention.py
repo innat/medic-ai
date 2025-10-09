@@ -65,11 +65,10 @@ class AttentionGate(keras.layers.Layer):
     def call(self, inputs):
         # expect list [x, g]
         x, g = inputs
-
         theta_x = self.theta_x(x)
         phi_g = self.phi_g(g)
-        add = self.add([theta_x, phi_g])
 
+        add = self.add([theta_x, phi_g])
         relu = self.relu(add)
         psi = self.psi(relu)
         alpha = self.sigmoid(psi)
