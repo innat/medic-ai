@@ -191,6 +191,7 @@ Instance of TransUNet
 | **MiT** | 2D, 3D | Classification | Transformer |
 | **Swin Transformer (V1/V2)** | 2D, 3D | Classification | Transformer |
 | **UNet** | 2D, 3D | Segmentation | CNN |
+| **AttentionUNet** | 2D, 3D | Segmentation | CNN |
 | **UNETR** | 2D, 3D | Segmentation | Transformer |
 | **SwinUNETR** | 2D, 3D | Segmentation | Transformer |
 | **TransUNet** | 2D, 3D | Segmentation | Transformer |
