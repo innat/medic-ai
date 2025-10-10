@@ -48,8 +48,6 @@ model = UNet(
 )
 ```
 
-**custom encoder**
-
 By default, it is set `5`, referring five stage of feature pyramid layer,
 i.e. `[P1, P2, P3, P4, P5]`. If `encoder_depth=3`, bottleneck key
 would be `P3`, and `P2..P1` will be used for skip connection. This can be used to
@@ -69,6 +67,9 @@ it has the `encoder.pyramid_outputs` attributes with `5` feature vectors, i.e.,
 ```
 
 All the built-in models in `medicai` have these attributes. So, we can do:
+
+
+**custom encoder**
 
 ```python
 from medicai.models import UNet
