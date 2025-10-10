@@ -53,6 +53,9 @@ i.e. `[P1, P2, P3, P4, P5]`. If `encoder_depth=3`, bottleneck key
 would be `P3`, and `P2..P1` will be used for skip connection. This can be used to
 reduce the size of the model.
 
+
+**custom encoder**
+
 We can also pass a custom encoder to build the unet model. But we need to make sure
 it has the `encoder.pyramid_outputs` attributes with `5` feature vectors, i.e.,
 
@@ -66,10 +69,7 @@ it has the `encoder.pyramid_outputs` attributes with `5` feature vectors, i.e.,
 }
 ```
 
-All the built-in models in `medicai` have these attributes. So, we can do:
-
-
-**custom encoder**
+All the built-in models in `medicai` have these attributes.
 
 ```python
 from medicai.models import UNet
