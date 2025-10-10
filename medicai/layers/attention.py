@@ -26,10 +26,11 @@ class AttentionGate(keras.layers.Layer):
         self.spatial_dims = len(input_shape[0]) - 2
         if self.spatial_dims not in (2, 3):
             raise ValueError(
-                f"AttentionGate only supports 2D or 3D inputs. Got spatial_dims={self.spatial_dims}"
+                f"{self.__class__.__name__} only supports 2D or 3D inputs. Got spatial_dims={self.spatial_dims}"
             )
 
         # input_shape = [x_shape, g_shape]
+        x_shape, g_shape = input_shape
         self.theta_x = get_conv_layer(
             self.spatial_dims,
             layer_type="conv",
@@ -38,6 +39,8 @@ class AttentionGate(keras.layers.Layer):
             strides=2,
             padding="same",
         )
+        self.theta_x.build(x_shape)
+
         self.upsampling = get_reshaping_layer(
             self.spatial_dims,
             layer_type="upsampling",
@@ -52,6 +55,8 @@ class AttentionGate(keras.layers.Layer):
             strides=1,
             padding="same",
         )
+        self.phi_g.build(g_shape)
+
         self.psi = get_conv_layer(
             self.spatial_dims,
             layer_type="conv",
@@ -60,20 +65,25 @@ class AttentionGate(keras.layers.Layer):
             strides=1,
             padding="same",
         )
+        psi_shape = self.add.compute_output_shape(
+            [self.theta_x.compute_output_shape(x_shape), self.phi_g.compute_output_shape(g_shape)]
+        )
+        self.psi.build(psi_shape)
+
         self.built = True
 
     def call(self, inputs):
-        # expect list [x, g]
+        # expect list [skip, input]
         x, g = inputs
+
         theta_x = self.theta_x(x)
         phi_g = self.phi_g(g)
-
         add = self.add([theta_x, phi_g])
+
         relu = self.relu(add)
         psi = self.psi(relu)
         alpha = self.sigmoid(psi)
         alpha = self.upsampling(alpha)
-
         return self.mul([x, alpha])  # gated skip
 
     def compute_output_shape(self, input_shape):
