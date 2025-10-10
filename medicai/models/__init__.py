@@ -1,7 +1,27 @@
 from medicai.utils import registration
 
-from ..utils.model_utils import BACKBONE_ZOO
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
+from .efficientnet import (
+    EfficientNetB0,
+    EfficientNetB1,
+    EfficientNetB2,
+    EfficientNetB3,
+    EfficientNetB4,
+    EfficientNetB5,
+    EfficientNetB6,
+    EfficientNetB7,
+    EfficientNetB8,
+    EfficientNetBackbone,
+    EfficientNetBackboneV2,
+    EfficientNetL2,
+    EfficientNetV2B0,
+    EfficientNetV2B1,
+    EfficientNetV2B2,
+    EfficientNetV2B3,
+    EfficientNetV2L,
+    EfficientNetV2M,
+    EfficientNetV2S,
+)
 from .mit import (
     MiTBackbone,
     MixViTB0,
@@ -37,7 +57,7 @@ from .swin import (
     SwinUNETR,
 )
 from .transunet import TransUNet
-from .unet import UNet
+from .unet import AttentionUNet, UNet
 from .unetr import UNETR
 from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 

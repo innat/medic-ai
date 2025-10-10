@@ -348,6 +348,7 @@ class MixFFN(keras.layers.Layer):
 
         self.dwconv = keras.Sequential(
             [
+                # depthwise conv 2D/3D.
                 get_conv_layer(
                     spatial_dims=self.spatial_dims,
                     layer_type="conv",

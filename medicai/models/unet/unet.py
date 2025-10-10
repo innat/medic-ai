@@ -28,7 +28,7 @@ class UNet(keras.Model, DescribeMixin):
 
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet"]
+    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
 
     def __init__(
         self,
@@ -39,9 +39,9 @@ class UNet(keras.Model, DescribeMixin):
         encoder_depth=5,
         decoder_block_type="upsampling",
         decoder_filters=(256, 128, 64, 32, 16),
+        decoder_use_batchnorm=True,
         num_classes=1,
         classifier_activation="sigmoid",
-        use_attention=False,
         name=None,
         **kwargs,
     ):
@@ -63,11 +63,18 @@ class UNet(keras.Model, DescribeMixin):
                 the library without having to instantiate it manually.
             encoder_depth: An integer specifying how many stages of the encoder
                 backbone to use. A number of stages used in encoder in range [3, 5].
-                This can be used to reduce the size of the model. Default: 5.
+                Expected available intermediate or pyramid level, P1, P2, ... P5.
+                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
+                be used for skip connection. If `encoder_depth=4`, bottleneck key
+                would be P4, and P3..P1 will be used for skip connection.
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
+                reduce the size of the model. Default: 5.
             decoder_block_type: A string specifying the type of decoder block
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
                 "transpose" uses a `ConvNDTranspose` layer.
+            decoder_use_batchnorm: Whether to include BatchNormalization layers
+                in unet decoder blocks.
             decoder_filters: A tuple of integers specifying the number of
                 filters for each block in the decoder path. The number of
                 filters should correspond to the `encoder_depth`.
@@ -75,9 +82,6 @@ class UNet(keras.Model, DescribeMixin):
                 final segmentation mask.
             classifier_activation: A string specifying the activation function
                 for the final classification layer.
-            use_attention: A boolean indicating whether to use attention blocks
-                in the decoder. If it is enabled, the UNet will be built as
-                Attention-UNet. Default: False.
             name: (Optional) The name of the model.
             **kwargs: Additional keyword arguments.
         """
@@ -87,19 +91,18 @@ class UNet(keras.Model, DescribeMixin):
             input_shape=input_shape,
             allowed_families=UNet.ALLOWED_BACKBONE_FAMILIES,
         )
-
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
         required_keys = {"P1", "P2", "P3", "P4", "P5"}
-        if not required_keys.issubset(pyramid_outputs.keys()):
+        missing_keys = set(required_keys) - set(pyramid_outputs.keys())
+        if missing_keys:
             raise ValueError(
                 f"The encoder's `pyramid_outputs` is missing one or more required keys. "
-                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+                f"Missing keys: {missing_keys}. "
+                f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
-
-        pyramid_outputs = list(pyramid_outputs.values())
 
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
@@ -109,20 +112,28 @@ class UNet(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
-        # Ensure we only use up to `encoder_depth` stages
-        pyramid_outputs = pyramid_outputs[:encoder_depth][
-            ::-1
-        ]  # reverse for decoder (deep → shallow)
-        bottleneck = pyramid_outputs[0]
-        skip_layers = pyramid_outputs[1:]
+        if decoder_block_type not in ("upsampling", "transpose"):
+            raise ValueError(
+                f"Invalid decoder_block_type: '{decoder_block_type}'. "
+                "Expected one of ('upsampling', 'transpose')."
+            )
+
+        # prepare head and skip layers
+        bottleneck_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
+        bottleneck_index = 5 - encoder_depth
+        bottleneck = pyramid_outputs[bottleneck_keys[bottleneck_index]]
+        skip_layers = [pyramid_outputs[key] for key in bottleneck_keys[bottleneck_index + 1 :]]
         decoder_filters = decoder_filters[:encoder_depth]
 
+        # unet decoder blocks
+        use_attention = getattr(self, "decoder_attention_gate", False)
         decoder = UNetDecoder(
+            spatial_dims,
             skip_layers,
             decoder_filters,
-            spatial_dims,
             block_type=decoder_block_type,
             use_attention=use_attention,
+            use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
 
@@ -144,7 +155,7 @@ class UNet(keras.Model, DescribeMixin):
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.use_attention = use_attention
+        self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):
         config = {
@@ -155,7 +166,7 @@ class UNet(keras.Model, DescribeMixin):
             "classifier_activation": self.classifier_activation,
             "decoder_block_type": self.decoder_block_type,
             "decoder_filters": self.decoder_filters,
-            "use_attention": self.use_attention,
+            "decoder_use_batchnorm": self.decoder_use_batchnorm,
         }
 
         if self.encoder_name is None and self.encoder is not None:
