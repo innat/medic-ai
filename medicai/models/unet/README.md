@@ -22,8 +22,7 @@ model = UNet(
 
 **decoder type**
 
-By default, the `decoder_block_type="upsampling"`, but we can use trainable
-convolutional netwrok. For example:
+By default, the `decoder_block_type="upsampling"`, but we can use trainable convolutional network. For example:
 
 ```python
 from medicai.models import UNet
@@ -37,8 +36,7 @@ model = UNet(
 
 **encoder depth**
 
-We can use `encoder_depth` to specifying how many stages of the encoder 
-backbone to use.
+We can use `encoder_depth` to specifying how many stages of the encoder backbone to use.
 
 ```python
 from medicai.models import UNet
@@ -93,9 +91,7 @@ model = UNet(
 
 ## AttentionUNet
 
-Extends the `UNet` architecture by integrating **Attention Gates** in the decoder path,
-allowing the network to focus on relevant spatial regions. The API is same as `UNet`,
-mentioned above.
+Extends the `UNet` architecture by integrating **Attention Gates** in the decoder path, allowing the network to focus on relevant spatial regions. The API usage is same as `UNet`, mentioned above.
 
 ```python
 AttentionUNet(
