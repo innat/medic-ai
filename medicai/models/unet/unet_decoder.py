@@ -11,8 +11,8 @@ def Conv3x3BnReLU(spatial_dims, filters, use_batchnorm=True, name_prefix=""):
     Builds a 3x3 convolutional block followed by optional BatchNormalization and ReLU activation.
 
     Args:
+        spatial_dims (int): Dimensionality of the convolution. Use 2 for Conv2D or 3 for Conv3D.
         filters (int): Number of output filters.
-        dim (int): Dimensionality of the convolution. Use 2 for Conv2D or 3 for Conv3D.
         use_batchnorm (bool): Whether to include BatchNormalization after the convolution.
 
     Returns:
