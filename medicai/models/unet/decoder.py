@@ -114,6 +114,8 @@ def DecoderBlock(
                 use_batchnorm=use_batchnorm,
                 name_prefix=f"{stage_prefix}_conv_{i}",
             )(x)
+            if block_type == "transpose":
+                return x
 
         return x
 

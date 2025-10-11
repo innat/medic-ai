@@ -3,7 +3,7 @@ from keras import layers
 
 from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
-from .unet_decoder import UNetDecoder
+from .decoder import UNetDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
