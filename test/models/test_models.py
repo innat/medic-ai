@@ -10,6 +10,7 @@ from medicai.models import (
     SwinUNETR,
     TransUNet,
     UNet,
+    UNetPlusPlus,
     ViTBase,
 )
 
@@ -24,6 +25,25 @@ def test_unet():
 
     input_shape = (64, 64, 1)
     model = UNet(input_shape=input_shape, num_classes=num_classes, encoder_name="densenet121")
+    dummy_input = tf.random.normal((1, 64, 64, 1))
+    output = model(dummy_input)
+    assert output.shape == (1, 64, 64, num_classes)
+
+
+def test_unet_pp():
+    num_classes = 1
+    input_shape = (64, 64, 64, 1)
+    model = UNetPlusPlus(
+        input_shape=input_shape, num_classes=num_classes, encoder_name="efficientnet_b0"
+    )
+    dummy_input = tf.random.normal((1, 64, 64, 64, 1))
+    output = model(dummy_input)
+    assert output.shape == (1, 64, 64, 64, num_classes)
+
+    input_shape = (64, 64, 1)
+    model = UNetPlusPlus(
+        input_shape=input_shape, num_classes=num_classes, encoder_name="efficientnet_b0"
+    )
     dummy_input = tf.random.normal((1, 64, 64, 1))
     output = model(dummy_input)
     assert output.shape == (1, 64, 64, num_classes)
