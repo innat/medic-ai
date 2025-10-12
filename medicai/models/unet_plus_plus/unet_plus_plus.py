@@ -28,9 +28,9 @@ class UNetPlusPlus(keras.Model):
         encoder_name=None,
         encoder=None,
         encoder_depth=5,
+        num_classes=1,
         decoder_filters=(256, 128, 64, 32, 16),
         decoder_use_batchnorm=True,
-        num_classes=1,
         decoder_block_type="upsampling",
         classifier_activation="sigmoid",
         name=None,
@@ -121,7 +121,7 @@ class UNetPlusPlus(keras.Model):
             spatial_dims=spatial_dims,
             skip_layers=skip_layers,
             decoder_filters=decoder_filters,
-            block_type=decoder_block_type,
+            decoder_block_type=decoder_block_type,
             use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)

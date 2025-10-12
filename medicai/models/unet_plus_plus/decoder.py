@@ -10,7 +10,7 @@ def UNetPlusPlusDecoder(
     spatial_dims,
     skip_layers,
     decoder_filters,
-    block_type,
+    decoder_block_type,
     use_batchnorm=True,
 ):
     def upsample_block(x, name_prefix):
@@ -67,6 +67,12 @@ def UNetPlusPlusDecoder(
             Final upsampled feature map at input resolution
         """
 
+        if decoder_block_type not in ("upsampling", "transpose"):
+            raise ValueError(
+                f"Invalid decoder_block_type: '{decoder_block_type}'. "
+                "Expected one of ('upsampling', 'transpose')."
+            )
+
         # Number of upsampling blocks = encoder_levels - 1 (following paper)
         N = len(decoder_filters) - 1
 
@@ -91,16 +97,14 @@ def UNetPlusPlusDecoder(
                     parent_feature = dense_grid[parent_node]
 
                     # Upsampling.
-                    if block_type == "transpose":
+                    if decoder_block_type == "transpose":
                         upsampled = transpose_block(
                             parent_feature,
                             decoder_filters[i],
                             name_prefix=f"x_{i}_{j}",
                         )
-                    elif block_type == "upsampling":
-                        upsampled = upsample_block(parent_feature, name_prefix=f"x_{i}_{j}")
                     else:
-                        raise ValueError(INVALID_BLOCK_TYPE_MSG.format(block_type))
+                        upsampled = upsample_block(parent_feature, name_prefix=f"x_{i}_{j}")
 
                     node_inputs.append(upsampled)
 
@@ -117,7 +121,7 @@ def UNetPlusPlusDecoder(
                     spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv1"
                 )(concat_inputs)
 
-                if block_type != "transpose":
+                if decoder_block_type != "transpose":
                     x_ij = Conv3x3BnReLU(
                         spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv2"
                     )(x_ij)
@@ -127,9 +131,9 @@ def UNetPlusPlusDecoder(
         final_node = dense_grid[(0, N)]
 
         # Add the extra upsampling that the official code does
-        if block_type == "transpose":
+        if decoder_block_type == "transpose":
             final_output = transpose_block(final_node, decoder_filters[0], "bridge")
-        elif block_type == "upsampling":
+        else:
             final_output = upsample_block(final_node, "bridge")
 
         return final_output
