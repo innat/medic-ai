@@ -116,12 +116,12 @@ def UNetPlusPlusDecoder(
                 concat_inputs = layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(node_inputs)
                 x_ij = concat_inputs
 
-                for i in range(1, num_convs + 1):
+                for conv_idx in range(1, num_convs + 1):
                     x_ij = Conv3x3BnReLU(
                         spatial_dims,
                         decoder_filters[i],
                         decoder_use_batchnorm,
-                        f"x_{i}_{j}_conv{i}",
+                        f"x_{i}_{j}_conv{conv_idx}",
                     )(x_ij)
 
                 dense_grid[(i, j)] = x_ij
