@@ -57,6 +57,8 @@ def DecoderBlock(
         spatial_dims (int): Dimensionality of the operation (2 for 2D, 3 for 3D).
         filters (int): Number of filters for convolutional layers.
         decoder_block_type (str): Type of upsampling — 'upsampling' (interpolation) or 'transpose' (learned).
+            Note: When using 'transpose', only one Conv3x3BnReLU block is applied after upsampling to reduce
+            trainable parameters, whereas 'upsampling' uses two blocks.
         decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
         decoder_attention (bool): Whether to apply an attention gate on the skip connection.
         stage_idx (int): Index for naming the decoder stage.

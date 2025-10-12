@@ -73,6 +73,9 @@ class UNet(keras.Model, DescribeMixin):
                 to use. Can be "upsampling" or "transpose". "upsampling"
                 uses a `UpSamplingND` layer followed by a convolution, while
                 "transpose" uses a `ConvNDTranspose` layer.
+                Note: When using 'transpose', only one Conv3x3BnReLU block is
+                applied after upsampling to reduce trainable parameters, whereas
+                'upsampling' uses two blocks.
             decoder_use_batchnorm: Whether to include BatchNormalization layers
                 in unet decoder blocks.
             decoder_filters: A tuple of integers specifying the number of
