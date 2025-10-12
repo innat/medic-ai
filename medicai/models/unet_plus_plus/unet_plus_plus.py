@@ -1,31 +1,22 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
+from medicai.utils import get_conv_layer, resolve_encoder
 
-from .decoder import UNetDecoder
+from .decoder import UNetPlusPlusDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
-class UNet(keras.Model, DescribeMixin):
+class UNetPlusPlus(keras.Model):
     """
-    The UNet model for semantic segmentation.
+    UNet++ model with dense skip connections.
 
-    UNet is a convolutional neural network architecture developed for biomedical
-    image segmentation. It consists of a symmetric encoder-decoder structure
-    where the encoder (downsampling path) captures context and the decoder
-    (upsampling path) enables precise localization. The key feature of UNet is
-    the use of "skip connections," which concatenate feature maps from the
-    encoder directly to the corresponding layers in the decoder. This allows
-    the decoder to leverage high-resolution features lost during downsampling,
-    leading to more accurate segmentations.
+    Reference: https://arxiv.org/abs/1807.10165
 
     Example:
-    >>> from medicai.models import UNet
-    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121")
-    >>> model = UNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
-    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=3)
-
+    >>> from medicai.models import UNetPlusPlus
+    >>> model = UNetPlusPlus(input_shape=(96, 96, 1), encoder_name="densenet121")
+    >>> model = UNetPlusPlus(input_shape=(96, 96, 96, 1), encoder_name="efficientnet_b0")
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
@@ -37,16 +28,16 @@ class UNet(keras.Model, DescribeMixin):
         encoder_name=None,
         encoder=None,
         encoder_depth=5,
-        decoder_block_type="upsampling",
+        num_classes=1,
         decoder_filters=(256, 128, 64, 32, 16),
         decoder_use_batchnorm=True,
-        num_classes=1,
+        decoder_block_type="upsampling",
         classifier_activation="sigmoid",
         name=None,
         **kwargs,
     ):
         """
-        Initializes the UNet model.
+        Initializes the UNet++ model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -92,7 +83,7 @@ class UNet(keras.Model, DescribeMixin):
             encoder=encoder,
             encoder_name=encoder_name,
             input_shape=input_shape,
-            allowed_families=UNet.ALLOWED_BACKBONE_FAMILIES,
+            allowed_families=UNetPlusPlus.ALLOWED_BACKBONE_FAMILIES,
         )
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
@@ -121,21 +112,19 @@ class UNet(keras.Model, DescribeMixin):
                 "Expected one of ('upsampling', 'transpose')."
             )
 
-        # prepare head and skip layers
+        # Prepare head and skip layers (same as UNet)
         bottleneck_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
         bottleneck_index = 5 - encoder_depth
         bottleneck = pyramid_outputs[bottleneck_keys[bottleneck_index]]
         skip_layers = [pyramid_outputs[key] for key in bottleneck_keys[bottleneck_index + 1 :]]
         decoder_filters = decoder_filters[:encoder_depth]
 
-        # unet decoder blocks
-        decoder_attention = getattr(self, "decoder_attention_gate", False)
-        decoder = UNetDecoder(
-            spatial_dims,
-            skip_layers,
-            decoder_filters,
+        # UNet++ Decoder
+        decoder = UNetPlusPlusDecoder(
+            spatial_dims=spatial_dims,
+            skip_layers=skip_layers,
+            decoder_filters=decoder_filters,
             decoder_block_type=decoder_block_type,
-            decoder_attention=decoder_attention,
             decoder_use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
@@ -147,9 +136,10 @@ class UNet(keras.Model, DescribeMixin):
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
         super().__init__(
-            inputs=inputs, outputs=outputs, name=name or f"UNet{spatial_dims}D", **kwargs
+            inputs=inputs, outputs=outputs, name=name or f"UNetPlusPlus{spatial_dims}D", **kwargs
         )
 
+        # Store config
         self._input_shape = input_shape
         self.encoder_name = encoder_name
         self.encoder = encoder
@@ -161,16 +151,19 @@ class UNet(keras.Model, DescribeMixin):
         self.decoder_use_batchnorm = decoder_use_batchnorm
 
     def get_config(self):
-        config = {
-            "input_shape": self._input_shape,
-            "encoder_name": self.encoder_name,
-            "encoder_depth": self.encoder_depth,
-            "num_classes": self.num_classes,
-            "classifier_activation": self.classifier_activation,
-            "decoder_block_type": self.decoder_block_type,
-            "decoder_filters": self.decoder_filters,
-            "decoder_use_batchnorm": self.decoder_use_batchnorm,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "input_shape": self._input_shape,
+                "encoder_name": self.encoder_name,
+                "encoder_depth": self.encoder_depth,
+                "num_classes": self.num_classes,
+                "classifier_activation": self.classifier_activation,
+                "decoder_filters": self.decoder_filters,
+                "decoder_block_type": self.decoder_block_type,
+                "decoder_use_batchnorm": self.decoder_use_batchnorm,
+            }
+        )
 
         if self.encoder_name is None and self.encoder is not None:
             config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
