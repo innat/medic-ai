@@ -14,10 +14,9 @@ def UNetPlusPlusDecoder(
     use_batchnorm=True,
 ):
     def upsample_block(x, name_prefix):
-        x = get_reshaping_layer(
+        return get_reshaping_layer(
             spatial_dims, layer_type="upsampling", size=2, name=f"{name_prefix}_up"
         )(x)
-        return x
 
     def transpose_block(x, filters, name_prefix):
         x = get_conv_layer(
@@ -36,46 +35,62 @@ def UNetPlusPlusDecoder(
 
     def apply(x):
         """
-        UNet++ Decoder following the original paper.
-        Grid structure (N=5 example for encoder_depth=5):
-        X0,0 -- X0,1 -- X0,2 -- X0,3 -- X0,4 -- X0,5
+        UNet++ Decoder following the original paper with an extra upsampling step
+        to handle backbone-specific resolution differences.
+
+        The decoder builds a dense grid of convolutional nodes where each node X_{i,j}
+        receives inputs from:
+        - Parent node: X_{i+1,j-1} (upsampled from lower resolution)
+        - Previous nodes: X_{i,0} to X_{i,j-1} (all nodes in the same row)
+
+        Grid structure for encoder_depth=5 (N=4 upsampling blocks):
+        X0,0 -- X0,1 -- X0,2 -- X0,3 -- X0,4 -- [Bridge]
           |       |       |       |       |
         X1,0 -- X1,1 -- X1,2 -- X1,3 -- X1,4
           |       |       |       |
         X2,0 -- X2,1 -- X2,2 -- X2,3
           |       |       |
         X3,0 -- X3,1 -- X3,2
-          |       |
-        X4,0 -- X4,1
           |
-        X5,0
-        """
-        N = len(decoder_filters)  # Number of upsampling levels
+        X4,0
 
-        # Initialize the dense grid
+        Where:
+        - X_{i,0} are encoder features:
+            (X4,0 = bottleneck, X3,0 = P4, X2,0 = P3, X1,0 = P2, X0,0 = P1)
+        - Final output is from X_{0,4} with an additional bridge upsampling
+        - The bridge upsampling compensates for backbone-specific resolution differences
+
+        Args:
+            x: Bottleneck tensor from encoder (deepest feature)
+
+        Returns:
+            Final upsampled feature map at input resolution
+        """
+
+        # Number of upsampling blocks = encoder_levels - 1 (following paper)
+        N = len(decoder_filters) - 1
+
+        # Placeholder for dense grid.
         dense_grid = {}
 
-        # Bottom layer (j=0): encoder features
-        # X_{N,0} is the bottleneck (deepest feature)
+        # Initialize encoder features
         dense_grid[(N, 0)] = x
 
-        # Initialize encoder skip connections (X_{i,0} nodes)
-        # skip_layers should be ordered from deepest to shallowest
-        for i in range(N):
-            if i < len(skip_layers):
-                dense_grid[(N - 1 - i, 0)] = skip_layers[i]
+        for i in range(len(skip_layers)):
+            level_index = N - 1 - i
+            dense_grid[(level_index, 0)] = skip_layers[i]
 
-        # DENSE CONNECTIONS
-        for j in range(1, N + 1):  # columns
-            for i in range(0, N - j + 1):  # rows
-                # Current node: X_{i,j}
+        # Build dense connection.
+        for j in range(1, N + 1):
+            for i in range(0, N - j + 1):
                 node_inputs = []
 
-                # 1. Input from parent node (upsampled from lower row, previous column)
+                # Parent node
                 parent_node = (i + 1, j - 1)
                 if parent_node in dense_grid:
                     parent_feature = dense_grid[parent_node]
 
+                    # Upsampling.
                     if block_type == "transpose":
                         upsampled = transpose_block(
                             parent_feature,
@@ -89,26 +104,22 @@ def UNetPlusPlusDecoder(
 
                     node_inputs.append(upsampled)
 
-                # 2. Input from previous node in same row (lateral connection)
-                # prev_node = (i, j - 1)
-                # if prev_node in dense_grid:
-                #     node_inputs.append(dense_grid[prev_node])
+                # Previous nodes in same row
                 for k in range(j):
                     prev_node = (i, k)
                     if prev_node in dense_grid:
                         node_inputs.append(dense_grid[prev_node])
 
-                if len(node_inputs) > 1:
-                    concatenated = layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(
-                        node_inputs
-                    )
-                else:
-                    concatenated = node_inputs[0]
+                # Process node
+                concat_inputs = (
+                    node_inputs[0]
+                    if len(node_inputs) == 1
+                    else layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(node_inputs)
+                )
 
-                # Apply convolutions
                 x_ij = Conv3x3BnReLU(
                     spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv1"
-                )(concatenated)
+                )(concat_inputs)
 
                 if block_type != "transpose":
                     x_ij = Conv3x3BnReLU(
@@ -117,7 +128,14 @@ def UNetPlusPlusDecoder(
 
                 dense_grid[(i, j)] = x_ij
 
-        # Final output is from node X_{0,N}
-        return dense_grid[(0, N)]
+        final_node = dense_grid[(0, N)]
+
+        # Add the extra upsampling that the official code does
+        if block_type == "transpose":
+            final_output = transpose_block(final_node, decoder_filters[0], "bridge")
+        elif block_type == "upsampling":
+            final_output = upsample_block(final_node, "bridge")
+
+        return final_output
 
     return apply

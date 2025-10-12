@@ -36,6 +36,46 @@ class UNetPlusPlus(keras.Model):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the UNet model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            encoder: (Optional) A Keras model to use as the encoder (backbone).
+                This argument is intended for passing a custom or pre-trained
+                model not available in the `BACKBONE_ZOO`. If provided, the
+                model must have a `pyramid_outputs` attribute, which should be
+                a dictionary of intermediate feature vectors from shallow to
+                deep layers (e.g., `'P1'`, `'P2'`, ...).
+            encoder_name: (Optional) A string specifying the name of a
+                pre-configured backbone from the `BACKBONE_ZOO` to use as the
+                encoder. This is a convenient option for using a backbone from
+                the library without having to instantiate it manually.
+            encoder_depth: An integer specifying how many stages of the encoder
+                backbone to use. A number of stages used in encoder in range [3, 5].
+                Expected available intermediate or pyramid level, P1, P2, ... P5.
+                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
+                be used for skip connection. If `encoder_depth=4`, bottleneck key
+                would be P4, and P3..P1 will be used for skip connection.
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
+                reduce the size of the model. Default: 5.
+            decoder_block_type: A string specifying the type of decoder block
+                to use. Can be "upsampling" or "transpose". "upsampling"
+                uses a `UpSamplingND` layer followed by a convolution, while
+                "transpose" uses a `ConvNDTranspose` layer.
+            decoder_use_batchnorm: Whether to include BatchNormalization layers
+                in unet decoder blocks.
+            decoder_filters: A tuple of integers specifying the number of
+                filters for each block in the decoder path. The number of
+                filters should correspond to the `encoder_depth`.
+            num_classes: An integer specifying the number of classes for the
+                final segmentation mask.
+            classifier_activation: A string specifying the activation function
+                for the final classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
         encoder, input_shape = resolve_encoder(
             encoder=encoder,
             encoder_name=encoder_name,
