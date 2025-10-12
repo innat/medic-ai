@@ -115,8 +115,13 @@ class UNetPlusPlus(keras.Model):
                 "decoder_use_batchnorm": self.decoder_use_batchnorm,
             }
         )
+
+        if self.encoder_name is None and self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
         return config
 
     @classmethod
     def from_config(cls, config):
-        return cls(**config)
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)

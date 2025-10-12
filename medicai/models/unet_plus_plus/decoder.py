@@ -79,7 +79,7 @@ def UNetPlusPlusDecoder(
                     if block_type == "transpose":
                         upsampled = transpose_block(
                             parent_feature,
-                            decoder_filters[i] if i < len(decoder_filters) else decoder_filters[-1],
+                            decoder_filters[i],
                             name_prefix=f"x_{i}_{j}",
                         )
                     elif block_type == "upsampling":
@@ -90,11 +90,13 @@ def UNetPlusPlusDecoder(
                     node_inputs.append(upsampled)
 
                 # 2. Input from previous node in same row (lateral connection)
-                # This is the key difference from your implementation:
-                # Only connect from the immediate previous node in the same row
-                prev_node = (i, j - 1)
-                if prev_node in dense_grid:
-                    node_inputs.append(dense_grid[prev_node])
+                # prev_node = (i, j - 1)
+                # if prev_node in dense_grid:
+                #     node_inputs.append(dense_grid[prev_node])
+                for k in range(j):
+                    prev_node = (i, k)
+                    if prev_node in dense_grid:
+                        node_inputs.append(dense_grid[prev_node])
 
                 # Concatenate available inputs
                 if not node_inputs:
@@ -107,22 +109,15 @@ def UNetPlusPlusDecoder(
                 else:
                     concatenated = node_inputs[0]
 
-                # Determine appropriate filter size
-                # In UNet++, nodes at the same encoder level (same i) use consistent filters
-                if i < len(decoder_filters):
-                    filters = decoder_filters[i]
-                else:
-                    filters = decoder_filters[-1]
-
                 # Apply convolutions
-                x_ij = Conv3x3BnReLU(spatial_dims, filters, use_batchnorm, f"x_{i}_{j}_conv1")(
-                    concatenated
-                )
+                x_ij = Conv3x3BnReLU(
+                    spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv1"
+                )(concatenated)
 
                 if block_type != "transpose":
-                    x_ij = Conv3x3BnReLU(spatial_dims, filters, use_batchnorm, f"x_{i}_{j}_conv2")(
-                        x_ij
-                    )
+                    x_ij = Conv3x3BnReLU(
+                        spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv2"
+                    )(x_ij)
 
                 dense_grid[(i, j)] = x_ij
 
