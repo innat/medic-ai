@@ -37,16 +37,18 @@ def UNetPlusPlusDecoder(
     def apply(x):
         """
         UNet++ Decoder following the original paper.
-        Grid structure (N=4 example):
-        X0,0 -- X0,1 -- X0,2 -- X0,3 -- X0,4
+        Grid structure (N=5 example for encoder_depth=5):
+        X0,0 -- X0,1 -- X0,2 -- X0,3 -- X0,4 -- X0,5
+          |       |       |       |       |
+        X1,0 -- X1,1 -- X1,2 -- X1,3 -- X1,4
           |       |       |       |
-        X1,0 -- X1,1 -- X1,2 -- X1,3
+        X2,0 -- X2,1 -- X2,2 -- X2,3
           |       |       |
-        X2,0 -- X2,1 -- X2,2
+        X3,0 -- X3,1 -- X3,2
           |       |
-        X3,0 -- X3,1
+        X4,0 -- X4,1
           |
-        X4,0
+        X5,0
         """
         N = len(decoder_filters)  # Number of upsampling levels
 
@@ -125,13 +127,6 @@ def UNetPlusPlusDecoder(
                 dense_grid[(i, j)] = x_ij
 
         # Final output is from node X_{0,N}
-        if (0, N) in dense_grid:
-            return dense_grid[(0, N)]
-        else:
-            # Fallback: use the deepest available node
-            for j in range(N, -1, -1):
-                if (0, j) in dense_grid:
-                    return dense_grid[(0, j)]
-            return x
+        return dense_grid[(0, N)]
 
     return apply
