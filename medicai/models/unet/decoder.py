@@ -56,7 +56,7 @@ def DecoderBlock(
     Args:
         spatial_dims (int): Dimensionality of the operation (2 for 2D, 3 for 3D).
         filters (int): Number of filters for convolutional layers.
-        block_type (str): Type of upsampling — 'upsampling' (interpolation) or 'transpose' (learned).
+        decoder_block_type (str): Type of upsampling — 'upsampling' (interpolation) or 'transpose' (learned).
         decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
         decoder_attention (bool): Whether to apply an attention gate on the skip connection.
         stage_idx (int): Index for naming the decoder stage.
@@ -124,7 +124,7 @@ def UNetDecoder(
     spatial_dims,
     skip_layers,
     decoder_filters,
-    block_type="upsampling",
+    decoder_block_type="upsampling",
     decoder_attention=False,
     decoder_use_batchnorm=True,
 ):
@@ -132,10 +132,10 @@ def UNetDecoder(
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
 
     Args:
+        spatial_dims (int): Dimensionality of the model — 2 for 2D or 3 for 3D.
         skip_layers (list): List of skip connection tensors from the encoder, ordered deepest to shallowest.
         decoder_filters (list or tuple): Number of filters for each decoder stage.
-        dim (int): Dimensionality of the model — 2 for 2D or 3 for 3D.
-        block_type (str): Decoder block type, either 'upsampling' or 'transpose'.
+        decoder_block_type (str): Decoder block type, either 'upsampling' or 'transpose'.
         decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
         decoder_attention (bool): Whether to apply an attention gate on the skip connection.
 
@@ -152,7 +152,7 @@ def UNetDecoder(
             x = DecoderBlock(
                 spatial_dims,
                 filters,
-                block_type,
+                decoder_block_type,
                 decoder_use_batchnorm,
                 decoder_attention,
                 stage_idx=stage_idx,
