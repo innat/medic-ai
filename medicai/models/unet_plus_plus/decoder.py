@@ -3,7 +3,7 @@ from keras import layers
 from medicai.models.unet.decoder import Conv3x3BnReLU
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
-INVALID_BLOCK_TYPE_MSG = "Invalid block_type '{}'. Must be 'upsampling' or 'transpose'."
+INVALID_BLOCK_TYPE_MSG = "Invalid decoder_block_type '{}'. Must be 'upsampling' or 'transpose'."
 
 
 def UNetPlusPlusDecoder(
@@ -66,12 +66,9 @@ def UNetPlusPlusDecoder(
         Returns:
             Final upsampled feature map at input resolution
         """
-
         if decoder_block_type not in ("upsampling", "transpose"):
-            raise ValueError(
-                f"Invalid decoder_block_type: '{decoder_block_type}'. "
-                "Expected one of ('upsampling', 'transpose')."
-            )
+            raise ValueError(INVALID_BLOCK_TYPE_MSG.format(decoder_block_type))
+
         num_convs = 1 if decoder_block_type == "transpose" else 2
 
         # Number of upsampling blocks = encoder_levels - 1 (following paper)

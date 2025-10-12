@@ -3,7 +3,7 @@ from keras import layers
 from medicai.layers import AttentionGate
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
-INVALID_BLOCK_TYPE_MSG = "Invalid block_type '{}'. Must be 'upsampling' or 'transpose'."
+INVALID_BLOCK_TYPE_MSG = "Invalid decoder_block_type '{}'. Must be 'upsampling' or 'transpose'."
 
 
 def Conv3x3BnReLU(spatial_dims, filters, decoder_use_batchnorm=True, name_prefix=""):
