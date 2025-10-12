@@ -102,6 +102,12 @@ class UNetPlusPlus(keras.Model):
             raise ValueError(
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
+        
+        if decoder_block_type not in ("upsampling", "transpose"):
+            raise ValueError(
+                f"Invalid decoder_block_type: '{decoder_block_type}'. "
+                "Expected one of ('upsampling', 'transpose')."
+            )
 
         # Prepare head and skip layers (same as UNet)
         bottleneck_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
