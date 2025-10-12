@@ -98,10 +98,6 @@ def UNetPlusPlusDecoder(
                     if prev_node in dense_grid:
                         node_inputs.append(dense_grid[prev_node])
 
-                # Concatenate available inputs
-                if not node_inputs:
-                    continue
-
                 if len(node_inputs) > 1:
                     concatenated = layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(
                         node_inputs
