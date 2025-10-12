@@ -133,7 +133,7 @@ class UNet(keras.Model, DescribeMixin):
             decoder_filters,
             decoder_block_type=decoder_block_type,
             decoder_attention=decoder_attention,
-            use_batchnorm=decoder_use_batchnorm,
+            decoder_use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
 

@@ -125,8 +125,8 @@ def UNetDecoder(
     skip_layers,
     decoder_filters,
     block_type="upsampling",
-    use_attention=False,
-    use_batchnorm=True,
+    decoder_attention=False,
+    decoder_use_batchnorm=True,
 ):
     """
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
@@ -136,8 +136,8 @@ def UNetDecoder(
         decoder_filters (list or tuple): Number of filters for each decoder stage.
         dim (int): Dimensionality of the model — 2 for 2D or 3 for 3D.
         block_type (str): Decoder block type, either 'upsampling' or 'transpose'.
-        use_batchnorm (bool): Whether to include BatchNormalization layers.
-        use_attention (bool): Whether to apply an attention gate on the skip connection.
+        decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
+        decoder_attention (bool): Whether to apply an attention gate on the skip connection.
 
     Returns:
         function: A decoder function that takes the encoder output and returns the final decoded tensor.
@@ -153,8 +153,8 @@ def UNetDecoder(
                 spatial_dims,
                 filters,
                 block_type,
-                use_batchnorm,
-                use_attention,
+                decoder_use_batchnorm,
+                decoder_attention,
                 stage_idx=stage_idx,
             )(x, skip)
         return x

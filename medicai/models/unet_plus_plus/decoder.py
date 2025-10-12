@@ -11,7 +11,7 @@ def UNetPlusPlusDecoder(
     skip_layers,
     decoder_filters,
     decoder_block_type,
-    use_batchnorm=True,
+    decoder_use_batchnorm=True,
 ):
     def upsample_block(x, name_prefix):
         return get_reshaping_layer(
@@ -28,7 +28,7 @@ def UNetPlusPlusDecoder(
             padding="same",
             name=f"{name_prefix}_transpose",
         )(x)
-        if use_batchnorm:
+        if decoder_use_batchnorm:
             x = get_norm_layer(layer_type="batch", axis=-1, name=f"{name_prefix}_transpose_bn")(x)
         x = get_act_layer(layer_type="relu", name=f"{name_prefix}_transpose_relu")(x)
         return x
@@ -72,6 +72,7 @@ def UNetPlusPlusDecoder(
                 f"Invalid decoder_block_type: '{decoder_block_type}'. "
                 "Expected one of ('upsampling', 'transpose')."
             )
+        num_convs = 1 if decoder_block_type == "transpose" else 2
 
         # Number of upsampling blocks = encoder_levels - 1 (following paper)
         N = len(decoder_filters) - 1
@@ -116,14 +117,14 @@ def UNetPlusPlusDecoder(
 
                 # Process node
                 concat_inputs = layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(node_inputs)
+                x_ij = concat_inputs
 
-                x_ij = Conv3x3BnReLU(
-                    spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv1"
-                )(concat_inputs)
-
-                if decoder_block_type != "transpose":
+                for i in range(1, num_convs + 1):
                     x_ij = Conv3x3BnReLU(
-                        spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv2"
+                        spatial_dims,
+                        decoder_filters[i],
+                        decoder_use_batchnorm,
+                        f"x_{i}_{j}_conv{i}",
                     )(x_ij)
 
                 dense_grid[(i, j)] = x_ij

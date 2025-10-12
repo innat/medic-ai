@@ -122,7 +122,7 @@ class UNetPlusPlus(keras.Model):
             skip_layers=skip_layers,
             decoder_filters=decoder_filters,
             decoder_block_type=decoder_block_type,
-            use_batchnorm=decoder_use_batchnorm,
+            decoder_use_batchnorm=decoder_use_batchnorm,
         )
         x = decoder(bottleneck)
 
