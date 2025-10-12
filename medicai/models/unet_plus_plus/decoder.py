@@ -111,11 +111,7 @@ def UNetPlusPlusDecoder(
                         node_inputs.append(dense_grid[prev_node])
 
                 # Process node
-                concat_inputs = (
-                    node_inputs[0]
-                    if len(node_inputs) == 1
-                    else layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(node_inputs)
-                )
+                concat_inputs = layers.Concatenate(axis=-1, name=f"x_{i}_{j}_concat")(node_inputs)
 
                 x_ij = Conv3x3BnReLU(
                     spatial_dims, decoder_filters[i], use_batchnorm, f"x_{i}_{j}_conv1"

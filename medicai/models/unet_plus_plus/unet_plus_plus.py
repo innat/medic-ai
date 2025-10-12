@@ -37,7 +37,7 @@ class UNetPlusPlus(keras.Model):
         **kwargs,
     ):
         """
-        Initializes the UNet model.
+        Initializes the UNet++ model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -102,7 +102,7 @@ class UNetPlusPlus(keras.Model):
             raise ValueError(
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
-        
+
         if decoder_block_type not in ("upsampling", "transpose"):
             raise ValueError(
                 f"Invalid decoder_block_type: '{decoder_block_type}'. "
