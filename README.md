@@ -189,8 +189,9 @@ Instance of TransUNet
 | **EfficientNet (V1/V2)** | 2D, 3D | Classification | CNN |
 | **ViT** | 2D, 3D | Classification | Transformer |
 | **MiT** | 2D, 3D | Classification | Transformer |
-| **Swin Transformer (V1/V2)** | 2D, 3D | Classification | Transformer |
-| **UNet** | 2D, 3D | Segmentation | CNN |
+| [**Swin Transformer (V1/V2)**](medicai/models/swin/README.md) | 2D, 3D | Classification | Transformer |
+| [**UNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
+| [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | **AttentionUNet** | 2D, 3D | Segmentation | CNN |
 | **UNETR** | 2D, 3D | Segmentation | Transformer |
 | **SwinUNETR** | 2D, 3D | Segmentation | Transformer |
