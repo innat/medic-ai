@@ -1,13 +1,13 @@
 import keras
 from keras import layers
 
-from medicai.utils import get_conv_layer, resolve_encoder
+from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
 
 from .decoder import UNetPlusPlusDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
-class UNetPlusPlus(keras.Model):
+class UNetPlusPlus(keras.Model, DescribeMixin):
     """
     UNet++ model with dense skip connections.
 
