@@ -1,5 +1,6 @@
 from medicai.utils import registration
 
+from .convnext import ConvNeXtBackbone, ConvNeXtBase, ConvNeXtLarge, ConvNeXtSmall, ConvNeXtTiny
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
 from .efficientnet import (
     EfficientNetB0,
