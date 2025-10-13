@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 from keras import layers
 
 from medicai.utils import DescribeMixin, get_conv_layer, get_norm_layer, parse_model_inputs
@@ -6,7 +7,7 @@ from medicai.utils import DescribeMixin, get_conv_layer, get_norm_layer, parse_m
 from .convnext_layers import ConvNeXtBlock, PreStem
 
 
-@keras.utils.register_keras_serializable(package="densenet.backbone")
+@keras.utils.register_keras_serializable(package="convnext.backbone")
 class ConvNeXtBackbone(keras.Model, DescribeMixin):
     def __init__(
         self,
@@ -22,9 +23,9 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
         **kwargs,
     ):
         spatial_dims = len(input_shape) - 1
-        input = parse_model_inputs(input_shape, input_tensor, name="input_spec")
+        inputs = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 
-        x = input
+        x = inputs
         if include_rescaling:
             num_channels = input_shape[-1]
             if num_channels == 3:
@@ -50,7 +51,7 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
         num_stages = len(depths)
 
         # A list to keep track of cumulative drop path rates for Stochastic Depth
-        dpr = [x.numpy() for x in keras.ops.linspace(0.0, drop_path_rate, sum(depths))]
+        dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         cur = 0
 
         for i in range(num_stages):
@@ -87,7 +88,7 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
             )(x)
 
         super().__init__(
-            inputs=input, outputs=x, name=name or f"DenseNetBackbone{spatial_dims}D", **kwargs
+            inputs=inputs, outputs=x, name=name or f"ConvNeXtBackbone{spatial_dims}D", **kwargs
         )
         self.depths = depths
         self.pyramid_outputs = pyramid_outputs
@@ -99,6 +100,7 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
 
     def get_config(self):
         config = {
+            "input_shape": self.input_shape[1:],
             "depths": self.depths,
             "projection_dims": self.projection_dims,
             "drop_path_rate": self.drop_path_rate,

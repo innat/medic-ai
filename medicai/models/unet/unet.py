@@ -28,7 +28,7 @@ class UNet(keras.Model, DescribeMixin):
 
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet", "convnext"]
+    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
 
     def __init__(
         self,

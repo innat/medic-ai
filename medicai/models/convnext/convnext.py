@@ -58,6 +58,7 @@ class ConvNeXtVariantsBase(keras.Model):
             input_shape=input_shape,
             depths=depths,
             projection_dims=projection_dims,
+            include_rescaling=include_rescaling,
         )
         inputs = backbone.input
         x = backbone.output

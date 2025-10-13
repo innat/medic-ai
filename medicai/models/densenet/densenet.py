@@ -66,7 +66,9 @@ class DenseNetBase(keras.Model):
         if name is None and self.__class__ is not DenseNetBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
-        backbone = DenseNetBackbone(input_shape=input_shape, blocks=blocks)
+        backbone = DenseNetBackbone(
+            input_shape=input_shape, blocks=blocks, include_rescaling=include_rescaling
+        )
         inputs = backbone.input
         x = backbone.output
 

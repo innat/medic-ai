@@ -53,7 +53,7 @@ def PreStem(name=None):
       name (str): Name prefix.
 
     Returns:
-      A presemt function.
+      A prestem function.
     """
     if name is None:
         name = "prestem" + str(backend.get_uid("prestem"))
@@ -98,7 +98,7 @@ def ConvNeXtBlock(projection_dim, drop_path_rate=0.0, layer_scale_init_value=1e-
         A function representing a ConvNeXtBlock block.
     """
     if name is None:
-        name = f"prestem{str(backend.get_uid('prestem'))}"
+        name = f"convnext_block{str(backend.get_uid('convnext_block'))}"
 
     def apply(inputs):
         spatial_dims = len(inputs.shape) - 2
