@@ -194,7 +194,7 @@ Instance of TransUNet
 | [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | **AttentionUNet** | 2D, 3D | Segmentation | CNN |
 | **UNETR** | 2D, 3D | Segmentation | Transformer |
-| **SwinUNETR** | 2D, 3D | Segmentation | Transformer |
+| [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | **TransUNet** | 2D, 3D | Segmentation | Transformer |
 | **SegFormer** | 2D, 3D | Segmentation | Transformer |
 
