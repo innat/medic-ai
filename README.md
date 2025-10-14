@@ -187,6 +187,7 @@ Instance of TransUNet
 | **DenseNet** | 2D, 3D | Classification | CNN |
 | **ResNet (V1/V2)** | 2D, 3D | Classification | CNN |
 | **EfficientNet (V1/V2)** | 2D, 3D | Classification | CNN |
+| **ConvNeXt (V1/V2)** | 2D, 3D | Classification | CNN |
 | **ViT** | 2D, 3D | Classification | Transformer |
 | **MiT** | 2D, 3D | Classification | Transformer |
 | [**Swin Transformer (V1/V2)**](medicai/models/swin/README.md) | 2D, 3D | Classification | Transformer |
