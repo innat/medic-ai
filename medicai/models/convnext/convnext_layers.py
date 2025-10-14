@@ -141,7 +141,7 @@ class GlobalResponseNormalization(layers.Layer):
     """
 
     def build(self, input_shape):
-        self.spatial_dism = len(input_shape) - 2
+        self.spatial_dims = len(input_shape) - 2
 
         # Use input_shape[-1] for channels_last format
         self.gamma = self.add_weight(
@@ -165,8 +165,9 @@ class GlobalResponseNormalization(layers.Layer):
         x = ops.cast(inputs, "float32")
 
         # Compute spatial norm: sqrt(sum(x^2) over spatial dimensions)
+        spatial_axes = tuple(range(1, self.spatial_dims + 1))
         spatial_norm = ops.sqrt(
-            ops.sum(ops.square(x), axis=(1, 2), keepdims=True) + keras.config.epsilon()
+            ops.sum(ops.square(x), axis=spatial_axes, keepdims=True) + keras.config.epsilon()
         )
 
         # Normalize by mean across channels
