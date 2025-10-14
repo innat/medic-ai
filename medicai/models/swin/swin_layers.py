@@ -29,12 +29,14 @@ def safe_normalize(x, axis=-1, epsilon=1e-6):
     """
     Safe normalization for empty slice.
     """
-    square_sum = ops.sum(ops.square(x), axis=axis, keepdims=True)
+    inputs = ops.cast(x, "float32")
+    square_sum = ops.sum(ops.square(inputs), axis=axis, keepdims=True)
     safe_square_sum = ops.where(
         square_sum < epsilon, epsilon * ops.ones_like(square_sum), square_sum
     )
     norm = ops.sqrt(safe_square_sum)
-    return x / norm
+    result = inputs / norm
+    return ops.cast(result, x.dtype)
 
 
 def window_partition(x, window_size):
