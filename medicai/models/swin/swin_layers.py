@@ -35,8 +35,8 @@ def safe_normalize(x, axis=-1, epsilon=1e-6):
         square_sum < epsilon, epsilon * ops.ones_like(square_sum), square_sum
     )
     norm = ops.sqrt(safe_square_sum)
-    result = x / norm
-    return ops.cast(result, inputs.dtype)
+    result = inputs / norm
+    return ops.cast(result, x.dtype)
 
 
 def window_partition(x, window_size):

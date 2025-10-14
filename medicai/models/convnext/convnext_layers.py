@@ -142,17 +142,18 @@ class GlobalResponseNormalization(layers.Layer):
 
     def build(self, input_shape):
         self.spatial_dims = len(input_shape) - 2
+        shape = (1,) * self.spatial_dims + (input_shape[-1],)
 
         # Use input_shape[-1] for channels_last format
         self.gamma = self.add_weight(
             name="gamma",
-            shape=(1, 1, 1, input_shape[-1]),
+            shape=shape,
             initializer="zeros",
             trainable=True,
         )
         self.beta = self.add_weight(
             name="beta",
-            shape=(1, 1, 1, input_shape[-1]),
+            shape=shape,
             initializer="zeros",
             trainable=True,
         )
@@ -208,14 +209,14 @@ def ConvNeXtV2Block(projection_dim, drop_path_rate=0.0, name=None):
     def apply(inputs):
         """Applies the ConvNeXtV2 block logic to the input tensor."""
 
-        spatial_dism = len(inputs.shape) - 2
+        spatial_dims = len(inputs.shape) - 2
 
         # Original implementation path: x = inputs
         x = inputs
 
         # 1. Depthwise Conv (7x7)
         x = get_conv_layer(
-            spatial_dims=spatial_dism,
+            spatial_dims=spatial_dims,
             layer_type="depthwise_conv",
             kernel_size=7,
             padding="same",

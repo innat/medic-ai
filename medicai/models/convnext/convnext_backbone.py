@@ -9,6 +9,49 @@ from .convnext_layers import ConvNeXtBlock, ConvNeXtV2Block, PreStem
 
 @keras.utils.register_keras_serializable(package="convnext.backbone")
 class ConvNeXtBackbone(keras.Model, DescribeMixin):
+    """
+    ConvNeXt V1 Backbone model as a Keras Model.
+
+    The ConvNeXt V1 architecture is a modern, purely convolutional
+    network designed to compete with Vision Transformers (ViTs), featuring
+    macro-design inspired by ViTs (e.g., stage ratios, downsampling methods)
+    and micro-design enhancements (e.g., inverted bottleneck, large kernel
+    depth-wise convolution, LayerNorm).
+
+    This model implements the feature extraction stages (Stem, Stages 1-4)
+    and outputs the feature maps at the end of each stage, commonly used
+    for downstream tasks like object detection or segmentation.
+
+    Args:
+        depths: A list or tuple of integers specifying the number of
+            ConvNeXt blocks in each of the 4 stages. E.g., `[3, 3, 9, 3]`.
+        projection_dims: A list or tuple of integers specifying the number
+            of channels (filters) for the stem and each of the 4 stages.
+            E.g., `[96, 192, 384, 768]`. Must have a length of 4.
+        input_shape: The shape of the input tensor, excluding the batch
+            dimension. E.g., `(224, 224, 3)` for 2D inputs.
+        input_tensor: Optional Keras tensor (e.g., `keras.Input`) to use
+            as the input to the model.
+        drop_path_rate: Float, the maximum dropout rate for Stochastic
+            Depth (DropPath) regularization. The rate is applied linearly
+            across all ConvNeXt blocks. Defaults to 0.0 (no dropout).
+        layer_scale_init_value: Float, initial value for the LayerScale
+            parameter in each ConvNeXt block. A small value (e.g., 1e-6)
+            is typically used to stabilize training. Defaults to 1e-6.
+        include_rescaling: Boolean, whether to include the input rescaling
+            layer (normalizing pixel values to [0, 1] or performing
+            ImageNet mean/std normalization if input channels is 3).
+            Defaults to False.
+        name: Optional string, the name for the Keras model.
+        **kwargs: Additional keyword arguments for the Keras Model constructor.
+
+    Attributes:
+        depths (list): The block depths used for each stage.
+        projection_dims (list): The channel dimensions for each stage.
+        pyramid_outputs (dict): Dictionary containing the output feature
+            maps for each stage, keyed as 'P1', 'P2', 'P3', 'P4'.
+    """
+
     def __init__(
         self,
         *,
@@ -118,6 +161,47 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
 
 @keras.utils.register_keras_serializable(package="convnext.backbone")
 class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
+    """
+    ConvNeXt V2 Backbone model as a Keras Model.
+
+    ConvNeXt V2 (A ConvNet for the era of vision transformers) is an improved
+    version of ConvNeXt V1, primarily distinguishing itself by introducing the
+    **Global Response Normalization (GRN)** layer in each block and removing
+    the Layer Scale (which was present in V1). This design makes the model
+    more effective for masked autoencoding (MAE) pre-training, leading to
+    improved performance on various downstream tasks.
+
+    This model implements the feature extraction stages (Stem, Stages 1-4)
+    and outputs the feature maps at the end of each stage.
+
+    Args:
+        depths: A list or tuple of integers specifying the number of
+            ConvNeXt V2 blocks in each of the 4 stages. E.g., `[3, 3, 9, 3]`
+            for the ConvNeXt-T V2 configuration.
+        projection_dims: A list or tuple of integers specifying the number
+            of channels (filters) for the stem and each of the 4 stages.
+            E.g., `[96, 192, 384, 768]`. Must have a length of 4.
+        input_shape: The shape of the input tensor, excluding the batch
+            dimension. E.g., `(224, 224, 3)` for 2D inputs.
+        input_tensor: Optional Keras tensor (e.g., `keras.Input`) to use
+            as the input to the model.
+        drop_path_rate: Float, the maximum dropout rate for Stochastic
+            Depth (DropPath) regularization. The rate is applied linearly
+            across all ConvNeXt V2 blocks. Defaults to 0.0 (no dropout).
+        include_rescaling: Boolean, whether to include the input rescaling
+            layer (normalizing pixel values to [0, 1] or performing
+            ImageNet mean/std normalization if input channels is 3).
+            Defaults to False.
+        name: Optional string, the name for the Keras model.
+        **kwargs: Additional keyword arguments for the Keras Model constructor.
+
+    Attributes:
+        depths (list): The block depths used for each stage.
+        projection_dims (list): The channel dimensions for each stage.
+        pyramid_outputs (dict): Dictionary containing the output feature
+            maps for each stage, keyed as 'P1', 'P2', 'P3', 'P4'.
+    """
+
     def __init__(
         self,
         *,
