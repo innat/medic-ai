@@ -143,15 +143,17 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
         self.name = name
 
     def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "depths": self.depths,
-            "projection_dims": self.projection_dims,
-            "drop_path_rate": self.drop_path_rate,
-            "layer_scale_init_value": self.layer_scale_init_value,
-            "include_rescaling": self.include_rescaling,
-            "name": self.name,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "input_shape": self.input_shape[1:],
+                "depths": self.depths,
+                "projection_dims": self.projection_dims,
+                "drop_path_rate": self.drop_path_rate,
+                "layer_scale_init_value": self.layer_scale_init_value,
+                "include_rescaling": self.include_rescaling,
+            }
+        )
         return config
 
     @classmethod
@@ -289,14 +291,16 @@ class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
         self.name = name
 
     def get_config(self):
-        config = {
-            "input_shape": self.input_shape[1:],
-            "depths": self.depths,
-            "projection_dims": self.projection_dims,
-            "drop_path_rate": self.drop_path_rate,
-            "include_rescaling": self.include_rescaling,
-            "name": self.name,
-        }
+        config = super().get_config()
+        config.update(
+            {
+                "input_shape": self.input_shape[1:],
+                "depths": self.depths,
+                "projection_dims": self.projection_dims,
+                "drop_path_rate": self.drop_path_rate,
+                "include_rescaling": self.include_rescaling,
+            }
+        )
         return config
 
     @classmethod

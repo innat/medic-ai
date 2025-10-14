@@ -130,6 +130,7 @@ class ConvNeXtVariantsBase(keras.Model):
             "num_classes": self.num_classes,
             "pooling": self.pooling,
             "classifier_activation": self.classifier_activation,
+            "name": self.name,
         }
         return config
 
