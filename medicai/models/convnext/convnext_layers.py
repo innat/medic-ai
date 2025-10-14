@@ -227,7 +227,7 @@ def ConvNeXtV2Block(projection_dim, drop_path_rate=0.0, name=None):
 
         # 3. Expansion (Pointwise Conv / Dense Layer)
         # Ratio is 4x as per ConvNeXt design
-        x = layers.Dense(4 * projection_dim, name=f"{name}_dense_expand" if name else None)(x)
+        x = layers.Dense(4 * projection_dim, name=f"{name}_dense_expand")(x)
 
         # 4. Activation (GELU)
         x = get_act_layer(layer_type="gelu", name=f"{name}_gelu")(x)
@@ -241,12 +241,11 @@ def ConvNeXtV2Block(projection_dim, drop_path_rate=0.0, name=None):
         # 7. Residual Connection with Stochastic Depth
         if drop_path_rate > 0.0:
             # Stochastic Depth is used for training regularization
-            output = DropPath(drop_path_rate, name=f"{name}_drop_path")([inputs, x])
-        else:
-            # Standard residual connection: inputs + x
-            # Use Add layer for clear functional graph definition
-            output = layers.Add(name=f"{name}_add")([inputs, x])
+            x = DropPath(drop_path_rate, name=f"{name}_drop_path")(x)
 
+        # Standard residual connection: inputs + x
+        # Use Add layer for clear functional graph definition
+        output = layers.Add(name=f"{name}_add")([inputs, x])
         return output
 
     # Return the function that applies the block logic
