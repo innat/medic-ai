@@ -208,9 +208,7 @@ class ConvNeXtV2Pico(ConvNeXtVariantsBaseV2, DescribeMixin):
         )
 
 
-keras.saving.register_keras_serializable(package="convnext")
-
-
+@keras.saving.register_keras_serializable(package="convnext")
 @registration.register(name="convnextv2_nano", family="convnext")
 class ConvNeXtV2Nano(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
@@ -239,9 +237,7 @@ class ConvNeXtV2Nano(ConvNeXtVariantsBaseV2, DescribeMixin):
         )
 
 
-keras.saving.register_keras_serializable(package="convnext")
-
-
+@keras.saving.register_keras_serializable(package="convnext")
 @registration.register(name="convnextv2_tiny", family="convnext")
 class ConvNeXtV2Tiny(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
