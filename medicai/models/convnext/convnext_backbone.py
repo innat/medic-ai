@@ -126,7 +126,6 @@ class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
         input_shape,
         input_tensor=None,
         drop_path_rate=0.0,
-        layer_scale_init_value=1e-6,
         include_rescaling=False,
         name=None,
         **kwargs,
@@ -202,7 +201,6 @@ class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
         self.pyramid_outputs = pyramid_outputs
         self.projection_dims = projection_dims
         self.drop_path_rate = drop_path_rate
-        self.layer_scale_init_value = layer_scale_init_value
         self.include_rescaling = include_rescaling
         self.name = name
 
@@ -212,7 +210,6 @@ class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
             "depths": self.depths,
             "projection_dims": self.projection_dims,
             "drop_path_rate": self.drop_path_rate,
-            "layer_scale_init_value": self.layer_scale_init_value,
             "include_rescaling": self.include_rescaling,
             "name": self.name,
         }

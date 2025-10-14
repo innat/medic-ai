@@ -1,5 +1,4 @@
-import numpy as np
-from keras import layers, ops
+from keras import layers
 
 from medicai.layers import AttentionGate
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer

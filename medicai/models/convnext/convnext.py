@@ -76,11 +76,11 @@ class ConvNeXtVariantsBase(keras.Model):
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
-        elif pooling == "avg":
-            x = GlobalAvgPool(x)
-            x = GlobalNorm(x)
-        elif pooling == "max":
-            x = GlobalMaxPool(x)
+        elif pooling is not None:
+            if pooling == "avg":
+                x = GlobalAvgPool(x)
+            elif pooling == "max":
+                x = GlobalMaxPool(x)
             x = GlobalNorm(x)
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
