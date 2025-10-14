@@ -1,16 +1,27 @@
 import keras
 from keras import layers
 
-from medicai.utils import (
-    DescribeMixin,
-    get_norm_layer,
-    get_pooling_layer,
-    registration,
-)
+from medicai.utils import DescribeMixin, get_norm_layer, get_pooling_layer, registration
 
-from .convnext_backbone import ConvNeXtBackbone
+from .convnext_backbone import ConvNeXtBackboneV2
 
 MODEL_CONFIGS = {
+    "atto": {
+        "depths": [2, 2, 6, 2],
+        "projection_dims": [40, 80, 160, 320],
+    },
+    "femto": {
+        "depths": [2, 2, 6, 2],
+        "projection_dims": [48, 96, 192, 384],
+    },
+    "pico": {
+        "depths": [2, 2, 6, 2],
+        "projection_dims": [64, 128, 256, 512],
+    },
+    "nano": {
+        "depths": [2, 2, 8, 2],
+        "projection_dims": [80, 160, 320, 640],
+    },
     "tiny": {
         "depths": [3, 3, 9, 3],
         "projection_dims": [96, 192, 384, 768],
@@ -27,14 +38,14 @@ MODEL_CONFIGS = {
         "depths": [3, 3, 27, 3],
         "projection_dims": [192, 384, 768, 1536],
     },
-    "xlarge": {
+    "huge": {
         "depths": [3, 3, 27, 3],
-        "projection_dims": [256, 512, 1024, 2048],
+        "projection_dims": [352, 704, 1408, 2816],
     },
 }
 
 
-class ConvNeXtVariantsBase(keras.Model):
+class ConvNeXtVariantsBaseV2(keras.Model):
     def __init__(
         self,
         *,
@@ -50,10 +61,10 @@ class ConvNeXtVariantsBase(keras.Model):
         **kwargs,
     ):
         spatial_dims = len(input_shape) - 1
-        if name is None and self.__class__ is not ConvNeXtVariantsBase:
+        if name is None and self.__class__ is not ConvNeXtVariantsBaseV2:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
-        backbone = ConvNeXtBackbone(
+        backbone = ConvNeXtBackboneV2(
             input_shape=input_shape,
             depths=depths,
             projection_dims=projection_dims,
@@ -82,7 +93,6 @@ class ConvNeXtVariantsBase(keras.Model):
         elif pooling == "max":
             x = GlobalMaxPool(x)
             x = GlobalNorm(x)
-
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.pyramid_outputs = backbone.pyramid_outputs
@@ -112,8 +122,128 @@ class ConvNeXtVariantsBase(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnext_tiny", family="convnext")
-class ConvNeXtTiny(ConvNeXtVariantsBase, DescribeMixin):
+@registration.register(name="convnextv2_atto", family="convnext")
+class ConvNeXtV2Atto(ConvNeXtVariantsBaseV2, DescribeMixin):
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_shape=input_shape,
+            depths=MODEL_CONFIGS["atto"]["depths"],
+            projection_dims=MODEL_CONFIGS["atto"]["projection_dims"],
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+@keras.saving.register_keras_serializable(package="convnext")
+@registration.register(name="convnextv2_femto", family="convnext")
+class ConvNeXtV2Femto(ConvNeXtVariantsBaseV2, DescribeMixin):
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_shape=input_shape,
+            depths=MODEL_CONFIGS["femto"]["depths"],
+            projection_dims=MODEL_CONFIGS["femto"]["projection_dims"],
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+@keras.saving.register_keras_serializable(package="convnext")
+@registration.register(name="convnextv2_pico", family="convnext")
+class ConvNeXtV2Pico(ConvNeXtVariantsBaseV2, DescribeMixin):
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_shape=input_shape,
+            depths=MODEL_CONFIGS["pico"]["depths"],
+            projection_dims=MODEL_CONFIGS["pico"]["projection_dims"],
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_nano", family="convnext")
+class ConvNeXtV2Nano(ConvNeXtVariantsBaseV2, DescribeMixin):
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_shape=input_shape,
+            depths=MODEL_CONFIGS["nano"]["depths"],
+            projection_dims=MODEL_CONFIGS["nano"]["projection_dims"],
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_tiny", family="convnext")
+class ConvNeXtV2Tiny(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
         *,
@@ -140,9 +270,11 @@ class ConvNeXtTiny(ConvNeXtVariantsBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnext_small", family="convnext")
-class ConvNeXtSmall(ConvNeXtVariantsBase, DescribeMixin):
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_small", family="convnext")
+class ConvNeXtV2Small(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
         *,
@@ -169,9 +301,11 @@ class ConvNeXtSmall(ConvNeXtVariantsBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnext_base", family="convnext")
-class ConvNeXtBase(ConvNeXtVariantsBase, DescribeMixin):
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_base", family="convnext")
+class ConvNeXtV2Base(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
         *,
@@ -198,9 +332,11 @@ class ConvNeXtBase(ConvNeXtVariantsBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnext_large", family="convnext")
-class ConvNeXtLarge(ConvNeXtVariantsBase, DescribeMixin):
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_large", family="convnext")
+class ConvNeXtV2Large(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
         *,
@@ -227,9 +363,11 @@ class ConvNeXtLarge(ConvNeXtVariantsBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnext_xlarge", family="convnext")
-class ConvNeXtXLarge(ConvNeXtVariantsBase, DescribeMixin):
+keras.saving.register_keras_serializable(package="convnext")
+
+
+@registration.register(name="convnextv2_huge", family="convnext")
+class ConvNeXtV2Huge(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
         *,
@@ -244,8 +382,8 @@ class ConvNeXtXLarge(ConvNeXtVariantsBase, DescribeMixin):
     ):
         super().__init__(
             input_shape=input_shape,
-            depths=MODEL_CONFIGS["xlarge"]["depths"],
-            projection_dims=MODEL_CONFIGS["xlarge"]["projection_dims"],
+            depths=MODEL_CONFIGS["huge"]["depths"],
+            projection_dims=MODEL_CONFIGS["huge"]["projection_dims"],
             include_rescaling=include_rescaling,
             include_top=include_top,
             num_classes=num_classes,

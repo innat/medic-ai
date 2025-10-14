@@ -2,10 +2,20 @@ from medicai.utils import registration
 
 from .convnext import (
     ConvNeXtBackbone,
+    ConvNeXtBackboneV2,
     ConvNeXtBase,
     ConvNeXtLarge,
     ConvNeXtSmall,
     ConvNeXtTiny,
+    ConvNeXtV2Atto,
+    ConvNeXtV2Base,
+    ConvNeXtV2Femto,
+    ConvNeXtV2Huge,
+    ConvNeXtV2Large,
+    ConvNeXtV2Nano,
+    ConvNeXtV2Pico,
+    ConvNeXtV2Small,
+    ConvNeXtV2Tiny,
     ConvNeXtXLarge,
 )
 from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
