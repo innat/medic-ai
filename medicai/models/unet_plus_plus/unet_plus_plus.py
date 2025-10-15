@@ -8,6 +8,7 @@ from medicai.utils import (
     DescribeMixin,
     get_conv_layer,
     get_reshaping_layer,
+    registration,
     resolve_encoder,
 )
 
@@ -15,6 +16,7 @@ from .decoder import UNetPlusPlusDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
+@registration.register(name="unet_plus_plus", type="segmentation")
 class UNetPlusPlus(keras.Model, DescribeMixin):
     """
     UNet++ model with dense skip connections.
@@ -143,6 +145,12 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         if len(decoder_filters) < encoder_depth:
             raise ValueError(
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
+            )
+
+        if decoder_block_type not in VALID_DECODER_BLOCK_TYPE:
+            raise ValueError(
+                f"Invalid decoder_block_type: '{decoder_block_type}'. "
+                "Expected one of ('upsampling', 'transpose')."
             )
 
         if isinstance(decoder_normalization, str):

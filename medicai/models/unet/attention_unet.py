@@ -1,11 +1,12 @@
 import keras
 
-from medicai.utils import DescribeMixin
+from medicai.utils import DescribeMixin, registration
 
 from .unet import UNet
 
 
 @keras.saving.register_keras_serializable(package="unet")
+@registration.register(name="attention_unet", type="segmentation")
 class AttentionUNet(UNet, DescribeMixin):
     """
     Attention U-Net model for semantic segmentation.

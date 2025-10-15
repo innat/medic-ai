@@ -1,5 +1,5 @@
 import keras
-from keras import layers, ops
+from keras import layers
 
 from medicai.utils import (
     VALID_ACTIVATION_LIST,
@@ -8,6 +8,7 @@ from medicai.utils import (
     DescribeMixin,
     get_conv_layer,
     get_reshaping_layer,
+    registration,
     resolve_encoder,
 )
 
@@ -15,6 +16,7 @@ from .decoder import UNetDecoder
 
 
 @keras.saving.register_keras_serializable(package="unet")
+@registration.register(name="unet", type="segmentation")
 class UNet(keras.Model, DescribeMixin):
     """
     The UNet model for semantic segmentation.

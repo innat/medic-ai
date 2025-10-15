@@ -6,10 +6,11 @@ hide_warnings()
 import keras
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
-from medicai.utils import DescribeMixin, resolve_encoder
+from medicai.utils import DescribeMixin, registration, resolve_encoder
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
+@registration.register(name="swin_unetr", type="segmentation")
 class SwinUNETR(keras.Model, DescribeMixin):
     """Swin-UNETR: A hybrid transformer-CNN for 3D or 2D medical image segmentation.
 

@@ -272,10 +272,10 @@ def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwar
                 "For 3D data, the format is `(depth, height, width, channels)`."
             )
 
-        if encoder_name.lower() not in registration._registry:
+        if encoder_name.lower() not in registration._backbone_registry:
             raise ValueError(
                 f"Encoder '{encoder_name}' not found in the registry. "
-                f"Available: {list(registration._registry.keys())}"
+                f"Available: {list(registration._backbone_registry.keys())}"
             )
 
         entry = registration.get_entry(encoder_name)

@@ -6,12 +6,14 @@ from medicai.utils import (
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
+    registration,
     resize_volumes,
     resolve_encoder,
 )
 
 
 @keras.saving.register_keras_serializable(package="segformer")
+@registration.register(name="segformer", type="segmentation")
 class SegFormer(keras.Model, DescribeMixin):
     """SegFormer model for 2D or 3D semantic segmentation.
 
