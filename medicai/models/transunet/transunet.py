@@ -1,7 +1,7 @@
 import keras
 from keras import layers, ops
 
-from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
+from medicai.models.vit.vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.utils import (
     DescribeMixin,
     get_conv_layer,

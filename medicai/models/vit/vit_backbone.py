@@ -1,8 +1,9 @@
 import keras
 from keras import layers
 
-from medicai.layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.utils import DescribeMixin
+
+from .vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 
 
 class ViTBackbone(keras.Model, DescribeMixin):

@@ -2,9 +2,8 @@ import keras
 import numpy as np
 from keras import ops
 
+from medicai.layers import ViTMLP
 from medicai.utils import get_conv_layer
-
-from .mlp import ViTMLP
 
 
 class ViTPatchingAndEmbedding(keras.layers.Layer):

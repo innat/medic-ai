@@ -118,7 +118,10 @@ class UNETR(keras.Model, DescribeMixin):
 
         # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
-        required_keys = ["P5", "P8", "P11"]  # vit-encoder-layer: 3rd, 6th, 9th
+        num_encoder_blocks = getattr(encoder, "num_layers", 12)
+        encoder_depth = 3
+        required_keys = self.calculate_skip_keys(num_encoder_blocks, encoder_depth)
+
         missing_keys = set(required_keys) - set(pyramid_outputs.keys())
         if missing_keys:
             raise ValueError(
@@ -258,6 +261,27 @@ class UNETR(keras.Model, DescribeMixin):
             )(out)
 
         return apply
+
+    @staticmethod
+    def calculate_skip_keys(num_layers, encoder_depth):
+        required_keys = []
+        for i in range(1, encoder_depth + 1):
+            # 1. Determine the relative depth for the skip connection.
+            # For num_skips=3, this calculates the fractions: 1/4, 2/4 (1/2), and 3/4.
+            fraction = i / (encoder_depth + 1)  # (1/4, 2/4, 3/4)
+
+            # 2. Calculate the corresponding transformer BLOCK INDEX (0 to N-1).
+            # This samples the encoder outputs at 25%, 50%, and 75% of the total N blocks.
+            # The result (e.g., 3, 6, 9 for N=12) matches the explicit indices used in MONAI UNETR.
+            target_block_index = max(0, round(num_layers * fraction))
+
+            # 3. Map the block index to the P-key index in our settings.
+            # Our P-key naming starts at P1 (Patch Embedding) and P2 is the output after block 0.
+            # P_index = (target_block_index) + (Index offset from Patch Embedding)
+            # The block index 3 corresponds to P5 (3 + 2), 6 to P8, and 9 to P11.
+            p_index = target_block_index + 2
+            required_keys.append(f"P{p_index}")
+        return required_keys
 
     def get_config(self):
         config = {

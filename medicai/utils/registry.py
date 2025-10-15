@@ -20,141 +20,13 @@ class TabularOutput:
         return ""
 
 
-# class BackboneFactoryRegistry:
-#     """A factory registry for backbone models.
-
-#     This class provides a centralized system for registering, retrieving, and
-#     instantiating backbone models, such as ResNet, DenseNet, etc. It uses a
-#     decorator-based approach to automatically register models when their
-#     respective modules are imported. This simplifies model management and
-#     allows for easy discovery of available backbones.
-#     """
-
-#     def __init__(self):
-#         self._registry = {}
-
-#     def register(
-#         self,
-#         name=None,
-#         family=None,
-#     ):
-#         """Registers a backbone model using a decorator.
-
-#         This method is designed to be used as a decorator on a class. It adds the
-#         class to the registry with its name and family. The `name` defaults to
-#         the class name if not provided. The `family` argument helps in categorizing
-#         backbones and can be a single string or a list of strings.
-
-#         Args:
-#             name: (Optional) The name to register the class under. Defaults to
-#                 the class name.
-#             family: The family of the backbone, e.g., 'resnet' or ['densenet', 'resnet'].
-
-#         Returns:
-#             A decorator that registers the class.
-
-#         Example:
-#             >>> @registration.register(name="resnet18", family="resnet")
-#             ... class ResNet18:
-#             ...     pass
-#         """
-
-#         def decorator(cls):
-#             key = (name or cls.__name__).lower()
-#             fam = [family] if isinstance(family, str) else family
-#             entry = {"class": cls, "family": [f.lower() for f in (fam or [])]}
-#             if key in self._registry:
-#                 raise KeyError(f"Backbone '{key}' is already registered")
-#             self._registry[key] = entry
-#             return cls
-
-#         return decorator
-
-#     def get_entry(self, name: str):
-#         """Retrieves a backbone's registry entry by its name.
-
-#         Args:
-#             name: The name of the backbone to retrieve (case-insensitive).
-
-#         Returns:
-#             A dictionary containing the class and family of the backbone.
-
-#         Raises:
-#             KeyError: If the specified backbone is not found in the registry.
-#         """
-#         key = name.lower()
-#         if key not in self._registry:
-#             raise KeyError(f"Backbone '{name}' not found. Available: {list(self._registry.keys())}")
-#         return self._registry[key]
-
-#     def get(self, name: str):
-#         """Retrieves a backbone's class by its name.
-
-#         Args:
-#             name: The name of the backbone to retrieve (case-insensitive).
-
-#         Returns:
-#             The Python class object for the specified backbone.
-#         """
-#         return self.get_entry(name)["class"]
-
-#     def create(self, name, **kwargs):
-#         """Instantiates a backbone model from the registry.
-
-#         Args:
-#             name: The name of the backbone to instantiate (case-insensitive).
-#             **kwargs: Keyword arguments to be passed to the class constructor.
-
-#         Returns:
-#             An instance of the specified backbone class.
-#         """
-#         cls = self.get(name)
-#         return cls(**kwargs)
-
-#     def list(self, family=None):
-#         # Initialize a rich Table object
-#         table = Table(
-#             title="Available Models", show_header=True, header_style="bold cyan", show_lines=True
-#         )
-
-#         # Add the columns
-#         table.add_column("Models", style="dim", width=15)
-#         table.add_column("Encoder Name", style="magenta")
-
-#         # Data Aggregation Logic
-#         if family is not None:
-#             names = [name for name, entry in self._registry.items() if family in entry["family"]]
-#             grouped = {family: names} if names else {}
-#         else:
-#             grouped = {}
-#             for name, entry in self._registry.items():
-#                 for fam in entry["family"]:
-#                     grouped.setdefault(fam, []).append(name)
-
-#         # Rich Table Population Logic
-#         for fam, models in sorted(grouped.items()):
-#             if not models:
-#                 variants_content = "None"
-#             else:
-#                 # Format variants as a simple list separated by newlines
-#                 # Rich will automatically render this with clean wrapping/spacing
-#                 variants_content = "\n".join([f"• [green]{model}[/]" for model in models])
-
-#             # Add the row to the rich Table
-#             table.add_row(fam, variants_content)
-
-#         # Return the wrapper object containing the rich Table
-#         return TabularOutput(table)
-
-
 class ModelRegistry:
-    """A factory registry for backbone models.
+    """A unified factory registry for both Backbone (Encoder) and Segmentation models.
 
     This class provides a centralized system for registering, retrieving, and
-    instantiating backbone models, such as ResNet, DenseNet, etc. It uses a
-    decorator-based approach to automatically register models when their
-    respective modules are imported. This simplifies model management and
-    allows for easy discovery of available backbones.
+    instantiating models. It uses a decorator-based approach to automatically
+    register models, simplifying model management and enabling easy discovery of
+    available backbones and their supported segmentation architectures.
     """
 
     def __init__(self):
@@ -171,25 +43,34 @@ class ModelRegistry:
         type="backbone",
         allowed_families=None,
     ):
-        """Registers a backbone model using a decorator.
+        """Registers a model (backbone or segmentor) using a decorator.
 
-        This method is designed to be used as a decorator on a class. It adds the
-        class to the registry with its name and family. The `name` defaults to
-        the class name if not provided. The `family` argument helps in categorizing
-        backbones and can be a single string or a list of strings.
+        This method is designed to be used as a decorator on a class. It directs the
+        model to either the backbone or segmentor registry based on the 'type' argument.
 
         Args:
             name: (Optional) The name to register the class under. Defaults to
-                the class name.
-            family: The family of the backbone, e.g., 'resnet' or ['densenet', 'resnet'].
+                the class name (case-insensitive).
+            family: (Required for type='backbone') The family of the encoder,
+                e.g., 'resnet' or ['densenet'].
+            type: The type of model to register. Must be 'backbone' (default) or 'segmentation'.
+            allowed_families: (Required for type='segmentation') A list of backbone
+                families that this segmentation model is compatible with, e.g.,
+                ["resnet", "densenet"]. If None, it attempts to read the
+                ALLOWED_BACKBONE_FAMILIES attribute from the decorated class.
 
         Returns:
             A decorator that registers the class.
 
-        Example:
+        Example (Backbone):
             >>> @registration.register(name="resnet18", family="resnet")
             ... class ResNet18:
             ...     pass
+
+        Example (Segmentor):
+            >>> @registration.register(type="segmentation", name="unet")
+            ... class UNet:
+            ...     ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet"]
         """
 
         def decorator(cls):
@@ -223,16 +104,17 @@ class ModelRegistry:
         return decorator
 
     def get_entry(self, name: str):
-        """Retrieves a backbone's registry entry by its name.
+        """Retrieves a model's registry entry by its name (backbone or segmentor).
 
         Args:
-            name: The name of the backbone to retrieve (case-insensitive).
+            name: The name of the model to retrieve (case-insensitive).
 
         Returns:
-            A dictionary containing the class and family of the backbone.
+            A dictionary containing the model's class and metadata
+            (either 'family' for backbones or 'allowed_families' for segmentors).
 
         Raises:
-            KeyError: If the specified backbone is not found in the registry.
+            KeyError: If the specified model is not found in either registry.
         """
         key = name.lower()
 
@@ -249,25 +131,27 @@ class ModelRegistry:
         raise KeyError(f"Model '{name}' not found in registry. Available models: {all_available}")
 
     def get(self, name: str):
-        """Retrieves a backbone's class by its name.
+        """Retrieves a registered model's class by its name.
 
         Args:
-            name: The name of the backbone to retrieve (case-insensitive).
+            name: The name of the model to retrieve (case-insensitive).
 
         Returns:
-            The Python class object for the specified backbone.
+            The Python class object for the specified model.
         """
         return self.get_entry(name)["class"]
 
     def create(self, name, **kwargs):
-        """Instantiates a backbone model from the registry.
+        """Instantiates a model from the registry.
+
+        This method can instantiate either a backbone or a segmentation model.
 
         Args:
-            name: The name of the backbone to instantiate (case-insensitive).
+            name: The name of the model to instantiate (case-insensitive).
             **kwargs: Keyword arguments to be passed to the class constructor.
 
         Returns:
-            An instance of the specified backbone class.
+            An instance of the specified model class.
         """
         cls = self.get(name)
         return cls(**kwargs)
@@ -289,6 +173,17 @@ class ModelRegistry:
         return grouped
 
     def list(self, family=None):
+        """Prints a rich Table catalog of all registered models.
+
+        Models are grouped by their backbone family, showing which segmentors
+        support that family and what backbone variants are available.
+
+        Args:
+            family: (Optional) Filter the output to show only a specific backbone family.
+
+        Returns:
+            A TabularOutput object containing the formatted rich Table.
+        """
         # Initialize rich Table
         table = Table(
             title="Model Registry Catalog",
