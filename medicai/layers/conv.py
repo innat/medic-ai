@@ -1,5 +1,67 @@
 from keras import constraints, initializers, layers, regularizers
 
+from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer
+
+
+def ConvBnAct(
+    filters,
+    kernel_size=3,
+    strides=1,
+    padding="same",
+    normalization="batch",
+    activation="relu",
+    name_prefix="",
+):
+    """
+    Generic convolution → normalization → activation block.
+    Works for both 2D and 3D input tensors (auto-detects spatial dims).
+
+    Args:
+        filters (int): Number of output filters.
+        kernel_size (int | tuple): Size of the convolution kernel.
+        strides (int | tuple): Stride value for convolution.
+        padding (str): Padding type, e.g. 'same' or 'valid'.
+        normalization (str | None): Type of normalization ('batch', 'layer', etc.) or None.
+        activation (str | None): Type of activation (e.g. 'relu', 'gelu', etc.) or None.
+        name_prefix (str): Optional prefix for layer naming.
+
+    Returns:
+        function: A function that applies the block to an input tensor.
+    """
+
+    def apply(x):
+        # Determine 2D or 3D dynamically
+        spatial_dims = len(x.shape) - 2
+        dim_str = f"{spatial_dims}D"
+
+        conv_name = f"{name_prefix}_conv_{dim_str}"
+        norm_name = f"{name_prefix}_norm_{dim_str}"
+        act_name = f"{name_prefix}_activation"
+
+        # Apply convolution
+        x = get_conv_layer(
+            spatial_dims,
+            layer_type="conv",
+            filters=filters,
+            kernel_size=kernel_size,
+            strides=strides,
+            padding=padding,
+            use_bias=not normalization,
+            name=conv_name,
+        )(x)
+
+        # Apply normalization if specified
+        if normalization:
+            x = get_norm_layer(layer_type=normalization, name=norm_name)(x)
+
+        # Apply activation if specified
+        if activation:
+            x = get_act_layer(layer_type=activation, name=act_name)(x)
+
+        return x
+
+    return apply
+
 
 class DepthwiseConv3D(layers.Conv3D):
     """

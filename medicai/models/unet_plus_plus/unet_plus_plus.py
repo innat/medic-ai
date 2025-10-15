@@ -1,7 +1,14 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_conv_layer, resolve_encoder
+from medicai.utils import (
+    VALID_ACTIVATION_LIST,
+    VALID_DECODER_BLOCK_TYPE,
+    VALID_DECODER_NORMS,
+    DescribeMixin,
+    get_conv_layer,
+    resolve_encoder,
+)
 
 from .decoder import UNetPlusPlusDecoder
 
@@ -30,7 +37,8 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         encoder_depth=5,
         num_classes=1,
         decoder_filters=(256, 128, 64, 32, 16),
-        decoder_use_batchnorm=True,
+        decoder_normalization="batch",
+        decoder_activation="relu",
         decoder_block_type="upsampling",
         classifier_activation="sigmoid",
         name=None,
@@ -67,8 +75,25 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 Note: When using 'transpose', only one Conv3x3BnReLU block is
                 applied after upsampling to reduce trainable parameters, whereas
                 'upsampling' uses two blocks.
-            decoder_use_batchnorm: Whether to include BatchNormalization layers
-                in unet decoder blocks.
+            decoder_normalization (str | bool): Controls the use of normalization layers in UNet decoder blocks.
+                It is a string specifying the normalization type.
+                - If a string is provided, the specified normalization type will be used instead.
+                    Supported arguments:
+                        [False, "batch", "layer", "unit", "group", "instance", "sync_batch]
+                - If `False`, no normalization layer will be used.
+                Supported options include:
+                    - `"batch"`: `keras.layers.BatchNormalization`
+                    - `"layer"`: `keras.layers.LayerNormalization`
+                    - `"unit"`: `keras.layers.UnitNormalization`
+                    - `"group"`: `keras.layers.GroupNormalization`
+                    - `"instance"`: `partial(
+                            keras.layers.GroupNormalization,
+                            groups=-1, epsilon=1e-05, scale=False, center=False
+                        )`
+                    - `"sync_batch"`: `partial(keras.layers.BatchNormalization, synchronized=True)`
+            decoder_activation (str): Controls the use of activation layers in UNet decoder blocks.
+                It should the activation string identifier in available in keras.
+                Default: 'relu'
             decoder_filters: A tuple of integers specifying the number of
                 filters for each block in the decoder path. The number of
                 filters should correspond to the `encoder_depth`.
@@ -106,10 +131,23 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
-        if decoder_block_type not in ("upsampling", "transpose"):
+        if isinstance(decoder_normalization, str):
+            decoder_normalization = decoder_normalization.lower()
+
+        if decoder_normalization not in VALID_DECODER_NORMS:
+            supported = ", ".join([str(v) for v in VALID_DECODER_NORMS])
             raise ValueError(
-                f"Invalid decoder_block_type: '{decoder_block_type}'. "
-                "Expected one of ('upsampling', 'transpose')."
+                f"Invalid value for `decoder_normalization`: {decoder_normalization!r}. "
+                f"Supported values are: {supported}"
+            )
+
+        if isinstance(decoder_activation, str):
+            decoder_activation = decoder_activation.lower()
+
+        if decoder_activation not in VALID_ACTIVATION_LIST:
+            raise ValueError(
+                f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
+                f"Supported values are: {VALID_ACTIVATION_LIST}"
             )
 
         # Prepare head and skip layers (same as UNet)
@@ -125,7 +163,8 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
             skip_layers=skip_layers,
             decoder_filters=decoder_filters,
             decoder_block_type=decoder_block_type,
-            decoder_use_batchnorm=decoder_use_batchnorm,
+            decoder_normalization=decoder_normalization,
+            decoder_activation=decoder_activation,
         )
         x = decoder(bottleneck)
 
@@ -148,7 +187,8 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         self.classifier_activation = classifier_activation
         self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
-        self.decoder_use_batchnorm = decoder_use_batchnorm
+        self.decoder_activation = decoder_activation
+        self.decoder_normalization = decoder_normalization
 
     def get_config(self):
         config = super().get_config()
@@ -161,7 +201,8 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 "classifier_activation": self.classifier_activation,
                 "decoder_filters": self.decoder_filters,
                 "decoder_block_type": self.decoder_block_type,
-                "decoder_use_batchnorm": self.decoder_use_batchnorm,
+                "decoder_normalization": self.decoder_normalization,
+                "decoder_activation": self.decoder_activation,
             }
         )
 

@@ -1,6 +1,6 @@
 from keras import layers
 
-from medicai.models.unet.decoder import Conv3x3BnReLU
+from medicai.layers import ConvBnAct
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
 INVALID_BLOCK_TYPE_MSG = "Invalid decoder_block_type '{}'. Must be 'upsampling' or 'transpose'."
@@ -11,7 +11,8 @@ def UNetPlusPlusDecoder(
     skip_layers,
     decoder_filters,
     decoder_block_type,
-    decoder_use_batchnorm=True,
+    decoder_normalization="batch",
+    decoder_activation="relu",
 ):
     def upsample_block(x, name_prefix):
         return get_reshaping_layer(
@@ -28,8 +29,10 @@ def UNetPlusPlusDecoder(
             padding="same",
             name=f"{name_prefix}_transpose",
         )(x)
-        if decoder_use_batchnorm:
-            x = get_norm_layer(layer_type="batch", axis=-1, name=f"{name_prefix}_transpose_bn")(x)
+        if decoder_normalization:
+            x = get_norm_layer(
+                layer_type=decoder_normalization, name=f"{name_prefix}_transpose_norm"
+            )(x)
         x = get_act_layer(layer_type="relu", name=f"{name_prefix}_transpose_relu")(x)
         return x
 
@@ -117,11 +120,14 @@ def UNetPlusPlusDecoder(
                 x_ij = concat_inputs
 
                 for conv_idx in range(1, num_convs + 1):
-                    x_ij = Conv3x3BnReLU(
-                        spatial_dims,
+                    x_ij = ConvBnAct(
                         decoder_filters[i],
-                        decoder_use_batchnorm,
-                        f"x_{i}_{j}_conv{conv_idx}",
+                        kernel_size=3,
+                        strides=1,
+                        padding="same",
+                        normalization=decoder_normalization,
+                        activation=decoder_activation,
+                        name_prefix=f"x_{i}_{j}_conv{conv_idx}",
                     )(x_ij)
 
                 dense_grid[(i, j)] = x_ij
