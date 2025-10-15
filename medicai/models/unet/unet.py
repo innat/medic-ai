@@ -1,5 +1,5 @@
 import keras
-from keras import layers
+from keras import layers, ops
 
 from medicai.utils import (
     VALID_ACTIVATION_LIST,
@@ -7,6 +7,7 @@ from medicai.utils import (
     VALID_DECODER_NORMS,
     DescribeMixin,
     get_conv_layer,
+    get_reshaping_layer,
     resolve_encoder,
 )
 
@@ -35,7 +36,7 @@ class UNet(keras.Model, DescribeMixin):
 
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet"]
+    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet", "convnext"]
 
     def __init__(
         self,
@@ -123,13 +124,18 @@ class UNet(keras.Model, DescribeMixin):
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
-        required_keys = {"P1", "P2", "P3", "P4", "P5"}
-        missing_keys = set(required_keys) - set(pyramid_outputs.keys())
+        # Determine required pyramid levels dynamically
+        required_keys = {f"P{i}" for i in range(1, encoder_depth + 1)}
+        available_keys = set(pyramid_outputs.keys())
+
+        # Find missing ones
+        missing_keys = required_keys - available_keys
         if missing_keys:
             raise ValueError(
-                f"The encoder's `pyramid_outputs` is missing one or more required keys. "
-                f"Missing keys: {missing_keys}. "
-                f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
+                f"The encoder's `pyramid_outputs` is missing required pyramid levels. "
+                f"Missing: {missing_keys}. "
+                f"Expected keys (based on encoder_depth={encoder_depth}): {required_keys}, "
+                f"but got: {available_keys}"
             )
 
         if not (3 <= encoder_depth <= 5):
@@ -166,10 +172,9 @@ class UNet(keras.Model, DescribeMixin):
             )
 
         # prepare head and skip layers
-        bottleneck_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
-        bottleneck_index = 5 - encoder_depth
-        bottleneck = pyramid_outputs[bottleneck_keys[bottleneck_index]]
-        skip_layers = [pyramid_outputs[key] for key in bottleneck_keys[bottleneck_index + 1 :]]
+        sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
+        bottleneck = pyramid_outputs[sorted_keys[0]]
+        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:]]
         decoder_filters = decoder_filters[:encoder_depth]
 
         # unet decoder blocks
