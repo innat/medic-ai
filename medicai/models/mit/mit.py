@@ -186,6 +186,39 @@ class MixViTB0(MiTBase, DescribeMixin):
         'SegFormer3D: an Efficient Transformer for 3D Medical Image Segmentation'
         - Encoder: MiT-B0
         - Paper: https://arxiv.org/abs/2404.10156
+
+    Initializes the Mix Transformer B0 (MiT-B0) model.
+
+    This constructor automatically sets the MiT-B0-specific hyper-parameters
+    and accepts configuration for the input and output head.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -201,39 +234,6 @@ class MixViTB0(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B0 (MiT-B0) model.
-
-        This constructor automatically sets the MiT-B0-specific hyper-parameters
-        and accepts configuration for the input and output head.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B0 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.
@@ -316,6 +316,36 @@ class MixViTB1(MiTBase, DescribeMixin):
         'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
         - Encoder: MiT-B1
         - Paper: https://arxiv.org/abs/2105.15203
+
+    Initializes the Mix Transformer B1 (MiT-B1) model.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -331,36 +361,6 @@ class MixViTB1(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B1 (MiT-B1) model.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B1 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.
@@ -445,6 +445,36 @@ class MixViTB2(MiTBase, DescribeMixin):
         'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
         - Encoder: MiT-B2
         - Paper: https://arxiv.org/abs/2105.15203
+
+    Initializes the Mix Transformer B2 (MiT-B2) model.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -460,36 +490,6 @@ class MixViTB2(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B2 (MiT-B2) model.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B2 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.
@@ -575,6 +575,40 @@ class MixViTB3(MiTBase, DescribeMixin):
         'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
         - Encoder: MiT-B3
         - Paper: https://arxiv.org/abs/2105.15203
+
+    Initializes the Mix Transformer B3 (MiT-B3) model.
+
+    This constructor automatically sets the MiT-B3-specific hyper-parameters
+    (e.g., `depths=[3, 4, 18, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
+    and accepts configuration for the input and output head.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -590,40 +624,6 @@ class MixViTB3(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B3 (MiT-B3) model.
-
-        This constructor automatically sets the MiT-B3-specific hyper-parameters
-        (e.g., `depths=[3, 4, 18, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
-        and accepts configuration for the input and output head.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B3 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.
@@ -708,6 +708,36 @@ class MixViTB4(MiTBase, DescribeMixin):
         'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
         - Encoder: MiT-B4
         - Paper: https://arxiv.org/abs/2105.15203
+
+    Initializes the Mix Transformer B4 (MiT-B4) model.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -723,36 +753,6 @@ class MixViTB4(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B4 (MiT-B4) model.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B4 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.
@@ -837,6 +837,40 @@ class MixViTB5(MiTBase, DescribeMixin):
         'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
         - Encoder: MiT-B5
         - Paper: https://arxiv.org/abs/2105.15203
+
+    Initializes the Mix Transformer B5 (MiT-B5) model.
+
+    This constructor automatically sets the MiT-B5-specific hyper-parameters
+    (e.g., `depths=[3, 6, 40, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
+    and accepts configuration for the input and output head.
+
+    Args:
+        input_shape: A tuple specifying the shape of the input tensor,
+            excluding the batch dimension. Format is typically (H, W, C) for 2D
+            images or (D, H, W, C) for 3D volumes.
+            *Effect:* Defines the input shape for the entire model.
+        include_rescaling: Boolean, determines whether to include a **rescaling**
+            layer at the start of the model to normalize pixel values.
+            *Effect:* If True, applies an input pre-processing step. Default: False.
+        include_top: Boolean, whether to include the final **Dense classification
+            layer** (the "top") on top of the feature extractor.
+            *Effect:* If True, the model output is a probability distribution/logits.
+            If False, the model outputs the feature map for downstream tasks. Default: True.
+        num_classes: Optional integer, the number of output classes. Only
+            relevant if `include_top` is True.
+            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
+        pooling: Optional string, only relevant when `include_top=False`.
+            Specifies the global pooling type to apply to the feature map:
+            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
+            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
+        classifier_activation: Optional activation function for the final
+            Dense classification layer. Only relevant if `include_top` is True.
+            *Effect:* Typically 'softmax' for multi-class classification or
+            'sigmoid' for multi-label classification. Default: "softmax".
+        name: Optional string, the name to give the Keras model.
+            *Effect:* Sets the model's identifier. Default: Auto-generated.
+        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
+            constructor.
     """
 
     def __init__(
@@ -852,40 +886,6 @@ class MixViTB5(MiTBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the Mix Transformer B5 (MiT-B5) model.
-
-        This constructor automatically sets the MiT-B5-specific hyper-parameters
-        (e.g., `depths=[3, 6, 40, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
-        and accepts configuration for the input and output head.
-
-        Args:
-            input_shape: A tuple specifying the shape of the input tensor,
-                excluding the batch dimension. Format is typically (H, W, C) for 2D
-                images or (D, H, W, C) for 3D volumes.
-                *Effect:* Defines the input shape for the entire model.
-            include_rescaling: Boolean, determines whether to include a **rescaling**
-                layer at the start of the model to normalize pixel values.
-                *Effect:* If True, applies an input pre-processing step. Default: False.
-            include_top: Boolean, whether to include the final **Dense classification
-                layer** (the "top") on top of the feature extractor.
-                *Effect:* If True, the model output is a probability distribution/logits.
-                If False, the model outputs the feature map for downstream tasks. Default: True.
-            num_classes: Optional integer, the number of output classes. Only
-                relevant if `include_top` is True.
-                *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-            pooling: Optional string, only relevant when `include_top=False`.
-                Specifies the global pooling type to apply to the feature map:
-                'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-                *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-            classifier_activation: Optional activation function for the final
-                Dense classification layer. Only relevant if `include_top` is True.
-                *Effect:* Typically 'softmax' for multi-class classification or
-                'sigmoid' for multi-label classification. Default: "softmax".
-            name: Optional string, the name to give the Keras model.
-                *Effect:* Sets the model's identifier. Default: Auto-generated.
-            **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-                constructor.
-
         Default Parameters (MiT-B5 specific):
             max_drop_path_rate: Float, the maximum drop path rate for regularization.
                 *Effect:* A higher value increases regularization to prevent overfitting.

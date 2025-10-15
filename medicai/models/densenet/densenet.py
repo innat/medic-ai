@@ -118,20 +118,6 @@ class DenseNetBase(keras.Model):
 @keras.saving.register_keras_serializable(package="densenet121")
 @registration.register(family="densenet")
 class DenseNet121(DenseNetBase, DescribeMixin):
-    """
-    A full DenseNet121 model for classification.
-
-    This class provides a complete DenseNet121 model, including both the
-    convolutional backbone and the classification head (the "top"). It is
-    capable of handling both 2D and 3D inputs. The model's architecture is
-    defined by the `DenseNetBackbone` and a final classification layer.
-
-    The model can be used for a variety of tasks, including image
-    classification on 2D images (with input shape `(height, width, channels)`)
-    and volumetric data classification on 3D images (with input shape
-    `(depth, height, width, channels)`).
-    """
-
     def __init__(
         self,
         *,
@@ -144,32 +130,6 @@ class DenseNet121(DenseNetBase, DescribeMixin):
         name=None,
         **kwargs,
     ):
-        """
-        Initializes the DenseNet121 model.
-
-        Args:
-            input_shape: A tuple specifying the input shape of the model,
-                not including the batch size. Can be `(height, width, channels)`
-                for 2D or `(depth, height, width, channels)` for 3D.
-            include_rescaling: A boolean indicating whether to include a
-                `Rescaling` layer at the beginning of the model. If `True`,
-                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
-            include_top: A boolean indicating whether to include the fully
-                connected classification layer at the top of the network. If
-                `False`, the model's output will be the features from the
-                backbone, without the final classifier.
-            num_classes: An integer specifying the number of classes for the
-                classification layer. This is only relevant if `include_top`
-                is `True`.
-            pooling: (Optional) A string specifying the type of pooling to
-                apply to the output of the backbone. Can be `"avg"` for global
-                average pooling or `"max"` for global max pooling. This is only
-                relevant if `include_top` is `False`.
-            classifier_activation: A string specifying the activation function
-                to use for the classification layer.
-            name: (Optional) The name of the model.
-            **kwargs: Additional keyword arguments.
-        """
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 24, 16],
@@ -186,20 +146,6 @@ class DenseNet121(DenseNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="densenet169")
 @registration.register(family="densenet")
 class DenseNet169(DenseNetBase, DescribeMixin):
-    """
-    A full DenseNet169 model for classification.
-
-    This class provides a complete DenseNet169 model, including both the
-    convolutional backbone and the classification head (the "top"). It is
-    capable of handling both 2D and 3D inputs. The model's architecture is
-    defined by the `DenseNetBackbone` and a final classification layer.
-
-    The model can be used for a variety of tasks, including image
-    classification on 2D images (with input shape `(height, width, channels)`)
-    and volumetric data classification on 3D images (with input shape
-    `(depth, height, width, channels)`).
-    """
-
     def __init__(
         self,
         *,
@@ -212,32 +158,6 @@ class DenseNet169(DenseNetBase, DescribeMixin):
         name=None,
         **kwargs,
     ):
-        """
-        Initializes the DenseNet169 model.
-
-        Args:
-            input_shape: A tuple specifying the input shape of the model,
-                not including the batch size. Can be `(height, width, channels)`
-                for 2D or `(depth, height, width, channels)` for 3D.
-            include_rescaling: A boolean indicating whether to include a
-                `Rescaling` layer at the beginning of the model. If `True`,
-                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
-            include_top: A boolean indicating whether to include the fully
-                connected classification layer at the top of the network. If
-                `False`, the model's output will be the features from the
-                backbone, without the final classifier.
-            num_classes: An integer specifying the number of classes for the
-                classification layer. This is only relevant if `include_top`
-                is `True`.
-            pooling: (Optional) A string specifying the type of pooling to
-                apply to the output of the backbone. Can be `"avg"` for global
-                average pooling or `"max"` for global max pooling. This is only
-                relevant if `include_top` is `False`.
-            classifier_activation: A string specifying the activation function
-                to use for the classification layer.
-            name: (Optional) The name of the model.
-            **kwargs: Additional keyword arguments.
-        """
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 32, 32],
@@ -254,20 +174,6 @@ class DenseNet169(DenseNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="densenet201")
 @registration.register(family="densenet")
 class DenseNet201(DenseNetBase, DescribeMixin):
-    """
-    A full DenseNet201 model for classification.
-
-    This class provides a complete DenseNet201 model, including both the
-    convolutional backbone and the classification head (the "top"). It is
-    capable of handling both 2D and 3D inputs. The model's architecture is
-    defined by the `DenseNetBackbone` and a final classification layer.
-
-    The model can be used for a variety of tasks, including image
-    classification on 2D images (with input shape `(height, width, channels)`)
-    and volumetric data classification on 3D images (with input shape
-    `(depth, height, width, channels)`).
-    """
-
     def __init__(
         self,
         *,
@@ -280,32 +186,6 @@ class DenseNet201(DenseNetBase, DescribeMixin):
         name=None,
         **kwargs,
     ):
-        """
-        Initializes the DenseNet201 model.
-
-        Args:
-            input_shape: A tuple specifying the input shape of the model,
-                not including the batch size. Can be `(height, width, channels)`
-                for 2D or `(depth, height, width, channels)` for 3D.
-            include_rescaling: A boolean indicating whether to include a
-                `Rescaling` layer at the beginning of the model. If `True`,
-                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
-            include_top: A boolean indicating whether to include the fully
-                connected classification layer at the top of the network. If
-                `False`, the model's output will be the features from the
-                backbone, without the final classifier.
-            num_classes: An integer specifying the number of classes for the
-                classification layer. This is only relevant if `include_top`
-                is `True`.
-            pooling: (Optional) A string specifying the type of pooling to
-                apply to the output of the backbone. Can be `"avg"` for global
-                average pooling or `"max"` for global max pooling. This is only
-                relevant if `include_top` is `False`.
-            classifier_activation: A string specifying the activation function
-                to use for the classification layer.
-            name: (Optional) The name of the model.
-            **kwargs: Additional keyword arguments.
-        """
         super().__init__(
             input_shape=input_shape,
             blocks=[6, 12, 48, 32],
@@ -317,3 +197,79 @@ class DenseNet201(DenseNetBase, DescribeMixin):
             name=name,
             **kwargs,
         )
+
+
+DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR = """
+{name} model for classification, supporting both 2D and 3D inputs.
+
+This class provides a complete **{name}** model, including the
+convolutional backbone and the classification head (the "top"). DenseNet is
+characterized by its **Dense Blocks** where each layer receives feature maps from
+all preceding layers in the block, and the "bottleneck" (1x1 convolution) and
+"compression" (1x1 convolution + 2x2 average pooling) layers in between blocks.
+
+It can operate on **2D inputs** (e.g., images of shape `(H, W, C)`) or **3D inputs**
+(e.g., volumetric data of shape `(D, H, W, C)`).
+
+References:
+    - "Densely Connected Convolutional Networks". CVPR 2017.
+      [arXiv:1608.06993](https://arxiv.org/abs/1608.06993)
+
+Example:
+    # TensorFlow / Keras - 2D cases.
+    >>> import tensorflow as tf
+    >>> from your_module import {name}
+    >>> # Classification model
+    >>> model = {name}(input_shape=(224, 224, 3), num_classes=10)
+    >>> x = tf.random.normal((1, 224, 224, 3))
+    >>> y = model(x)
+    >>> y.shape
+    (1, 10)
+
+    # PyTorch - 2D cases.
+    >>> import torch
+    >>> from your_module import {name}
+    >>> # Classification model
+    >>> model = {name}(input_shape=(224, 224, 3), num_classes=10) 
+    >>> x = torch.randn((1, 224, 224, 3))
+    >>> y = model(x)
+    >>> y.shape
+    torch.Size([1, 10])
+
+
+Initializes the {name} model.
+
+Args:
+    input_shape: A tuple specifying the input shape of the model,
+        not including the batch size. Can be `(height, width, channels)`
+        for 2D or `(depth, height, width, channels)` for 3D.
+    include_rescaling: A boolean indicating whether to include a
+        `Rescaling` layer at the beginning of the model. If `True`,
+        the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
+        Defaults to `False`.
+    include_top: A boolean indicating whether to include the fully
+        connected classification layer at the top of the network. If
+        `False`, the model's output will be the features from the
+        backbone, without the final classifier. Defaults to `True`.
+    num_classes: An integer specifying the number of classes for the
+        classification layer. This is only relevant if `include_top`
+        is `True`. Defaults to 1000.
+    pooling: (Optional) A string specifying the type of pooling to
+        apply to the output of the backbone. Can be `"avg"` for global
+        average pooling or `"max"` for global max pooling. This is only
+        relevant if `include_top` is `False`.
+    classifier_activation: A string specifying the activation function
+        to use for the classification layer. Defaults to `"softmax"`.
+    name: (Optional) The name of the model.
+    **kwargs: Additional keyword arguments.
+"""
+
+DenseNet121.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+    name="DenseNet121",
+)
+DenseNet169.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+    name="DenseNet169",
+)
+DenseNet201.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+    name="DenseNet201",
+)
