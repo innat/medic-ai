@@ -1,8 +1,8 @@
-from pathlib import Path
-
-from medicai.utils.general import DescribeMixin, camel_to_snake, hide_warnings, resize_volumes
+from medicai.utils.describe_mixin import DescribeMixin
+from medicai.utils.general import camel_to_snake, hide_warnings
+from medicai.utils.image import resize_volumes
 from medicai.utils.inference import SlidingWindowInference, sliding_window_inference
-from medicai.utils.model_utils import (
+from medicai.utils.swi_utils import (
     get_act_layer,
     get_conv_layer,
     get_norm_layer,

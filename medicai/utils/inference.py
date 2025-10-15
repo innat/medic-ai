@@ -4,7 +4,7 @@ import numpy as np
 from scipy.ndimage import zoom
 from tqdm import tqdm
 
-from medicai.utils.general import (
+from .swi_utils import (
     compute_importance_map,
     crop_output,
     dense_patch_slices,
