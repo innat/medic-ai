@@ -7,6 +7,7 @@ from medicai.utils import (
     VALID_DECODER_NORMS,
     DescribeMixin,
     get_conv_layer,
+    get_reshaping_layer,
     resolve_encoder,
 )
 
@@ -40,6 +41,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         decoder_normalization="batch",
         decoder_activation="relu",
         decoder_block_type="upsampling",
+        head_upsample=1,
         classifier_activation="sigmoid",
         name=None,
         **kwargs,
@@ -99,6 +101,13 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 filters should correspond to the `encoder_depth`.
             num_classes: An integer specifying the number of classes for the
                 final segmentation mask.
+            head_upsample : int or tuple/list of ints, default=1
+                Optional upsampling factor for the final segmentation head.
+                - If an `int` > 1, all spatial dimensions are upsampled by this factor.
+                - If a `tuple` or `list`, each element specifies the upsampling factor for the
+                    corresponding spatial dimension (2D: (H, W), 3D: (D, H, W)).
+                - If 1 or all elements are 1, no upsampling is applied.
+                This is useful when the decoder output is smaller than the desired output resolution.
             classifier_activation: A string specifying the activation function
                 for the final classification layer.
             name: (Optional) The name of the model.
@@ -176,6 +185,23 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         x = get_conv_layer(
             spatial_dims, layer_type="conv", filters=num_classes, kernel_size=1, padding="same"
         )(x)
+
+        # Some encoder like, i.e. convnext need final upsampling.
+        if isinstance(head_upsample, int):
+            if head_upsample > 1:
+                x = get_reshaping_layer(
+                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
+                )(x)
+        elif isinstance(head_upsample, (tuple, list)):
+            if any(f > 1 for f in head_upsample):
+                x = get_reshaping_layer(
+                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
+                )(x)
+        else:
+            raise ValueError(
+                f"`head_upsampling_factor` must be int or tuple/list, got {type(head_upsample)}"
+            )
+
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
         super().__init__(
