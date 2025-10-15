@@ -207,7 +207,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 )(x)
         else:
             raise ValueError(
-                f"`head_upsampling_factor` must be int or tuple/list, got {type(head_upsample)}"
+                f"`head_upsample` must be int or tuple/list, got {type(head_upsample)}"
             )
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
@@ -227,6 +227,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         self.decoder_filters = decoder_filters
         self.decoder_activation = decoder_activation
         self.decoder_normalization = decoder_normalization
+        self.head_upsample = head_upsample
 
     def get_config(self):
         config = super().get_config()
@@ -241,6 +242,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 "decoder_block_type": self.decoder_block_type,
                 "decoder_normalization": self.decoder_normalization,
                 "decoder_activation": self.decoder_activation,
+                "head_upsample": self.head_upsample,
             }
         )
 

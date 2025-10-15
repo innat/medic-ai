@@ -33,7 +33,9 @@ def UNetPlusPlusDecoder(
             x = get_norm_layer(
                 layer_type=decoder_normalization, name=f"{name_prefix}_transpose_norm"
             )(x)
-        x = get_act_layer(layer_type="relu", name=f"{name_prefix}_transpose_relu")(x)
+        x = get_act_layer(
+            layer_type=decoder_activation, name=f"{name_prefix}_transpose_activation"
+        )(x)
         return x
 
     def apply(x):

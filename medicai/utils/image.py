@@ -5,7 +5,9 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
     def trilinear_resize(volumes, depth, height, width, align_corners):
         original_dtype = volumes.dtype
         volumes = ops.cast(volumes, "float32")
-        batch_size, in_d, in_h, in_w, channels = ops.shape(volumes)
+        in_d = ops.shape(volumes)[1]
+        in_h = ops.shape(volumes)[2]
+        in_w = ops.shape(volumes)[3]
 
         if align_corners:
             # Map corner to corner
@@ -59,7 +61,8 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
         return ops.cast(interp_w, original_dtype)
 
     def nearest(volumes, depth, height, width):
-        bs, d, h, w, c = ops.shape(volumes)
+        shape = ops.shape(volumes)
+        bs, d, h, w, c = shape[0], shape[1], shape[2], shape[3], shape[4]
 
         z = ops.linspace(0.0, ops.cast(d - 1, "float32"), depth)
         z = ops.cast(ops.round(z), "int32")

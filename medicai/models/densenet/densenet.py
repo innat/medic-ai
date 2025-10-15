@@ -199,7 +199,7 @@ class DenseNet201(DenseNetBase, DescribeMixin):
         )
 
 
-DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR = """
+DENSENET_DOCSTRING = """
 {name} model for classification, supporting both 2D and 3D inputs.
 
 This class provides a complete **{name}** model, including the
@@ -218,7 +218,7 @@ References:
 Example:
     # TensorFlow / Keras - 2D cases.
     >>> import tensorflow as tf
-    >>> from your_module import {name}
+    >>> from medicai.models import {name}
     >>> # Classification model
     >>> model = {name}(input_shape=(224, 224, 3), num_classes=10)
     >>> x = tf.random.normal((1, 224, 224, 3))
@@ -228,7 +228,7 @@ Example:
 
     # PyTorch - 2D cases.
     >>> import torch
-    >>> from your_module import {name}
+    >>> from medicai.models import {name}
     >>> # Classification model
     >>> model = {name}(input_shape=(224, 224, 3), num_classes=10) 
     >>> x = torch.randn((1, 224, 224, 3))
@@ -264,12 +264,12 @@ Args:
     **kwargs: Additional keyword arguments.
 """
 
-DenseNet121.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+DenseNet121.__doc__ = DENSENET_DOCSTRING.format(
     name="DenseNet121",
 )
-DenseNet169.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+DenseNet169.__doc__ = DENSENET_DOCSTRING.format(
     name="DenseNet169",
 )
-DenseNet201.__doc__ = DENSENET_DOCSTRING_NO_FEATURE_EXTRACTOR.format(
+DenseNet201.__doc__ = DENSENET_DOCSTRING.format(
     name="DenseNet201",
 )
