@@ -39,7 +39,7 @@ Installing from source GitHub: (**recommended**)
 !pip install git+https://github.com/innat/medic-ai.git
 ```
 
-# Quick Start
+# Quick Overview
 
 For details end-to-end training workflow, please check the [guide](#-guides) section.
 
@@ -90,92 +90,77 @@ The available `model/encoder` can be listed down, showing below.
 import medicai
 medicai.models.list_models()
 
-          Available Models           
-┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃ Models          ┃ Encoder Name    ┃
-┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│ densenet        │ • densenet121   │
-│                 │ • densenet169   │
-│                 │ • densenet201   │
-├─────────────────┼─────────────────┤
-│ mit             │ • mit_b0        │
-│                 │ • mit_b1        │
-│                 │ • mit_b2        │
-│                 │ • mit_b3        │
-│                 │ • mit_b4        │
-│                 │ • mit_b5        │
-├─────────────────┼─────────────────┤
-│ resnet          │ • resnet18      │
-│                 │ • resnet34      │
-│                 │ • resnet50      │
-│                 │ • resnet101     │
-│                 │ • resnet152     │
-│                 │ • resnet50v2    │
-│                 │ • resnet101v2   │
-│                 │ • resnet152v2   │
-│                 │ • resnet50vd    │
-│                 │ • resnet200vd   │
-├─────────────────┼─────────────────┤
-│ swin            │ • swin_tiny     │
-│                 │ • swin_small    │
-│                 │ • swin_base     │
-│                 │ • swin_tiny_v2  │
-│                 │ • swin_small_v2 │
-│                 │ • swin_base_v2  │
-├─────────────────┼─────────────────┤
-│ vit             │ • vit_base      │
-│                 │ • vit_large     │
-│                 │ • vit_huge      │
-...
-```
-
-Each model class provides `class_describe` and `instance_describe` attributes, which offer helpful documentation and display the default built-in parameters. Here is an example:
-
-```python
-from medicai.models import TransUNet
-
-# `.class_describe()` will return helpful docstring
-TransUNet.class_describe()
-'''
-📌 Class: TransUNet
-
-Example:
->>> from medicai.models import TransUNet
->>> model = TransUNet(...)
-
-🧩 Allowed Backbone Families:
-  • densenet
-  • resnet
-'''
-```
-```python
-# `.instance_describe()` will return default parameter.
-model = TransUNet(
-    encoder_name='resnet18', 
-    input_shape=(96, 96, 96, 1)
-)
-model.instance_describe()
-'''
-Instance of TransUNet
-  • input_shape: (96, 96, 96, 1)
-  • num_classes: 1
-  • num_queries: 100
-  • encoder: ResNet18(
-    • name: 'ResNet183D'
-    • trainable: True
-    • input_shape: (96, 96, 96, 1)
-    • include_rescaling: False
-    )
-  • encoder_name: 'resnet18'
-  • classifier_activation: None
-  • patch_size: (3, 3, 3)
-  • num_encoder_layers: 6
-  • num_heads: 8
-  • embed_dim: 256
-  • mlp_dim: 1024
-  • dropout_rate: 0.1
-  • decoder_projection_filters: 64
-'''
+                   Model Registry Catalog
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
+┃ Segmentor        ┃ Backbone Family ┃ Variants            ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
+│ • attention_unet │ convnext        │ • convnext_base     │
+│ • unet           │                 │ • convnext_large    │
+│ • unet_plus_plus │                 │ • convnext_small    │
+│                  │                 │ • convnext_tiny     │
+│                  │                 │ • convnext_xlarge   │
+│                  │                 │ • convnextv2_atto   │
+│                  │                 │ • convnextv2_base   │
+│                  │                 │ • convnextv2_femto  │
+│                  │                 │ • convnextv2_huge   │
+│                  │                 │ • convnextv2_large  │
+│                  │                 │ • convnextv2_nano   │
+│                  │                 │ • convnextv2_pico   │
+│                  │                 │ • convnextv2_small  │
+│                  │                 │ • convnextv2_tiny   │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • attention_unet │ densenet        │ • densenet121       │
+│ • trans_unet     │                 │ • densenet169       │
+│ • unet           │                 │ • densenet201       │
+│ • unet_plus_plus │                 │                     │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • attention_unet │ efficientnet    │ • efficientnet_b0   │
+│ • unet           │                 │ • efficientnet_b1   │
+│ • unet_plus_plus │                 │ • efficientnet_b2   │
+│                  │                 │ • efficientnet_b3   │
+│                  │                 │ • efficientnet_b4   │
+│                  │                 │ • efficientnet_b5   │
+│                  │                 │ • efficientnet_b6   │
+│                  │                 │ • efficientnet_b7   │
+│                  │                 │ • efficientnet_b8   │
+│                  │                 │ • efficientnet_l2   │
+│                  │                 │ • efficientnetv2_b0 │
+│                  │                 │ • efficientnetv2_b1 │
+│                  │                 │ • efficientnetv2_b2 │
+│                  │                 │ • efficientnetv2_b3 │
+│                  │                 │ • efficientnetv2_l  │
+│                  │                 │ • efficientnetv2_m  │
+│                  │                 │ • efficientnetv2_s  │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • segformer      │ mit             │ • mit_b0            │
+│                  │                 │ • mit_b1            │
+│                  │                 │ • mit_b2            │
+│                  │                 │ • mit_b3            │
+│                  │                 │ • mit_b4            │
+│                  │                 │ • mit_b5            │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • attention_unet │ resnet          │ • resnet101         │
+│ • trans_unet     │                 │ • resnet101v2       │
+│ • unet           │                 │ • resnet152         │
+│ • unet_plus_plus │                 │ • resnet152v2       │
+│                  │                 │ • resnet18          │
+│                  │                 │ • resnet200vd       │
+│                  │                 │ • resnet34          │
+│                  │                 │ • resnet50          │
+│                  │                 │ • resnet50v2        │
+│                  │                 │ • resnet50vd        │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • swin_unetr     │ swin            │ • swin_base         │
+│                  │                 │ • swin_base_v2      │
+│                  │                 │ • swin_small        │
+│                  │                 │ • swin_small_v2     │
+│                  │                 │ • swin_tiny         │
+│                  │                 │ • swin_tiny_v2      │
+├──────────────────┼─────────────────┼─────────────────────┤
+│ • unetr          │ vit             │ • vit_base          │
+│                  │                 │ • vit_huge          │
+│                  │                 │ • vit_large         │
+.....
 ```
 
 # 📊 Features
@@ -184,20 +169,20 @@ Instance of TransUNet
 
 | Model | Supported Modalities | Primary Task | Architecture Type |
 | :--- | :--- | :--- | :--- |
-| **DenseNet** | 2D, 3D | Classification | CNN |
-| **ResNet (V1/V2)** | 2D, 3D | Classification | CNN |
-| **EfficientNet (V1/V2)** | 2D, 3D | Classification | CNN |
-| **ConvNeXt (V1/V2)** | 2D, 3D | Classification | CNN |
-| **ViT** | 2D, 3D | Classification | Transformer |
-| **MiT** | 2D, 3D | Classification | Transformer |
+| [**DenseNet**](medicai/models/densenet/README.md) | 2D, 3D | Classification | CNN |
+| [**ResNet (V1/V2)**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
+| [**EfficientNet (V1/V2)**](medicai/models/efficientnet/README.md) | 2D, 3D | Classification | CNN |
+| [**ConvNeXt (V1/V2)**](medicai/models/convnext/README.md) | 2D, 3D | Classification | CNN |
+| [**ViT**](medicai/models/vit/README.md) | 2D, 3D | Classification | Transformer |
+| [**MiT**](medicai/models/mit/README.md) | 2D, 3D | Classification | Transformer |
 | [**Swin Transformer (V1/V2)**](medicai/models/swin/README.md) | 2D, 3D | Classification | Transformer |
 | [**UNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**AttentionUNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
-| **UNETR** | 2D, 3D | Segmentation | Transformer |
+| [**UNETR**](medicai/models/unetr/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
-| **TransUNet** | 2D, 3D | Segmentation | Transformer |
-| **SegFormer** | 2D, 3D | Segmentation | Transformer |
+| [**TransUNet**](medicai/models/transunet/README.md) | 2D, 3D | Segmentation | Transformer |
+| [**SegFormer**](medicai/models/segformer/README.md) | 2D, 3D | Segmentation | Transformer |
 
 **Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with **TensorFlow** operations. It can be used in the `tf.data` API or a Python data generator and is fully compatible with multiple backends, `tf`, `torch`, `jax` in training and inference, supporting both GPUs and TPUs.
 
@@ -240,28 +225,8 @@ To learn more about **model**, **transformation**, and **training**, please visi
 
 # 🤝 Contributing
 
-Please refer to the current [roadmap](https://github.com/innat/medic-ai/wiki/Roadmap) for an overview of the project. Feel free to explore anything that interests you. If you have suggestions or ideas, I’d appreciate it if you could open a [GitHub issue](https://github.com/innat/medic-ai/issues/new/choose) so we can discuss them further.
+Please check the contribution guide [here](CONTRIBUTION.md).
 
-1. Install `medicai` from soruce:
-
-```bash
-!git clone https://github.com/innat/medic-ai
-%cd medic-ai
-!pip install keras -qU
-!pip install -e .
-%cd ..
-```
-
-Add your contribution and implement relevant test code.
-
-2. Run test code as:
-
-```
-python -m pytest test/
-
-# or, only one your new_method
-python -m pytest -k new_method
-```
 
 # 🙏 Acknowledgements
 

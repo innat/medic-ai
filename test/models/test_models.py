@@ -3,6 +3,7 @@ import tensorflow as tf
 
 from medicai.models import (
     UNETR,
+    ConvNeXtV2Atto,
     DenseNet121,
     EfficientNetB0,
     SegFormer,
@@ -46,6 +47,22 @@ def test_unet_pp(input_shape):
     dummy_input = tf.random.normal((1, *input_shape))
     output = model(dummy_input)
     expected_shape = (1, *input_shape[:-1], num_classes)
+    assert output.shape == expected_shape
+
+
+@pytest.mark.parametrize(
+    "input_shape",
+    [
+        (64, 64, 64, 1),
+        (64, 64, 1),
+    ],
+)
+def test_convnext(input_shape):
+    num_classes = 1
+    model = ConvNeXtV2Atto(input_shape=input_shape, num_classes=num_classes)
+    dummy_input = tf.random.normal((1, *input_shape))
+    output = model(dummy_input)
+    expected_shape = (1, num_classes)
     assert output.shape == expected_shape
 
 

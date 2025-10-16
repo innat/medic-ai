@@ -2,6 +2,8 @@ from medicai.utils.general import hide_warnings
 
 hide_warnings()
 
+from functools import partial
+
 import keras
 from keras import activations, layers
 
@@ -199,21 +201,23 @@ def get_norm_layer(layer_type, **kwargs):
     """
     layer_type = layer_type.lower()
 
-    if layer_type == "instance":
-        # Instance normalization is implemented via GroupNormalization with specific settings.
-        # Note: Custom kwargs are ignored for this layer type.
-        return layers.GroupNormalization(groups=-1, epsilon=1e-05, scale=False, center=False)
-
     # Lookup table for other normalizations
     norm_layers = {
         "batch": layers.BatchNormalization,
         "layer": layers.LayerNormalization,
         "unit": layers.UnitNormalization,
         "group": layers.GroupNormalization,
+        "instance": partial(
+            layers.GroupNormalization, groups=-1, epsilon=1e-05, scale=False, center=False
+        ),
+        "sync_batch": partial(layers.BatchNormalization, synchronized=True),
     }
 
     if layer_type not in norm_layers:
-        raise ValueError(f"Unsupported normalization: {layer_type}")
+        supported = ", ".join(norm_layers.keys())
+        raise ValueError(
+            f"Unsupported normalization type '{layer_type}'. " f"Supported types are: {supported}"
+        )
 
     layer_cls = norm_layers[layer_type]
     return layer_cls(**kwargs)
@@ -268,10 +272,10 @@ def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwar
                 "For 3D data, the format is `(depth, height, width, channels)`."
             )
 
-        if encoder_name.lower() not in registration._registry:
+        if encoder_name.lower() not in registration._backbone_registry:
             raise ValueError(
                 f"Encoder '{encoder_name}' not found in the registry. "
-                f"Available: {list(registration._registry.keys())}"
+                f"Available: {list(registration._backbone_registry.keys())}"
             )
 
         entry = registration.get_entry(encoder_name)

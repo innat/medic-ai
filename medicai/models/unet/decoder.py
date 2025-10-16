@@ -1,52 +1,17 @@
 from keras import layers
 
-from medicai.layers import AttentionGate
+from medicai.layers import AttentionGate, ConvBnAct
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer, get_reshaping_layer
 
 INVALID_BLOCK_TYPE_MSG = "Invalid decoder_block_type '{}'. Must be 'upsampling' or 'transpose'."
-
-
-def Conv3x3BnReLU(spatial_dims, filters, decoder_use_batchnorm=True, name_prefix=""):
-    """
-    Builds a 3x3 convolutional block followed by optional BatchNormalization and ReLU activation.
-
-    Args:
-        spatial_dims (int): Dimensionality of the convolution. Use 2 for Conv2D or 3 for Conv3D.
-        filters (int): Number of output filters.
-        decoder_use_batchnorm (bool): Whether to include BatchNormalization after the convolution.
-
-    Returns:
-        function: A function that applies the convolutional block to an input tensor.
-    """
-    dim_str = f"{spatial_dims}D"
-
-    def apply(x):
-        conv_name = f"{name_prefix}_conv3x3_{dim_str}"
-        bn_name = f"{name_prefix}_bn_{dim_str}"
-        relu_name = f"{name_prefix}_relu"
-        x = get_conv_layer(
-            spatial_dims,
-            layer_type="conv",
-            filters=filters,
-            kernel_size=3,
-            strides=1,
-            padding="same",
-            use_bias=not decoder_use_batchnorm,
-            name=conv_name,
-        )(x)
-        if decoder_use_batchnorm:
-            x = get_norm_layer(layer_type="batch", axis=-1, name=bn_name)(x)
-        x = get_act_layer(layer_type="relu", name=relu_name)(x)
-        return x
-
-    return apply
 
 
 def DecoderBlock(
     spatial_dims,
     filters,
     decoder_block_type="upsampling",
-    decoder_use_batchnorm=True,
+    decoder_normalization="batch",
+    decoder_activation="relu",
     decoder_attention=False,
     stage_idx=0,
 ):
@@ -59,7 +24,8 @@ def DecoderBlock(
         decoder_block_type (str): Type of upsampling — 'upsampling' (interpolation) or 'transpose' (learned).
             Note: When using 'transpose', only one Conv3x3BnReLU block is applied after upsampling to reduce
             trainable parameters, whereas 'upsampling' uses two blocks.
-        decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
+        decoder_normalization (str | False): Whether to include normalization layers.
+        decoder_activation (str): String identifier to include activation layer.
         decoder_attention (bool): Whether to apply an attention gate on the skip connection.
         stage_idx (int): Index for naming the decoder stage.
 
@@ -87,9 +53,11 @@ def DecoderBlock(
             padding="same",
             name=f"{stage_prefix}_transpose_conv_{dim_str}",
         )(x)
-        if decoder_use_batchnorm:
-            x = get_norm_layer(layer_type="batch", axis=-1, name=f"{stage_prefix}_bn_{dim_str}")(x)
-        return get_act_layer(layer_type="relu", name=f"{stage_prefix}_relu")(x)
+        if decoder_normalization:
+            x = get_norm_layer(
+                layer_type=decoder_normalization, name=f"{stage_prefix}_norm_{dim_str}"
+            )(x)
+        return get_act_layer(layer_type=decoder_activation, name=f"{stage_prefix}_activation")(x)
 
     def apply(x, skip=None):
         # Apply attention
@@ -111,10 +79,13 @@ def DecoderBlock(
         # Double convolution block
         num_convs = 1 if decoder_block_type == "transpose" else 2
         for i in range(1, num_convs + 1):
-            x = Conv3x3BnReLU(
-                spatial_dims=spatial_dims,
+            x = ConvBnAct(
                 filters=filters,
-                decoder_use_batchnorm=decoder_use_batchnorm,
+                kernel_size=3,
+                strides=1,
+                padding="same",
+                normalization=decoder_normalization,
+                activation=decoder_activation,
                 name_prefix=f"{stage_prefix}_conv_{i}",
             )(x)
         return x
@@ -128,7 +99,8 @@ def UNetDecoder(
     decoder_filters,
     decoder_block_type="upsampling",
     decoder_attention=False,
-    decoder_use_batchnorm=True,
+    decoder_normalization="batch",
+    decoder_activation="relu",
 ):
     """
     Constructs the full decoder path of the UNet using a series of DecoderBlocks.
@@ -138,7 +110,8 @@ def UNetDecoder(
         skip_layers (list): List of skip connection tensors from the encoder, ordered deepest to shallowest.
         decoder_filters (list or tuple): Number of filters for each decoder stage.
         decoder_block_type (str): Decoder block type, either 'upsampling' or 'transpose'.
-        decoder_use_batchnorm (bool): Whether to include BatchNormalization layers.
+        decoder_normalization (str | False): Whether to include normalization layers.
+        decoder_activation (str): String identifier to include activation layer.
         decoder_attention (bool): Whether to apply an attention gate on the skip connection.
 
     Returns:
@@ -155,7 +128,8 @@ def UNetDecoder(
                 spatial_dims,
                 filters,
                 decoder_block_type,
-                decoder_use_batchnorm,
+                decoder_normalization,
+                decoder_activation,
                 decoder_attention,
                 stage_idx=stage_idx,
             )(x, skip)
