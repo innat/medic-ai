@@ -114,7 +114,12 @@ class UNETR(keras.Model, DescribeMixin):
             pooling=None,
         )
         *image_size, _ = input_shape
-        feat_size = tuple(img_d // encoder.patch_size for img_d in image_size)
+
+        patch_dims = encoder.patch_size
+        if isinstance(patch_dims, int):
+            patch_dims = (patch_dims,) * len(image_size)
+
+        feat_size = tuple(img_d // patch_d for img_d, patch_d in zip(image_size, patch_dims))
 
         # Get intermediate vectores
         pyramid_outputs = encoder.pyramid_outputs
