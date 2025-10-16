@@ -22,5 +22,30 @@ model.count_params() / 1e6
 # 87.174417
 ```
 
+**Custom Encoder**
+
+```python
+from medicai.models import ViTBackbone
+
+encoder = ViTBackbone(
+    input_shape=(96, 96, 96, 3),
+    patch_size=16,
+    num_layers=6,
+    num_heads=6,
+    hidden_dim=384,
+    mlp_dim=1536,
+    use_class_token=True,
+)
+model = UNETR(
+    encoder=encoder, 
+    num_classes=3, 
+    classifier_activation='sigmoid'
+)
+model.count_params() / 1e6
+# 18.813267
+```
+
+
+
 **Reference**
 - [UNETR: Transformers for 3D Medical Image Segmentation](https://arxiv.org/abs/2103.10504)
