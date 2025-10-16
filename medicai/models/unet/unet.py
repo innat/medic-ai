@@ -8,7 +8,6 @@ from medicai.utils import (
     VALID_DECODER_NORMS,
     DescribeMixin,
     get_conv_layer,
-    get_reshaping_layer,
     registration,
     resolve_encoder,
 )
@@ -207,11 +206,22 @@ class UNet(keras.Model, DescribeMixin):
         )(x)
 
         # Some encoder like, i.e. convnext need final upsampling.
-        if head_upsample > 1:
-            x = ResizingND(
-                scale_factor=head_upsample,
-                interpolation="bilinear" if spatial_dims == 2 else "trilinear",
-            )(x)
+        if isinstance(head_upsample, (int, float)):
+            if head_upsample > 1:
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                )(x)
+        elif isinstance(head_upsample, (list, tuple)):
+            if any(s > 1 for s in head_upsample):
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                )(x)
+        else:
+            raise ValueError(
+                f"`head_upsample` must be int or tuple/list, got {type(head_upsample)}"
+            )
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 

@@ -20,8 +20,33 @@ class ResizingND(layers.Layer):
         self.target_shape = target_shape
         self.scale_factor = scale_factor
         self.interpolation = interpolation
-        # Store the original values for serialization
-        self._original_scale_factor = scale_factor
+
+        if scale_factor is not None:
+            # Check if it is int or float
+            if isinstance(scale_factor, (int, float)):
+                if scale_factor <= 0:
+                    raise ValueError(f"scale_factor must be positive, got {scale_factor}")
+            # Check if it is list or tuple and each item is either int or float
+            elif isinstance(scale_factor, (list, tuple)):
+                if len(scale_factor) == 0:
+                    raise ValueError("scale_factor list/tuple cannot be empty")
+
+                for i, factor in enumerate(scale_factor):
+                    if not isinstance(factor, (int, float)):
+                        raise ValueError(
+                            f"All scale_factor elements must be int or float, "
+                            f"but got {type(factor)} at index {i}"
+                        )
+                    if factor <= 0:
+                        raise ValueError(
+                            f"All scale_factor elements must be positive, "
+                            f"got {factor} at index {i}"
+                        )
+            else:
+                raise ValueError(
+                    f"scale_factor must be int, float, list or tuple, "
+                    f"but got {type(scale_factor)}"
+                )
 
     def build(self, input_shape):
         self.spatial_dims = len(input_shape) - 2
@@ -41,60 +66,89 @@ class ResizingND(layers.Layer):
                 f"For 3D inputs, interpolation must be one of ('nearest', 'trilinear'), but got '{self.interpolation}'."
             )
 
-        # Compute target_shape from scale_factor if provided
-        if self.scale_factor is not None:
-            if isinstance(self.scale_factor, (int, float)):
-                # Uniform scaling for all spatial dimensions
-                self.target_shape = [
-                    int(input_shape[i + 1] * self.scale_factor) for i in range(self.spatial_dims)
-                ]
-            elif isinstance(self.scale_factor, (list, tuple)):
-                if len(self.scale_factor) != self.spatial_dims:
-                    raise ValueError(
-                        f"scale_factor must have length {self.spatial_dims} for {self.spatial_dims}D inputs, "
-                        f"got {len(self.scale_factor)}"
-                    )
-                # Different scaling for each spatial dimension
-                self.target_shape = [
-                    int(input_shape[i + 1] * self.scale_factor[i]) for i in range(self.spatial_dims)
-                ]
-            else:
-                raise ValueError(
-                    f"{self.__class__.__name__} `scale_factor` must be int, float, list or tuple "
-                    f"Got {type(self.scale_factor)}"
-                )
-        else:
-            if len(self.target_shape) != self.spatial_dims:
-                raise ValueError(
-                    f"target_shape must have {self.spatial_dims} elements for {self.spatial_dims}D inputs, "
-                    f"got {len(self.target_shape)}"
-                )
-
-        # Validate the computed shape
-        if any(dim <= 0 for dim in self.target_shape):
+        # validation for `scale_factor`` length when it's a list/tuple
+        if (
+            self.scale_factor is not None
+            and isinstance(self.scale_factor, (list, tuple))
+            and len(self.scale_factor) != self.spatial_dims
+        ):
             raise ValueError(
-                f"{self.__class__.__name__} Invalid target shape: {self.target_shape}. "
-                "All dimensions must be positive."
+                f"scale_factor must have length {self.spatial_dims} for {self.spatial_dims}D inputs, "
+                f"got {len(self.scale_factor)}"
             )
+
+        # validation for `target_shape` length
+        if self.target_shape is not None and len(self.target_shape) != self.spatial_dims:
+            raise ValueError(
+                f"target_shape must have {self.spatial_dims} elements for {self.spatial_dims}D inputs, "
+                f"got {len(self.target_shape)}"
+            )
+
+        # Validate `target_shape` values if provided
+        if self.target_shape is not None:
+            for i, dim in enumerate(self.target_shape):
+                if dim <= 0:
+                    raise ValueError(
+                        f"All target_shape dimensions must be positive, " f"got {dim} at index {i}"
+                    )
 
         super().build(input_shape)
 
     def call(self, inputs):
-        if self.spatial_dims == 3:
-            d, h, w = self.target_shape
-            return resize_volumes(inputs, d, h, w, method=self.interpolation)
+        input_shape = ops.shape(inputs)
+
+        if self.scale_factor is not None:
+            if isinstance(self.scale_factor, (int, float)):
+                target_shape = [
+                    ops.cast(input_shape[i + 1] * self.scale_factor, "int32")
+                    for i in range(self.spatial_dims)
+                ]
+            else:
+                target_shape = [
+                    ops.cast(input_shape[i + 1] * self.scale_factor[i], "int32")
+                    for i in range(self.spatial_dims)
+                ]
         else:
-            return ops.image.resize(inputs, self.target_shape, interpolation=self.interpolation)
+            target_shape = self.target_shape
+
+        if self.spatial_dims == 3:
+            return resize_volumes(inputs, *target_shape, method=self.interpolation)
+        else:
+            return ops.image.resize(inputs, target_shape, interpolation=self.interpolation)
 
     def compute_output_shape(self, input_shape):
-        return (input_shape[0], *self.target_shape, self.channels)
+        batch_size = input_shape[0]
+
+        if self.scale_factor is not None:
+            if isinstance(self.scale_factor, (int, float)):
+                new_spatial = [
+                    (
+                        int(input_shape[i + 1] * self.scale_factor)
+                        if input_shape[i + 1] is not None
+                        else None
+                    )
+                    for i in range(self.spatial_dims)
+                ]
+            else:
+                new_spatial = [
+                    (
+                        int(input_shape[i + 1] * self.scale_factor[i])
+                        if input_shape[i + 1] is not None
+                        else None
+                    )
+                    for i in range(self.spatial_dims)
+                ]
+        else:
+            new_spatial = list(self.target_shape)
+
+        return (batch_size, *new_spatial, self.channels)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "target_shape": self.target_shape if self.scale_factor is None else None,
-                "scale_factor": self._original_scale_factor,
+                "target_shape": self.target_shape,
+                "scale_factor": self.scale_factor,
                 "interpolation": self.interpolation,
             }
         )
