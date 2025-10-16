@@ -1,13 +1,13 @@
 import keras
 from keras import layers
 
+from medicai.layers import ResizingND
 from medicai.utils import (
     VALID_ACTIVATION_LIST,
     VALID_DECODER_BLOCK_TYPE,
     VALID_DECODER_NORMS,
     DescribeMixin,
     get_conv_layer,
-    get_reshaping_layer,
     registration,
     resolve_encoder,
 )
@@ -195,19 +195,21 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         )(x)
 
         # Some encoder like, i.e. convnext need final upsampling.
-        if isinstance(head_upsample, int):
+        if isinstance(head_upsample, (int, float)):
             if head_upsample > 1:
-                x = get_reshaping_layer(
-                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
                 )(x)
-        elif isinstance(head_upsample, (tuple, list)):
-            if any(f > 1 for f in head_upsample):
-                x = get_reshaping_layer(
-                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
+        elif isinstance(head_upsample, (list, tuple)):
+            if any(s > 1 for s in head_upsample):
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
                 )(x)
         else:
             raise ValueError(
-                f"`head_upsample` must be int or tuple/list, got {type(head_upsample)}"
+                f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
             )
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
