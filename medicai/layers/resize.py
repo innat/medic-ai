@@ -22,11 +22,9 @@ class ResizingND(layers.Layer):
         self.interpolation = interpolation
 
         if scale_factor is not None:
-            # Check if it is int or float
             if isinstance(scale_factor, (int, float)):
                 if scale_factor <= 0:
                     raise ValueError(f"scale_factor must be positive, got {scale_factor}")
-            # Check if it is list or tuple and each item is either int or float
             elif isinstance(scale_factor, (list, tuple)):
                 if len(scale_factor) == 0:
                     raise ValueError("scale_factor list/tuple cannot be empty")
@@ -66,16 +64,16 @@ class ResizingND(layers.Layer):
                 f"For 3D inputs, interpolation must be one of ('nearest', 'trilinear'), but got '{self.interpolation}'."
             )
 
-        # validation for `scale_factor`` length when it's a list/tuple
-        if (
-            self.scale_factor is not None
-            and isinstance(self.scale_factor, (list, tuple))
-            and len(self.scale_factor) != self.spatial_dims
-        ):
-            raise ValueError(
-                f"scale_factor must have length {self.spatial_dims} for {self.spatial_dims}D inputs, "
-                f"got {len(self.scale_factor)}"
-            )
+        # Normalize scale_factor to always be a list
+        if self.scale_factor is not None:
+            if isinstance(self.scale_factor, (int, float)):
+                self.scale_factor = [self.scale_factor] * self.spatial_dims
+
+            if len(self.scale_factor) != self.spatial_dims:
+                raise ValueError(
+                    f"scale_factor must have length {self.spatial_dims} for {self.spatial_dims}D inputs, "
+                    f"but got {len(self.scale_factor)}"
+                )
 
         # validation for `target_shape` length
         if self.target_shape is not None and len(self.target_shape) != self.spatial_dims:
@@ -98,16 +96,10 @@ class ResizingND(layers.Layer):
         input_shape = ops.shape(inputs)
 
         if self.scale_factor is not None:
-            if isinstance(self.scale_factor, (int, float)):
-                target_shape = [
-                    ops.cast(input_shape[i + 1] * self.scale_factor, "int32")
-                    for i in range(self.spatial_dims)
-                ]
-            else:
-                target_shape = [
-                    ops.cast(input_shape[i + 1] * self.scale_factor[i], "int32")
-                    for i in range(self.spatial_dims)
-                ]
+            target_shape = [
+                ops.cast(input_shape[i + 1] * self.scale_factor[i], "int32")
+                for i in range(self.spatial_dims)
+            ]
         else:
             target_shape = self.target_shape
 
@@ -120,24 +112,14 @@ class ResizingND(layers.Layer):
         batch_size = input_shape[0]
 
         if self.scale_factor is not None:
-            if isinstance(self.scale_factor, (int, float)):
-                new_spatial = [
-                    (
-                        int(input_shape[i + 1] * self.scale_factor)
-                        if input_shape[i + 1] is not None
-                        else None
-                    )
-                    for i in range(self.spatial_dims)
-                ]
-            else:
-                new_spatial = [
-                    (
-                        int(input_shape[i + 1] * self.scale_factor[i])
-                        if input_shape[i + 1] is not None
-                        else None
-                    )
-                    for i in range(self.spatial_dims)
-                ]
+            new_spatial = [
+                (
+                    int(input_shape[i + 1] * self.scale_factor[i])
+                    if input_shape[i + 1] is not None
+                    else None
+                )
+                for i in range(self.spatial_dims)
+            ]
         else:
             new_spatial = list(self.target_shape)
 
