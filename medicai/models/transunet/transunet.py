@@ -38,16 +38,17 @@ class TransUNet(keras.Model, DescribeMixin):
         input_shape=None,
         encoder_name=None,
         encoder=None,
+        encoder_depth=5,
         num_classes=1,
-        patch_size=3,
+        patch_size=1,
         classifier_activation=None,
-        num_encoder_layers=6,
+        num_encoder_layers=12,
         num_heads=8,
         num_queries=100,
-        embed_dim=256,
+        embed_dim=512,
         mlp_dim=1024,
         dropout_rate=0.1,
-        decoder_projection_filters=64,
+        decoder_filters=(256, 128, 64, 32, 16),
         name=None,
         **kwargs,
     ):
@@ -65,6 +66,14 @@ class TransUNet(keras.Model, DescribeMixin):
                 pre-configured backbone from the `BACKBONE_ZOO` to use as the
                 encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
+            encoder_depth: An integer specifying how many stages of the encoder
+                backbone to use. A number of stages used in encoder in range [3, 5].
+                Expected available intermediate or pyramid level, P1, P2, ... P5.
+                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
+                be used for skip connection. If `encoder_depth=4`, bottleneck key
+                would be P4, and P3..P1 will be used for skip connection.
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
+                reduce the size of the model. Default: 5.
             input_shape (tuple): The shape of the input data. For 2D, it is
                 `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
             num_classes (int): The number of segmentation classes.
@@ -75,17 +84,18 @@ class TransUNet(keras.Model, DescribeMixin):
             classifier_activation (str, optional): Activation function for the final
                 segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
             num_encoder_layers (int, optional): The number of transformer encoder blocks
-                in the ViT encoder. Defaults to 6.
+                in the ViT encoder. Defaults to 12.
             num_heads (int, optional): The number of attention heads in the transformer blocks.
                 Defaults to 8.
             embed_dim (int, optional): The dimensionality of the token embeddings.
-                Defaults to 256.
+                Defaults to 512.
             mlp_dim (int, optional): The hidden dimension of the MLP in the transformer
                 blocks. Defaults to 1024.
             dropout_rate (float, optional): The dropout rate for regularization.
                 Defaults to 0.1.
-            decoder_projection_filters (int, optional): The number of filters for the
-                convolutional layers in the decoder upsampling path. Defaults to 64.
+            decoder_filters: The number of filters for the convolutional layers in the
+                decoder upsampling path. The number of filters should correspond to
+                the `encoder_depth`. Default: [256, 128, 64, 32, 16]
             name (str, optional): The name of the model. Defaults to `TransUNetND`.
         """
         encoder, input_shape = resolve_encoder(
@@ -108,17 +118,29 @@ class TransUNet(keras.Model, DescribeMixin):
         # Get CNN feature maps from the encoder.
         inputs = encoder.input
         pyramid_outputs = encoder.pyramid_outputs
-        required_keys = {"P1", "P2", "P3", "P4", "P5"}
-        if not required_keys.issubset(pyramid_outputs.keys()):
+
+        # Determine required pyramid levels dynamically
+        required_keys = {f"P{i}" for i in range(1, encoder_depth + 1)}
+        available_keys = set(pyramid_outputs.keys())
+
+        # Find missing ones
+        missing_keys = required_keys - available_keys
+        if missing_keys:
             raise ValueError(
-                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
-                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+                f"The encoder's `pyramid_outputs` is missing required pyramid levels. "
+                f"Missing: {missing_keys}. "
+                f"Expected keys (based on encoder_depth={encoder_depth}): {required_keys}, "
+                f"but got: {available_keys}"
             )
-        c1 = pyramid_outputs.get("P1")
-        c2 = pyramid_outputs.get("P2")
-        c3 = pyramid_outputs.get("P3")
-        final_cnn_output = pyramid_outputs.get("P4")
-        cnn_features = [c1, c2, c3]  # shallow to deep
+
+        if not (3 <= encoder_depth <= 5):
+            raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
+
+        # prepare head and skip layers
+        sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]))
+        final_cnn_output = pyramid_outputs[sorted_keys[-1]]
+        cnn_features = [pyramid_outputs[key] for key in sorted_keys[:-1]]
+        decoder_filters = decoder_filters[:encoder_depth]
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
@@ -153,7 +175,7 @@ class TransUNet(keras.Model, DescribeMixin):
             num_classes=num_classes,
             num_queries=num_queries,
             spatial_dims=spatial_dims,
-            decoder_projection_filters=decoder_projection_filters,
+            decoder_filters=decoder_filters,
         )
 
         outputs = get_conv_layer(
@@ -181,7 +203,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
         self.dropout_rate = dropout_rate
-        self.decoder_projection_filters = decoder_projection_filters
+        self.decoder_filters = decoder_filters
 
     def get_config(self):
         config = {
@@ -196,7 +218,7 @@ class TransUNet(keras.Model, DescribeMixin):
             "embed_dim": self.embed_dim,
             "mlp_dim": self.mlp_dim,
             "dropout_rate": self.dropout_rate,
-            "decoder_projection_filters": self.decoder_projection_filters,
+            "decoder_filters": self.decoder_filters,
         }
         if self.encoder is not None:
             config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
@@ -220,7 +242,7 @@ class TransUNet(keras.Model, DescribeMixin):
         mlp_dim,
         dropout_rate,
         spatial_dims,
-        decoder_projection_filters,
+        decoder_filters,
     ):
         """
         Builds the hybrid decoder, which consists of a transformer-based
@@ -329,62 +351,36 @@ class TransUNet(keras.Model, DescribeMixin):
         # Step 7: U-Net style upsampling path
         # This final path uses standard convolutions and upsampling to refine the
         # combined output and leverage the CNN skip connections (C1, C2, C3).
-        c1, c2, c3 = cnn_features
-
-        # Step 7a: UpSampling and Concatenation with C3
+        # Step 7: U-Net style upsampling path
         x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
-            filters=decoder_projection_filters,
+            filters=decoder_filters[0],
             kernel_size=3,
             padding="same",
             name="decoder_proj_0",
         )(final_output)
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c3"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c3")([x, c3])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_1",
-        )(x)
 
-        # Step 7b: UpSampling and Concatenation with C2
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c2"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c2")([x, c2])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_2",
-        )(x)
+        # Iterate from deepest skip (last element) to shallowest (first)
+        for i, (skip, filters) in enumerate(
+            zip(reversed(cnn_features), decoder_filters[1:]), start=1
+        ):
+            x = get_reshaping_layer(
+                spatial_dims=spatial_dims, layer_type="upsampling", size=2, name=f"upsample_to_p{i}"
+            )(x)
+            x = layers.Concatenate(axis=-1, name=f"concat_with_p{i}")([x, skip])
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=filters,
+                kernel_size=3,
+                strides=1,
+                padding="same",
+                activation="relu",
+                name=f"decoder_conv_{i}",
+            )(x)
 
-        # Step 7c: UpSampling and Concatenation with C1
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c1"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c1")([x, c1])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_3",
-        )(x)
-
-        # Final upsampling to the original input resolution
+        # Final upsample to restore full resolution
         x = get_reshaping_layer(
             spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="final_upsample"
         )(x)
