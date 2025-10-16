@@ -1,6 +1,7 @@
 import keras
 from keras import layers, ops
 
+from medicai.layers import ConvBnAct
 from medicai.utils import (
     DescribeMixin,
     get_act_layer,
@@ -191,14 +192,15 @@ class SegFormer(keras.Model, DescribeMixin):
             x = layers.Concatenate(axis=-1)([c1, c2, c3, c4])
 
             # Fusion convolution
-            x = get_conv_layer(
-                spatial_dims=spatial_dims,
-                layer_type="conv",
+            x = ConvBnAct(
                 filters=decoder_head_embedding_dim,
                 kernel_size=1,
+                strides=1,
+                padding="same",
+                normalization="batch",
+                activation="relu",
+                name_prefix="linear_fuse_conv",
             )(x)
-            x = get_norm_layer("batch")(x)
-            x = get_act_layer("relu")(x)
             x = layers.Dropout(dropout)(x)
 
             # Final prediction
