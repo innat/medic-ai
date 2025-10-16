@@ -85,9 +85,10 @@ class ResizingND(layers.Layer):
         # Validate `target_shape` values if provided
         if self.target_shape is not None:
             for i, dim in enumerate(self.target_shape):
-                if dim <= 0:
+                if not isinstance(dim, int) or dim <= 0:
                     raise ValueError(
-                        f"All target_shape dimensions must be positive, " f"got {dim} at index {i}"
+                        f"All target_shape dimensions must be positive integers, "
+                        f"got {dim} (type: {type(dim)}) at index {i}"
                     )
 
         super().build(input_shape)

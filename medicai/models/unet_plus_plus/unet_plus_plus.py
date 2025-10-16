@@ -209,7 +209,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 )(x)
         else:
             raise ValueError(
-                f"`head_upsample` must be int or tuple/list, got {type(head_upsample)}"
+                f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
             )
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
