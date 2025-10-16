@@ -49,7 +49,7 @@ model.pyramid_outputs
     'P13': <KerasTensor shape=(None, 217, 768)>}
 ```
 
-Here, `P1` refers to the output of patch embedding, and rest are from transformer blocks.
+Here, `P1` refers to the output of patch embedding, and the rest are from transformer blocks.
 
 
 # Segmentation Model
