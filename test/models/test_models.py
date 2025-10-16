@@ -62,7 +62,7 @@ def test_convnext(input_shape):
     model = ConvNeXtV2Atto(input_shape=input_shape, num_classes=num_classes)
     dummy_input = tf.random.normal((1, *input_shape))
     output = model(dummy_input)
-    expected_shape = (1, *input_shape[:-1], num_classes)
+    expected_shape = (1, num_classes)
     assert output.shape == expected_shape
 
 
