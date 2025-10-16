@@ -35,7 +35,9 @@ class ViTPatchingAndEmbedding(keras.layers.Layer):
             patch_size = (patch_size,) * self.spatial_dims
 
         grid_size = tuple([s // p for s, p in zip(image_size, patch_size)])
-        num_patches = np.prod(grid_size)
+        num_patches = 1
+        for dim in grid_size:
+            num_patches *= dim
         num_positions = num_patches + 1 if use_class_token else num_patches
 
         # === Config ===

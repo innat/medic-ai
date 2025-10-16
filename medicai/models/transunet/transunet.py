@@ -18,7 +18,7 @@ from .transunet_layers import LearnableQueries, MaskedCrossAttention
 class TransUNet(keras.Model, DescribeMixin):
     """3D or 2D TransUNet model for medical image segmentation.
 
-    This model combines a 3D or 2D CNN encoder (DenseNet) with a Vision Transformer
+    This model combines a 3D or 2D CNN encoder with a Vision Transformer
     (ViT) encoder and a hybrid decoder. The CNN extracts multi-scale local features,
     while the ViT captures global context. The decoder upsamples the fused
     features to produce the final segmentation map using a coarse-to-fine

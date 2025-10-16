@@ -41,11 +41,11 @@ model.pyramid_outputs
 }
 ```
 
-Notice that, the ConvNeXt model gives four feature vectors are scale down by `[1/4, 1/8, 1/16, 1/32]`. This is the expected hierarchical downscaling.
+Notice that, the **ConvNeXt** model gives four feature vectors are scale down by `[1/4, 1/8, 1/16, 1/32]`. This is the expected hierarchical downscaling.
 
 # Segmentation Model
 
-**ConvNeXt** variants are used as encoders for segmentation models like `UNet`, `AttentionUNet`, and `UNet++`.
+**ConvNeXt** variants are used as encoders for segmentation models like `UNet`, `AttentionUNet`, and `UNet++`. 
 
 ```python
 from medicai.models import UNet
@@ -64,4 +64,31 @@ unet_convnext.output
 
 unet_convnext.count_params() / 1e6
 # 43.644483
+```
+
+The available encoder name or variants can be found by as follows and supported segmentation architect.
+
+```python
+import medicai
+medicai.models.list_models(family='convnext')
+
+                  Model Registry Catalog
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ Segmentor        ┃ Backbone Family ┃ Variants           ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ • attention_unet │ convnext        │ • convnext_base    │
+│ • unet           │                 │ • convnext_large   │
+│ • unet_plus_plus │                 │ • convnext_small   │
+│                  │                 │ • convnext_tiny    │
+│                  │                 │ • convnext_xlarge  │
+│                  │                 │ • convnextv2_atto  │
+│                  │                 │ • convnextv2_base  │
+│                  │                 │ • convnextv2_femto │
+│                  │                 │ • convnextv2_huge  │
+│                  │                 │ • convnextv2_large │
+│                  │                 │ • convnextv2_nano  │
+│                  │                 │ • convnextv2_pico  │
+│                  │                 │ • convnextv2_small │
+│                  │                 │ • convnextv2_tiny  │
+└──────────────────┴─────────────────┴────────────────────┘
 ```
