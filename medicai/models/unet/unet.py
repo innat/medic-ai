@@ -1,6 +1,7 @@
 import keras
 from keras import layers
 
+from medicai.layers import ResizingND
 from medicai.utils import (
     VALID_ACTIVATION_LIST,
     VALID_DECODER_BLOCK_TYPE,
@@ -206,20 +207,11 @@ class UNet(keras.Model, DescribeMixin):
         )(x)
 
         # Some encoder like, i.e. convnext need final upsampling.
-        if isinstance(head_upsample, int):
-            if head_upsample > 1:
-                x = get_reshaping_layer(
-                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
-                )(x)
-        elif isinstance(head_upsample, (tuple, list)):
-            if any(f > 1 for f in head_upsample):
-                x = get_reshaping_layer(
-                    spatial_dims=spatial_dims, layer_type="upsampling", size=head_upsample
-                )(x)
-        else:
-            raise ValueError(
-                f"`head_upsample` must be int or tuple/list, got {type(head_upsample)}"
-            )
+        if head_upsample > 1:
+            x = ResizingND(
+                scale_factor=head_upsample,
+                interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+            )(x)
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)
 
