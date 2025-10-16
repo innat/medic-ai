@@ -30,7 +30,6 @@ from medicai.models import ViTBase
 model = ViTBase(
     input_shape=(96, 96, 96, 4),
     num_classes=3,
-    num_layers=12,
     classifier_activation=None
 )
 model.pyramid_outputs
