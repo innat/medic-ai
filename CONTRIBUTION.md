@@ -5,10 +5,10 @@
 1. Install `medicai` from source:
 
 ```bash
-!git clone https://github.com/innat/medic-ai
-%cd medic-ai
-!pip install keras -qU
-!pip install -e .
+git clone https://github.com/innat/medic-ai
+cd medic-ai
+pip install keras -qU
+pip install -e .
 ```
 
 Add your contribution and implement relevant test code.
