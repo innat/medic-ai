@@ -211,7 +211,6 @@ def test_transunet():
     batch_size = 1
     D, H, W, C = 96, 96, 96, 1
     num_classes = 3
-    patch_size = 3
 
     # test for 3D
     dummy_input = tf.random.normal((batch_size, D, H, W, C))
@@ -219,7 +218,6 @@ def test_transunet():
         input_shape=(D, H, W, C),
         encoder_name="densenet121",
         num_classes=num_classes,
-        patch_size=patch_size,
     )
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 96, 1)
@@ -231,7 +229,6 @@ def test_transunet():
         input_shape=(H, W, C),
         encoder_name="densenet121",
         num_classes=num_classes,
-        patch_size=patch_size,
     )
     output = model(dummy_input)
     assert model.input_shape == (None, 96, 96, 1)

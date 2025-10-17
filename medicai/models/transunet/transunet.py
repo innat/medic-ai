@@ -129,6 +129,11 @@ class TransUNet(keras.Model, DescribeMixin):
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
 
+        if len(decoder_filters) < encoder_depth:
+            raise ValueError(
+                f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
+            )
+
         if isinstance(decoder_activation, str):
             decoder_activation = decoder_activation.lower()
 
@@ -367,7 +372,6 @@ class TransUNet(keras.Model, DescribeMixin):
         # Step 7: U-Net style upsampling path
         # This final path uses standard convolutions and upsampling to refine the
         # combined output and leverage the CNN skip connections [P1, P2, P3, P4].
-        # Step 7: U-Net style upsampling path
         x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
