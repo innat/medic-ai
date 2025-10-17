@@ -199,6 +199,34 @@ class DenseNet201(DenseNetBase, DescribeMixin):
         )
 
 
+@keras.saving.register_keras_serializable(package="densenet264")
+@registration.register(family="densenet")
+class DenseNet264(DenseNetBase, DescribeMixin):
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            input_shape=input_shape,
+            blocks=[6, 12, 64, 48],
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            **kwargs,
+        )
+
+
 DENSENET_DOCSTRING = """
 {name} model for classification, supporting both 2D and 3D inputs.
 
@@ -272,4 +300,7 @@ DenseNet169.__doc__ = DENSENET_DOCSTRING.format(
 )
 DenseNet201.__doc__ = DENSENET_DOCSTRING.format(
     name="DenseNet201",
+)
+DenseNet264.__doc__ = DENSENET_DOCSTRING.format(
+    name="DenseNet264",
 )
