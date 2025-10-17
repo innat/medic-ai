@@ -42,7 +42,7 @@ class TransUNet(keras.Model, DescribeMixin):
         num_classes=1,
         patch_size=1,
         classifier_activation=None,
-        num_encoder_layers=12,
+        num_vit_layers=12,
         num_heads=8,
         num_queries=100,
         embed_dim=512,
@@ -58,13 +58,12 @@ class TransUNet(keras.Model, DescribeMixin):
         Args:
             encoder: (Optional) A Keras model to use as the encoder (backbone).
                 This argument is intended for passing a custom or pre-trained
-                model not available in the `BACKBONE_ZOO`. If provided, the
-                model must have a `pyramid_outputs` attribute, which should be
-                a dictionary of intermediate feature vectors from shallow to
-                deep layers (e.g., `'P1'`, `'P2'`, ...).
+                model. If provided, the model must have a `pyramid_outputs` attribute,
+                which should be a dictionary of intermediate feature vectors from shallow
+                to deep layers (e.g., `'P1'`, `'P2'`, ...).
             encoder_name: (Optional) A string specifying the name of a
-                pre-configured backbone from the `BACKBONE_ZOO` to use as the
-                encoder. This is a convenient option for using a backbone from
+                pre-configured backbone from the `medicai.models.list_models()` to use as
+                the encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
             encoder_depth: An integer specifying how many stages of the encoder
                 backbone to use. A number of stages used in encoder in range [3, 5].
@@ -138,23 +137,23 @@ class TransUNet(keras.Model, DescribeMixin):
 
         # prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]))
-        final_cnn_output = pyramid_outputs[sorted_keys[-1]]
+        final_cnn_feature = pyramid_outputs[sorted_keys[-1]]
         cnn_features = [pyramid_outputs[key] for key in sorted_keys[:-1]]
         decoder_filters = decoder_filters[:encoder_depth]
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
-            image_size=final_cnn_output.shape[1:-1],
+            image_size=final_cnn_feature.shape[1:-1],
             patch_size=patch_size,
             hidden_dim=embed_dim,
-            num_channels=final_cnn_output.shape[-1],
+            num_channels=final_cnn_feature.shape[-1],
             use_class_token=False,
             use_patch_bias=True,
             name="transunet_vit_patching_and_embedding",
-        )(final_cnn_output)
+        )(final_cnn_feature)
 
         encoder_output = encoded_patches
-        for i in range(num_encoder_layers):
+        for i in range(num_vit_layers):
             encoder_output = ViTEncoderBlock(
                 num_heads=num_heads,
                 hidden_dim=embed_dim,
@@ -167,7 +166,7 @@ class TransUNet(keras.Model, DescribeMixin):
         outputs = self.build_decoder(
             encoder_output=encoder_output,
             cnn_features=cnn_features,
-            final_cnn_output=final_cnn_output,
+            final_cnn_feature=final_cnn_feature,
             num_heads=num_heads,
             embed_dim=embed_dim,
             mlp_dim=mlp_dim,
@@ -198,7 +197,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self.encoder = encoder
         self.patch_size = patch_size
         self.classifier_activation = classifier_activation
-        self.num_encoder_layers = num_encoder_layers
+        self.num_vit_layers = num_vit_layers
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
@@ -213,7 +212,7 @@ class TransUNet(keras.Model, DescribeMixin):
             "encoder_name": self.encoder_name,
             "classifier_activation": self.classifier_activation,
             "patch_size": self.patch_size,
-            "num_encoder_layers": self.num_encoder_layers,
+            "num_vit_layers": self.num_vit_layers,
             "num_heads": self.num_heads,
             "embed_dim": self.embed_dim,
             "mlp_dim": self.mlp_dim,
@@ -234,7 +233,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self,
         encoder_output,
         cnn_features,
-        final_cnn_output,
+        final_cnn_feature,
         num_heads,
         embed_dim,
         num_classes,
@@ -257,7 +256,7 @@ class TransUNet(keras.Model, DescribeMixin):
         )  # Initial queries
 
         # Step 2: Project CNN features for decoder skip connections
-        # Project the 3 intermediate CNN features (C1, C2, C3) to the
+        # Project the intermediate CNN features to the
         # transformer's embedding dimension.
         projected_features = []
         for i, feat in enumerate(cnn_features):
@@ -280,10 +279,10 @@ class TransUNet(keras.Model, DescribeMixin):
         )
 
         # Step 4: Coarse-to-Fine Refinement Loop
-        # This loop iterates through the CNN feature maps in reverse order (C3 -> C2 -> C1),
+        # This loop iterates through the CNN feature maps in reverse order (P4 -> P3 -> P2 -> P1),
         # refining the queries and mask at each step.
-        for t, cnn_feature in enumerate(reversed(projected_features)):  # [C3, C2, C1]
-            level_name = f"level_{t}"  # level_0 (C3), level_1 (C2), level_2 (C1)
+        for t, cnn_feature in enumerate(reversed(projected_features)):  # [P4, P3, P2, P1]
+            level_name = f"level_{t}"  # level_0 (P4), level_1 (P3), level_2 (P2), level_3 (P1)
 
             # Step 4a: Prepare CNN features for cross-attention
             # Flatten the spatial dimensions of the CNN feature map into a sequence of tokens.
@@ -346,11 +345,11 @@ class TransUNet(keras.Model, DescribeMixin):
         # Step 6: Combine Masks with Class Predictions
         # The final segmentation map is produced by combining the per-query class
         # predictions with their corresponding spatial masks.
-        final_output = self.combine_masks_and_classes(final_mask, class_logits, final_cnn_output)
+        final_output = self.combine_masks_and_classes(final_mask, class_logits, final_cnn_feature)
 
         # Step 7: U-Net style upsampling path
         # This final path uses standard convolutions and upsampling to refine the
-        # combined output and leverage the CNN skip connections (C1, C2, C3).
+        # combined output and leverage the CNN skip connections [P1, P2, P3, P4].
         # Step 7: U-Net style upsampling path
         x = get_conv_layer(
             spatial_dims=spatial_dims,

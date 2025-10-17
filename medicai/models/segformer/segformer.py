@@ -61,9 +61,15 @@ class SegFormer(keras.Model, DescribeMixin):
         Args:
             input_shape (tuple, optional): The shape of the input data, excluding the batch dimension.
                 Required if `encoder_name` is provided. Format is (H, W, C) for 2D or (D, H, W, C) for 3D.
-            encoder_name (str, optional): The name of a registered hierarchical backbone (e.g., 'mit_b0').
-            encoder (keras.Model, optional): An already instantiated hierarchical feature extractor.
-                Must have a `pyramid_outputs` attribute.
+            encoder: (Optional) A Keras model to use as the encoder (backbone).
+                This argument is intended for passing a custom or pre-trained
+                model. If provided, the model must have a `pyramid_outputs` attribute,
+                which should be a dictionary of intermediate feature vectors from shallow
+                to deep layers (e.g., `'P1'`, `'P2'`, ...).
+            encoder_name: (Optional) A string specifying the name of a
+                pre-configured backbone from the `medicai.models.list_models()` to use as
+                the encoder. This is a convenient option for using a backbone from
+                the library without having to instantiate it manually.
             num_classes (int, optional): The number of output classes for segmentation. Default: 1.
             classifier_activation (str, optional): The activation function for the final output layer.
                 Typically 'softmax' for multi-class or 'sigmoid' for multi-label/binary segmentation.
