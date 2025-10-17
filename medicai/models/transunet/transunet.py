@@ -82,7 +82,7 @@ class TransUNet(keras.Model, DescribeMixin):
                 decoder's attention mechanism. Defaults to 100.
             classifier_activation (str, optional): Activation function for the final
                 segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
-            num_encoder_layers (int, optional): The number of transformer encoder blocks
+            num_vit_layers (int, optional): The number of transformer encoder blocks
                 in the ViT encoder. Defaults to 12.
             num_heads (int, optional): The number of attention heads in the transformer blocks.
                 Defaults to 8.
@@ -218,7 +218,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self.num_queries = num_queries
         self.encoder_name = encoder_name
         self.encoder = encoder
-        self.patch_size = patch_size
+        self.encoder_depth = encoder_depth
         self.classifier_activation = classifier_activation
         self.num_vit_layers = num_vit_layers
         self.num_heads = num_heads
@@ -234,8 +234,8 @@ class TransUNet(keras.Model, DescribeMixin):
             "num_classes": self.num_classes,
             "num_queries": self.num_queries,
             "encoder_name": self.encoder_name,
+            "encoder_depth": self.encoder_depth,
             "classifier_activation": self.classifier_activation,
-            "patch_size": self.patch_size,
             "num_vit_layers": self.num_vit_layers,
             "num_heads": self.num_heads,
             "embed_dim": self.embed_dim,
@@ -389,12 +389,13 @@ class TransUNet(keras.Model, DescribeMixin):
         for i, (skip, filters) in enumerate(
             zip(reversed(cnn_features), decoder_filters[1:]), start=1
         ):
+            pyramid_level = len(cnn_features) - i + 1
             x = ResizingND(
                 scale_factor=2,
                 interpolation="bilinear" if spatial_dims == 2 else "trilinear",
-                name=f"upsample_to_p{i}",
+                name=f"upsample_to_p{pyramid_level}",
             )(x)
-            x = layers.Concatenate(axis=-1, name=f"concat_with_p{i}")([x, skip])
+            x = layers.Concatenate(axis=-1, name=f"concat_with_p{pyramid_level}")([x, skip])
             x = get_conv_layer(
                 spatial_dims=spatial_dims,
                 layer_type="conv",
@@ -403,9 +404,9 @@ class TransUNet(keras.Model, DescribeMixin):
                 strides=1,
                 padding="same",
                 activation=None,
-                name=f"decoder_conv_{i}",
+                name=f"decoder_conv_{pyramid_level}",
             )(x)
-            x = get_act_layer(layer_type=decoder_activation, name=f"decoder_act_{i}")(x)
+            x = get_act_layer(layer_type=decoder_activation, name=f"decoder_act_{pyramid_level}")(x)
 
         # Final upsample to restore full resolution
         x = ResizingND(
