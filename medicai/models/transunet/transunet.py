@@ -1,11 +1,12 @@
 import keras
 from keras import layers, ops
 
+from medicai.layers import ResizingND
 from medicai.models.vit.vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.utils import (
+    VALID_ACTIVATION_LIST,
     DescribeMixin,
     get_conv_layer,
-    get_reshaping_layer,
     registration,
     resolve_encoder,
 )
@@ -40,7 +41,6 @@ class TransUNet(keras.Model, DescribeMixin):
         encoder=None,
         encoder_depth=5,
         num_classes=1,
-        patch_size=1,
         classifier_activation=None,
         num_vit_layers=12,
         num_heads=8,
@@ -48,6 +48,7 @@ class TransUNet(keras.Model, DescribeMixin):
         embed_dim=512,
         mlp_dim=1024,
         dropout_rate=0.1,
+        decoder_activation="leaky_relu",
         decoder_filters=(256, 128, 64, 32, 16),
         name=None,
         **kwargs,
@@ -76,8 +77,6 @@ class TransUNet(keras.Model, DescribeMixin):
             input_shape (tuple): The shape of the input data. For 2D, it is
                 `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
             num_classes (int): The number of segmentation classes.
-            patch_size (int or tuple): The size of the patches for the Vision
-                Transformer. Must be a tuple of length `spatial_dims`. Defaults to 3.
             num_queries (int, optional): The number of learnable queries used in the
                 decoder's attention mechanism. Defaults to 100.
             classifier_activation (str, optional): Activation function for the final
@@ -92,6 +91,9 @@ class TransUNet(keras.Model, DescribeMixin):
                 blocks. Defaults to 1024.
             dropout_rate (float, optional): The dropout rate for regularization.
                 Defaults to 0.1.
+            decoder_activation (str): Controls the use of activation layers in decoder blocks.
+                It should the activation string identifier in available in keras.
+                Default: 'leaky_relu'
             decoder_filters: The number of filters for the convolutional layers in the
                 decoder upsampling path. The number of filters should correspond to
                 the `encoder_depth`. Default: [256, 128, 64, 32, 16]
@@ -105,14 +107,6 @@ class TransUNet(keras.Model, DescribeMixin):
         )
 
         spatial_dims = len(input_shape) - 1
-
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * spatial_dims
-        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
-            raise ValueError(
-                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {patch_size} with length {len(patch_size)}"
-            )
 
         # Get CNN feature maps from the encoder.
         inputs = encoder.input
@@ -135,11 +129,30 @@ class TransUNet(keras.Model, DescribeMixin):
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
 
+        if isinstance(decoder_activation, str):
+            decoder_activation = decoder_activation.lower()
+
+        if decoder_activation not in VALID_ACTIVATION_LIST:
+            raise ValueError(
+                f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
+                f"Supported values are: {VALID_ACTIVATION_LIST}"
+            )
+
         # prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]))
         final_cnn_feature = pyramid_outputs[sorted_keys[-1]]
         cnn_features = [pyramid_outputs[key] for key in sorted_keys[:-1]]
         decoder_filters = decoder_filters[:encoder_depth]
+
+        # Compute adaptive patch size based on the last CNN feature map
+        feature_shape = final_cnn_feature.shape[1:-1]  # e.g., (3, 3, 3) or (6, 6, 6)
+        min_dim = min([s for s in feature_shape if s is not None])
+
+        # Use patch size = 1 if feature map is small, else divide it
+        if min_dim <= 4:
+            patch_size = (1,) * len(feature_shape)
+        else:
+            patch_size = tuple(max(1, s // 2) for s in feature_shape)
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
@@ -175,6 +188,7 @@ class TransUNet(keras.Model, DescribeMixin):
             num_queries=num_queries,
             spatial_dims=spatial_dims,
             decoder_filters=decoder_filters,
+            decoder_activation=decoder_activation,
         )
 
         outputs = get_conv_layer(
@@ -202,6 +216,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
         self.dropout_rate = dropout_rate
+        self.decoder_activation = decoder_activation
         self.decoder_filters = decoder_filters
 
     def get_config(self):
@@ -217,6 +232,7 @@ class TransUNet(keras.Model, DescribeMixin):
             "embed_dim": self.embed_dim,
             "mlp_dim": self.mlp_dim,
             "dropout_rate": self.dropout_rate,
+            "decoder_activation": self.decoder_activation,
             "decoder_filters": self.decoder_filters,
         }
         if self.encoder is not None:
@@ -242,6 +258,7 @@ class TransUNet(keras.Model, DescribeMixin):
         dropout_rate,
         spatial_dims,
         decoder_filters,
+        decoder_activation,
     ):
         """
         Builds the hybrid decoder, which consists of a transformer-based
@@ -364,8 +381,10 @@ class TransUNet(keras.Model, DescribeMixin):
         for i, (skip, filters) in enumerate(
             zip(reversed(cnn_features), decoder_filters[1:]), start=1
         ):
-            x = get_reshaping_layer(
-                spatial_dims=spatial_dims, layer_type="upsampling", size=2, name=f"upsample_to_p{i}"
+            x = ResizingND(
+                scale_factor=2,
+                interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                name=f"upsample_to_p{i}",
             )(x)
             x = layers.Concatenate(axis=-1, name=f"concat_with_p{i}")([x, skip])
             x = get_conv_layer(
@@ -375,13 +394,15 @@ class TransUNet(keras.Model, DescribeMixin):
                 kernel_size=3,
                 strides=1,
                 padding="same",
-                activation="relu",
+                activation=decoder_activation,
                 name=f"decoder_conv_{i}",
             )(x)
 
         # Final upsample to restore full resolution
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="final_upsample"
+        x = ResizingND(
+            scale_factor=2,
+            interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+            name="final_upsample",
         )(x)
 
         return x
