@@ -6,6 +6,7 @@ from medicai.models.vit.vit_layers import ViTEncoderBlock, ViTPatchingAndEmbeddi
 from medicai.utils import (
     VALID_ACTIVATION_LIST,
     DescribeMixin,
+    get_act_layer,
     get_conv_layer,
     registration,
     resolve_encoder,
@@ -150,14 +151,17 @@ class TransUNet(keras.Model, DescribeMixin):
         decoder_filters = decoder_filters[:encoder_depth]
 
         # Compute adaptive patch size based on the last CNN feature map
-        feature_shape = final_cnn_feature.shape[1:-1]  # e.g., (3, 3, 3) or (6, 6, 6)
-        min_dim = min([s for s in feature_shape if s is not None])
-
         # Use patch size = 1 if feature map is small, else divide it
-        if min_dim <= 4:
+        feature_shape = final_cnn_feature.shape[1:-1]  # e.g., (3, 3, 3) or (6, 6, 6)
+        if any(s is None for s in feature_shape):
             patch_size = (1,) * len(feature_shape)
         else:
-            patch_size = tuple(max(1, s // 2) for s in feature_shape)
+            min_dim = min(feature_shape)
+            patch_size = (
+                (1,) * len(feature_shape)
+                if min_dim <= 4
+                else tuple(max(1, s // 2) for s in feature_shape)
+            )
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
@@ -398,9 +402,10 @@ class TransUNet(keras.Model, DescribeMixin):
                 kernel_size=3,
                 strides=1,
                 padding="same",
-                activation=decoder_activation,
+                activation=None,
                 name=f"decoder_conv_{i}",
             )(x)
+            x = get_act_layer(layer_type=decoder_activation, name=f"decoder_act_{i}")(x)
 
         # Final upsample to restore full resolution
         x = ResizingND(
