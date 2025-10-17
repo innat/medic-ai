@@ -1,11 +1,13 @@
 import keras
 from keras import layers, ops
 
+from medicai.layers import ResizingND
 from medicai.models.vit.vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.utils import (
+    VALID_ACTIVATION_LIST,
     DescribeMixin,
+    get_act_layer,
     get_conv_layer,
-    get_reshaping_layer,
     registration,
     resolve_encoder,
 )
@@ -30,7 +32,7 @@ class TransUNet(keras.Model, DescribeMixin):
     >>> model = TransUNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet"]
+    ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet", "efficientnet"]
 
     def __init__(
         self,
@@ -38,16 +40,17 @@ class TransUNet(keras.Model, DescribeMixin):
         input_shape=None,
         encoder_name=None,
         encoder=None,
+        encoder_depth=5,
         num_classes=1,
-        patch_size=3,
         classifier_activation=None,
-        num_encoder_layers=6,
+        num_vit_layers=12,
         num_heads=8,
         num_queries=100,
-        embed_dim=256,
+        embed_dim=512,
         mlp_dim=1024,
         dropout_rate=0.1,
-        decoder_projection_filters=64,
+        decoder_activation="leaky_relu",
+        decoder_filters=(256, 128, 64, 32, 16),
         name=None,
         **kwargs,
     ):
@@ -57,35 +60,44 @@ class TransUNet(keras.Model, DescribeMixin):
         Args:
             encoder: (Optional) A Keras model to use as the encoder (backbone).
                 This argument is intended for passing a custom or pre-trained
-                model not available in the `BACKBONE_ZOO`. If provided, the
-                model must have a `pyramid_outputs` attribute, which should be
-                a dictionary of intermediate feature vectors from shallow to
-                deep layers (e.g., `'P1'`, `'P2'`, ...).
+                model. If provided, the model must have a `pyramid_outputs` attribute,
+                which should be a dictionary of intermediate feature vectors from shallow
+                to deep layers (e.g., `'P1'`, `'P2'`, ...).
             encoder_name: (Optional) A string specifying the name of a
-                pre-configured backbone from the `BACKBONE_ZOO` to use as the
-                encoder. This is a convenient option for using a backbone from
+                pre-configured backbone from the `medicai.models.list_models()` to use as
+                the encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
+            encoder_depth: An integer specifying how many stages of the encoder
+                backbone to use. A number of stages used in encoder in range [3, 5].
+                Expected available intermediate or pyramid level, P1, P2, ... P5.
+                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
+                be used for skip connection. If `encoder_depth=4`, bottleneck key
+                would be P4, and P3..P1 will be used for skip connection.
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
+                reduce the size of the model. Default: 5.
             input_shape (tuple): The shape of the input data. For 2D, it is
                 `(height, width, channels)`. For 3D, it is `(depth, height, width, channels)`.
             num_classes (int): The number of segmentation classes.
-            patch_size (int or tuple): The size of the patches for the Vision
-                Transformer. Must be a tuple of length `spatial_dims`. Defaults to 3.
             num_queries (int, optional): The number of learnable queries used in the
                 decoder's attention mechanism. Defaults to 100.
             classifier_activation (str, optional): Activation function for the final
                 segmentation head (e.g., 'sigmoid' for binary, 'softmax' for multi-class).
-            num_encoder_layers (int, optional): The number of transformer encoder blocks
-                in the ViT encoder. Defaults to 6.
+            num_vit_layers (int, optional): The number of transformer encoder blocks
+                in the ViT encoder. Defaults to 12.
             num_heads (int, optional): The number of attention heads in the transformer blocks.
                 Defaults to 8.
             embed_dim (int, optional): The dimensionality of the token embeddings.
-                Defaults to 256.
+                Defaults to 512.
             mlp_dim (int, optional): The hidden dimension of the MLP in the transformer
                 blocks. Defaults to 1024.
             dropout_rate (float, optional): The dropout rate for regularization.
                 Defaults to 0.1.
-            decoder_projection_filters (int, optional): The number of filters for the
-                convolutional layers in the decoder upsampling path. Defaults to 64.
+            decoder_activation (str): Controls the use of activation layers in decoder blocks.
+                It should the activation string identifier in available in keras.
+                Default: 'leaky_relu'
+            decoder_filters: The number of filters for the convolutional layers in the
+                decoder upsampling path. The number of filters should correspond to
+                the `encoder_depth`. Default: [256, 128, 64, 32, 16]
             name (str, optional): The name of the model. Defaults to `TransUNetND`.
         """
         encoder, input_shape = resolve_encoder(
@@ -97,42 +109,73 @@ class TransUNet(keras.Model, DescribeMixin):
 
         spatial_dims = len(input_shape) - 1
 
-        if isinstance(patch_size, int):
-            patch_size = (patch_size,) * spatial_dims
-        elif isinstance(patch_size, (list, tuple)) and len(patch_size) != spatial_dims:
-            raise ValueError(
-                f"patch_size must have length {spatial_dims} for {spatial_dims}D input. "
-                f"Got {patch_size} with length {len(patch_size)}"
-            )
-
         # Get CNN feature maps from the encoder.
         inputs = encoder.input
         pyramid_outputs = encoder.pyramid_outputs
-        required_keys = {"P1", "P2", "P3", "P4", "P5"}
-        if not required_keys.issubset(pyramid_outputs.keys()):
+
+        # Determine required pyramid levels dynamically
+        required_keys = {f"P{i}" for i in range(1, encoder_depth + 1)}
+        available_keys = set(pyramid_outputs.keys())
+
+        # Find missing ones
+        missing_keys = required_keys - available_keys
+        if missing_keys:
             raise ValueError(
-                f"The backbone's `pyramid_outputs` is missing one or more required keys. "
-                f"Required: {required_keys}, Available: {set(pyramid_outputs.keys())}"
+                f"The encoder's `pyramid_outputs` is missing required pyramid levels. "
+                f"Missing: {missing_keys}. "
+                f"Expected keys (based on encoder_depth={encoder_depth}): {required_keys}, "
+                f"but got: {available_keys}"
             )
-        c1 = pyramid_outputs.get("P1")
-        c2 = pyramid_outputs.get("P2")
-        c3 = pyramid_outputs.get("P3")
-        final_cnn_output = pyramid_outputs.get("P4")
-        cnn_features = [c1, c2, c3]  # shallow to deep
+
+        if not (3 <= encoder_depth <= 5):
+            raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
+
+        if len(decoder_filters) < encoder_depth:
+            raise ValueError(
+                f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
+            )
+
+        if isinstance(decoder_activation, str):
+            decoder_activation = decoder_activation.lower()
+
+        if decoder_activation not in VALID_ACTIVATION_LIST:
+            raise ValueError(
+                f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
+                f"Supported values are: {VALID_ACTIVATION_LIST}"
+            )
+
+        # prepare head and skip layers
+        sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]))
+        final_cnn_feature = pyramid_outputs[sorted_keys[-1]]
+        cnn_features = [pyramid_outputs[key] for key in sorted_keys[:-1]]
+        decoder_filters = decoder_filters[:encoder_depth]
+
+        # Compute adaptive patch size based on the last CNN feature map
+        # Use patch size = 1 if feature map is small, else divide it
+        feature_shape = final_cnn_feature.shape[1:-1]  # e.g., (3, 3, 3) or (6, 6, 6)
+        if any(s is None for s in feature_shape):
+            patch_size = (1,) * len(feature_shape)
+        else:
+            min_dim = min(feature_shape)
+            patch_size = (
+                (1,) * len(feature_shape)
+                if min_dim <= 4
+                else tuple(max(1, s // 2) for s in feature_shape)
+            )
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
-            image_size=final_cnn_output.shape[1:-1],
+            image_size=final_cnn_feature.shape[1:-1],
             patch_size=patch_size,
             hidden_dim=embed_dim,
-            num_channels=final_cnn_output.shape[-1],
+            num_channels=final_cnn_feature.shape[-1],
             use_class_token=False,
             use_patch_bias=True,
             name="transunet_vit_patching_and_embedding",
-        )(final_cnn_output)
+        )(final_cnn_feature)
 
         encoder_output = encoded_patches
-        for i in range(num_encoder_layers):
+        for i in range(num_vit_layers):
             encoder_output = ViTEncoderBlock(
                 num_heads=num_heads,
                 hidden_dim=embed_dim,
@@ -145,7 +188,7 @@ class TransUNet(keras.Model, DescribeMixin):
         outputs = self.build_decoder(
             encoder_output=encoder_output,
             cnn_features=cnn_features,
-            final_cnn_output=final_cnn_output,
+            final_cnn_feature=final_cnn_feature,
             num_heads=num_heads,
             embed_dim=embed_dim,
             mlp_dim=mlp_dim,
@@ -153,7 +196,8 @@ class TransUNet(keras.Model, DescribeMixin):
             num_classes=num_classes,
             num_queries=num_queries,
             spatial_dims=spatial_dims,
-            decoder_projection_filters=decoder_projection_filters,
+            decoder_filters=decoder_filters,
+            decoder_activation=decoder_activation,
         )
 
         outputs = get_conv_layer(
@@ -174,14 +218,15 @@ class TransUNet(keras.Model, DescribeMixin):
         self.num_queries = num_queries
         self.encoder_name = encoder_name
         self.encoder = encoder
-        self.patch_size = patch_size
+        self.encoder_depth = encoder_depth
         self.classifier_activation = classifier_activation
-        self.num_encoder_layers = num_encoder_layers
+        self.num_vit_layers = num_vit_layers
         self.num_heads = num_heads
         self.embed_dim = embed_dim
         self.mlp_dim = mlp_dim
         self.dropout_rate = dropout_rate
-        self.decoder_projection_filters = decoder_projection_filters
+        self.decoder_activation = decoder_activation
+        self.decoder_filters = decoder_filters
 
     def get_config(self):
         config = {
@@ -189,14 +234,15 @@ class TransUNet(keras.Model, DescribeMixin):
             "num_classes": self.num_classes,
             "num_queries": self.num_queries,
             "encoder_name": self.encoder_name,
+            "encoder_depth": self.encoder_depth,
             "classifier_activation": self.classifier_activation,
-            "patch_size": self.patch_size,
-            "num_encoder_layers": self.num_encoder_layers,
+            "num_vit_layers": self.num_vit_layers,
             "num_heads": self.num_heads,
             "embed_dim": self.embed_dim,
             "mlp_dim": self.mlp_dim,
             "dropout_rate": self.dropout_rate,
-            "decoder_projection_filters": self.decoder_projection_filters,
+            "decoder_activation": self.decoder_activation,
+            "decoder_filters": self.decoder_filters,
         }
         if self.encoder is not None:
             config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
@@ -212,7 +258,7 @@ class TransUNet(keras.Model, DescribeMixin):
         self,
         encoder_output,
         cnn_features,
-        final_cnn_output,
+        final_cnn_feature,
         num_heads,
         embed_dim,
         num_classes,
@@ -220,7 +266,8 @@ class TransUNet(keras.Model, DescribeMixin):
         mlp_dim,
         dropout_rate,
         spatial_dims,
-        decoder_projection_filters,
+        decoder_filters,
+        decoder_activation,
     ):
         """
         Builds the hybrid decoder, which consists of a transformer-based
@@ -235,7 +282,7 @@ class TransUNet(keras.Model, DescribeMixin):
         )  # Initial queries
 
         # Step 2: Project CNN features for decoder skip connections
-        # Project the 3 intermediate CNN features (C1, C2, C3) to the
+        # Project the intermediate CNN features to the
         # transformer's embedding dimension.
         projected_features = []
         for i, feat in enumerate(cnn_features):
@@ -258,10 +305,10 @@ class TransUNet(keras.Model, DescribeMixin):
         )
 
         # Step 4: Coarse-to-Fine Refinement Loop
-        # This loop iterates through the CNN feature maps in reverse order (C3 -> C2 -> C1),
+        # This loop iterates through the CNN feature maps in reverse order (P4 -> P3 -> P2 -> P1),
         # refining the queries and mask at each step.
-        for t, cnn_feature in enumerate(reversed(projected_features)):  # [C3, C2, C1]
-            level_name = f"level_{t}"  # level_0 (C3), level_1 (C2), level_2 (C1)
+        for t, cnn_feature in enumerate(reversed(projected_features)):  # [P4, P3, P2, P1]
+            level_name = f"level_{t}"  # level_0 (P4), level_1 (P3), level_2 (P2), level_3 (P1)
 
             # Step 4a: Prepare CNN features for cross-attention
             # Flatten the spatial dimensions of the CNN feature map into a sequence of tokens.
@@ -324,69 +371,48 @@ class TransUNet(keras.Model, DescribeMixin):
         # Step 6: Combine Masks with Class Predictions
         # The final segmentation map is produced by combining the per-query class
         # predictions with their corresponding spatial masks.
-        final_output = self.combine_masks_and_classes(final_mask, class_logits, final_cnn_output)
+        final_output = self.combine_masks_and_classes(final_mask, class_logits, final_cnn_feature)
 
         # Step 7: U-Net style upsampling path
         # This final path uses standard convolutions and upsampling to refine the
-        # combined output and leverage the CNN skip connections (C1, C2, C3).
-        c1, c2, c3 = cnn_features
-
-        # Step 7a: UpSampling and Concatenation with C3
+        # combined output and leverage the CNN skip connections [P1, P2, P3, P4].
         x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
-            filters=decoder_projection_filters,
+            filters=decoder_filters[0],
             kernel_size=3,
             padding="same",
             name="decoder_proj_0",
         )(final_output)
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c3"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c3")([x, c3])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_1",
-        )(x)
 
-        # Step 7b: UpSampling and Concatenation with C2
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c2"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c2")([x, c2])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_2",
-        )(x)
+        # Iterate from deepest skip (last element) to shallowest (first)
+        for i, (skip, filters) in enumerate(
+            zip(reversed(cnn_features), decoder_filters[1:]), start=1
+        ):
+            pyramid_level = len(cnn_features) - i + 1
+            x = ResizingND(
+                scale_factor=2,
+                interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                name=f"upsample_to_p{pyramid_level}",
+            )(x)
+            x = layers.Concatenate(axis=-1, name=f"concat_with_p{pyramid_level}")([x, skip])
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="conv",
+                filters=filters,
+                kernel_size=3,
+                strides=1,
+                padding="same",
+                activation=None,
+                name=f"decoder_conv_{pyramid_level}",
+            )(x)
+            x = get_act_layer(layer_type=decoder_activation, name=f"decoder_act_{pyramid_level}")(x)
 
-        # Step 7c: UpSampling and Concatenation with C1
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="upsample_to_c1"
-        )(x)
-        x = layers.Concatenate(axis=-1, name="concat_with_c1")([x, c1])
-        x = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="conv",
-            filters=decoder_projection_filters,
-            kernel_size=3,
-            padding="same",
-            activation="relu",
-            name="decoder_conv_3",
-        )(x)
-
-        # Final upsampling to the original input resolution
-        x = get_reshaping_layer(
-            spatial_dims=spatial_dims, layer_type="upsampling", size=2, name="final_upsample"
+        # Final upsample to restore full resolution
+        x = ResizingND(
+            scale_factor=2,
+            interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+            name="final_upsample",
         )(x)
 
         return x

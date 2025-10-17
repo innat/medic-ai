@@ -65,13 +65,12 @@ class UNet(keras.Model, DescribeMixin):
                 not including the batch size.
             encoder: (Optional) A Keras model to use as the encoder (backbone).
                 This argument is intended for passing a custom or pre-trained
-                model not available in the `BACKBONE_ZOO`. If provided, the
-                model must have a `pyramid_outputs` attribute, which should be
-                a dictionary of intermediate feature vectors from shallow to
-                deep layers (e.g., `'P1'`, `'P2'`, ...).
+                model. If provided, the model must have a `pyramid_outputs` attribute,
+                which should be a dictionary of intermediate feature vectors from shallow
+                to deep layers (e.g., `'P1'`, `'P2'`, ...).
             encoder_name: (Optional) A string specifying the name of a
-                pre-configured backbone from the `BACKBONE_ZOO` to use as the
-                encoder. This is a convenient option for using a backbone from
+                pre-configured backbone from the `medicai.models.list_models()` to use as
+                the encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
             encoder_depth: An integer specifying how many stages of the encoder
                 backbone to use. A number of stages used in encoder in range [3, 5].
