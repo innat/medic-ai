@@ -26,6 +26,8 @@ model = TransUNet(
 )
 ```
 
+**Note**: There are two published **TransUNet** for 2D and 3D task, with different decoder modelling. In 3D **TransUNet**, it is mentioned that, this model can be applied in 2D task by replacing the 3D ops to 2D ops. In this codebase, 3D version of TransUNet is implemented. If 2D input shape is passed, the built model would be 3D TransUNet in 2D version.
+
 **Reference**
 - [TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation](https://arxiv.org/abs/2102.04306)
 - [3D TransUNet: Advancing Medical Image Segmentation through Vision Transformers](https://arxiv.org/abs/2310.07781)
