@@ -8,20 +8,24 @@ This model combines a 3D or 2D CNN encoder with a **Vision Transformer** (ViT) e
 ```python
 from medicai.models import TransUNet
 
-# To build 3D model
+# To build 3D model (with resnet)
 model = TransUNet(encoder_name='resnet18', input_shape=(96,96,96,1))
 
-# To build 2D model
-model = TransUNet(encoder_name='resnet18', input_shape=(96,96,1))
+# To build 2D model (with efficientnet)
+model = TransUNet(encoder_name='efficientnet_b2', input_shape=(96,96,1))
+
+# To reduce the size of the model (with densenet)
+model = TransUNet(
+    encoder_name='densenet121', 
+    input_shape=(96,96,96,1),
+    encoder_depth=3, # 3 or 4, default (5)
+    num_vit_layers=6, # default (12)
+    num_heads=8,
+    embed_dim=512,
+    mlp_dim=1024,
+)
 ```
 
----
-
-**Note**: For the 2D version of the **TransUNet** model, we adopted the decoder architecture from the 3D **TransUNet**. The 3D variant demonstrates significantly greater modeling capability compared to the 2D version. The 2D version of the 3D model is also mentioned in the 3D-TransUNet paper. From the paper, page 4:
-
-> Lastly, we would like to note that our method, though built upon the 3D nnU-Net, can be easily modified to fit 2D tasks by simply switching the backbone model and reducing all
-operations back to 2D.
-
-
 **Reference**
+- [TransUNet: Transformers Make Strong Encoders for Medical Image Segmentation](https://arxiv.org/abs/2102.04306)
 - [3D TransUNet: Advancing Medical Image Segmentation through Vision Transformers](https://arxiv.org/abs/2310.07781)
