@@ -1,3 +1,4 @@
+import keras
 from keras import layers, ops
 
 from medicai.utils import resize_volumes
@@ -91,18 +92,35 @@ class ResizingND(layers.Layer):
                         f"got {dim} (type: {type(dim)}) at index {i}"
                     )
 
+        # Jax doesn't support dynamic shape.
+        if keras.config.backend() == "jax":
+            # Precompute target shape statically to avoid tracing
+            if self.scale_factor is not None:
+                self.computed_target_shape = [
+                    int(round(input_shape[i + 1] * self.scale_factor[i]))
+                    for i in range(self.spatial_dims)
+                ]
+            else:
+                self.computed_target_shape = list(self.target_shape)
+        else:
+            self.computed_target_shape = None
+
         super().build(input_shape)
 
     def call(self, inputs):
-        input_shape = ops.shape(inputs)
 
-        if self.scale_factor is not None:
-            target_shape = [
-                ops.cast(input_shape[i + 1] * self.scale_factor[i], "int32")
-                for i in range(self.spatial_dims)
-            ]
+        if keras.config.backend() == "jax":
+            target_shape = self.computed_target_shape
         else:
-            target_shape = self.target_shape
+            input_shape = ops.shape(inputs)
+
+            if self.scale_factor is not None:
+                target_shape = [
+                    ops.cast(input_shape[i + 1] * self.scale_factor[i], "int32")
+                    for i in range(self.spatial_dims)
+                ]
+            else:
+                target_shape = self.target_shape
 
         if self.spatial_dims == 3:
             return resize_volumes(inputs, *target_shape, method=self.interpolation)
@@ -112,7 +130,9 @@ class ResizingND(layers.Layer):
     def compute_output_shape(self, input_shape):
         batch_size = input_shape[0]
 
-        if self.scale_factor is not None:
+        if keras.config.backend() == "jax":
+            new_spatial = self.computed_target_shape
+        elif self.scale_factor is not None:
             new_spatial = [
                 (
                     int(input_shape[i + 1] * self.scale_factor[i])
