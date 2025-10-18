@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 from keras import layers, ops
 
 from medicai.layers import ResizingND
@@ -8,6 +9,7 @@ from medicai.utils import (
     DescribeMixin,
     get_act_layer,
     get_conv_layer,
+    get_norm_layer,
     registration,
     resolve_encoder,
 )
@@ -151,17 +153,13 @@ class TransUNet(keras.Model, DescribeMixin):
         decoder_filters = decoder_filters[:encoder_depth]
 
         # Compute adaptive patch size based on the last CNN feature map
-        # Use patch size = 1 if feature map is small, else divide it
-        feature_shape = final_cnn_feature.shape[1:-1]  # e.g., (3, 3, 3) or (6, 6, 6)
-        if any(s is None for s in feature_shape):
-            patch_size = (1,) * len(feature_shape)
-        else:
-            min_dim = min(feature_shape)
-            patch_size = (
-                (1,) * len(feature_shape)
-                if min_dim <= 4
-                else tuple(max(1, s // 2) for s in feature_shape)
-            )
+        num_pool_per_axis = [
+            int(round(np.log2(i / j)))
+            for i, j in zip(input_shape[:-1], final_cnn_feature.shape[1:-1])
+        ]
+        patch_size = tuple(
+            max(1, s // (2**n)) for s, n in zip(final_cnn_feature.shape[1:-1], num_pool_per_axis)
+        )
 
         # Transformer Encoder
         encoded_patches = ViTPatchingAndEmbedding(
@@ -293,7 +291,10 @@ class TransUNet(keras.Model, DescribeMixin):
                 kernel_size=1,
                 name=f"proj_cnn_{i}",
             )(feat)
-            projected_features.append(proj_feat)
+            proj_feat_norm = get_norm_layer(layer_type="group", name=f"proj_cnn_group_norm_{i}")(
+                proj_feat
+            )
+            projected_features.append(proj_feat_norm)
 
         # Step 3: Initial Coarse Prediction
         # Generate an initial coarse mask prediction by performing a dot product

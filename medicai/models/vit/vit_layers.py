@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 from keras import ops
 
 from medicai.layers import ViTMLP
