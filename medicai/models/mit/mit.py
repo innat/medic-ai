@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, keras_constants, registration
 
 from .mit_backbone import MiTBackbone
 
@@ -112,6 +112,14 @@ class MiTBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
+
             x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
         elif pooling == "avg":
             x = GlobalAvgPool(x)

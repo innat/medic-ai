@@ -1,7 +1,3 @@
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
-
 from keras import ops
 
 from medicai.utils import DescribeMixin

@@ -1,10 +1,5 @@
 from typing import Dict, Tuple, Union
 
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
-from typing import Dict, Tuple, Union
-
 import tensorflow as tf
 
 from .tensor_bundle import TensorBundle

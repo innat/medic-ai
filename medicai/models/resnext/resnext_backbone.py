@@ -13,6 +13,7 @@ from medicai.utils import (
 from .resnext_layers import conv_block, identity_block
 
 
+@keras.utils.register_keras_serializable(package="resnext.backbone")
 class ResNeXtBackbone(keras.Model):
     """ResNeXt backbone network for feature extraction.
 
@@ -46,7 +47,6 @@ class ResNeXtBackbone(keras.Model):
             x = layers.Rescaling(1.0 / 255, name="rescaling")(x)
 
         # Initial stems
-        x = get_norm_layer(layer_type=normalization, name="initial_norm")(x)
         x = get_reshaping_layer(
             spatial_dims=spatial_dims,
             layer_type="padding",

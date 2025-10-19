@@ -6,6 +6,7 @@ from medicai.utils import (
     DescribeMixin,
     get_conv_layer,
     get_norm_layer,
+    keras_constants,
     registration,
     resize_volumes,
     resolve_encoder,
@@ -122,6 +123,12 @@ class SegFormer(keras.Model, DescribeMixin):
         outputs = decoder_head(skips)
 
         if classifier_activation:
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
             outputs = layers.Activation(classifier_activation, dtype="float32")(outputs)
 
         super().__init__(

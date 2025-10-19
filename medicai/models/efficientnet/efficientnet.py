@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, keras_constants, registration
 
 from .efficientnet_backbone import EfficientNetBackbone
 from .efficientnet_layers import (
@@ -51,6 +51,13 @@ class EfficientNetBase(keras.Model):
             x = GlobalAvgPool(x)
             if dropout_rate > 0:
                 x = layers.Dropout(dropout_rate, name="top_dropout")(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
 
             x = layers.Dense(
                 num_classes,

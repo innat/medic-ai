@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, registration
+from medicai.utils import DescribeMixin, keras_constants, registration
 from medicai.utils.model_utils import get_pooling_layer
 
 from .resnext_backbone import ResNeXtBackbone
@@ -14,6 +14,7 @@ class ResNeXtBase(keras.Model):
         *,
         blocks,
         input_shape,
+        groups,
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
@@ -27,7 +28,10 @@ class ResNeXtBase(keras.Model):
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
         backbone = ResNeXtBackbone(
-            input_shape=input_shape, blocks=blocks, include_rescaling=include_rescaling
+            input_shape=input_shape,
+            blocks=blocks,
+            include_rescaling=include_rescaling,
+            groups=groups,
         )
         inputs = backbone.input
         x = backbone.output
@@ -40,6 +44,14 @@ class ResNeXtBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
+
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
@@ -47,11 +59,14 @@ class ResNeXtBase(keras.Model):
             x = GlobalAvgPool(x)
         elif pooling == "max":
             x = GlobalMaxPool(x)
+        elif pooling is not None:
+            raise ValueError("pooling must be one of: None, 'avg', 'max'")
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 
         self.pyramid_outputs = backbone.pyramid_outputs
         self.blocks = blocks
+        self.groups = groups
         self.include_rescaling = include_rescaling
         self.include_top = include_top
         self.num_classes = num_classes
@@ -66,6 +81,7 @@ class ResNeXtBase(keras.Model):
             "include_rescaling": self.include_rescaling,
             "num_classes": self.num_classes,
             "pooling": self.pooling,
+            "groups": self.groups,
             "classifier_activation": self.classifier_activation,
         }
         return config
@@ -82,6 +98,7 @@ class ResNeXt50(ResNeXtBase, DescribeMixin):
         self,
         *,
         input_shape,
+        groups=32,
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
@@ -93,6 +110,7 @@ class ResNeXt50(ResNeXtBase, DescribeMixin):
         super().__init__(
             input_shape=input_shape,
             blocks=[3, 4, 6, 3],
+            groups=groups,
             include_rescaling=include_rescaling,
             include_top=include_top,
             num_classes=num_classes,
@@ -110,6 +128,7 @@ class ResNeXt101(ResNeXtBase, DescribeMixin):
         self,
         *,
         input_shape,
+        groups=32,
         include_rescaling=False,
         include_top=True,
         num_classes=1000,
@@ -121,6 +140,7 @@ class ResNeXt101(ResNeXtBase, DescribeMixin):
         super().__init__(
             input_shape=input_shape,
             blocks=[3, 4, 23, 3],
+            groups=groups,
             include_rescaling=include_rescaling,
             include_top=include_top,
             num_classes=num_classes,

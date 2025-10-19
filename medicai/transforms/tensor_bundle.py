@@ -1,8 +1,5 @@
 from typing import Any, Dict, Optional
 
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
 import tensorflow as tf
 
 

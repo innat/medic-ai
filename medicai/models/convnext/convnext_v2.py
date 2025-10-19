@@ -1,7 +1,13 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_norm_layer, get_pooling_layer, registration
+from medicai.utils import (
+    DescribeMixin,
+    get_norm_layer,
+    get_pooling_layer,
+    keras_constants,
+    registration,
+)
 
 from .convnext_backbone import ConvNeXtBackboneV2
 
@@ -111,6 +117,14 @@ class ConvNeXtVariantsBaseV2(keras.Model):
         if include_top:
             x = GlobalAvgPool(x)
             x = GlobalNorm(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
+
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)

@@ -3,11 +3,9 @@ from keras import layers
 
 from medicai.layers import ResizingND
 from medicai.utils import (
-    VALID_ACTIVATION_LIST,
-    VALID_DECODER_BLOCK_TYPE,
-    VALID_DECODER_NORMS,
     DescribeMixin,
     get_conv_layer,
+    keras_constants,
     registration,
     resolve_encoder,
 )
@@ -146,25 +144,19 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
-        if decoder_block_type not in VALID_DECODER_BLOCK_TYPE:
-            raise ValueError(
-                f"Invalid decoder_block_type: '{decoder_block_type}'. "
-                "Expected one of ('upsampling', 'transpose')."
-            )
-
         if isinstance(decoder_normalization, str):
             decoder_normalization = decoder_normalization.lower()
 
-        if decoder_normalization not in VALID_DECODER_NORMS:
-            supported = ", ".join([str(v) for v in VALID_DECODER_NORMS])
+        if decoder_normalization not in keras_constants.VALID_DECODER_NORMS:
             raise ValueError(
                 f"Invalid value for `decoder_normalization`: {decoder_normalization!r}. "
-                f"Supported values are: {supported}"
+                f"Supported values are: {keras_constants.VALID_DECODER_NORMS}"
             )
 
         if isinstance(decoder_activation, str):
             decoder_activation = decoder_activation.lower()
 
+        VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
         if decoder_activation not in VALID_ACTIVATION_LIST:
             raise ValueError(
                 f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
@@ -209,6 +201,12 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
         else:
             raise ValueError(
                 f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
+            )
+
+        if classifier_activation not in VALID_ACTIVATION_LIST:
+            raise ValueError(
+                f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                f"Supported values are: {VALID_ACTIVATION_LIST}"
             )
 
         outputs = layers.Activation(classifier_activation, dtype="float32")(x)

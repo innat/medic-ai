@@ -1,8 +1,5 @@
 from typing import Dict, Sequence, Tuple, Union
 
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
 import tensorflow as tf
 
 from medicai.transforms.depth_interpolate import (

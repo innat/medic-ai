@@ -1,12 +1,7 @@
-from medicai.utils import hide_warnings
-
-hide_warnings()
-
-
 import keras
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
-from medicai.utils import DescribeMixin, registration, resolve_encoder
+from medicai.utils import DescribeMixin, keras_constants, registration, resolve_encoder
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
@@ -82,6 +77,16 @@ class SwinUNETR(keras.Model, DescribeMixin):
             stage_wise_conv=stage_wise_conv,
             pooling=None,
         )
+
+        # check head activation.
+        VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+        if classifier_activation not in VALID_ACTIVATION_LIST:
+            raise ValueError(
+                f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                f"Supported values are: {VALID_ACTIVATION_LIST}"
+            )
+
+        # get spatial dimention
         spatial_dims = len(input_shape) - 1
 
         # Get intermediate vectores

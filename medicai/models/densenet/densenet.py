@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, registration
+from medicai.utils import DescribeMixin, keras_constants, registration
 from medicai.utils.model_utils import get_pooling_layer
 
 from .densenet_backbone import DenseNetBackbone
@@ -80,6 +80,14 @@ class DenseNetBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
+
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)

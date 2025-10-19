@@ -1,6 +1,6 @@
 import keras
 
-from medicai.utils import DescribeMixin, get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, keras_constants, registration
 
 from .swin_backbone import SwinBackbone, SwinBackboneV2, resolve_input_params
 
@@ -114,6 +114,14 @@ class SwinVariantsBase(keras.Model):
             x = GlobalAvgPool(x)
             if dropout > 0.0:
                 x = keras.layers.Dropout(dropout, name="output_dropout")(x)
+
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
+
             x = keras.layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
