@@ -86,7 +86,7 @@ def DecoderBlock(
                 padding="same",
                 normalization=decoder_normalization,
                 activation=decoder_activation,
-                name_prefix=f"{stage_prefix}_conv_{i}",
+                name=f"{stage_prefix}_conv_{i}",
             )(x)
         return x
 

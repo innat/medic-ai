@@ -129,7 +129,7 @@ def UNetPlusPlusDecoder(
                         padding="same",
                         normalization=decoder_normalization,
                         activation=decoder_activation,
-                        name_prefix=f"x_{i}_{j}_conv{conv_idx}",
+                        name=f"x_{i}_{j}_conv{conv_idx}",
                     )(x_ij)
 
                 dense_grid[(i, j)] = x_ij

@@ -62,6 +62,7 @@ from .resnet import (
     ResNet200vd,
     ResNetBackbone,
 )
+from .resnext import ResNeXt50, ResNeXt101, ResNeXtBackbone
 from .segformer import SegFormer
 from .swin import (
     SwinBackbone,

@@ -10,7 +10,7 @@ def ConvBnAct(
     padding="same",
     normalization="batch",
     activation="relu",
-    name_prefix="",
+    name="",
 ):
     """
     Generic convolution → normalization → activation block.
@@ -23,7 +23,7 @@ def ConvBnAct(
         padding (str): Padding type, e.g. 'same' or 'valid'.
         normalization (str | None): Type of normalization ('batch', 'layer', etc.) or None.
         activation (str | None): Type of activation (e.g. 'relu', 'gelu', etc.) or None.
-        name_prefix (str): Optional prefix for layer naming.
+        name (str): Optional prefix for layer naming.
 
     Returns:
         function: A function that applies the block to an input tensor.
@@ -34,9 +34,9 @@ def ConvBnAct(
         spatial_dims = len(x.shape) - 2
         dim_str = f"{spatial_dims}D"
 
-        conv_name = f"{name_prefix}_conv_{dim_str}"
-        norm_name = f"{name_prefix}_norm_{dim_str}"
-        act_name = f"{name_prefix}_activation"
+        conv_name = f"{name}_conv_{dim_str}"
+        norm_name = f"{name}_norm_{dim_str}"
+        act_name = f"{name}_activation"
 
         # Apply convolution
         x = get_conv_layer(

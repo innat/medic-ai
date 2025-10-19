@@ -4,7 +4,6 @@ from keras import layers, ops
 from medicai.layers import ConvBnAct
 from medicai.utils import (
     DescribeMixin,
-    get_act_layer,
     get_conv_layer,
     get_norm_layer,
     registration,
@@ -205,7 +204,7 @@ class SegFormer(keras.Model, DescribeMixin):
                 padding="same",
                 normalization="batch",
                 activation="relu",
-                name_prefix="linear_fuse_conv",
+                name="linear_fuse_conv",
             )(x)
             x = layers.Dropout(dropout)(x)
 
