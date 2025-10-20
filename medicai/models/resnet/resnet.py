@@ -796,7 +796,7 @@ class ResNet200vd(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnext")
-@registration.register(family="resnext")
+@registration.register(family="resnet")
 class ResNeXt50(ResNetBase, DescribeMixin):
     """
     ResNeXt-50 32x4d model for classification.
@@ -887,7 +887,7 @@ class ResNeXt50(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnext")
-@registration.register(family="resnext")
+@registration.register(family="resnet")
 class ResNeXt101(ResNetBase, DescribeMixin):
     """
     ResNeXt-101 32x8d model for classification.
