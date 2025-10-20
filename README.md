@@ -170,7 +170,7 @@ medicai.models.list_models()
 | Model | Supported Modalities | Primary Task | Architecture Type |
 | :--- | :--- | :--- | :--- |
 | [**DenseNet**](medicai/models/densenet/README.md) | 2D, 3D | Classification | CNN |
-| [**ResNet (V1/V2)**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
+| [**ResNet-V1,V2**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
 | [**ResNeXt**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
 | [**SE-ResNet**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
 | [**SE-ResNeXt**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
