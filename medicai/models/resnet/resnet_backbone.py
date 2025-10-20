@@ -7,6 +7,7 @@ from medicai.utils import (
     get_pooling_layer,
     get_reshaping_layer,
     parse_model_inputs,
+    validate_activation,
 )
 
 from .resnet_layers import apply_resnet_block
@@ -14,7 +15,7 @@ from .resnet_layers import apply_resnet_block
 
 @keras.saving.register_keras_serializable(package="resnet.backbone")
 class ResNetBackbone(keras.Model, DescribeMixin):
-    """ResNet and ResNetV2 core network with hyperparameters.
+    """ResNet, ResNeXt, and ResNetV2 core network with hyperparameters.
 
     This class implements a ResNet backbone as described in [Deep Residual
     Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
@@ -29,6 +30,10 @@ class ResNetBackbone(keras.Model, DescribeMixin):
     ReLU activation precede the convolution layers, as opposed to **ResNet** where
     the batch normalization and ReLU activation are applied after the
     convolution layers. The `use_pre_activation` argument controls this behavior.
+
+    This model also extends ResNeXt with **grouped convolutions** and follows the
+    ResNeXt architecture described in "Aggregated Residual Transformations for
+    Deep Neural Networks". It uses **width_per_group** with **groups**.
 
     **ResNetVd** introduces two key modifications to the standard ResNet:
     1. The initial convolutional layer is replaced by a series of three
@@ -55,6 +60,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         use_pre_activation=False,
         groups=1,
         width_per_group=64,
+        se_block=False,
+        se_ratio=16,
+        se_activation="relu",
         include_rescaling=False,
         **kwargs,
     ):
@@ -87,6 +95,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
             use_pre_activation: A boolean indicating whether to use pre-activation or not.
                 `True` for ResNetV2, `False` for ResNetVd.
             groups: int. Number of groups for grouped convolution. Defaults to 1.
+            se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+            se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+            se_activation: str. Activation function for SE block. Defaults to "relu"
             width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
 
         Examples:
@@ -148,6 +159,10 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 f"(groups={groups}, width_per_group={width_per_group}). "
                 f"Set groups=1 and width_per_group=64 when using {block_type}."
             )
+
+        # If we apply Squeeze Excitation block
+        if se_block:
+            se_activation = validate_activation(se_activation)
 
         num_input_convs = len(conv_filters)
         num_stacks = len(num_filters)
@@ -247,6 +262,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 first_shortcut=(block_type != "basic_block" or stack_index > 0),
                 groups=groups,
                 width_per_group=width_per_group,
+                se_block=se_block,
+                se_ratio=se_ratio,
+                se_activation=se_activation,
                 name=f"stack{stack_index}",
             )
             pyramid_outputs[f"P{stack_index + 2}"] = x
@@ -277,6 +295,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         self.groups = groups
         self.width_per_group = width_per_group
         self.use_pre_activation = use_pre_activation
+        self.se_block = se_block
+        self.se_ratio = se_ratio
+        self.se_activation = se_activation
         self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):

@@ -172,16 +172,19 @@ medicai.models.list_models()
 | [**DenseNet**](medicai/models/densenet/README.md) | 2D, 3D | Classification | CNN |
 | [**ResNet (V1/V2)**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
 | [**ResNeXt**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
-| [**EfficientNet (V1/V2)**](medicai/models/efficientnet/README.md) | 2D, 3D | Classification | CNN |
-| [**ConvNeXt (V1/V2)**](medicai/models/convnext/README.md) | 2D, 3D | Classification | CNN |
+| [**SE-ResNet**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
+| [**SE-ResNeXt**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
+| [**EfficientNet-V1,V2**](medicai/models/efficientnet/README.md) | 2D, 3D | Classification | CNN |
+| [**ConvNeXt-V1,V2**](medicai/models/convnext/README.md) | 2D, 3D | Classification | CNN |
 | [**ViT**](medicai/models/vit/README.md) | 2D, 3D | Classification | Transformer |
 | [**MiT**](medicai/models/mit/README.md) | 2D, 3D | Classification | Transformer |
-| [**Swin Transformer (V1/V2)**](medicai/models/swin/README.md) | 2D, 3D | Classification | Transformer |
+| [**Swin Transformer-V1,V2**](medicai/models/swin/README.md) | 2D, 3D | Classification | Transformer |
 | [**UNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**AttentionUNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNETR**](medicai/models/unetr/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
+| [**SwinUNETR-V1,V2**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**TransUNet**](medicai/models/transunet/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SegFormer**](medicai/models/segformer/README.md) | 2D, 3D | Segmentation | Transformer |
 

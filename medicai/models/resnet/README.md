@@ -22,7 +22,7 @@ model = ResNet18(
 
 # ResNeXt 
 
-The **ResNeXt** architecture, a standard CNNs supporting in both 2D and 3D tasks. This model extends **ResNet** with **grouped convolutions** and follows the **ResNeXt** architecture described in Aggregated Residual Transformations for Deep Neural Networks.
+The **ResNeXt** architecture, a standard CNNs supporting in both 2D and 3D tasks. This model extends **ResNet** with **grouped convolutions** and follows the **ResNeXt** architecture described in [Aggregated Residual Transformations for Deep Neural Networks](https://arxiv.org/abs/1611.05431).
 
 ```python
 from medicai.models import ResNeXt50, ResNeXt101, ResNetBackbone

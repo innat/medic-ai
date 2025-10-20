@@ -39,6 +39,9 @@ class ResNetBase(keras.Model):
         pooling=None,
         groups=1,
         width_per_group=64,
+        se_block=False,
+        se_ratio=16,
+        se_activation="relu",
         classifier_activation="softmax",
         name=None,
         **kwargs,
@@ -76,6 +79,10 @@ class ResNetBase(keras.Model):
                 is `True`.
             groups: int. Number of groups for grouped convolution. Defaults to 1.
             width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
+            se_block: bool. If `True`, apply Squeeze-and-Excitation block.
+                Defaults to `False`.
+            se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+            se_activation: str. Activation function for SE block. Defaults to "relu"
             pooling: (Optional) A string specifying the type of pooling to
                 apply to the output of the backbone. Can be `"avg"` for global
                 average pooling or `"max"` for global max pooling. This is only
@@ -111,6 +118,9 @@ class ResNetBase(keras.Model):
             include_rescaling=include_rescaling,
             groups=groups,
             width_per_group=width_per_group,
+            se_block=se_block,
+            se_ratio=se_ratio,
+            se_activation=se_activation,
         )
         inputs = backbone.input
         x = backbone.output
@@ -145,6 +155,9 @@ class ResNetBase(keras.Model):
         self.include_top = include_top
         self.num_classes = num_classes
         self.pooling = pooling
+        self.se_block = se_block
+        self.se_ratio = se_ratio
+        self.se_activation = se_activation
         self.classifier_activation = classifier_activation
         self.name = name
 
