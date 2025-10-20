@@ -292,9 +292,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         self.groups = groups
         self.width_per_group = width_per_group
         self.use_pre_activation = use_pre_activation
-        se_block = se_block
-        se_ratio = se_ratio
-        se_activation = se_activation
+        self.se_block = se_block
+        self.se_ratio = se_ratio
+        self.se_activation = se_activation
         self.pyramid_outputs = pyramid_outputs
 
     def get_config(self):
