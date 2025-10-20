@@ -272,6 +272,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         self.num_blocks = num_blocks
         self.num_strides = num_strides
         self.block_type = block_type
+        self.groups = groups
+        self.width_per_group = width_per_group
         self.use_pre_activation = use_pre_activation
         self.pyramid_outputs = pyramid_outputs
 

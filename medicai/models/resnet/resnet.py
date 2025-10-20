@@ -795,7 +795,7 @@ class ResNet200vd(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnext")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNeXt50(ResNetBase, DescribeMixin):
     """
@@ -886,7 +886,7 @@ class ResNeXt50(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnext")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNeXt101(ResNetBase, DescribeMixin):
     """

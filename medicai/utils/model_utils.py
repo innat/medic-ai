@@ -236,7 +236,7 @@ def validate_activation(activation):
     list of valid Keras activations.
     """
     if activation is None:
-        return None
+        return "linear"
 
     if not isinstance(activation, str):
         raise TypeError(
