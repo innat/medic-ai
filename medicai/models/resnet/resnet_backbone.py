@@ -138,6 +138,15 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 f'or `"bottleneck_block_vd"`. Received block_type={block_type}.'
             )
 
+        # Validate block type and ResNeXt parameters
+        # TODO: Should we keep it or make it flexible!
+        if block_type != "bottleneck_block" and (groups != 1 or width_per_group != 64):
+            raise ValueError(
+                f"Invalid configuration: only `bottleneck_block` supports grouped convolutions "
+                f"(groups={groups}, width_per_group={width_per_group}). "
+                f"Set groups=1 and width_per_group=64 when using {block_type}."
+            )
+
         num_input_convs = len(conv_filters)
         num_stacks = len(num_filters)
 
