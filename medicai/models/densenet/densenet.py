@@ -1,13 +1,13 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, registration
+from medicai.utils import DescribeMixin, registration, validate_activation
 from medicai.utils.model_utils import get_pooling_layer
 
 from .densenet_backbone import DenseNetBackbone
 
 
-@keras.saving.register_keras_serializable(package="densenetbase")
+@keras.saving.register_keras_serializable(package="densenet")
 class DenseNetBase(keras.Model):
     """
     A full DenseNet model for classification.
@@ -66,6 +66,16 @@ class DenseNetBase(keras.Model):
         if name is None and self.__class__ is not DenseNetBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        # number of classes must be positive.
+        if include_top and num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
         backbone = DenseNetBackbone(
             input_shape=input_shape, blocks=blocks, include_rescaling=include_rescaling
         )
@@ -115,7 +125,7 @@ class DenseNetBase(keras.Model):
         return cls(**config)
 
 
-@keras.saving.register_keras_serializable(package="densenet121")
+@keras.saving.register_keras_serializable(package="densenet")
 @registration.register(family="densenet")
 class DenseNet121(DenseNetBase, DescribeMixin):
     def __init__(
@@ -143,7 +153,7 @@ class DenseNet121(DenseNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="densenet169")
+@keras.saving.register_keras_serializable(package="densenet")
 @registration.register(family="densenet")
 class DenseNet169(DenseNetBase, DescribeMixin):
     def __init__(
@@ -171,7 +181,7 @@ class DenseNet169(DenseNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="densenet201")
+@keras.saving.register_keras_serializable(package="densenet")
 @registration.register(family="densenet")
 class DenseNet201(DenseNetBase, DescribeMixin):
     def __init__(
@@ -199,7 +209,7 @@ class DenseNet201(DenseNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="densenet264")
+@keras.saving.register_keras_serializable(package="densenet")
 @registration.register(family="densenet")
 class DenseNet264(DenseNetBase, DescribeMixin):
     def __init__(

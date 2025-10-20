@@ -9,5 +9,7 @@ from .resnet import (
     ResNet152,
     ResNet152v2,
     ResNet200vd,
+    ResNeXt50,
+    ResNeXt101,
 )
 from .resnet_backbone import ResNetBackbone

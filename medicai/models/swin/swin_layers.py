@@ -1,13 +1,10 @@
-from medicai.utils import hide_warnings
-from medicai.utils.model_utils import get_conv_layer, get_reshaping_layer
-
-hide_warnings()
-
 import itertools
 
 import keras
 import numpy as np
 from keras import layers, ops
+
+from medicai.utils.model_utils import get_conv_layer, get_reshaping_layer
 
 from ...layers.drop_path import DropPath
 from ...layers.mlp import SwinMLP

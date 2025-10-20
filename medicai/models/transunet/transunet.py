@@ -5,13 +5,13 @@ from keras import layers, ops
 from medicai.layers import ResizingND
 from medicai.models.vit.vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 from medicai.utils import (
-    VALID_ACTIVATION_LIST,
     DescribeMixin,
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
     registration,
     resolve_encoder,
+    validate_activation,
 )
 
 from .transunet_layers import LearnableQueries, MaskedCrossAttention
@@ -111,6 +111,16 @@ class TransUNet(keras.Model, DescribeMixin):
 
         spatial_dims = len(input_shape) - 1
 
+        if not (0 <= dropout_rate <= 1):
+            raise ValueError("dropout should be between 0 and 1.")
+
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
         # Get CNN feature maps from the encoder.
         inputs = encoder.input
         pyramid_outputs = encoder.pyramid_outputs
@@ -137,14 +147,9 @@ class TransUNet(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
-        if isinstance(decoder_activation, str):
-            decoder_activation = decoder_activation.lower()
-
-        if decoder_activation not in VALID_ACTIVATION_LIST:
-            raise ValueError(
-                f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
-                f"Supported values are: {VALID_ACTIVATION_LIST}"
-            )
+        # verify input activation.
+        decoder_activation = validate_activation(decoder_activation)
+        classifier_activation = validate_activation(classifier_activation)
 
         # prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]))
@@ -197,7 +202,6 @@ class TransUNet(keras.Model, DescribeMixin):
             decoder_filters=decoder_filters,
             decoder_activation=decoder_activation,
         )
-
         outputs = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",

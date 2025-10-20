@@ -20,12 +20,74 @@ model = ResNet18(
 )
 ```
 
+# ResNeXt 
+
+The **ResNeXt** architecture, a standard CNNs supporting in both 2D and 3D tasks. This model extends **ResNet** with **grouped convolutions** and follows the **ResNeXt** architecture described in Aggregated Residual Transformations for Deep Neural Networks.
+
+```python
+from medicai.models import ResNeXt50, ResNeXt101, ResNetBackbone
+
+# Build 2D model
+# Initializes the ResNeXt-50 32x4 (resnext50_32x4d) model
+model = ResNeXt50(
+    input_shape=(224, 224, 3),
+    num_classes=100,
+    classifier_activation='sigmoid'
+)
+
+# Build 2D model
+# Initializes the ResNeXt-101 32x8 (resnext101_32x8d) model
+model = ResNeXt101(
+    input_shape=(224, 224, 3),
+    num_classes=100,
+    classifier_activation='sigmoid'
+)
+```
+
+We can also create custom more complex model. Let's build **ResNeXt** with `32` cardinality and `4` bottleneck width with **ResNet101** config.
+
+```python
+# build `resnext101_64x4d`.
+backbone = ResNetBackbone(
+    input_shape=(96, 96, 96, 4),
+    num_blocks=[3, 4, 23, 3],
+    block_type="bottleneck_block",
+    groups=64,
+    width_per_group=4
+)
+backbone.count_params() / 1e6 # 92M
+
+# build classification model.
+model = keras.Sequential(
+    [
+        backbone,
+        keras.layers.GlobalAveragePooling3D(),
+        keras.layers.Dense(1, activation='sigmoid')
+    ]
+)
+model.summary()
+Model: "sequential"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                         ┃ Output Shape                ┃         Param # ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│ ResNetBackbone (ResNetBackbone)      │ (None, 3, 3, 3, 2048)       │      92,359,680 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ global_average_pooling3d             │ (None, 2048)                │               0 │
+│ (GlobalAveragePooling3D)             │                             │                 │
+├──────────────────────────────────────┼─────────────────────────────┼─────────────────┤
+│ dense (Dense)                        │ (None, 1)                   │           2,049 │
+└──────────────────────────────────────┴─────────────────────────────┴─────────────────┘
+ Total params: 92,361,729 (352.33 MB)
+ Trainable params: 92,158,849 (351.56 MB)
+ Non-trainable params: 202,880 (792.50 KB)
+```
+
 # Feature Pyramid Output
 
 Models expose intermediate feature vectors via the `pyramid_outputs` attribute for downstream tasks (segmentation, detection).
 
 ```python
-from medicai.models import ResNet18
+from medicai.models import ResNet18, ResNeXt50
 
 model = ResNet18(
     input_shape=(96, 96, 96, 4),

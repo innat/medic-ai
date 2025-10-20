@@ -1,6 +1,3 @@
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
 from typing import Dict, Union
 
 import tensorflow as tf

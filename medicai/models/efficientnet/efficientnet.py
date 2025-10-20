@@ -1,7 +1,7 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_pooling_layer, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration, validate_activation
 
 from .efficientnet_backbone import EfficientNetBackbone
 from .efficientnet_layers import (
@@ -9,7 +9,7 @@ from .efficientnet_layers import (
 )
 
 
-@keras.saving.register_keras_serializable(package="efficientnetbase")
+@keras.saving.register_keras_serializable(package="efficientnet")
 class EfficientNetBase(keras.Model):
     def __init__(
         self,
@@ -31,6 +31,19 @@ class EfficientNetBase(keras.Model):
         if name is None and self.__class__ is not EfficientNetBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        if not (0 <= dropout_rate <= 1):
+            raise ValueError("dropout_rate should be between 0 and 1.")
+
+        # number of classes must be positive.
+        if include_top and num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
         backbone = EfficientNetBackbone(
             input_shape=input_shape,
             width_coefficient=width_coefficient,
@@ -51,7 +64,6 @@ class EfficientNetBase(keras.Model):
             x = GlobalAvgPool(x)
             if dropout_rate > 0:
                 x = layers.Dropout(dropout_rate, name="top_dropout")(x)
-
             x = layers.Dense(
                 num_classes,
                 activation=classifier_activation,

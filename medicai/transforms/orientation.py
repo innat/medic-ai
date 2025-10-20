@@ -1,8 +1,5 @@
 from typing import Dict, Sequence, Union
 
-from medicai.utils.general import hide_warnings
-
-hide_warnings()
 import tensorflow as tf
 
 from .tensor_bundle import TensorBundle

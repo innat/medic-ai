@@ -72,6 +72,9 @@ class DenseNetBackbone(keras.Model, DescribeMixin):
         spatial_dims = len(input_shape) - 1
         input = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 
+        if not (0 <= dropout_rate <= 1):
+            raise ValueError("dropout_rate should be between 0 and 1.")
+
         x = input
         if include_rescaling:
             x = layers.Rescaling(1.0 / 255)(x)

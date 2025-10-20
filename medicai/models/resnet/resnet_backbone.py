@@ -53,6 +53,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         num_filters=[64, 128, 256, 512],
         num_strides=[1, 2, 2, 2],
         use_pre_activation=False,
+        groups=1,
+        width_per_group=64,
         include_rescaling=False,
         **kwargs,
     ):
@@ -84,6 +86,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
             use_pre_activation: A boolean indicating whether to use pre-activation or not.
                 `True` for ResNetV2, `False` for ResNetVd.
+            groups: int. Number of groups for grouped convolution. Defaults to 1.
+            width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
 
         Examples:
         ```python
@@ -132,6 +136,17 @@ class ResNetBackbone(keras.Model, DescribeMixin):
             raise ValueError(
                 '`block_type` must be one of `"basic_block"`, `"bottleneck_block"`, '
                 f'or `"bottleneck_block_vd"`. Received block_type={block_type}.'
+            )
+
+        # Validate block type and ResNeXt parameters
+        # TODO: Should we keep it or make it flexible!
+        if block_type not in ("bottleneck_block", "bottleneck_block_vd") and (
+            groups != 1 or width_per_group != 64
+        ):
+            raise ValueError(
+                f"Invalid configuration: only `bottleneck_block` and `bottleneck_block_vd` support grouped convolutions "
+                f"(groups={groups}, width_per_group={width_per_group}). "
+                f"Set groups=1 and width_per_group=64 when using {block_type}."
             )
 
         num_input_convs = len(conv_filters)
@@ -230,6 +245,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 block_type=block_type,
                 use_pre_activation=use_pre_activation,
                 first_shortcut=(block_type != "basic_block" or stack_index > 0),
+                groups=groups,
+                width_per_group=width_per_group,
                 name=f"stack{stack_index}",
             )
             pyramid_outputs[f"P{stack_index + 2}"] = x
@@ -257,6 +274,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         self.num_blocks = num_blocks
         self.num_strides = num_strides
         self.block_type = block_type
+        self.groups = groups
+        self.width_per_group = width_per_group
         self.use_pre_activation = use_pre_activation
         self.pyramid_outputs = pyramid_outputs
 

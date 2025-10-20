@@ -2,7 +2,7 @@ import keras
 from keras import ops
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-from medicai.utils import DescribeMixin, registration, resolve_encoder
+from medicai.utils import DescribeMixin, registration, resolve_encoder, validate_activation
 
 
 @keras.saving.register_keras_serializable(package="unetr")
@@ -104,6 +104,16 @@ class UNETR(keras.Model, DescribeMixin):
 
         if not (0 <= dropout_rate <= 1):
             raise ValueError("dropout_rate should be between 0 and 1.")
+
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
 
         encoder, input_shape = resolve_encoder(
             encoder=encoder,

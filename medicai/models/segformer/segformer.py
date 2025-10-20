@@ -4,12 +4,12 @@ from keras import layers, ops
 from medicai.layers import ConvBnAct
 from medicai.utils import (
     DescribeMixin,
-    get_act_layer,
     get_conv_layer,
     get_norm_layer,
     registration,
     resize_volumes,
     resolve_encoder,
+    validate_activation,
 )
 
 
@@ -89,6 +89,18 @@ class SegFormer(keras.Model, DescribeMixin):
             input_shape=input_shape,
             allowed_families=SegFormer.ALLOWED_BACKBONE_FAMILIES,
         )
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
+        if not (0 <= dropout <= 1):
+            raise ValueError("dropout should be between 0 and 1.")
+
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
 
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
@@ -121,9 +133,11 @@ class SegFormer(keras.Model, DescribeMixin):
             num_classes, decoder_head_embedding_dim, spatial_dims, dropout
         )
         outputs = decoder_head(skips)
-
-        if classifier_activation:
-            outputs = layers.Activation(classifier_activation, dtype="float32")(outputs)
+        outputs = layers.Activation(
+            classifier_activation,
+            dtype="float32",
+            name="predictions",
+        )(outputs)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"SegFormer{spatial_dims}D", **kwargs
@@ -205,7 +219,7 @@ class SegFormer(keras.Model, DescribeMixin):
                 padding="same",
                 normalization="batch",
                 activation="relu",
-                name_prefix="linear_fuse_conv",
+                name="linear_fuse_conv",
             )(x)
             x = layers.Dropout(dropout)(x)
 

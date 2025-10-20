@@ -1,7 +1,13 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_norm_layer, get_pooling_layer, registration
+from medicai.utils import (
+    DescribeMixin,
+    get_norm_layer,
+    get_pooling_layer,
+    registration,
+    validate_activation,
+)
 
 from .convnext_backbone import ConvNeXtBackboneV2
 
@@ -45,6 +51,7 @@ MODEL_CONFIGS = {
 }
 
 
+@keras.saving.register_keras_serializable(package="convnext")
 class ConvNeXtVariantsBaseV2(keras.Model):
     """
     Base class for all ConvNeXt V2 classification models (Atto, Femto, Nano, etc.).
@@ -90,6 +97,16 @@ class ConvNeXtVariantsBaseV2(keras.Model):
         spatial_dims = len(input_shape) - 1
         if name is None and self.__class__ is not ConvNeXtVariantsBaseV2:
             name = f"{self.__class__.__name__}{spatial_dims}D"
+
+        # number of classes must be positive.
+        if include_top and num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
 
         backbone = ConvNeXtBackboneV2(
             input_shape=input_shape,
