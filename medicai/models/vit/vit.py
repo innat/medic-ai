@@ -107,12 +107,15 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
             x = keras.layers.Dropout(rate=dropout, name="output_dropout")(x)
 
             # output layer
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
+            if classifier_activation is not None:
+                if isinstance(classifier_activation, str):
+                    classifier_activation = classifier_activation.lower()
+                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+                if classifier_activation not in VALID_ACTIVATION_LIST:
+                    raise ValueError(
+                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                        f"Supported values are: {VALID_ACTIVATION_LIST}"
+                    )
 
             output_dense = keras.layers.Dense(
                 num_classes,

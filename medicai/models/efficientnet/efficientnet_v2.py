@@ -54,12 +54,15 @@ class EfficientNetBaseV2(keras.Model):
             if dropout_rate > 0:
                 x = layers.Dropout(dropout_rate, name="top_dropout")(x)
 
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
+            if classifier_activation is not None:
+                if isinstance(classifier_activation, str):
+                    classifier_activation = classifier_activation.lower()
+                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+                if classifier_activation not in VALID_ACTIVATION_LIST:
+                    raise ValueError(
+                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                        f"Supported values are: {VALID_ACTIVATION_LIST}"
+                    )
 
             x = layers.Dense(
                 num_classes,

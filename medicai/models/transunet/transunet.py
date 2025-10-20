@@ -198,12 +198,15 @@ class TransUNet(keras.Model, DescribeMixin):
             decoder_activation=decoder_activation,
         )
 
-        VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-        if classifier_activation not in VALID_ACTIVATION_LIST:
-            raise ValueError(
-                f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                f"Supported values are: {VALID_ACTIVATION_LIST}"
-            )
+        if classifier_activation is not None:
+            if isinstance(classifier_activation, str):
+                classifier_activation = classifier_activation.lower()
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
 
         outputs = get_conv_layer(
             spatial_dims=spatial_dims,

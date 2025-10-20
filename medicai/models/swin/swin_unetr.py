@@ -79,12 +79,15 @@ class SwinUNETR(keras.Model, DescribeMixin):
         )
 
         # check head activation.
-        VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-        if classifier_activation not in VALID_ACTIVATION_LIST:
-            raise ValueError(
-                f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                f"Supported values are: {VALID_ACTIVATION_LIST}"
-            )
+        if classifier_activation is not None:
+            if isinstance(classifier_activation, str):
+                classifier_activation = classifier_activation.lower()
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
 
         # get spatial dimention
         spatial_dims = len(input_shape) - 1

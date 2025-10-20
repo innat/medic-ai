@@ -2,7 +2,7 @@ import keras
 from keras import ops
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
-from medicai.utils import DescribeMixin, registration, resolve_encoder
+from medicai.utils import DescribeMixin, keras_constants, registration, resolve_encoder
 
 
 @keras.saving.register_keras_serializable(package="unetr")
@@ -134,6 +134,16 @@ class UNETR(keras.Model, DescribeMixin):
                 f"Missing keys: {missing_keys}. "
                 f"Required: {set(required_keys)}, Available: {set(pyramid_outputs.keys())}"
             )
+
+        if classifier_activation is not None:
+            if isinstance(classifier_activation, str):
+                classifier_activation = classifier_activation.lower()
+            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+            if classifier_activation not in VALID_ACTIVATION_LIST:
+                raise ValueError(
+                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
+                    f"Supported values are: {VALID_ACTIVATION_LIST}"
+                )
 
         # catch input and intermediate feature vectors
         inputs = encoder.input
