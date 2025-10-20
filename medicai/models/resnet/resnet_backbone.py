@@ -53,6 +53,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
         num_filters=[64, 128, 256, 512],
         num_strides=[1, 2, 2, 2],
         use_pre_activation=False,
+        groups=1,
+        width_per_group=64,
         include_rescaling=False,
         **kwargs,
     ):
@@ -84,6 +86,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
             use_pre_activation: A boolean indicating whether to use pre-activation or not.
                 `True` for ResNetV2, `False` for ResNetVd.
+            groups: int. Number of groups for grouped convolution. Defaults to 1.
+            width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
 
         Examples:
         ```python
@@ -230,6 +234,8 @@ class ResNetBackbone(keras.Model, DescribeMixin):
                 block_type=block_type,
                 use_pre_activation=use_pre_activation,
                 first_shortcut=(block_type != "basic_block" or stack_index > 0),
+                groups=groups,
+                width_per_group=width_per_group,
                 name=f"stack{stack_index}",
             )
             pyramid_outputs[f"P{stack_index + 2}"] = x

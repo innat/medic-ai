@@ -37,6 +37,8 @@ class ResNetBase(keras.Model):
         include_top=True,
         num_classes=1000,
         pooling=None,
+        groups=1,
+        width_per_group=64,
         classifier_activation="softmax",
         name=None,
         **kwargs,
@@ -72,6 +74,8 @@ class ResNetBase(keras.Model):
             num_classes: An integer specifying the number of classes for the
                 classification layer. This is only relevant if `include_top`
                 is `True`.
+            groups: int. Number of groups for grouped convolution. Defaults to 1.
+            width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
             pooling: (Optional) A string specifying the type of pooling to
                 apply to the output of the backbone. Can be `"avg"` for global
                 average pooling or `"max"` for global max pooling. This is only
@@ -95,6 +99,8 @@ class ResNetBase(keras.Model):
             num_strides=num_strides,
             use_pre_activation=use_pre_activation,
             include_rescaling=include_rescaling,
+            groups=groups,  # ✅ Pass groups
+            width_per_group=width_per_group,  # ✅ Pass width_per_group
         )
         inputs = backbone.input
         x = backbone.output
@@ -157,7 +163,7 @@ class ResNetBase(keras.Model):
         return cls(**config)
 
 
-@keras.saving.register_keras_serializable(package="resnet18")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet18(ResNetBase, DescribeMixin):
     """
@@ -220,7 +226,7 @@ class ResNet18(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet34")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet34(ResNetBase, DescribeMixin):
     """
@@ -284,7 +290,7 @@ class ResNet34(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet50")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet50(ResNetBase, DescribeMixin):
     """
@@ -346,7 +352,7 @@ class ResNet50(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet101")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet101(ResNetBase, DescribeMixin):
     """
@@ -409,7 +415,7 @@ class ResNet101(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet152")
+@keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet152(ResNetBase, DescribeMixin):
     """
@@ -472,8 +478,8 @@ class ResNet152(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet50v2")
-@registration.register(family="resnet")
+@keras.saving.register_keras_serializable(package="resnet")
+@registration.register(name="resnet50_v2", family="resnet")
 class ResNet50v2(ResNetBase, DescribeMixin):
     """
     ResNet-50 v2 model for classification.
@@ -535,8 +541,8 @@ class ResNet50v2(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet101v2")
-@registration.register(family="resnet")
+@keras.saving.register_keras_serializable(package="resnet")
+@registration.register(name="resnet101_v2", family="resnet")
 class ResNet101v2(ResNetBase, DescribeMixin):
     """
     ResNet-101 v2 model for classification.
@@ -597,8 +603,8 @@ class ResNet101v2(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet152v2")
-@registration.register(family="resnet")
+@keras.saving.register_keras_serializable(package="resnet")
+@registration.register(name="resnet152_v2", family="resnet")
 class ResNet152v2(ResNetBase, DescribeMixin):
     """
     ResNet-152 v2 model for classification.
@@ -660,8 +666,8 @@ class ResNet152v2(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet50vd")
-@registration.register(family="resnet")
+@keras.saving.register_keras_serializable(package="resnet")
+@registration.register(name="resnet50_vd", family="resnet")
 class ResNet50vd(ResNetBase, DescribeMixin):
     """
     ResNet-50 "very deep" (vd) model for classification.
@@ -723,8 +729,8 @@ class ResNet50vd(ResNetBase, DescribeMixin):
         )
 
 
-@keras.saving.register_keras_serializable(package="resnet200vd")
-@registration.register(family="resnet")
+@keras.saving.register_keras_serializable(package="resnet")
+@registration.register(name="resnet200_vd", family="resnet")
 class ResNet200vd(ResNetBase, DescribeMixin):
     """
     ResNet-200 "very deep" (vd) model for classification.
@@ -780,6 +786,192 @@ class ResNet200vd(ResNetBase, DescribeMixin):
             conv_kernel_sizes=[3, 3, 3],
             num_filters=[64, 128, 256, 512],
             num_strides=[1, 2, 2, 2],
+            use_pre_activation=False,
+            **kwargs,
+        )
+
+
+@keras.saving.register_keras_serializable(package="resnext")
+@registration.register(family="resnext")
+class ResNeXt50(ResNetBase, DescribeMixin):
+    """
+    ResNeXt-50 32x4d model for classification.
+
+    This model extends ResNet-50 with **grouped convolutions** and follows the
+    ResNeXt architecture described in "Aggregated Residual Transformations for
+    Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
+    and **bottleneck width=4**, resulting in a total of **50 layers**.
+
+    ResNeXt introduces a new dimension called "cardinality" (the size of the set
+    of transformations) in addition to width and depth, which improves accuracy
+    without significantly increasing computational complexity.
+
+    References:
+        - [Aggregated Residual Transformations for Deep Neural Networks](
+          https://arxiv.org/abs/1611.05431)
+
+    Example:
+    ```python
+    from medicai.models import ResNeXt50
+
+    # Create ResNeXt-50 model for ImageNet classification
+    model = ResNeXt50(
+        input_shape=(224, 224, 3),
+        include_top=True,
+        num_classes=1000
+    )
+
+    # Create ResNeXt-50 for feature extraction
+    backbone = ResNeXt50(
+        input_shape=(224, 224, 3),
+        include_top=False,
+        pooling='avg'
+    )
+    ```
+    """
+
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        """
+        Initializes the ResNet-50 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+        super().__init__(
+            input_shape=input_shape,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            block_type="bottleneck_block",
+            num_blocks=[3, 4, 6, 3],
+            conv_filters=[64],
+            conv_kernel_sizes=[7],
+            num_filters=[64, 128, 256, 512],
+            num_strides=[1, 2, 2, 2],
+            groups=32,
+            width_per_group=4,
+            use_pre_activation=False,
+            **kwargs,
+        )
+
+
+@keras.saving.register_keras_serializable(package="resnext")
+@registration.register(family="resnext")
+class ResNeXt101(ResNetBase, DescribeMixin):
+    """
+    ResNeXt-101 32x8d model for classification.
+
+    This model extends ResNet-101 with **grouped convolutions** and follows the
+    ResNeXt architecture described in "Aggregated Residual Transformations for
+    Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
+    and **bottleneck width=4**, resulting in a total of **101 layers**.
+
+    As a deeper variant of ResNeXt, it can capture more complex features from
+    the input data, often leading to higher accuracy on challenging datasets,
+    though at a higher computational cost compared to ResNeXt-50.
+
+    ResNeXt introduces a new dimension called "cardinality" (the size of the set
+    of transformations) in addition to width and depth, which improves accuracy
+    without significantly increasing computational complexity.
+
+    References:
+        - [Aggregated Residual Transformations for Deep Neural Networks](
+          https://arxiv.org/abs/1611.05431)
+
+    Example:
+    ```python
+    from medicai.models import ResNeXt101
+
+    # Create ResNeXt-101 model for ImageNet classification
+    model = ResNeXt101(
+        input_shape=(224, 224, 3),
+        include_top=True,
+        num_classes=1000
+    )
+
+    # Create ResNeXt-101 for feature extraction
+    backbone = ResNeXt101(
+        input_shape=(224, 224, 3),
+        include_top=False,
+        pooling='avg'
+    )
+    ```
+    """
+
+    def __init__(
+        self,
+        *,
+        input_shape,
+        include_rescaling=False,
+        include_top=True,
+        num_classes=1000,
+        pooling=None,
+        classifier_activation="softmax",
+        name=None,
+        **kwargs,
+    ):
+        """
+        Initializes the ResNet-101 model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            include_rescaling: A boolean indicating whether to include a `Rescaling`
+                layer at the beginning of the model.
+            include_top: A boolean indicating whether to include the fully connected
+                classification layer at the top of the network.
+            num_classes: An integer specifying the number of classes for the
+                classification layer.
+            pooling: (Optional) A string specifying the type of pooling to apply
+                to the output of the backbone.
+            classifier_activation: A string specifying the activation function for
+                the classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+        super().__init__(
+            input_shape=input_shape,
+            include_rescaling=include_rescaling,
+            include_top=include_top,
+            num_classes=num_classes,
+            pooling=pooling,
+            classifier_activation=classifier_activation,
+            name=name,
+            block_type="bottleneck_block",
+            num_blocks=[3, 4, 23, 3],
+            conv_filters=[64],
+            conv_kernel_sizes=[7],
+            num_filters=[64, 128, 256, 512],
+            num_strides=[1, 2, 2, 2],
+            groups=32,
+            width_per_group=8,
             use_pre_activation=False,
             **kwargs,
         )

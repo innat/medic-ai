@@ -10,6 +10,8 @@ def apply_resnet_basic_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
+    groups=1,  # for ResNeXt
+    width_per_group=64,  # for ResNeXt
     name=None,
 ):
     """Applies a basic residual block.
@@ -25,12 +27,17 @@ def apply_resnet_basic_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        groups: int. Number of groups for grouped convolution. Defaults to 1.
+        width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
         name: str. A prefix for the layer names used in the block.
 
     Returns:
         The output tensor for the basic residual block.
     """
     spatial_dims = len(x.shape) - 2
+
+    # Calculate bottleneck width for ResNeXt
+    width = int(filters * (width_per_group / 64)) * groups
 
     x_preact = None
     if use_pre_activation:
@@ -80,10 +87,11 @@ def apply_resnet_basic_block(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=kernel_size,
         padding="valid" if stride > 1 else "same",
         strides=stride,
+        groups=groups,
         use_bias=False,
         name=f"{name}_1_conv",
     )(x)
@@ -98,10 +106,11 @@ def apply_resnet_basic_block(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=kernel_size,
         strides=1,
         padding="same",
+        groups=groups,
         use_bias=False,
         name=f"{name}_2_conv",
     )(x)
@@ -127,6 +136,8 @@ def apply_resnet_bottleneck_block(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
+    groups=1,  # for ResNeXt
+    width_per_group=64,  # for ResNeXt
     name=None,
 ):
     """Applies a bottleneck residual block.
@@ -142,6 +153,8 @@ def apply_resnet_bottleneck_block(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        groups: int. Number of groups for grouped convolution. Defaults to 1.
+        width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
         name: str. A prefix for the layer names used in the block.
 
     Returns:
@@ -149,6 +162,9 @@ def apply_resnet_bottleneck_block(
     """
 
     spatial_dims = len(x.shape) - 2
+
+    # Calculate bottleneck width for ResNeXt
+    width = int(filters * (width_per_group / 64)) * groups
 
     x_preact = None
     if use_pre_activation:
@@ -190,7 +206,7 @@ def apply_resnet_bottleneck_block(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=1,
         strides=1,
         use_bias=False,
@@ -215,9 +231,10 @@ def apply_resnet_bottleneck_block(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=kernel_size,
         strides=stride,
+        groups=groups,
         padding="valid" if stride > 1 else "same",
         use_bias=False,
         name=f"{name}_2_conv",
@@ -260,6 +277,8 @@ def apply_bottleneck_block_vd(
     stride=1,
     conv_shortcut=False,
     use_pre_activation=False,
+    groups=1,
+    width_per_group=64,
     name=None,
 ):
     """Applies a bottleneck residual block.
@@ -275,6 +294,8 @@ def apply_bottleneck_block_vd(
             `False`.
         use_pre_activation: boolean. Whether to use pre-activation or not.
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
+        groups: int. Number of groups for grouped convolution. Defaults to 1.
+        width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
         name: str. A prefix for the layer names used in the block.
 
     Returns:
@@ -282,6 +303,9 @@ def apply_bottleneck_block_vd(
     """
     x_preact = None
     spatial_dims = len(x.shape) - 2
+
+    # Calculate bottleneck width for ResNeXt
+    width = int(filters * (width_per_group / 64)) * groups
 
     if use_pre_activation:
         x_preact = layers.BatchNormalization(
@@ -331,7 +355,7 @@ def apply_bottleneck_block_vd(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=1,
         strides=1,
         use_bias=False,
@@ -356,9 +380,10 @@ def apply_bottleneck_block_vd(
     x = get_conv_layer(
         spatial_dims=spatial_dims,
         layer_type="conv",
-        filters=filters,
+        filters=width,
         kernel_size=kernel_size,
         strides=stride,
+        groups=groups,
         padding="valid" if stride > 1 else "same",
         use_bias=False,
         name=f"{name}_2_conv",
@@ -403,6 +428,8 @@ def apply_resnet_block(
     block_type,
     use_pre_activation,
     first_shortcut=True,
+    groups=1,
+    width_per_group=64,
     name=None,
 ):
     """Applies a set of stacked residual blocks.
@@ -422,6 +449,8 @@ def apply_resnet_block(
         first_shortcut: bool. If `True`, use a convolution shortcut. If `False`,
             use an identity or pooling shortcut based on the stride. Defaults to
             `True`.
+        groups: int. Number of groups for grouped convolution. Defaults to 1.
+        width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
         name: str. A prefix for the layer names used in the stack.
 
     Returns:
@@ -450,12 +479,15 @@ def apply_resnet_block(
         else:
             stride = 1
             conv_shortcut = False
+
         x = block_fn(
             x,
             filters,
             stride=stride,
             conv_shortcut=conv_shortcut,
             use_pre_activation=use_pre_activation,
+            groups=groups,
+            width_per_group=width_per_group,
             name=f"{name}_block{str(i)}",
         )
     return x
