@@ -79,6 +79,10 @@ class ResNetBase(keras.Model):
                 is `True`.
             groups: int. Number of groups for grouped convolution. Defaults to 1.
             width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
+            se_block: bool. If `True`, apply Squeeze-and-Excitation block.
+                Defaults to `False`.
+            se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+            se_activation: str. Activation function for SE block. Defaults to "relu"
             pooling: (Optional) A string specifying the type of pooling to
                 apply to the output of the backbone. Can be `"avg"` for global
                 average pooling or `"max"` for global max pooling. This is only

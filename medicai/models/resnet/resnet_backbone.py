@@ -95,6 +95,9 @@ class ResNetBackbone(keras.Model, DescribeMixin):
             use_pre_activation: A boolean indicating whether to use pre-activation or not.
                 `True` for ResNetV2, `False` for ResNetVd.
             groups: int. Number of groups for grouped convolution. Defaults to 1.
+            se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+            se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+            se_activation: str. Activation function for SE block. Defaults to "relu"
             width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
 
         Examples:

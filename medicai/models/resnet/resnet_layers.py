@@ -169,6 +169,9 @@ def apply_resnet_bottleneck_block(
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
         groups: int. Number of groups for grouped convolution. Defaults to 1.
         width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
+        se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+        se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+        se_activation: str. Activation function for SE block. Defaults to "relu"
         name: str. A prefix for the layer names used in the block.
 
     Returns:
@@ -320,6 +323,9 @@ def apply_bottleneck_block_vd(
             `True` for ResNetV2, `False` for ResNet. Defaults to `False`.
         groups: int. Number of groups for grouped convolution. Defaults to 1.
         width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
+        se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+        se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+        se_activation: str. Activation function for SE block. Defaults to "relu"
         name: str. A prefix for the layer names used in the block.
 
     Returns:
@@ -485,6 +491,9 @@ def apply_resnet_block(
             `True`.
         groups: int. Number of groups for grouped convolution. Defaults to 1.
         width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
+        se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+        se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+        se_activation: str. Activation function for SE block. Defaults to "relu".
         name: str. A prefix for the layer names used in the stack.
 
     Returns:
