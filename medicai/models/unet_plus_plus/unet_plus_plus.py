@@ -205,17 +205,7 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
             )
 
-        if classifier_activation is not None:
-            if isinstance(classifier_activation, str):
-                classifier_activation = classifier_activation.lower()
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
-
-        outputs = layers.Activation(classifier_activation, dtype="float32")(x)
+        outputs = layers.Activation(classifier_activation, dtype="float32", name="predictions")(x)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"UNetPlusPlus{spatial_dims}D", **kwargs

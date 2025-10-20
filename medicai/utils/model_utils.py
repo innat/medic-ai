@@ -3,7 +3,7 @@ from functools import partial
 import keras
 from keras import activations, layers
 
-from .constants import keras_constants
+from .constant import keras_constants
 from .registry import registration
 
 

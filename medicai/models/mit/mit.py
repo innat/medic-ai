@@ -88,7 +88,7 @@ class MiTBase(keras.Model):
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
         # number of classes must be positive.
-        if num_classes <= 0:
+        if include_top and num_classes <= 0:
             raise ValueError(
                 f"Number of classes (`num_classes`) must be greater than 0, "
                 f"but received {num_classes}."

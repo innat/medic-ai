@@ -29,8 +29,8 @@ class KerasConstants:
                 for m in dir(cls.keras_module.losses)
                 if (not m.startswith("_") and m not in cls.LOSS_EXCLUDES)
             ]
-            cls.valid_metrics = tuple(sorted(losses))
-        return cls.valid_metrics
+            cls.valid_losses = tuple(sorted(losses))
+        return cls.valid_losses
 
     @classmethod
     def get_valid_metrics(cls):

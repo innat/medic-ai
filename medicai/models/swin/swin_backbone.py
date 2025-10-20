@@ -68,7 +68,7 @@ class SwinBackboneBase(keras.Model):
             raise ValueError("attn_drop_rate should be between 0 and 1.")
 
         if not (0 <= drop_path_rate <= 1):
-            raise ValueError("attn_drop_rate should be between 0 and 1.")
+            raise ValueError("drop_path_rate should be between 0 and 1.")
 
         pyramid_outputs = {}  # To store the swin-basic features
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
