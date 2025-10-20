@@ -39,6 +39,9 @@ class ResNetBase(keras.Model):
         pooling=None,
         groups=1,
         width_per_group=64,
+        se_block=False,
+        se_ratio=16,
+        se_activation="relu",
         classifier_activation="softmax",
         name=None,
         **kwargs,
@@ -111,6 +114,9 @@ class ResNetBase(keras.Model):
             include_rescaling=include_rescaling,
             groups=groups,
             width_per_group=width_per_group,
+            se_block=se_block,
+            se_ratio=se_ratio,
+            se_activation=se_activation,
         )
         inputs = backbone.input
         x = backbone.output
@@ -145,6 +151,9 @@ class ResNetBase(keras.Model):
         self.include_top = include_top
         self.num_classes = num_classes
         self.pooling = pooling
+        self.se_block = se_block
+        self.se_ratio = se_ratio
+        self.se_activation = se_activation
         self.classifier_activation = classifier_activation
         self.name = name
 

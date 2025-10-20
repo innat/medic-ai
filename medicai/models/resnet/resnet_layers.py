@@ -1,5 +1,6 @@
 from keras import layers
 
+from medicai.layers import SqueezeExcitation
 from medicai.utils import get_conv_layer, get_pooling_layer, get_reshaping_layer
 
 
@@ -12,6 +13,9 @@ def apply_resnet_basic_block(
     use_pre_activation=False,
     groups=1,  # for ResNeXt
     width_per_group=64,  # for ResNeXt
+    se_block=False,  # for SE-(ResNet or ResNeXt)
+    se_ratio=16,  # for SE-(ResNet or ResNeXt)
+    se_activation="relu",  # for SE-(ResNet or ResNeXt)
     name=None,
 ):
     """Applies a basic residual block.
@@ -115,6 +119,13 @@ def apply_resnet_basic_block(
         name=f"{name}_2_conv",
     )(x)
 
+    if se_block:
+        x = SqueezeExcitation(
+            ratio=se_ratio,
+            activation=se_activation,
+            name=f"{name}_squeeze_excitation",
+        )(x)
+
     if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=-1,
@@ -138,6 +149,9 @@ def apply_resnet_bottleneck_block(
     use_pre_activation=False,
     groups=1,  # for ResNeXt
     width_per_group=64,  # for ResNeXt
+    se_block=False,  # for SE-(ResNet or ResNeXt)
+    se_ratio=16,  # for SE-(ResNet or ResNeXt)
+    se_activation="relu",  # for SE-(ResNet or ResNeXt)
     name=None,
 ):
     """Applies a bottleneck residual block.
@@ -256,6 +270,13 @@ def apply_resnet_bottleneck_block(
         name=f"{name}_3_conv",
     )(x)
 
+    if se_block:
+        x = SqueezeExcitation(
+            ratio=se_ratio,
+            activation=se_activation,
+            name=f"{name}_squeeze_excitation",
+        )(x)
+
     if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=-1,
@@ -279,6 +300,9 @@ def apply_bottleneck_block_vd(
     use_pre_activation=False,
     groups=1,
     width_per_group=64,
+    se_block=False,
+    se_ratio=16,
+    se_activation="relu",
     name=None,
 ):
     """Applies a bottleneck residual block.
@@ -406,6 +430,13 @@ def apply_bottleneck_block_vd(
         name=f"{name}_3_conv",
     )(x)
 
+    if se_block:
+        x = SqueezeExcitation(
+            ratio=se_ratio,
+            activation=se_activation,
+            name=f"{name}_squeeze_excitation",
+        )(x)
+
     if not use_pre_activation:
         x = layers.BatchNormalization(
             axis=-1,
@@ -430,6 +461,9 @@ def apply_resnet_block(
     first_shortcut=True,
     groups=1,
     width_per_group=64,
+    se_block=False,
+    se_ratio=16,
+    se_activation="relu",
     name=None,
 ):
     """Applies a set of stacked residual blocks.
@@ -473,21 +507,21 @@ def apply_resnet_block(
         )
 
     for i in range(blocks):
-        if i == 0:
-            stride = stride
-            conv_shortcut = first_shortcut
-        else:
-            stride = 1
-            conv_shortcut = False
+
+        block_stride = stride if i == 0 else 1
+        block_conv_shortcut = first_shortcut if i == 0 else False
 
         x = block_fn(
             x,
             filters,
-            stride=stride,
-            conv_shortcut=conv_shortcut,
+            stride=block_stride,
+            conv_shortcut=block_conv_shortcut,
             use_pre_activation=use_pre_activation,
             groups=groups,
             width_per_group=width_per_group,
+            se_block=se_block,
+            se_ratio=se_ratio,
+            se_activation=se_activation,
             name=f"{name}_block{str(i)}",
         )
     return x
