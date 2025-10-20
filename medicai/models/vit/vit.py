@@ -71,6 +71,9 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
         if name is None and self.__class__ is not ViTVariantsBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        if not (0 <= dropout <= 1):
+            raise ValueError("dropout should be between 0 and 1.")
+
         # number of classes must be positive.
         if num_classes <= 0:
             raise ValueError(
