@@ -11,6 +11,7 @@ from medicai.utils.model_utils import (
     get_reshaping_layer,
     parse_model_inputs,
     resolve_encoder,
+    validate_activation,
 )
 
 from .registry import registration

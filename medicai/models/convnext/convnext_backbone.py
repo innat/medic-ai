@@ -68,6 +68,9 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
         spatial_dims = len(input_shape) - 1
         inputs = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 
+        if not (0 <= drop_path_rate <= 1):
+            raise ValueError("drop_path_rate should be between 0 and 1.")
+
         x = inputs
         if include_rescaling:
             num_channels = input_shape[-1]

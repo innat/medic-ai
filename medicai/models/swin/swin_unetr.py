@@ -1,7 +1,7 @@
 import keras
 
 from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
-from medicai.utils import DescribeMixin, keras_constants, registration, resolve_encoder
+from medicai.utils import DescribeMixin, registration, resolve_encoder, validate_activation
 
 
 @keras.saving.register_keras_serializable(package="swin.unetr")
@@ -78,16 +78,15 @@ class SwinUNETR(keras.Model, DescribeMixin):
             pooling=None,
         )
 
-        # check head activation.
-        if classifier_activation is not None:
-            if isinstance(classifier_activation, str):
-                classifier_activation = classifier_activation.lower()
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
 
         # get spatial dimention
         spatial_dims = len(input_shape) - 1

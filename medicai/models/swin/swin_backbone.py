@@ -61,6 +61,15 @@ class SwinBackboneBase(keras.Model):
         spatial_dims = len(input_shape) - 1
         input_spec = parse_model_inputs(input_shape, input_tensor, name="swin_input")
 
+        if not (0 <= drop_rate <= 1):
+            raise ValueError("drop_rate should be between 0 and 1.")
+
+        if not (0 <= attn_drop_rate <= 1):
+            raise ValueError("attn_drop_rate should be between 0 and 1.")
+
+        if not (0 <= drop_path_rate <= 1):
+            raise ValueError("attn_drop_rate should be between 0 and 1.")
+
         pyramid_outputs = {}  # To store the swin-basic features
         dpr = np.linspace(0.0, drop_path_rate, sum(depths)).tolist()
         num_layers = len(depths)

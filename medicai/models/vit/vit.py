@@ -1,7 +1,7 @@
 import keras
 from keras import ops
 
-from medicai.utils import DescribeMixin, keras_constants, registration
+from medicai.utils import DescribeMixin, registration, validate_activation
 
 from .vit_backbone import ViTBackbone
 
@@ -71,6 +71,16 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
         if name is None and self.__class__ is not ViTVariantsBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
         # ViT Backbone
         backbone = ViTBackbone(
             input_shape=input_shape,
@@ -107,16 +117,6 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
             x = keras.layers.Dropout(rate=dropout, name="output_dropout")(x)
 
             # output layer
-            if classifier_activation is not None:
-                if isinstance(classifier_activation, str):
-                    classifier_activation = classifier_activation.lower()
-                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-                if classifier_activation not in VALID_ACTIVATION_LIST:
-                    raise ValueError(
-                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                        f"Supported values are: {VALID_ACTIVATION_LIST}"
-                    )
-
             output_dense = keras.layers.Dense(
                 num_classes,
                 activation=classifier_activation,

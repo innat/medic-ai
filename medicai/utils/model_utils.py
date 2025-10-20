@@ -3,6 +3,7 @@ from functools import partial
 import keras
 from keras import activations, layers
 
+from .constants import keras_constants
 from .registry import registration
 
 
@@ -227,6 +228,32 @@ def parse_model_inputs(input_shape, input_tensor=None, **kwargs):
             return keras.layers.Input(tensor=input_tensor, shape=input_shape, **kwargs)
         else:
             return input_tensor
+
+
+def validate_activation(activation):
+    """
+    Validates an activation function string against the
+    list of valid Keras activations.
+    """
+    if activation is None:
+        return None
+
+    if not isinstance(activation, str):
+        raise TypeError(
+            f"Activation must be a string or None, but received type {type(activation).__name__!r} "
+            f"with value {activation!r}."
+        )
+
+    normalized_activation = activation.lower()
+    VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
+
+    if normalized_activation not in VALID_ACTIVATION_LIST:
+        raise ValueError(
+            f"Invalid activation name: {activation!r}. "
+            f"Supported string values are: {VALID_ACTIVATION_LIST}"
+        )
+
+    return normalized_activation
 
 
 def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwargs):

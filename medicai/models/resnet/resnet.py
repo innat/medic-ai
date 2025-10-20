@@ -1,12 +1,12 @@
 import keras
 from keras import layers
 
-from medicai.utils import DescribeMixin, get_pooling_layer, keras_constants, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration, validate_activation
 
 from .resnet_backbone import ResNetBackbone
 
 
-@keras.saving.register_keras_serializable(package="resnetbase")
+@keras.saving.register_keras_serializable(package="resnet")
 class ResNetBase(keras.Model):
     """
     A full ResNetBase model for classification.
@@ -89,6 +89,16 @@ class ResNetBase(keras.Model):
         if name is None and self.__class__ is not ResNetBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
         backbone = ResNetBackbone(
             input_shape=input_shape,
             block_type=block_type,
@@ -99,8 +109,8 @@ class ResNetBase(keras.Model):
             num_strides=num_strides,
             use_pre_activation=use_pre_activation,
             include_rescaling=include_rescaling,
-            groups=groups,  # ✅ Pass groups
-            width_per_group=width_per_group,  # ✅ Pass width_per_group
+            groups=groups,
+            width_per_group=width_per_group,
         )
         inputs = backbone.input
         x = backbone.output
@@ -113,18 +123,9 @@ class ResNetBase(keras.Model):
         )
         if include_top:
             x = GlobalAvgPool(x)
-
-            if classifier_activation is not None:
-                if isinstance(classifier_activation, str):
-                    classifier_activation = classifier_activation.lower()
-                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-                if classifier_activation not in VALID_ACTIVATION_LIST:
-                    raise ValueError(
-                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                        f"Supported values are: {VALID_ACTIVATION_LIST}"
-                    )
-
-            x = layers.Dense(num_classes, activation=classifier_activation, name="predictions")(x)
+            x = layers.Dense(
+                num_classes, activation=classifier_activation, dtype="float32", name="predictions"
+            )(x)
         elif pooling == "avg":
             x = GlobalAvgPool(x)
         elif pooling == "max":
@@ -803,7 +804,7 @@ class ResNeXt50(ResNetBase, DescribeMixin):
     This model extends ResNet-50 with **grouped convolutions** and follows the
     ResNeXt architecture described in "Aggregated Residual Transformations for
     Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
-    and **bottleneck width=4**, resulting in a total of **50 layers**.
+    and **width_per_group=4**, resulting in a total of **50 layers**.
 
     ResNeXt introduces a new dimension called "cardinality" (the size of the set
     of transformations) in addition to width and depth, which improves accuracy
@@ -846,7 +847,7 @@ class ResNeXt50(ResNetBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the ResNet-50 model.
+        Initializes the ResNeXt-50 32x4 model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -894,7 +895,7 @@ class ResNeXt101(ResNetBase, DescribeMixin):
     This model extends ResNet-101 with **grouped convolutions** and follows the
     ResNeXt architecture described in "Aggregated Residual Transformations for
     Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
-    and **bottleneck width=4**, resulting in a total of **101 layers**.
+    and **width_per_group=8**, resulting in a total of **101 layers**.
 
     As a deeper variant of ResNeXt, it can capture more complex features from
     the input data, often leading to higher accuracy on challenging datasets,
@@ -941,7 +942,7 @@ class ResNeXt101(ResNetBase, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the ResNet-101 model.
+        Initializes the ResNeXt-101 32x8 model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,

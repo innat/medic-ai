@@ -8,6 +8,7 @@ from medicai.utils import (
     keras_constants,
     registration,
     resolve_encoder,
+    validate_activation,
 )
 
 from .decoder import UNetPlusPlusDecoder
@@ -136,6 +137,13 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 f"but got: {available_keys}"
             )
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
         if not (3 <= encoder_depth <= 5):
             raise ValueError(f"encoder_depth must be in range [3, 5], but got {encoder_depth}")
 
@@ -153,15 +161,9 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
                 f"Supported values are: {keras_constants.VALID_DECODER_NORMS}"
             )
 
-        if isinstance(decoder_activation, str):
-            decoder_activation = decoder_activation.lower()
-
-        VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-        if decoder_activation not in VALID_ACTIVATION_LIST:
-            raise ValueError(
-                f"Invalid value for `decoder_activation`: {decoder_activation!r}. "
-                f"Supported values are: {VALID_ACTIVATION_LIST}"
-            )
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+        decoder_activation = validate_activation(decoder_activation)
 
         # Prepare head and skip layers (same as UNet)
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)

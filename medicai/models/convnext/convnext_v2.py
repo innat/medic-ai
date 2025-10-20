@@ -5,8 +5,8 @@ from medicai.utils import (
     DescribeMixin,
     get_norm_layer,
     get_pooling_layer,
-    keras_constants,
     registration,
+    validate_activation,
 )
 
 from .convnext_backbone import ConvNeXtBackboneV2
@@ -51,6 +51,7 @@ MODEL_CONFIGS = {
 }
 
 
+@keras.saving.register_keras_serializable(package="convnext")
 class ConvNeXtVariantsBaseV2(keras.Model):
     """
     Base class for all ConvNeXt V2 classification models (Atto, Femto, Nano, etc.).
@@ -97,6 +98,16 @@ class ConvNeXtVariantsBaseV2(keras.Model):
         if name is None and self.__class__ is not ConvNeXtVariantsBaseV2:
             name = f"{self.__class__.__name__}{spatial_dims}D"
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
         backbone = ConvNeXtBackboneV2(
             input_shape=input_shape,
             depths=depths,
@@ -117,17 +128,6 @@ class ConvNeXtVariantsBaseV2(keras.Model):
         if include_top:
             x = GlobalAvgPool(x)
             x = GlobalNorm(x)
-
-            if classifier_activation is not None:
-                if isinstance(classifier_activation, str):
-                    classifier_activation = classifier_activation.lower()
-                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-                if classifier_activation not in VALID_ACTIVATION_LIST:
-                    raise ValueError(
-                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                        f"Supported values are: {VALID_ACTIVATION_LIST}"
-                    )
-
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)

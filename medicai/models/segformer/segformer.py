@@ -6,10 +6,10 @@ from medicai.utils import (
     DescribeMixin,
     get_conv_layer,
     get_norm_layer,
-    keras_constants,
     registration,
     resize_volumes,
     resolve_encoder,
+    validate_activation,
 )
 
 
@@ -89,6 +89,18 @@ class SegFormer(keras.Model, DescribeMixin):
             input_shape=input_shape,
             allowed_families=SegFormer.ALLOWED_BACKBONE_FAMILIES,
         )
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+
+        if not (0 <= dropout <= 1):
+            raise ValueError("dropout should be between 0 and 1.")
+
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
 
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
@@ -121,17 +133,11 @@ class SegFormer(keras.Model, DescribeMixin):
             num_classes, decoder_head_embedding_dim, spatial_dims, dropout
         )
         outputs = decoder_head(skips)
-
-        if classifier_activation is not None:
-            if isinstance(classifier_activation, str):
-                classifier_activation = classifier_activation.lower()
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
-        outputs = layers.Activation(classifier_activation, dtype="float32")(outputs)
+        outputs = layers.Activation(
+            classifier_activation,
+            dtype="float32",
+            name="predictions",
+        )(outputs)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"SegFormer{spatial_dims}D", **kwargs

@@ -8,6 +8,7 @@ from medicai.utils import (
     keras_constants,
     registration,
     resolve_encoder,
+    validate_activation,
 )
 
 from .decoder import UNetDecoder
@@ -153,6 +154,16 @@ class UNet(keras.Model, DescribeMixin):
                 f"Length of decoder_filters ({len(decoder_filters)}) must be >= encoder_depth ({encoder_depth})."
             )
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        if isinstance(decoder_block_type, str):
+            decoder_block_type = decoder_block_type.lower()
+
         if decoder_block_type not in keras_constants.VALID_DECODER_BLOCK_TYPE:
             raise ValueError(
                 f"Invalid decoder_block_type: '{decoder_block_type}'. "
@@ -168,18 +179,9 @@ class UNet(keras.Model, DescribeMixin):
                 f"Supported values are: {keras_constants.VALID_DECODER_NORMS}"
             )
 
-        if isinstance(decoder_activation, str):
-            decoder_activation = decoder_activation.lower()
-
-        if classifier_activation is not None:
-            if isinstance(classifier_activation, str):
-                classifier_activation = classifier_activation.lower()
-            VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-            if classifier_activation not in VALID_ACTIVATION_LIST:
-                raise ValueError(
-                    f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                    f"Supported values are: {VALID_ACTIVATION_LIST}"
-                )
+        # verify input activation.
+        decoder_activation = validate_activation(decoder_activation)
+        classifier_activation = validate_activation(classifier_activation)
 
         # prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
@@ -223,13 +225,7 @@ class UNet(keras.Model, DescribeMixin):
                 f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
             )
 
-        if classifier_activation not in VALID_ACTIVATION_LIST:
-            raise ValueError(
-                f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                f"Supported values are: {VALID_ACTIVATION_LIST}"
-            )
-
-        outputs = layers.Activation(classifier_activation, dtype="float32")(x)
+        outputs = layers.Activation(classifier_activation, dtype="float32", name="predictions")(x)
 
         super().__init__(
             inputs=inputs, outputs=outputs, name=name or f"UNet{spatial_dims}D", **kwargs

@@ -1,6 +1,6 @@
 import keras
 
-from medicai.utils import DescribeMixin, get_pooling_layer, keras_constants, registration
+from medicai.utils import DescribeMixin, get_pooling_layer, registration, validate_activation
 
 from .swin_backbone import SwinBackbone, SwinBackboneV2, resolve_input_params
 
@@ -80,12 +80,22 @@ class SwinVariantsBase(keras.Model):
         )
         spatial_dims = len(input_shape) - 1
 
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
         # Get variant specific config
         cfg = SWIN_CFG.get(f"{spatial_dims}D")[variant]
 
         # Get and set class name
         if name is None and self.__class__ is not SwinVariantsBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
 
         backbone = self.backbone_cls(
             input_shape=input_shape,
@@ -114,17 +124,6 @@ class SwinVariantsBase(keras.Model):
             x = GlobalAvgPool(x)
             if dropout > 0.0:
                 x = keras.layers.Dropout(dropout, name="output_dropout")(x)
-
-            if classifier_activation is not None:
-                if isinstance(classifier_activation, str):
-                    classifier_activation = classifier_activation.lower()
-                VALID_ACTIVATION_LIST = keras_constants.get_valid_activations()
-                if classifier_activation not in VALID_ACTIVATION_LIST:
-                    raise ValueError(
-                        f"Invalid value for `classifier_activation`: {classifier_activation!r}. "
-                        f"Supported values are: {VALID_ACTIVATION_LIST}"
-                    )
-
             x = keras.layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
