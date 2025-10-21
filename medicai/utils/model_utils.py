@@ -284,6 +284,12 @@ def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwar
         raise ValueError("Exactly one of `encoder` or `encoder_name` must be provided.")
 
     if encoder is not None:
+        if not isinstance(encoder, keras.Model):
+            raise ValueError(
+                "Argument `encoder` must be a `keras.Model` instance. "
+                "Received instead "
+                f"{encoder} (of type {type(encoder)})."
+            )
         input_shape = encoder.input_shape[1:]
     elif encoder_name is not None:
         if not input_shape:
