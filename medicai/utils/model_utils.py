@@ -50,8 +50,9 @@ def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
         if spatial_dims == 2:
             ConvClass = layers.SeparableConv2D
         else:
-            raise ValueError("SeparableConv is only available in 2D.")
+            from medicai.layers import SeparableConv3D
 
+            ConvClass = SeparableConv3D
     elif layer_type == "depthwise_conv":
         if spatial_dims == 2:
             ConvClass = layers.DepthwiseConv2D
@@ -59,7 +60,6 @@ def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
             from medicai.layers import DepthwiseConv3D
 
             ConvClass = DepthwiseConv3D
-
     else:
         raise ValueError(
             f"Unsupported layer_type: '{layer_type}'. "
