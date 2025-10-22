@@ -70,10 +70,10 @@ For example, setting `encoder_depth=4` will use the $P4$ feature map as the **AS
 
 **Custom Encoder**
 
-You can provide a pre-configured or custom encoder model via the encoder argument. When using a custom encoder, ensure the following:
+You can provide a pre-configured or custom encoder model via the `encoder` argument. When using a custom encoder, ensure the following:
 1. It provides the pyramid_outputs dictionary attribute with appropriately keyed tensors ($P1, P2, \dots$).
 2. The encoder_depth parameter matches the number of feature vectors provided (e.g., depth=4 if your custom model only provides $P1$ to $P4$).
-3. You may need to manually adjust the head_upsample factor to ensure the final output matches the input size, especially if the feature resolutions are non-standard.
+3. You may need to manually adjust the `head_upsample` factor to ensure the final output matches the input size, especially if the feature resolutions are non-standard.
 
 ```python
 from medicai.models import ConvNeXtBackbone
