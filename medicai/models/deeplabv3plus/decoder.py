@@ -6,8 +6,6 @@ from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer
 
 def DeepLabV3PlusDecoder(
     spatial_dims,
-    encoder_output_stride,
-    encoder_depth,
     decoder_channels=256,
     decoder_dilation_rates=(12, 24, 36),
     decoder_aspp_separable=True,
