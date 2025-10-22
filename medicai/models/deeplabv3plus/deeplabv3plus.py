@@ -1,5 +1,4 @@
 import keras
-import numpy as np
 from keras import layers
 
 from medicai.layers import ResizingND
@@ -15,7 +14,49 @@ from medicai.utils import (
 from .decoder import DeepLabV3PlusDecoder
 
 
-class DeepLabV3Plus(keras.Model):
+@keras.saving.register_keras_serializable(package="deeplab")
+@registration.register(name="deeplabv3plus", type="segmentation")
+class DeepLabV3Plus(keras.Model, DescribeMixin):
+    """
+    Implements the DeepLabV3+ architecture for semantic segmentation.
+
+    This model combines the DeepLabV3 Atrous Spatial Pyramid Pooling (ASPP)
+    module with an encoder-decoder structure, leveraging both high-level,
+    context-rich features (via ASPP) and low-level, boundary-detailed features
+    (via a skip connection) to produce fine segmentation masks.
+
+    The implementation is generalized to handle both 2D (image) and 3D (volumetric/video)
+    inputs, dynamically adjusting convolutional and upsampling layers based on the
+    `input_shape`.
+
+    Example (2D):
+    ```python
+    from medicai.models import DeepLabV3Plus
+
+    # Create an image segmentation model using ResNet50 as the encoder
+    model = DeepLabV3Plus(
+        encoder_name='resnet50',
+        input_shape=(224, 224, 3),
+        num_classes=1,
+        classifier_activation="sigmoid",
+    )
+    ```
+
+    Example (3D):
+    ```python
+    from medicai.models import DeepLabV3Plus
+
+    # Create a volumetric segmentation model using a 3D backbone
+    model_3d = DeepLabV3Plus(
+        encoder_name='convnext_tiny',
+        input_shape=(64, 128, 128, 1),
+        num_classes=4,
+        classifier_activation='softmax',
+        encoder_depth=4,
+        head_upsample=8,
+    )
+    ```
+    """
 
     ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet", "convnext", "senet"]
 
@@ -38,13 +79,52 @@ class DeepLabV3Plus(keras.Model):
         name=None,
         **kwargs,
     ):
+        """
+        Initializes the DeepLabV3Plus model.
+
+        Args:
+        encoder (keras.Model, optional): The backbone model used for feature extraction.
+            If provided, `encoder_name` and `input_shape` are ignored. Defaults to `None`.
+        encoder_name (str, optional): Name of the backbone model to instantiate from
+            the supported families. Defaults to `None`.
+        input_shape (tuple, optional): The shape of the input tensor, excluding the batch
+            dimension. E.g., `(224, 224, 3)` for 2D or `(96, 96, 96, 1)` for 3D.
+            Defaults to `None`.
+        encoder_depth (int, optional): The number of feature levels (pyramid stages P1-P5)
+            to use from the encoder. Must be between 3 and 5. The deepest feature (P{depth})
+            is used for ASPP, and P2 is typically used for the low-level skip connection.
+            Defaults to 5.
+        num_classes (int, optional): The number of segmentation classes. Must be positive.
+            Defaults to 1.
+        decoder_channels (int, optional): The number of channels used in the ASPP output
+            and the final decoder convolution. Defaults to 256.
+        decoder_dilation_rates (tuple of ints, optional): The dilation rates for the
+            parallel dilated 3x3x3 convolutions in the ASPP module. Defaults to (12, 24, 36).
+        decoder_aspp_separable (bool, optional): If True, uses SeparableConv layers
+            within the ASPP module for efficiency. Defaults to `True`.
+        decoder_aspp_dropout (float, optional): Dropout rate applied after the final
+            ASPP projection. Defaults to 0.5.
+        decoder_normalization (str, optional): Normalization type used in the decoder
+            (e.g., 'batch', 'layer', 'group'). Defaults to `"batch"`.
+        decoder_activation (str, optional): Activation function used within the decoder blocks.
+            Defaults to `"relu"`.
+        projection_filters (int, optional): The number of channels to project the
+            low-level feature map down to (e.g., 48 in the original paper). Defaults to 48.
+        classifier_activation (str, optional): The activation function applied to the final
+            output layer (e.g., 'sigmoid' for binary or multi-label, 'softmax' for multi-class).
+            Defaults to `"sigmoid"`.
+        head_upsample (int, float, list, or tuple, optional): The final upsampling scale
+            factor(s) applied to the head output to match the original input resolution.
+            Defaults to 4 (e.g., to go from 1/4 resolution to full resolution).
+        name (str, optional): The name of the model. Defaults to `None`.
+        """
+
         encoder, input_shape = resolve_encoder(
             encoder=encoder,
             encoder_name=encoder_name,
             input_shape=input_shape,
             allowed_families=DeepLabV3Plus.ALLOWED_BACKBONE_FAMILIES,
         )
-
         inputs = encoder.input
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
