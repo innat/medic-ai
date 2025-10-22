@@ -86,9 +86,12 @@ class ResizingND(layers.Layer):
         # Validate `target_shape` values if provided
         if self.target_shape is not None:
             for i, dim in enumerate(self.target_shape):
+                if dim is None:
+                    # Allow dynamic shapes for flexible input resizing
+                    continue
                 if not isinstance(dim, int) or dim <= 0:
                     raise ValueError(
-                        f"All target_shape dimensions must be positive integers, "
+                        f"All target_shape dimensions must be positive integers or None, "
                         f"got {dim} (type: {type(dim)}) at index {i}"
                     )
 

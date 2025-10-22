@@ -182,6 +182,7 @@ medicai.models.list_models()
 | [**UNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**AttentionUNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
+| [**DeepLabV3Plus**](medicai/models/deeplabv3plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNETR**](medicai/models/unetr/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR-V1,V2**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
