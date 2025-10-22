@@ -228,25 +228,25 @@ class SeparableConv3D(layers.Layer):
             pointwise convolution. If `None`, no activation is applied (linear activation).
             Defaults to `None`.
         use_bias (bool, optional): Whether the layer uses a bias vector. Defaults to `True`.
-        depthwise_initializer (str or tf.keras.initializers.Initializer, optional):
+        depthwise_initializer (str or keras.initializers.Initializer, optional):
             Initializer for the depthwise kernel. Defaults to `"glorot_uniform"`.
-        pointwise_initializer (str or tf.keras.initializers.Initializer, optional):
+        pointwise_initializer (str or keras.initializers.Initializer, optional):
             Initializer for the pointwise kernel. Defaults to `"glorot_uniform"`.
-        bias_initializer (str or tf.keras.initializers.Initializer, optional):
+        bias_initializer (str or keras.initializers.Initializer, optional):
             Initializer for the bias vector. Defaults to `"zeros"`.
-        depthwise_regularizer (str or tf.keras.regularizers.Regularizer, optional):
+        depthwise_regularizer (str or keras.regularizers.Regularizer, optional):
             Regularizer function applied to the depthwise kernel. Defaults to `None`.
-        pointwise_regularizer (str or tf.keras.regularizers.Regularizer, optional):
+        pointwise_regularizer (str or keras.regularizers.Regularizer, optional):
             Regularizer function applied to the pointwise kernel. Defaults to `None`.
-        bias_regularizer (str or tf.keras.regularizers.Regularizer, optional):
+        bias_regularizer (str or keras.regularizers.Regularizer, optional):
             Regularizer function applied to the bias vector. Defaults to `None`.
-        activity_regularizer (str or tf.keras.regularizers.Regularizer, optional):
+        activity_regularizer (str or keras.regularizers.Regularizer, optional):
             Regularizer function applied to the output of the layer. Defaults to `None`.
-        depthwise_constraint (str or tf.keras.constraints.Constraint, optional):
+        depthwise_constraint (str or keras.constraints.Constraint, optional):
             Constraint function applied to the depthwise kernel. Defaults to `None`.
-        pointwise_constraint (str or tf.keras.constraints.Constraint, optional):
+        pointwise_constraint (str or keras.constraints.Constraint, optional):
             Constraint function applied to the pointwise kernel. Defaults to `None`.
-        bias_constraint (str or tf.keras.constraints.Constraint, optional):
+        bias_constraint (str or keras.constraints.Constraint, optional):
             Constraint function applied to the bias vector. Defaults to `None`.
 
     Input shape:
