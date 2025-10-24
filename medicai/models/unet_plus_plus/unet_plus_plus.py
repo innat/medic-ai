@@ -28,7 +28,14 @@ class UNetPlusPlus(keras.Model, DescribeMixin):
     >>> model = UNetPlusPlus(input_shape=(96, 96, 96, 1), encoder_name="efficientnet_b0")
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["resnet", "densenet", "efficientnet", "convnext", "senet"]
+    ALLOWED_BACKBONE_FAMILIES = [
+        "resnet",
+        "densenet",
+        "efficientnet",
+        "convnext",
+        "senet",
+        "xception",
+    ]
 
     def __init__(
         self,
