@@ -37,6 +37,10 @@ class XceptionBackbone(keras.Model, DescribeMixin):
 
         inputs = parse_model_inputs(input_shape, name="xception_input")
 
+        x = inputs
+        if include_rescaling:
+            x = keras.layers.Rescaling(1.0 / 255.0, name="rescaling")(x)
+
         # Block 1
         x = get_conv_layer(
             spatial_dims=spatial_dims,
@@ -47,7 +51,7 @@ class XceptionBackbone(keras.Model, DescribeMixin):
             strides=2,
             use_bias=False,
             name="block1_conv1",
-        )(inputs)
+        )(x)
         x = get_norm_layer(layer_type="batch", name="block1_conv1_bn")(x)
         x = get_act_layer(layer_type="relu", name="block1_conv1_act")(x)
         x = get_conv_layer(
@@ -130,7 +134,7 @@ class XceptionBackbone(keras.Model, DescribeMixin):
             name="block3_sepconv1",
         )(x)
         x = get_norm_layer(layer_type="batch", name="block3_sepconv1_bn")(x)
-        x = get_act_layer(layer_type="relu")(x)
+        x = get_act_layer(layer_type="relu", name="block3_sepconv2_act")(x)
         x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="separable_conv",

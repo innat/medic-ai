@@ -103,7 +103,6 @@ class Xception(keras.Model, DescribeMixin):
         self.num_classes = num_classes
         self.pooling = pooling
         self.classifier_activation = classifier_activation
-        self.name = name
 
     def get_config(self):
         config = {
