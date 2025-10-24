@@ -13,10 +13,22 @@ class Xception(keras.Model, DescribeMixin):
     """
     A full Xception model for classification.
 
-    This class provides a complete Xception model, including both the
-    convolutional backbone and the classification head (the "top"). It is
-    capable of handling both 2D and 3D inputs. The model's architecture is
-    defined by the `XceptionBackbone` and a final classification layer.
+    Xception (Extreme Inception) is a deep convolutional neural network architecture
+    that replaces the standard Inception modules with depthwise separable convolutions.
+    This design improves model efficiency by decoupling spatial and channel-wise
+    feature extraction, reducing the number of parameters while maintaining high
+    performance.
+
+    This class implements the complete Xception architecture, including the
+    convolutional backbone (`XceptionBackbone`) and the optional classification
+    head (the "top"). The backbone exposes intermediate pyramid features P1–P5,
+    which can be used for feature-based tasks.
+
+    Example:
+    >>> from medicai.models import Xception
+    >>> model = Xception(input_shape=(224, 224, 3), num_classes=1000)
+    >>> model.pyramid_outputs['P1'].shape
+    (None, 112, 112, 64)
 
     The model can be used for a variety of tasks, including image
     classification on 2D images (with input shape `(height, width, channels)`)

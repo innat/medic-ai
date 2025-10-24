@@ -82,7 +82,7 @@ model = keras.Sequential(
 
 # Feature Pyramid Output
 
-Models expose intermediate feature vectors via the `pyramid_outputs` attribute for downstream tasks (segmentation, detection).
+These models expose intermediate feature vectors via the `pyramid_outputs` attribute for downstream tasks (segmentation, detection).
 
 ```python
 from medicai.models import SEResNeXt50
