@@ -80,21 +80,20 @@ class Xception(keras.Model, DescribeMixin):
         inputs = backbone.input
         x = backbone.output
 
-        GlobalAvgPool = get_pooling_layer(
-            spatial_dims=spatial_dims, layer_type="avg", global_pool=True
-        )
-        GlobalMaxPool = get_pooling_layer(
-            spatial_dims=spatial_dims, layer_type="max", global_pool=True
-        )
         if include_top:
-            x = GlobalAvgPool(x)
+            x = get_pooling_layer(
+                spatial_dims=spatial_dims, layer_type="avg", global_pool=True, name="avg_pool"
+            )(x)
             x = layers.Dense(
                 num_classes, activation=classifier_activation, dtype="float32", name="predictions"
             )(x)
-        elif pooling == "avg":
-            x = GlobalAvgPool(x)
-        elif pooling == "max":
-            x = GlobalMaxPool(x)
+        elif pooling in ("avg", "max"):
+            x = get_pooling_layer(
+                spatial_dims=spatial_dims,
+                layer_type=pooling,
+                global_pool=True,
+                name=f"{pooling}_pool",
+            )(x)
 
         super().__init__(inputs=inputs, outputs=x, name=name, **kwargs)
 

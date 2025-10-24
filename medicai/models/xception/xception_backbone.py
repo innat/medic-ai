@@ -43,6 +43,7 @@ class XceptionBackbone(keras.Model, DescribeMixin):
             layer_type="conv",
             filters=32,
             kernel_size=3,
+            padding="same",
             strides=2,
             use_bias=False,
             name="block1_conv1",
@@ -54,6 +55,7 @@ class XceptionBackbone(keras.Model, DescribeMixin):
             layer_type="conv",
             filters=64,
             kernel_size=3,
+            padding="same",
             use_bias=False,
             name="block1_conv2",
         )(x)

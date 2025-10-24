@@ -1,1 +1,2 @@
-from .xception_backbone import Xception, XceptionBackbone
+from .xception import Xception
+from .xception_backbone import XceptionBackbone
