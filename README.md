@@ -174,6 +174,7 @@ medicai.models.list_models()
 | [**ResNeXt**](medicai/models/resnet/README.md) | 2D, 3D | Classification | CNN |
 | [**SE-ResNet**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
 | [**SE-ResNeXt**](medicai/models/senet/README.md) | 2D, 3D | Classification | CNN |
+| [**Xception**](medicai/models/xception/README.md) | 2D, 3D | Classification | CNN |
 | [**EfficientNet-V1,V2**](medicai/models/efficientnet/README.md) | 2D, 3D | Classification | CNN |
 | [**ConvNeXt-V1,V2**](medicai/models/convnext/README.md) | 2D, 3D | Classification | CNN |
 | [**ViT**](medicai/models/vit/README.md) | 2D, 3D | Classification | Transformer |
