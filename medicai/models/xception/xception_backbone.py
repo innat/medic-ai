@@ -22,6 +22,9 @@ class XceptionBackbone(keras.Model, DescribeMixin):
     classification on 2D images (with input shape `(height, width, channels)`)
     and volumetric data classification on 3D images (with input shape
     `(depth, height, width, channels)`).
+
+    Reference:
+        https://github.com/keras-team/keras
     """
 
     def __init__(
