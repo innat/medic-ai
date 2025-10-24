@@ -34,7 +34,7 @@ class TransUNet(keras.Model, DescribeMixin):
     >>> model = TransUNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
     """
 
-    ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet", "efficientnet", "senet"]
+    ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet", "efficientnet", "senet", "xception"]
 
     def __init__(
         self,
