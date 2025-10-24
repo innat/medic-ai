@@ -96,7 +96,7 @@ from .unet import AttentionUNet, UNet
 from .unet_plus_plus import UNetPlusPlus
 from .unetr import UNETR
 from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
-from .xception import XceptionBackbone
+from .xception import Xception, XceptionBackbone
 
 
 def list_models(family: str = None):

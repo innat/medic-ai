@@ -1,6 +1,7 @@
 import keras
 
 from medicai.utils import (
+    DescribeMixin,
     get_act_layer,
     get_conv_layer,
     get_norm_layer,
@@ -8,141 +9,318 @@ from medicai.utils import (
     parse_model_inputs,
 )
 
-# TODO: Incomplete!
-class XceptionBackbone(keras.Model):
-    """Xception core network with hyperparameters.
 
-    This class implements a Xception backbone as described in
-    [Xception: Deep Learning with Depthwise Separable Convolutions](https://arxiv.org/abs/1610.02357).
+@keras.utils.register_keras_serializable(package="xception.backbone")
+class XceptionBackbone(keras.Model, DescribeMixin):
+    """
+    A full XceptionBackbone mode.
 
-    Most users will want the pretrained presets available with this model. If
-    you are creating a custom backbone, this model provides customizability
-    through the `stackwise_conv_filters` and `stackwise_pooling` arguments. This
-    backbone assumes the same basic structure as the original Xception mode:
-    * Residuals and pre-activation everywhere but the first and last block.
-    * Conv layers for the first block only, separable conv layers elsewhere.
+    This class provides a complete XceptionBackbone model, excluding the
+    classification head (the "top"). It is capable of handling both 2D and 3D inputs.
 
-    Args:
-        stackwise_conv_filters: list of list of ints. Each outermost list
-            entry represents a block, and each innermost list entry a conv
-            layer. The integer value specifies the number of filters for the
-            conv layer.
-        stackwise_pooling: list of bools. A list of booleans per block, where
-            each entry is true if the block should includes a max pooling layer
-            and false if it should not.
-        image_shape: tuple. The input shape without the batch size.
-            Defaults to `(None, None, 3)`.
-        data_format: `None` or str. If specified, either `"channels_last"` or
-            `"channels_first"`. If unspecified, the Keras default will be used.
-        dtype: `None` or str or `keras.mixed_precision.DTypePolicy`. The dtype
-            to use for the model's computations and weights.
-
-    Examples:
+    The model can be used for a variety of tasks, including image
+    classification on 2D images (with input shape `(height, width, channels)`)
+    and volumetric data classification on 3D images (with input shape
+    `(depth, height, width, channels)`).
     """
 
     def __init__(
         self,
-        conv_filters,
-        pooling,
-        include_rescaling=False,
         input_shape=(None, None, 3),
+        include_rescaling=False,
+        name=None,
         **kwargs,
     ):
-        if len(conv_filters) != len(pooling):
-            raise ValueError("")
 
-        num_blocks = len(conv_filters)
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = {}
 
-        # Layer shorcuts with common args.
-        norm = get_norm_layer(layer_type="batch")
-        act = get_act_layer(layer_type="relu")
-        conv = get_conv_layer(
-            spatial_dims=spatial_dims, layer_type="conv", kernel_size=3, use_bias=False
-        )
-        sep_conv = get_conv_layer(
-            spatial_dims=spatial_dims,
-            layer_type="separable_conv",
-            kernel_size=3,
-            padding="same",
-            use_bias=False,
-        )
+        inputs = parse_model_inputs(input_shape, name="xception_input")
 
-        point_conv = get_conv_layer(
+        # Block 1
+        x = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv",
+            filters=32,
+            kernel_size=3,
+            strides=2,
+            use_bias=False,
+            name="block1_conv1",
+        )(inputs)
+        x = get_norm_layer(layer_type="batch", name="block1_conv1_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block1_conv1_act")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=64,
+            kernel_size=3,
+            use_bias=False,
+            name="block1_conv2",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block1_conv2_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block1_conv2_act")(x)
+        pyramid_outputs["P1"] = x
+
+        # Block 2
+        residual = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=128,
             kernel_size=1,
             strides=2,
             padding="same",
             use_bias=False,
-        )
-        pool = get_pooling_layer(
+        )(x)
+        residual = get_norm_layer(layer_type="batch")(residual)
+
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=128,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block2_sepconv1",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block2_sepconv1_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block2_sepconv2_act")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=128,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block2_sepconv2",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block2_sepconv2_bn")(x)
+        x = get_pooling_layer(
+            spatial_dims=spatial_dims,
             layer_type="max",
             pool_size=3,
             strides=2,
             padding="same",
-        )
+            name="block2_pool",
+        )(x)
+        x = keras.layers.add([x, residual])
+        pyramid_outputs["P2"] = x
 
-        image_input = parse_model_inputs(shape=input_shape, name="xception_input")
-        x = image_input
+        # Block 3
+        residual = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=256,
+            kernel_size=1,
+            strides=2,
+            padding="same",
+            use_bias=False,
+        )(x)
+        residual = get_norm_layer(layer_type="batch")(residual)
 
-        if include_rescaling:
-            x = keras.layers.Rescaling(1.0 / 255)(x)
+        x = get_act_layer(layer_type="relu", name="block3_sepconv1_act")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=256,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block3_sepconv1",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block3_sepconv1_bn")(x)
+        x = get_act_layer(layer_type="relu")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=256,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block3_sepconv2",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block3_sepconv2_bn")(x)
 
-        # Iterate through the blocks.
-        for block_i in range(num_blocks):
-            first_block, last_block = block_i == 0, block_i == num_blocks - 1
-            block_filters = conv_filters[block_i]
-            use_pooling = pooling[block_i]
+        x = get_pooling_layer(
+            spatial_dims=spatial_dims,
+            layer_type="max",
+            pool_size=3,
+            strides=2,
+            padding="same",
+            name="block3_pool",
+        )(x)
+        x = keras.layers.add([x, residual])
+        pyramid_outputs["P3"] = x
 
-            # Save the block input as a residual.
+        # Block 4
+        residual = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=728,
+            kernel_size=1,
+            strides=2,
+            padding="same",
+            use_bias=False,
+        )(x)
+        residual = get_norm_layer(layer_type="batch")(residual)
+
+        x = get_act_layer(layer_type="relu", name="block4_sepconv1_act")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=728,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block4_sepconv1",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block4_sepconv1_bn")(x)
+
+        x = get_act_layer(layer_type="relu", name="block4_sepconv2_act")(x)
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=728,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block4_sepconv2",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block4_sepconv2_bn")(x)
+
+        x = get_pooling_layer(
+            spatial_dims=spatial_dims,
+            layer_type="max",
+            pool_size=3,
+            strides=2,
+            padding="same",
+            name="block4_pool",
+        )(x)
+        x = keras.layers.add([x, residual])
+        pyramid_outputs["P4"] = x
+
+        # Blocks 5–12
+        for i in range(8):
             residual = x
-            for conv_i, filters in enumerate(block_filters):
-                # First block has post activation and strides on first conv.
-                if first_block:
-                    prefix = f"block{block_i + 1}_conv{conv_i + 1}"
-                    strides = (2, 2) if conv_i == 0 else (1, 1)
-                    x = conv(filters, strides=strides, name=prefix)(x)
-                    x = norm(name=f"{prefix}_bn")(x)
-                    x = act(name=f"{prefix}_act")(x)
-                # Last block has post activation.
-                elif last_block:
-                    prefix = f"block{block_i + 1}_sepconv{conv_i + 1}"
-                    x = sep_conv(filters, name=prefix)(x)
-                    x = norm(name=f"{prefix}_bn")(x)
-                    x = act(name=f"{prefix}_act")(x)
-                else:
-                    prefix = f"block{block_i + 1}_sepconv{conv_i + 1}"
-                    # The first conv in second block has no activation.
-                    if block_i != 1 or conv_i != 0:
-                        x = act(name=f"{prefix}_act")(x)
-                    x = sep_conv(filters, name=prefix)(x)
-                    x = norm(name=f"{prefix}_bn")(x)
+            prefix = "block" + str(i + 5)
 
-            # Optional block pooling.
-            if use_pooling:
-                x = pool(name=f"block{block_i + 1}_pool")(x)
+            x = get_act_layer(layer_type="relu", name=prefix + "_sepconv1_act")(x)
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="separable_conv",
+                filters=728,
+                kernel_size=3,
+                padding="same",
+                use_bias=False,
+                name=prefix + "_sepconv1",
+            )(x)
 
-            # Sum residual, first and last block do not have a residual.
-            if not first_block and not last_block:
-                prefix = f"block{block_i + 1}_residual"
-                filters = x.shape[-1]
-                # Match filters with a pointwise conv if needed.
-                if filters != residual.shape[-1]:
-                    residual = point_conv(filters, name=f"{prefix}_conv")(residual)
-                    residual = norm(name=f"{prefix}_bn")(residual)
-                x = keras.layers.Add(name=f"{prefix}_add")([x, residual])
+            x = get_norm_layer(layer_type="batch", name=prefix + "_sepconv1_bn")(x)
+            x = get_act_layer(layer_type="relu", name=prefix + "_sepconv2_act")(x)
 
-            print(x.shape)
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="separable_conv",
+                filters=728,
+                kernel_size=3,
+                padding="same",
+                use_bias=False,
+                name=prefix + "_sepconv2",
+            )(x)
+
+            x = get_norm_layer(layer_type="batch", name=prefix + "_sepconv2_bn")(x)
+            x = get_act_layer(layer_type="relu", name=prefix + "_sepconv3_act")(x)
+
+            x = get_conv_layer(
+                spatial_dims=spatial_dims,
+                layer_type="separable_conv",
+                filters=728,
+                kernel_size=3,
+                padding="same",
+                use_bias=False,
+                name=prefix + "_sepconv3",
+            )(x)
+            x = get_norm_layer(layer_type="batch", name=prefix + "_sepconv3_bn")(x)
+            x = keras.layers.add([x, residual])
+
+        residual = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="conv",
+            filters=1024,
+            kernel_size=1,
+            strides=2,
+            padding="same",
+            use_bias=False,
+        )(x)
+        residual = get_norm_layer(layer_type="batch")(residual)
+        x = get_act_layer(layer_type="relu", name="block13_sepconv1_act")(x)
+
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=728,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block13_sepconv1",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block13_sepconv1_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block13_sepconv2_act")(x)
+
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=1024,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block13_sepconv2",
+        )(x)
+        x = get_norm_layer(layer_type="batch", name="block13_sepconv2_bn")(x)
+
+        x = get_pooling_layer(
+            spatial_dims=spatial_dims,
+            layer_type="max",
+            pool_size=3,
+            strides=2,
+            padding="same",
+            name="block13_pool",
+        )(x)
+        x = keras.layers.add([x, residual])
+        pyramid_outputs["P5"] = x
+
+        # Block 14
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=1536,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block14_sepconv1",
+        )(x)
+
+        x = get_norm_layer(layer_type="batch", name="block14_sepconv1_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block14_sepconv1_act")(x)
+
+        x = get_conv_layer(
+            spatial_dims=spatial_dims,
+            layer_type="separable_conv",
+            filters=2048,
+            kernel_size=3,
+            padding="same",
+            use_bias=False,
+            name="block14_sepconv2",
+        )(x)
+
+        x = get_norm_layer(layer_type="batch", name="block14_sepconv2_bn")(x)
+        x = get_act_layer(layer_type="relu", name="block14_sepconv2_act")(x)
 
         super().__init__(
-            inputs=image_input,
+            inputs=inputs,
             outputs=x,
+            name=name or f"XceptionBackbone{spatial_dims}D",
             **kwargs,
         )
-        self.conv_filters = conv_filters
-        self.pooling = pooling
         self.pyramid_outputs = pyramid_outputs
         self.include_rescaling = include_rescaling
         self._input_shape = input_shape
@@ -151,8 +329,6 @@ class XceptionBackbone(keras.Model):
         config = super().get_config()
         config.update(
             {
-                "conv_filters": self.conv_filters,
-                "pooling": self.pooling,
                 "include_rescaling": self.include_rescaling,
                 "input_shape": self._input_shape,
             }
