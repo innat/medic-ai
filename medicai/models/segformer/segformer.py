@@ -1,7 +1,7 @@
 import keras
 from keras import layers, ops
 
-from medicai.layers import ConvBnAct
+from medicai.layers import ConvBnAct, ResizingND
 from medicai.utils import (
     DescribeMixin,
     get_conv_layer,
@@ -249,18 +249,12 @@ class SegFormer(keras.Model, DescribeMixin):
         return x
 
     def resize_to_target(self, x, target_spatial_shape, spatial_dims):
-        if spatial_dims == 3:
-            uid = keras.backend.get_uid(prefix="resize_op")
-            target_depth, target_height, target_width = target_spatial_shape
-            lambda_layer = ResizeVolume(
-                lambda volume: resize_volumes(
-                    volume, target_depth, target_height, target_width, method="trilinear"
-                ),
-                name=f"resize_op{uid}",
-            )
-            x = lambda_layer(x)
-        elif spatial_dims == 2:
-            x = ops.image.resize(x, target_spatial_shape, interpolation="bilinear")
+        uid = keras.backend.get_uid(prefix="resize_op")
+        x = ResizingND(
+            target_shape=target_spatial_shape,
+            interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+            name=f"resize_op{uid}",
+        )(x)
         return x
 
     def get_config(self):
@@ -282,7 +276,3 @@ class SegFormer(keras.Model, DescribeMixin):
         if "encoder" in config and isinstance(config["encoder"], dict):
             config["encoder"] = keras.layers.deserialize(config["encoder"])
         return super().from_config(config)
-
-
-class ResizeVolume(keras.layers.Lambda):
-    pass
