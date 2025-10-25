@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import keras
 from keras import ops
 
-from medicai.layers.resize import ResizingND
+from .image import resize_volumes
 
 
 class BaseCAM(ABC):
@@ -105,10 +105,13 @@ class BaseCAM(ABC):
         # Add channel dimension if needed
         if len(heatmap.shape) == len(target_shape):
             heatmap = ops.expand_dims(heatmap, axis=-1)
-        resized_layer = ResizingND(
-            target_shape, interpolation="bilinear" if len(target_shape) == 2 else "trilinear"
-        )
-        return resized_layer(heatmap)
+
+        if len(target_shape) == 2:
+            resized = ops.image.resize(heatmap, target_shape, interpolation="bilinear")
+        else:
+            resized = resize_volumes(heatmap, *target_shape, method="trilinear")
+
+        return resized
 
     def compute_gradients(self, input_tensor, target_class_index=None, mask_type="object"):
         if self.backend == "tensorflow":
