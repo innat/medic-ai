@@ -38,15 +38,15 @@ class Compose:
         """
 
         # Automatically convert all NumPy arrays in image_data to TensorFlow tensors
-        for key, value in image_data.items():
-            if isinstance(value, np.ndarray):
-                image_data[key] = self._to_tensor(value)
+        # for key, value in image_data.items():
+        #     if isinstance(value, np.ndarray):
+        #         image_data[key] = self._to_tensor(value)
 
-        # Also convert any NumPy arrays in meta_data
-        if meta_data is not None:
-            for key, value in meta_data.items():
-                if isinstance(value, np.ndarray):
-                    meta_data[key] = self._to_tensor(value)
+        # # Also convert any NumPy arrays in meta_data
+        # if meta_data is not None:
+        #     for key, value in meta_data.items():
+        #         if isinstance(value, np.ndarray):
+        #             meta_data[key] = self._to_tensor(value)
 
         x = TensorBundle(image_data, meta_data)
         for transform in self.transforms:
