@@ -44,14 +44,8 @@ class BaseCAM(ABC):
             )
             return grad_model
         else:
-            hidden_model = keras.Model(inputs=self.model.inputs, outputs=target_layer_obj.output)
-            # Layers after target layer → classifier model
-            target_idx = self.model.layers.index(target_layer_obj)
-            classifier_input = keras.Input(shape=target_layer_obj.output.shape[1:])
-            x = classifier_input
-            for layer in self.model.layers[target_idx + 1 :]:
-                x = layer(x)
-            classifier_model = keras.Model(classifier_input, x)
+            hidden_model = keras.Model(self.model.inputs, target_layer_obj.output)
+            classifier_model = keras.Model(target_layer_obj.output, self.model.output)
             return classifier_model, hidden_model
 
     def compute_target(self, predictions, target_class_index, mask_type):
