@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import keras
 from keras import ops
 
-from medicai.layers import ResizingND
+from medicai.layers.resize import ResizingND
 
 
 class BaseCAM(ABC):
