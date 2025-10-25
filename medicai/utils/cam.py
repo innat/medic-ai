@@ -102,15 +102,18 @@ class BaseCAM(ABC):
             return target
 
     def resize_heatmap(self, heatmap, target_shape):
-        # Add channel dimension if needed
+        # Ensure channel dim present
         if len(heatmap.shape) == len(target_shape):
             heatmap = ops.expand_dims(heatmap, axis=-1)
 
         if len(target_shape) == 2:
             resized = ops.image.resize(heatmap, target_shape, interpolation="bilinear")
-        else:
+        elif len(target_shape) == 3:
+            heatmap = ops.expand_dims(heatmap, axis=0)
             resized = resize_volumes(heatmap, *target_shape, method="trilinear")
-
+            resized = ops.squeeze(resized, axis=0)
+        else:
+            raise ValueError(f"Unsupported target_shape: {target_shape}")
         return resized
 
     def compute_gradients(self, input_tensor, target_class_index=None, mask_type="object"):
