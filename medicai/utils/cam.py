@@ -1,9 +1,15 @@
+import logging
 from abc import ABC, abstractmethod
 
 import keras
 from keras import ops
 
 from .image import resize_volumes
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 class BaseCAM(ABC):
@@ -12,7 +18,7 @@ class BaseCAM(ABC):
         self.target_layer = target_layer
         self.task_type = task_type
         self.backend = keras.config.backend()
-        print(f"Using backend: {self.backend}")
+        logger.info(f"Using backend: {self.backend}")
 
         # Auto-detect task type
         if self.task_type == "auto":
@@ -23,24 +29,28 @@ class BaseCAM(ABC):
 
     def detect_task_type(self):
         output_shape = self.model.output.shape
-        if len(output_shape) == 2:  # (B, num_classes) - Classification
+        rank = len(output_shape)
+
+        if rank == 2:
+            # (Batch, Channel)
             self.task_type = "classification"
-        elif len(output_shape) in (4, 5):  # (B, [D], H, W, C) - Segmentation
+        elif rank == 4 or rank == 5:
+            # (Batch, [Depth], Height, Width, Channel)
             self.task_type = "segmentation"
         else:
             raise ValueError(f"Unknown output shape: {output_shape}")
 
-        print(f"Auto-detected task type: {self.task_type}")
+        logger.info(f"Auto-detected task type: {self.task_type}")
 
     def build_grad_model(self):
         try:
             target_layer_obj = self.model.get_layer(self.target_layer)
-        except ValueError:
-            raise ValueError(f"Target layer '{self.target_layer}' not found in model")
+        except ValueError as err:
+            raise ValueError(f"Target layer '{self.target_layer}' not found in model") from err
 
         if self.backend == "tensorflow":
             grad_model = keras.Model(
-                inputs=self.model.input, outputs=[target_layer_obj.output, self.model.output]
+                inputs=self.model.inputs, outputs=[target_layer_obj.output, self.model.output]
             )
             return grad_model
         else:
@@ -88,9 +98,9 @@ class BaseCAM(ABC):
                     M = ops.reshape(M_flat, ops.shape(y_c_ij))
 
                 # Debug information
-                print(f"y_c_ij range: [{ops.min(y_c_ij):.3f}, {ops.max(y_c_ij):.3f}]")
-                print(f"M sum: {ops.sum(M)}")
-                print(f"Target: {ops.sum(y_c_ij * M):.3f}")
+                # print(f"y_c_ij range: [{ops.min(y_c_ij):.3f}, {ops.max(y_c_ij):.3f}]")
+                # print(f"M sum: {ops.sum(M)}")
+                # print(f"Target: {ops.sum(y_c_ij * M):.3f}")
                 target = ops.sum(y_c_ij * M)
 
             return target
@@ -123,8 +133,8 @@ class BaseCAM(ABC):
     def _compute_gradients_tf(self, input_tensor, target_class_index, mask_type):
         try:
             import tensorflow as tf
-        except ImportError:
-            raise ImportError("TensorFlow is not installed. Please install tensorflow.")
+        except ImportError as err:
+            raise ImportError("TensorFlow is not installed. Please install tensorflow.") from err
 
         with tf.GradientTape() as tape:
             hidden_output, predictions = self.grad_model(input_tensor)
@@ -136,8 +146,8 @@ class BaseCAM(ABC):
     def _compute_gradients_jax(self, input_tensor, target_class_index, mask_type):
         try:
             import jax
-        except ImportError:
-            raise ImportError("JAX is not installed. Please install jax and jaxlib.")
+        except ImportError as err:
+            raise ImportError("JAX is not installed. Please install jax and jaxlib.") from err
 
         classifier_model, hidden_model = self.grad_model
 
@@ -151,14 +161,14 @@ class BaseCAM(ABC):
 
         # Compute hidden activations and gradients
         hidden_output = hidden_model(input_tensor)
-        (target_value, predictions), grads = value_and_grad_fn(hidden_output)
+        (_, predictions), grads = value_and_grad_fn(hidden_output)
         return grads, hidden_output, predictions
 
     def _compute_gradients_torch(self, input_tensor, target_class_index, mask_type):
         try:
             import torch
-        except ImportError:
-            raise ImportError("PyTorch is not installed.")
+        except ImportError as err:
+            raise ImportError("PyTorch is not installed.") from err
 
         classifier_model, hidden_model = self.grad_model
         hidden_output = hidden_model(input_tensor)
@@ -186,7 +196,7 @@ class GradCAM(BaseCAM):
     def compute_heatmap(self, input_tensor, target_class_index=None, mask_type="object"):
 
         # Compute gradients using unified backend method
-        grads, hidden_output, predictions = self.compute_gradients(
+        grads, hidden_output, _ = self.compute_gradients(
             input_tensor, target_class_index, mask_type
         )
 
@@ -212,7 +222,7 @@ class GradCAM(BaseCAM):
         # Normalize
         heatmap_max = ops.max(heatmap)
         if heatmap_max > 0:
-            heatmap = heatmap / (heatmap_max + keras.backend.epsilon())
+            heatmap = heatmap / (heatmap_max + keras.config.epsilon())
         else:
             heatmap = ops.zeros_like(heatmap)
 
