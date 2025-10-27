@@ -59,11 +59,18 @@ class BaseCAM(ABC):
             return classifier_model, hidden_model
 
     def compute_target(self, predictions, target_class_index, mask_type):
+        batch_size = ops.shape(predictions)[0]
         if self.task_type == "classification":
             # Classification: use single class score
             if target_class_index is None:
-                target_class_index = ops.argmax(predictions[0])
-            target = predictions[0, target_class_index]  # Single scalar
+                target_indices = ops.argmax(predictions, axis=-1)
+            else:
+                target_indices = ops.ones(batch_size, dtype="int32") * target_class_index
+
+            target = ops.take_along_axis(
+                predictions, ops.expand_dims(target_indices, axis=-1), axis=-1
+            )
+            target = ops.squeeze(target, axis=-1)
             return target
 
         else:  # Segmentation (2D or 3D)
@@ -154,6 +161,7 @@ class BaseCAM(ABC):
         def loss_fn(hidden_output):
             predictions = classifier_model(hidden_output)
             target = self.compute_target(predictions, target_class_index, mask_type)
+            target = ops.sum(target)
             return target, predictions
 
         # Gradient of the loss wrt convolutional output
@@ -179,7 +187,7 @@ class BaseCAM(ABC):
         target = self.compute_target(predictions, target_class_index, mask_type)
 
         # Backward pass to compute gradients
-        target.backward()
+        target.backward(gradient=ops.ones_like(target))
 
         # Get gradients
         grads = hidden_output.grad
@@ -205,13 +213,7 @@ class GradCAM(BaseCAM):
 
         # Global average pooling of gradients
         spatial_axes = tuple(range(1, len(grads.shape) - 1))
-        pooled_grads = ops.mean(grads, axis=spatial_axes)
-        pooled_grads = ops.reshape(
-            pooled_grads, [1] * (len(hidden_output.shape) - 1) + [pooled_grads.shape[-1]]
-        )
-
-        # Get feature maps for this image (remove batch dimension)
-        hidden_output = hidden_output[0]
+        pooled_grads = ops.mean(grads, axis=spatial_axes, keepdims=True)
 
         # Weighted combination of feature maps
         heatmap = ops.sum(hidden_output * pooled_grads, axis=-1)
@@ -220,14 +222,13 @@ class GradCAM(BaseCAM):
         heatmap = ops.relu(heatmap)
 
         # Normalize
-        heatmap_max = ops.max(heatmap)
-        if heatmap_max > 0:
-            heatmap = heatmap / (heatmap_max + keras.config.epsilon())
-        else:
-            heatmap = ops.zeros_like(heatmap)
+        heatmap_max = ops.max(heatmap, axis=tuple(range(1, len(heatmap.shape))), keepdims=True)
+        eps = keras.backend.epsilon()
+        heatmap = ops.where(heatmap_max > 0, heatmap / (heatmap_max + eps), ops.zeros_like(heatmap))
 
         # Resize to original spatial dimensions
         heatmap = heatmap[..., None]
         heatmap = self.resize_heatmap(heatmap, tuple(input_tensor.shape[1:-1]))
+        heatmap = ops.convert_to_numpy(heatmap)
 
         return heatmap
