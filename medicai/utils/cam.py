@@ -4,21 +4,41 @@ from abc import ABC, abstractmethod
 import keras
 from keras import ops
 
+from .general import BaseEnum
 from .image import resize_volumes
 
 logger = logging.getLogger(__name__)
 
 
+class TaskType(BaseEnum):
+    AUTO = "auto"
+    CLASSIFICATION = "classification"
+    SEGMENTATION = "segmentation"
+
+
+class MaskType(BaseEnum):
+    OBJECT = "object"
+    ALL = "all"
+    SINGLE = "single"
+
+
 class BaseCAM(ABC):
-    def __init__(self, model, target_layer, task_type="auto"):
+    def __init__(self, model, target_layer, task_type: TaskType = TaskType.AUTO):
         self.model = model
         self.target_layer = target_layer
-        self.task_type = task_type
+
         self.backend = keras.config.backend()
         logger.info(f"Using backend: {self.backend}")
 
+        task_type = task_type.value if isinstance(task_type, TaskType) else str(task_type)
+        if task_type not in TaskType.values():
+            raise ValueError(
+                f"Invalid task_type: '{task_type}'. Must be one of {TaskType.values()}"
+            )
+        self.task_type = task_type
+
         # Auto-detect task type
-        if self.task_type == "auto":
+        if self.task_type == TaskType.AUTO.value:
             self.detect_task_type()
 
         # Build grad model
@@ -30,10 +50,10 @@ class BaseCAM(ABC):
 
         if rank == 2:
             # (Batch, Channel)
-            self.task_type = "classification"
+            self.task_type = TaskType.CLASSIFICATION.value
         elif rank == 4 or rank == 5:
             # (Batch, [Depth], Height, Width, Channel)
-            self.task_type = "segmentation"
+            self.task_type = TaskType.SEGMENTATION.value
         else:
             raise ValueError(f"Unknown output shape: {output_shape}")
 
@@ -79,14 +99,8 @@ class BaseCAM(ABC):
 
             if num_classes == 1:  # Binary
                 y_c_ij = ops.squeeze(predictions, axis=-1)
-                if mask_type == "object":
-                    M = ops.cast(y_c_ij > 0.0, "float32")
-                elif mask_type == "all":
-                    M = ops.ones_like(y_c_ij)
-                elif mask_type == "single":
-                    max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
-                    M = ops.cast(ops.equal(y_c_ij, max_val), "float32")
-                target = ops.sum(y_c_ij * M, axis=tuple(range(1, y_c_ij.ndim)))
+                class_mask = self._get_segmentation_mask(mask_type, y_c_ij)
+                target = ops.sum(y_c_ij * class_mask, axis=tuple(range(1, y_c_ij.ndim)))
 
             else:  # Multi-class
                 if target_class_index is None:
@@ -94,22 +108,26 @@ class BaseCAM(ABC):
 
                 y_c_ij = predictions[..., target_class_index]
                 predicted_classes = ops.argmax(predictions, axis=-1)
-
-                if mask_type == "object":
-                    M = ops.cast(ops.equal(predicted_classes, target_class_index), "float32")
-                elif mask_type == "all":
-                    M = ops.ones_like(y_c_ij)
-                elif mask_type == "single":
-                    max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
-                    M = ops.cast(ops.equal(y_c_ij, max_val), "float32")
-
-                # Debug information
-                # print(f"y_c_ij range: [{ops.min(y_c_ij):.3f}, {ops.max(y_c_ij):.3f}]")
-                # print(f"M sum: {ops.sum(M)}")
-                # print(f"Target: {ops.sum(y_c_ij * M):.3f}")
-                target = ops.sum(y_c_ij * M, axis=tuple(range(1, y_c_ij.ndim)))
+                class_mask = self._get_segmentation_mask(
+                    mask_type, y_c_ij, predicted_classes, target_class_index
+                )
+                target = ops.sum(y_c_ij * class_mask, axis=tuple(range(1, y_c_ij.ndim)))
 
             return target
+
+    def _get_segmentation_mask(
+        self, mask_type, y_c_ij, predicted_classes=None, target_class_index=None
+    ):
+        if mask_type == "all":
+            return ops.ones_like(y_c_ij)
+        if mask_type == "single":
+            max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
+            return ops.cast(ops.equal(y_c_ij, max_val), "float32")
+        if mask_type == "object":
+            if predicted_classes is not None:  # Multi-class
+                return ops.cast(ops.equal(predicted_classes, target_class_index), "float32")
+            else:  # Binary
+                return ops.cast(y_c_ij > 0.0, "float32")
 
     def resize_heatmap(self, heatmap, target_shape):
         if len(target_shape) == 2:
@@ -213,9 +231,10 @@ class BaseCAM(ABC):
 class GradCAM(BaseCAM):
     def compute_heatmap(self, input_tensor, target_class_index=None, mask_type="object"):
 
-        if mask_type not in ("object", "all", "single"):
+        mask_type = mask_type.value if isinstance(mask_type, MaskType) else str(mask_type)
+        if mask_type not in MaskType.values():
             raise ValueError(
-                f"Unsupported mask_type '{mask_type}'. Use 'object', 'all', or 'single'."
+                f"Unsupported mask_type '{mask_type}'. Use one of: {MaskType.values()}"
             )
 
         # Compute gradients using unified backend method
