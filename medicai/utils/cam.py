@@ -6,9 +6,6 @@ from keras import ops
 
 from .image import resize_volumes
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +84,7 @@ class BaseCAM(ABC):
                 elif mask_type == "single":
                     max_val = ops.max(y_c_ij)
                     M = ops.cast(ops.equal(y_c_ij, max_val), "float32")
-                target = ops.sum(y_c_ij * M)
+                target = ops.sum(y_c_ij * M, axis=tuple(range(1, y_c_ij.ndim)))
 
             else:  # Multi-class
                 if target_class_index is None:
@@ -110,21 +107,15 @@ class BaseCAM(ABC):
                 # print(f"y_c_ij range: [{ops.min(y_c_ij):.3f}, {ops.max(y_c_ij):.3f}]")
                 # print(f"M sum: {ops.sum(M)}")
                 # print(f"Target: {ops.sum(y_c_ij * M):.3f}")
-                target = ops.sum(y_c_ij * M)
+                target = ops.sum(y_c_ij * M, axis=tuple(range(1, y_c_ij.ndim)))
 
             return target
 
     def resize_heatmap(self, heatmap, target_shape):
-        # Ensure channel dim present
-        if len(heatmap.shape) == len(target_shape):
-            heatmap = ops.expand_dims(heatmap, axis=-1)
-
         if len(target_shape) == 2:
             resized = ops.image.resize(heatmap, target_shape, interpolation="bilinear")
         elif len(target_shape) == 3:
-            heatmap = ops.expand_dims(heatmap, axis=0)
             resized = resize_volumes(heatmap, *target_shape, method="trilinear")
-            resized = ops.squeeze(resized, axis=0)
         else:
             raise ValueError(f"Unsupported target_shape: {target_shape}")
         return resized
@@ -177,8 +168,8 @@ class BaseCAM(ABC):
     def _compute_gradients_torch(self, input_tensor, target_class_index, mask_type):
         try:
             import torch
-        except ImportError:
-            raise ImportError("PyTorch is not installed.")
+        except ImportError as err:
+            raise ImportError("PyTorch is not installed.") from err
 
         # evaluation mode
         self.model.eval()
@@ -221,6 +212,11 @@ class BaseCAM(ABC):
 class GradCAM(BaseCAM):
     def compute_heatmap(self, input_tensor, target_class_index=None, mask_type="object"):
 
+        if mask_type not in ("object", "all", "single"):
+            raise ValueError(
+                f"Unsupported mask_type '{mask_type}'. Use 'object', 'all', or 'single'."
+            )
+
         # Compute gradients using unified backend method
         grads, hidden_output, _ = self.compute_gradients(
             input_tensor, target_class_index, mask_type
@@ -241,11 +237,11 @@ class GradCAM(BaseCAM):
 
         # Normalize
         heatmap_max = ops.max(heatmap, axis=tuple(range(1, len(heatmap.shape))), keepdims=True)
-        eps = keras.backend.epsilon()
+        eps = keras.config.epsilon()
         heatmap = ops.where(heatmap_max > 0, heatmap / (heatmap_max + eps), ops.zeros_like(heatmap))
 
         # Resize to original spatial dimensions
-        heatmap = heatmap[..., None]
+        heatmap = ops.expand_dims(heatmap, axis=-1)
         heatmap = self.resize_heatmap(heatmap, tuple(input_tensor.shape[1:-1]))
         heatmap = ops.convert_to_numpy(heatmap)
 

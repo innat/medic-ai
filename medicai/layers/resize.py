@@ -72,6 +72,11 @@ class ResizingND(layers.Layer):
             raise ValueError(
                 f"For 3D inputs, interpolation must be one of ('nearest', 'trilinear'), but got '{self.interpolation}'."
             )
+        if self.spatial_dims == 2 and self.align_corners:
+            raise ValueError(
+                "`align_corners=True` is not supported for 2D inputs, as `keras.ops.image.resize` "
+                "does not have this parameter."
+            )
         if self.interpolation == "nearest" and self.align_corners:
             raise ValueError(
                 f"`align_corners=True` is not supported when using '{self.interpolation}' interpolation."
