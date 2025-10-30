@@ -13,12 +13,12 @@ def camel_to_snake(name: str) -> str:
 class EnumMixin:
     @classmethod
     def to_dict(cls):
-        # Returns a dictionary mapping member names to their values.
+        """Returns a dictionary mapping member names to their values."""
         return {item.name: item.value for item in cls}
 
     @classmethod
     def values(cls):
-        # Returns a list of all member string values.
+        """Returns a list of all member string values."""
         return [item.value for item in cls]
 
 

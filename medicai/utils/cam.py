@@ -40,9 +40,10 @@ class BaseCAM(ABC):
         Args:
             model: The Keras model to analyze.
             target_layer: The name of the convolutional layer whose feature maps will be used.
-            task_type: Specifies the type of task the model performs. If AUTO, it is
-                inferred from the model's output shape.
-                (e.g., TaskType.CLASSIFICATION, TaskType.SEGMENTATION).
+            task_type: Specifies the type of task. Can be a `TaskType` enum member
+                (e.g., `TaskType.CLASSIFICATION`) or its string equivalent
+                (e.g., `'classification'`). If 'auto', it is inferred from the
+                model's output shape.
 
         Raises:
             ValueError: If an invalid task_type is provided.
