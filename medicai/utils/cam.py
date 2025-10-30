@@ -363,7 +363,14 @@ class GradCAM(BaseCAM):
     of a final convolutional layer to generate a coarse localization map.
     """
 
-    def compute_heatmap(self, input_tensor, target_class_index=None, mask_type="object"):
+    def compute_heatmap(
+        self,
+        input_tensor,
+        target_class_index=None,
+        mask_type="object",
+        normalize_heatmap=True,
+        resize_heatmap=True,
+    ):
         """
         Computes the Grad-CAM heatmap.
 
@@ -388,6 +395,10 @@ class GradCAM(BaseCAM):
                 single: Calculates the gradient based only on the score of the
                     **single pixel/voxel** that has the maximum prediction value
                     for the `target_class_index`.
+            normalize_heatmap: If True, scales the heatmap values between 0 and 1 after ReLU.
+                Default: True.
+            resize_heatmap: If True, upsamples the heatmap to the input_tensor's spatial
+                dimensions ([D], H, W). Default: True.
 
         Returns:
             The final normalized heatmap as a NumPy array
@@ -424,15 +435,20 @@ class GradCAM(BaseCAM):
         # 4. Apply ReLU: Only positive influence on the target class is considered
         heatmap = ops.relu(heatmap)
 
-        # 5. Normalize heatmap between 0 and 1
-        # Find the maximum value across all spatial dimensions
-        heatmap_max = ops.max(heatmap, axis=tuple(range(1, len(heatmap.shape))), keepdims=True)
-        eps = keras.config.epsilon()  # will add epsilon to avoid division by zero
-        heatmap = ops.where(heatmap_max > 0, heatmap / (heatmap_max + eps), ops.zeros_like(heatmap))
+        if normalize_heatmap:
+            # 5. Normalize heatmap between 0 and 1
+            # Find the maximum value across all spatial dimensions
+            heatmap_max = ops.max(heatmap, axis=tuple(range(1, len(heatmap.shape))), keepdims=True)
+            eps = keras.config.epsilon()  # will add epsilon to avoid division by zero
+            heatmap = ops.where(
+                heatmap_max > 0, heatmap / (heatmap_max + eps), ops.zeros_like(heatmap)
+            )
 
-        # 6. Resize to original spatial dimensions
+        # Add the channel dimension
         heatmap = ops.expand_dims(heatmap, axis=-1)
-        heatmap = self.resize_heatmap(heatmap, tuple(input_tensor.shape[1:-1]))
-        heatmap = ops.convert_to_numpy(heatmap)
 
-        return heatmap
+        if resize_heatmap:
+            # 6. Resize to original spatial dimensions
+            heatmap = self.resize_heatmap(heatmap, tuple(input_tensor.shape[1:-1]))
+
+        return ops.convert_to_numpy(heatmap)
