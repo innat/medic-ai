@@ -315,6 +315,7 @@ class BaseCAM(ABC):
             raise ImportError("PyTorch is not installed.") from err
 
         # evaluation mode
+        training_flag = self.grad_model().training
         self.grad_model.eval()
         target_layer_obj = self.grad_model.get_layer(self.target_layer)
 
@@ -344,6 +345,8 @@ class BaseCAM(ABC):
             # Remove hooks
             handle_fwd.remove()
             handle_bwd.remove()
+            if training_flag:
+                self.grad_model.train()
 
         return grads, hidden_output, preds
 
