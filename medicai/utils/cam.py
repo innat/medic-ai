@@ -100,10 +100,8 @@ class BaseCAM(ABC):
                 elif mask_type == "all":
                     M = ops.ones_like(y_c_ij)
                 elif mask_type == "single":
-                    flat_y = ops.reshape(y_c_ij, [ops.shape(y_c_ij)[0], -1])
                     max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
-                    M_flat = ops.cast(ops.equal(flat_y, max_val), "float32")
-                    M = ops.reshape(M_flat, ops.shape(y_c_ij))
+                    M = ops.cast(ops.equal(y_c_ij, max_val), "float32")
 
                 # Debug information
                 # print(f"y_c_ij range: [{ops.min(y_c_ij):.3f}, {ops.max(y_c_ij):.3f}]")
