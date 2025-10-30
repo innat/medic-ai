@@ -52,10 +52,12 @@ class BaseCAM(ABC):
             return grad_model
         elif self.backend == "torch":
             return self.model
-        else:
+        elif self.backend == "jax":
             hidden_model = keras.Model(self.model.inputs, target_layer_obj.output)
             classifier_model = keras.Model(target_layer_obj.output, self.model.output)
             return classifier_model, hidden_model
+        else:
+            raise ValueError(f"Unsupported backend for GradCAM: {self.backend}")
 
     def compute_target(self, predictions, target_class_index, mask_type):
         batch_size = ops.shape(predictions)[0]
@@ -99,7 +101,7 @@ class BaseCAM(ABC):
                     M = ops.ones_like(y_c_ij)
                 elif mask_type == "single":
                     flat_y = ops.reshape(y_c_ij, [ops.shape(y_c_ij)[0], -1])
-                    max_val = ops.max(flat_y, axis=-1, keepdims=True)
+                    max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
                     M_flat = ops.cast(ops.equal(flat_y, max_val), "float32")
                     M = ops.reshape(M_flat, ops.shape(y_c_ij))
 
@@ -190,16 +192,17 @@ class BaseCAM(ABC):
         handle_fwd = target_layer_obj.register_forward_hook(forward_hook)
         handle_bwd = target_layer_obj.register_backward_hook(backward_hook)
 
-        preds = self.model(input_tensor)
-        target = self.compute_target(preds, target_class_index, mask_type)
-        self.model.zero_grad()
-        target.backward(gradient=torch.ones_like(target))
-        hidden_output = activations[0]
-        grads = gradients[0]
-
-        # Remove hooks
-        handle_fwd.remove()
-        handle_bwd.remove()
+        try:
+            preds = self.model(input_tensor)
+            target = self.compute_target(preds, target_class_index, mask_type)
+            self.model.zero_grad()
+            target.backward(gradient=torch.ones_like(target))
+            hidden_output = activations[0]
+            grads = gradients[0]
+        finally:
+            # Remove hooks
+            handle_fwd.remove()
+            handle_bwd.remove()
 
         return grads, hidden_output, preds
 
