@@ -170,6 +170,7 @@ class ResizingND(layers.Layer):
                 "target_shape": self.target_shape,
                 "scale_factor": self.scale_factor,
                 "interpolation": self.interpolation,
+                "align_corners": self.align_corners,
             }
         )
         return config

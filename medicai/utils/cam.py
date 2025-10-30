@@ -53,6 +53,8 @@ class BaseCAM(ABC):
                 inputs=self.model.inputs, outputs=[target_layer_obj.output, self.model.output]
             )
             return grad_model
+        elif self.backend == "torch":
+            return self.model
         else:
             hidden_model = keras.Model(self.model.inputs, target_layer_obj.output)
             classifier_model = keras.Model(target_layer_obj.output, self.model.output)
@@ -175,24 +177,40 @@ class BaseCAM(ABC):
     def _compute_gradients_torch(self, input_tensor, target_class_index, mask_type):
         try:
             import torch
-        except ImportError as err:
-            raise ImportError("PyTorch is not installed.") from err
+        except ImportError:
+            raise ImportError("PyTorch is not installed.")
 
-        classifier_model, hidden_model = self.grad_model
-        hidden_output = hidden_model(input_tensor)
-        hidden_output = hidden_output.clone().detach().requires_grad_(True)
-        predictions = classifier_model(hidden_output)
+        # evaluation mode
+        self.model.eval()
+        target_layer_obj = self.model.get_layer(self.target_layer)
 
-        # Get the specific class score
-        target = self.compute_target(predictions, target_class_index, mask_type)
+        activations = []
+        gradients = []
 
-        # Backward pass to compute gradients
-        target.backward(gradient=ops.ones_like(target))
+        # Forward hook to capture activations
+        def forward_hook(module, input, output):
+            activations.append(output)
 
-        # Get gradients
-        grads = hidden_output.grad
+        # Backward hook to capture gradients
+        def backward_hook(module, grad_in, grad_out):
+            gradients.append(grad_out[0])
 
-        return grads, hidden_output, predictions
+        # Register hooks
+        handle_fwd = target_layer_obj.register_forward_hook(forward_hook)
+        handle_bwd = target_layer_obj.register_backward_hook(backward_hook)
+
+        preds = self.model(input_tensor)
+        target = self.compute_target(preds, target_class_index, mask_type)
+        self.model.zero_grad()
+        target.backward(gradient=torch.ones_like(target))
+        hidden_output = activations[0]
+        grads = gradients[0]
+
+        # Remove hooks
+        handle_fwd.remove()
+        handle_bwd.remove()
+
+        return grads, hidden_output, preds
 
     @abstractmethod
     def compute_heatmap(self, input_tensor, target_class_index=None, mask_type="object"):
