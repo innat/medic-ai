@@ -84,7 +84,7 @@ class BaseCAM(ABC):
                 elif mask_type == "all":
                     M = ops.ones_like(y_c_ij)
                 elif mask_type == "single":
-                    max_val = ops.max(y_c_ij)
+                    max_val = ops.max(y_c_ij, axis=tuple(range(1, y_c_ij.ndim)), keepdims=True)
                     M = ops.cast(ops.equal(y_c_ij, max_val), "float32")
                 target = ops.sum(y_c_ij * M, axis=tuple(range(1, y_c_ij.ndim)))
 
