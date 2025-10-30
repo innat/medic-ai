@@ -35,7 +35,8 @@ def linear_interpolation(volume, target_depth, depth_axis=0, align_corners=False
             indices = tf.clip_by_value(indices, 0.0, tf.cast(original_depth - 1, tf.float32))
         else:
             # Single output - use center
-            indices = tf.constant([(tf.cast(original_depth, tf.float32) - 1) / 2.0])
+            # indices = tf.constant([(tf.cast(original_depth, tf.float32) - 1) / 2.0])
+            indices = (tf.cast(original_depth, tf.float32) - 1) / 2.0
 
     # Split indices into integer and fractional parts
     lower_indices = tf.cast(tf.floor(indices), tf.int32)

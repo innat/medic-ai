@@ -1,3 +1,4 @@
+from medicai.utils.cam import GradCAM
 from medicai.utils.constant import keras_constants
 from medicai.utils.describe_mixin import DescribeMixin
 from medicai.utils.general import camel_to_snake

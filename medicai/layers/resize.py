@@ -5,7 +5,14 @@ from medicai.utils import resize_volumes
 
 
 class ResizingND(layers.Layer):
-    def __init__(self, target_shape=None, scale_factor=None, interpolation="nearest", **kwargs):
+    def __init__(
+        self,
+        target_shape=None,
+        scale_factor=None,
+        interpolation="nearest",
+        align_corners=False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         if target_shape is None and scale_factor is None:
@@ -21,6 +28,7 @@ class ResizingND(layers.Layer):
         self.target_shape = target_shape
         self.scale_factor = scale_factor
         self.interpolation = interpolation
+        self.align_corners = align_corners
 
         if scale_factor is not None:
             if isinstance(scale_factor, (int, float)):
@@ -63,6 +71,15 @@ class ResizingND(layers.Layer):
         if self.spatial_dims == 3 and self.interpolation not in ("nearest", "trilinear"):
             raise ValueError(
                 f"For 3D inputs, interpolation must be one of ('nearest', 'trilinear'), but got '{self.interpolation}'."
+            )
+        if self.spatial_dims == 2 and self.align_corners:
+            raise ValueError(
+                "`align_corners=True` is not supported for 2D inputs, as `keras.ops.image.resize` "
+                "does not have this parameter."
+            )
+        if self.interpolation == "nearest" and self.align_corners:
+            raise ValueError(
+                f"`align_corners=True` is not supported when using '{self.interpolation}' interpolation."
             )
 
         # Normalize scale_factor to always be a list
@@ -126,7 +143,9 @@ class ResizingND(layers.Layer):
                 target_shape = self.target_shape
 
         if self.spatial_dims == 3:
-            return resize_volumes(inputs, *target_shape, method=self.interpolation)
+            return resize_volumes(
+                inputs, *target_shape, method=self.interpolation, align_corners=self.align_corners
+            )
         else:
             return ops.image.resize(inputs, target_shape, interpolation=self.interpolation)
 
@@ -156,6 +175,7 @@ class ResizingND(layers.Layer):
                 "target_shape": self.target_shape,
                 "scale_factor": self.scale_factor,
                 "interpolation": self.interpolation,
+                "align_corners": self.align_corners,
             }
         )
         return config
