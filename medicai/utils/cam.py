@@ -408,6 +408,9 @@ class GradCAM(BaseCAM):
         if grads is None:
             raise ValueError("Gradient computation failed - no gradients returned")
 
+        grads = ops.cast(grads, "float32")
+        hidden_output = ops.cast(hidden_output, "float32")
+
         # 2. Global Average Pooling of gradients (calculating the importance weight alpha_c^k)
         # The pooling axes are all spatial dimensions (1 to rank - 2)
         spatial_axes = tuple(range(1, len(grads.shape) - 1))
