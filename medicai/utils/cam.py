@@ -314,8 +314,8 @@ class BaseCAM(ABC):
             raise ImportError("PyTorch is not installed.") from err
 
         # evaluation mode
-        self.model.eval()
-        target_layer_obj = self.model.get_layer(self.target_layer)
+        self.grad_model.eval()
+        target_layer_obj = self.grad_model.get_layer(self.target_layer)
 
         activations = []
         gradients = []
@@ -333,9 +333,9 @@ class BaseCAM(ABC):
         handle_bwd = target_layer_obj.register_backward_hook(backward_hook)
 
         try:
-            preds = self.model(input_tensor)
+            preds = self.grad_model(input_tensor)
             target = self.compute_target(preds, target_class_index, mask_type)
-            self.model.zero_grad()
+            self.grad_model.zero_grad()
             target.backward(gradient=torch.ones_like(target))
             hidden_output = activations[0]
             grads = gradients[0]
