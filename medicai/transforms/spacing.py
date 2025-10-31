@@ -22,7 +22,7 @@ class Spacing:
         self,
         keys: Sequence[str] = ("image", "label"),
         pixdim: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        mode: Tuple[str, str] = ("bilinear", "nearest"),
+        mode: Tuple[str, str] = ("trilinear", "nearest"),
     ):
         """Initializes the Spacing transform.
 
@@ -30,20 +30,35 @@ class Spacing:
             keys (Sequence[str]): Keys of the tensors to resample. Default is ("image", "label").
             pixdim (Tuple[float, float, float]): The desired physical spacing (voxel dimensions)
                 in (depth, height, width) or (z, y, x) order. Default is (1.0, 1.0, 1.0).
-            mode (Union[str, Tuple[str, str]]): The interpolation mode(s) to use for resampling.
-                - If a single string is provided, it's used for all keys.
-                - If a tuple of two strings is provided, the first mode is used for the first key
-                  and the second mode for the second key (assuming the default `keys`).
-                  For more than two keys, provide a dictionary in `__call__`.
-                  Supported modes are those of `tf.image.resize` (for spatial H, W)
-                  and the depth interpolation used within `Resize` (for spatial D).
-                  Default is ("bilinear", "nearest").
+            mode (Union[str, Tuple[str, ...]]): The interpolation mode to use for resizing.
+                - If a single string is provided, the same mode is used for all keys.
+                - If a tuple of strings is provided, it must have the same length as `keys`,
+                  and the mode at each index will be used for the tensor with the
+                  corresponding key. Supported modes include 'nearest', 'bilinear', 'trilinear'.
+                  for 2D resizing (using `tf.image.resize`) supports 'bilinear' and 'nearest'.
+                  for 3D resizing (using a custom volume resizer) supports 'trilinear' and 'nearest'.
         """
+        ndim = len(pixdim)
+        if ndim not in (2, 3):
+            raise ValueError(f"`pixdim` must be 2D or 3D, got {ndim}D.")
+
+        if ndim == 2:
+            valid_modes = {"bilinear", "nearest"}
+        else:  # ndim == 3
+            valid_modes = {"trilinear", "nearest"}
+
         self.pixdim = pixdim
         self.keys = keys
         self.image_mode = mode[0]
         self.label_mode = mode[1]
         self.mode = dict(zip(keys, mode))
+
+        for key, m in self.mode.items():
+            if m not in valid_modes:
+                raise ValueError(
+                    f"Invalid mode '{m}' for {ndim}D input. "
+                    f"Allowed: {sorted(valid_modes)} (key='{key}')."
+                )
 
     def get_spacing_from_affine(self, affine):
         """Calculates the voxel spacing from the affine transformation matrix.
@@ -130,6 +145,6 @@ class Spacing:
         spatial_shape = (new_depth, new_height, new_width)
 
         image = image[None, ...]  # Add temp batch axis
-        resized_dhw = resize_volumes(image, *spatial_shape, method="trilinear", align_corners=False)
+        resized_dhw = resize_volumes(image, *spatial_shape, method=mode, align_corners=False)
         resized_dhw = resized_dhw[0]  # Remove temp batch axis
         return resized_dhw

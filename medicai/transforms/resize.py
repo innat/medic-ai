@@ -17,7 +17,7 @@ class Resize:
     def __init__(
         self,
         keys: Sequence[str],
-        mode: Tuple[str, str] = ("bilinear", "nearest"),
+        mode: Tuple[str, str] = ("trilinear", "nearest"),
         spatial_shape: Tuple[int, ...] = (96, 96, 96),
     ):
         """Initializes the Resize transform.
