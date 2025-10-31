@@ -69,10 +69,7 @@ class Spacing:
         Returns:
             Tuple[float, float, float]: The voxel spacing in (depth, height, width) order.
         """
-        width_spacing = tf.norm(affine[:3, 0])
-        depth_spacing = tf.norm(affine[:3, 1])
-        height_spacing = tf.norm(affine[:3, 2])
-        return (width_spacing, depth_spacing, height_spacing)
+        return tuple(tf.norm(affine[:3, i]) for i in range(3))
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """Apply the spacing resampling to the input TensorBundle.
@@ -139,9 +136,9 @@ class Spacing:
         original_height = tf.cast(original_shape[1], tf.float32)
         original_width = tf.cast(original_shape[2], tf.float32)
 
-        new_depth = tf.cast(original_depth * scale_d, tf.int32)
-        new_height = tf.cast(original_height * scale_h, tf.int32)
-        new_width = tf.cast(original_width * scale_w, tf.int32)
+        new_depth = tf.cast(tf.round(original_depth * scale_d), tf.int32)
+        new_height = tf.cast(tf.round(original_height * scale_h), tf.int32)
+        new_width = tf.cast(tf.round(original_width * scale_w), tf.int32)
         spatial_shape = (new_depth, new_height, new_width)
 
         image = image[None, ...]  # Add temp batch axis
