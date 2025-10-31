@@ -3,8 +3,7 @@ from typing import Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 
-from medicai.transforms.resize import Resize
-
+from .resize import resize_volumes
 from .tensor_bundle import TensorBundle
 
 
@@ -128,10 +127,9 @@ class Spacing:
         new_depth = tf.cast(original_depth * scale_d, tf.int32)
         new_height = tf.cast(original_height * scale_h, tf.int32)
         new_width = tf.cast(original_width * scale_w, tf.int32)
-
         spatial_shape = (new_depth, new_height, new_width)
-        inputs = TensorBundle({"image": image})
-        resized_dhw = Resize(keys=["image"], mode=[mode], spatial_shape=spatial_shape)(inputs).data[
-            "image"
-        ]
+
+        image = image[None, ...]  # Add temp batch axis
+        resized_dhw = resize_volumes(image, *spatial_shape, method="trilinear", align_corners=False)
+        resized_dhw = resized_dhw[0]  # Remove temp batch axis
         return resized_dhw
