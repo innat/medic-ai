@@ -1,4 +1,4 @@
-from keras import layers, ops
+from keras import layers
 
 from medicai.layers import ConvBnAct, ResizingND
 from medicai.utils import get_norm_layer, get_pooling_layer
@@ -44,7 +44,7 @@ def PyramidPoolingModule(
 
     def apply(feature):
         spatial_dims = len(feature.shape) - 2
-        _, *input_spatial_shape, _ = ops.shape(feature)
+        input_spatial_shape = tuple(dim if dim is None else int(dim) for dim in feature.shape[1:-1])
 
         # List to collect multi-scale pooled features
         pyramid_features = [feature]
@@ -70,7 +70,7 @@ def PyramidPoolingModule(
             kernel_size=3,
             padding="same",
             activation="relu",
-            normalization="batch",
+            normalization=decoder_normalization,
             name=f"{prefix}_final_3x3",
         )(fused)
         return fused_output
@@ -144,7 +144,9 @@ def UPerNetDecoder(
             )(lateral_feature)
 
             # 2. Resize state to match lateral resolution
-            _, *target_spatial_shape, _ = ops.shape(lateral_feature)
+            target_spatial_shape = tuple(
+                dim if dim is None else int(dim) for dim in lateral_feature.shape[1:-1]
+            )
             state_feature = ResizingND(
                 target_shape=target_spatial_shape,
                 interpolation="bilinear" if spatial_dims == 2 else "trilinear",
@@ -161,7 +163,9 @@ def UPerNetDecoder(
 
         # 4. Upsample all FPN outputs to the highest resolution (P2)
         target_size_tensor = fpn_features[-1]
-        _, *target_spatial_shape, _ = ops.shape(target_size_tensor)
+        target_spatial_shape = tuple(
+            dim if dim is None else int(dim) for dim in target_size_tensor.shape[1:-1]
+        )
 
         resized_fpn_features = []
         for i, feature in enumerate(fpn_features):
