@@ -186,15 +186,6 @@ class UPerNet(keras.Model, DescribeMixin):
                 f"Supported values are: {keras_constants.VALID_DECODER_NORMS}"
             )
 
-        if isinstance(decoder_block_type, str):
-            decoder_block_type = decoder_block_type.lower()
-
-        if decoder_block_type not in keras_constants.VALID_DECODER_BLOCK_TYPE:
-            raise ValueError(
-                f"Invalid decoder_block_type: '{decoder_block_type}'. "
-                f"Expected one of {keras_constants.VALID_DECODER_BLOCK_TYPE}."
-            )
-
         # verify input activation.
         classifier_activation = validate_activation(classifier_activation)
         decoder_activation = validate_activation(decoder_activation)
