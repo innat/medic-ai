@@ -6,12 +6,18 @@ from medicai.utils.swi_utils import ensure_tuple_rep
 class AdaptivePooling2D(layers.Layer):
     """Parent class for 2D pooling layers with adaptive kernel size.
 
-    This class only exists for code reuse. It will never be an exposed API.
+    This layer performs pooling over the input height (H) and width (W) dimensions
+    such that the output dimensions match the specified `output_size`.
+    It supports arbitrary input sizes, even when the input H/W is not divisible
+    by the output H/W.
+
+    It assumes the 'channels_last' data format: (batch, H, W, C).
 
     Args:
-      reduce_function: The reduction method to apply, e.g. `tf.reduce_max`.
-      output_size: An integer or tuple/list of 2 integers specifying (pooled_rows, pooled_cols).
-        The new size of output channels.
+        reduce_function: The reduction method to apply, e.g. `keras.ops.mean` or
+          `keras.ops.max`.
+        output_size: An integer or tuple/list of 2 integers specifying
+          (pooled_rows, pooled_cols). The new size of the H and W dimensions.
     """
 
     def __init__(
@@ -25,15 +31,47 @@ class AdaptivePooling2D(layers.Layer):
         super().__init__(**kwargs)
 
     def call(self, inputs):
+        # Assume channels_last: (batch, H, W, C)
         h_bins = self.output_size[0]
         w_bins = self.output_size[1]
 
-        split_cols = ops.split(inputs, h_bins, axis=1)
-        split_cols = ops.stack(split_cols, axis=1)
-        split_rows = ops.split(split_cols, w_bins, axis=3)
-        split_rows = ops.stack(split_rows, axis=3)
-        out_vect = self.reduce_function(split_rows, axis=[2, 4])
-        return out_vect
+        # Get input dimensions H and W (at axes 1 and 2)
+        input_shape = ops.shape(inputs)
+        h = input_shape[1]
+        w = input_shape[2]
+
+        # Calculate the start and end indices for each bin using linspace
+        h_idx = ops.linspace(0, h, h_bins + 1)
+        w_idx = ops.linspace(0, w, w_bins + 1)
+
+        outputs = []
+        for i in range(h_bins):
+            row_outputs = []
+
+            # Calculate height indices (axes 1)
+            h_start = ops.cast(ops.floor(h_idx[i]), "int32")
+            h_end = ops.cast(ops.ceil(h_idx[i + 1]), "int32")
+            h_end = ops.where(h_end > h, h, h_end)
+
+            for j in range(w_bins):
+                # Calculate width indices (axes 2)
+                w_start = ops.cast(ops.floor(w_idx[j]), "int32")
+                w_end = ops.cast(ops.ceil(w_idx[j + 1]), "int32")
+                w_end = ops.where(w_end > w, w, w_end)
+
+                # Slicing: inputs[:, H_slice, W_slice, :]
+                region = inputs[:, h_start:h_end, w_start:w_end, :]
+
+                # Reduction axes are H (1) and W (2)
+                pooled = self.reduce_function(region, axis=[1, 2], keepdims=True)
+                row_outputs.append(pooled)
+
+            # Concatenate pooled regions along the width axis (axis 2)
+            outputs.append(ops.concatenate(row_outputs, axis=2))
+
+        # Concatenate pooled rows along the height axis (axis 1)
+        outputs = ops.concatenate(outputs, axis=1)
+        return outputs
 
     def compute_output_shape(self, input_shape):
         shape = (
@@ -53,29 +91,13 @@ class AdaptivePooling2D(layers.Layer):
 
 
 class AdaptiveAveragePooling2D(AdaptivePooling2D):
-    """Average Pooling with adaptive kernel size.
+    """Adaptive Average Pooling 2D layer (channels_last).
+
+    This layer resizes the 2D input (H, W) to a fixed size using average pooling.
 
     Args:
-      output_size: Tuple of integers specifying (pooled_rows, pooled_cols).
-        The new size of output channels.
-      data_format: A string,
-        one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, height, width, channels)` while `channels_first`
-        corresponds to inputs with shape `(batch, channels, height, width)`.
-
-    Input shape:
-      - If `data_format='channels_last'`:
-        4D tensor with shape `(batch_size, height, width, channels)`.
-      - If `data_format='channels_first'`:
-        4D tensor with shape `(batch_size, channels, height, width)`.
-
-    Output shape:
-      - If `data_format='channels_last'`:
-        4D tensor with shape `(batch_size, pooled_rows, pooled_cols, channels)`.
-      - If `data_format='channels_first'`:
-        4D tensor with shape `(batch_size, channels, pooled_rows, pooled_cols)`.
+        output_size: An integer or tuple/list of 2 integers specifying
+          (pooled_rows, pooled_cols).
     """
 
     def __init__(self, output_size, **kwargs):
@@ -83,29 +105,13 @@ class AdaptiveAveragePooling2D(AdaptivePooling2D):
 
 
 class AdaptiveMaxPooling2D(AdaptivePooling2D):
-    """Max Pooling with adaptive kernel size.
+    """Adaptive Max Pooling 2D layer (channels_last).
+
+    This layer resizes the 2D input (H, W) to a fixed size using max pooling.
 
     Args:
-      output_size: Tuple of integers specifying (pooled_rows, pooled_cols).
-        The new size of output channels.
-      data_format: A string,
-        one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, height, width, channels)` while `channels_first`
-        corresponds to inputs with shape `(batch, channels, height, width)`.
-
-    Input shape:
-      - If `data_format='channels_last'`:
-        4D tensor with shape `(batch_size, height, width, channels)`.
-      - If `data_format='channels_first'`:
-        4D tensor with shape `(batch_size, channels, height, width)`.
-
-    Output shape:
-      - If `data_format='channels_last'`:
-        4D tensor with shape `(batch_size, pooled_rows, pooled_cols, channels)`.
-      - If `data_format='channels_first'`:
-        4D tensor with shape `(batch_size, channels, pooled_rows, pooled_cols)`.
+        output_size: An integer or tuple/list of 2 integers specifying
+          (pooled_rows, pooled_cols).
     """
 
     def __init__(self, output_size, **kwargs):
@@ -115,19 +121,18 @@ class AdaptiveMaxPooling2D(AdaptivePooling2D):
 class AdaptivePooling3D(layers.Layer):
     """Parent class for 3D pooling layers with adaptive kernel size.
 
-    This class only exists for code reuse. It will never be an exposed API.
+    This layer performs pooling over the input depth (D), height (H), and width (W)
+    dimensions such that the output dimensions match the specified `output_size`.
+    It supports arbitrary input sizes.
+
+    It assumes the 'channels_last' data format: (batch, D, H, W, C).
 
     Args:
-      reduce_function: The reduction method to apply, e.g. `tf.reduce_max`.
-      output_size: An integer or tuple/list of 3 integers specifying (pooled_dim1, pooled_dim2, pooled_dim3).
-        The new size of output channels.
-      data_format: A string,
-        one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, spatial_dim1, spatial_dim2, spatial_dim3, channels)` while `channels_first`
-        corresponds to inputs with shape
-        `(batch, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
+        reduce_function: The reduction method to apply, e.g. `keras.ops.mean` or
+          `keras.ops.max`.
+        output_size: An integer or tuple/list of 3 integers specifying
+           (pooled_depth, pooled_rows, pooled_cols). The new size of
+           the D, H, and W dimensions.
     """
 
     def __init__(
@@ -141,17 +146,59 @@ class AdaptivePooling3D(layers.Layer):
         super().__init__(**kwargs)
 
     def call(self, inputs):
-        h_bins = self.output_size[0]
-        w_bins = self.output_size[1]
-        d_bins = self.output_size[2]
-        split_cols = ops.split(inputs, h_bins, axis=1)
-        split_cols = ops.stack(split_cols, axis=1)
-        split_rows = ops.split(split_cols, w_bins, axis=3)
-        split_rows = ops.stack(split_rows, axis=3)
-        split_depth = ops.split(split_rows, d_bins, axis=5)
-        split_depth = ops.stack(split_depth, axis=5)
-        out_vect = self.reduce_function(split_depth, axis=[2, 4, 6])
-        return out_vect
+        # Assume channels_last: (batch, D, H, W, C)
+        d_bins = self.output_size[0]
+        h_bins = self.output_size[1]
+        w_bins = self.output_size[2]
+
+        # Get input dimensions D, H, W (at axes 1, 2, 3)
+        input_shape = ops.shape(inputs)
+        d = input_shape[1]  # Depth
+        h = input_shape[2]  # Height
+        w = input_shape[3]  # Width
+
+        # Calculate the start and end indices for each bin using linspace
+        d_idx = ops.linspace(0, d, d_bins + 1)
+        h_idx = ops.linspace(0, h, h_bins + 1)
+        w_idx = ops.linspace(0, w, w_bins + 1)
+
+        depth_outputs = []
+        for i in range(d_bins):
+            # Calculate Depth indices (axis 1)
+            d_start = ops.cast(ops.floor(d_idx[i]), "int32")
+            d_end = ops.cast(ops.ceil(d_idx[i + 1]), "int32")
+            d_end = ops.where(d_end > d, d, d_end)
+
+            row_outputs = []
+            for j in range(h_bins):
+                # Calculate Height indices (axis 2)
+                h_start = ops.cast(ops.floor(h_idx[j]), "int32")
+                h_end = ops.cast(ops.ceil(h_idx[j + 1]), "int32")
+                h_end = ops.where(h_end > h, h, h_end)
+
+                col_outputs = []
+                for k in range(w_bins):
+                    # Calculate Width indices (axis 3)
+                    w_start = ops.cast(ops.floor(w_idx[k]), "int32")
+                    w_end = ops.cast(ops.ceil(w_idx[k + 1]), "int32")
+                    w_end = ops.where(w_end > w, w, w_end)
+
+                    # Slicing: inputs[:, D_slice, H_slice, W_slice, :]
+                    region = inputs[:, d_start:d_end, h_start:h_end, w_start:w_end, :]
+
+                    # Reduction axes are D (1), H (2), W (3)
+                    pooled = self.reduce_function(region, axis=[1, 2, 3], keepdims=True)
+                    col_outputs.append(pooled)
+
+                # Concatenate pooled regions along the width axis (axis 3)
+                row_outputs.append(ops.concatenate(col_outputs, axis=3))
+
+            # Concatenate pooled rows along the height axis (axis 2)
+            depth_outputs.append(ops.concatenate(row_outputs, axis=2))
+
+        # Concatenate pooled depth slices along the depth axis (axis 1)
+        outputs = ops.concatenate(depth_outputs, axis=1)
+        return outputs
 
     def compute_output_shape(self, input_shape):
         shape = (
@@ -172,29 +219,13 @@ class AdaptivePooling3D(layers.Layer):
 
 
 class AdaptiveAveragePooling3D(AdaptivePooling3D):
-    """Average Pooling with adaptive kernel size.
+    """Adaptive Average Pooling 3D layer (channels_last).
+
+    This layer resizes the 3D input (D, H, W) to a fixed size using average pooling.
 
     Args:
-      output_size: An integer or tuple/list of 3 integers specifying (pooled_depth, pooled_height, pooled_width).
-        The new size of output channels.
-      data_format: A string,
-        one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, height, width, channels)` while `channels_first`
-        corresponds to inputs with shape `(batch, channels, height, width)`.
-
-    Input shape:
-      - If `data_format='channels_last'`:
-        5D tensor with shape `(batch_size, spatial_dim1, spatial_dim2, spatial_dim3, channels)`.
-      - If `data_format='channels_first'`:
-        5D tensor with shape `(batch_size, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
-
-    Output shape:
-      - If `data_format='channels_last'`:
-        5D tensor with shape `(batch_size, pooled_dim1, pooled_dim2, pooled_dim3, channels)`.
-      - If `data_format='channels_first'`:
-        5D tensor with shape `(batch_size, channels, pooled_dim1, pooled_dim2, pooled_dim3)`.
+        output_size: An integer or tuple/list of 3 integers specifying
+          (pooled_depth, pooled_rows, pooled_cols).
     """
 
     def __init__(self, output_size, **kwargs):
@@ -202,29 +233,13 @@ class AdaptiveAveragePooling3D(AdaptivePooling3D):
 
 
 class AdaptiveMaxPooling3D(AdaptivePooling3D):
-    """Max Pooling with adaptive kernel size.
+    """Adaptive Max Pooling 3D layer (channels_last).
+
+    This layer resizes the 3D input (D, H, W) to a fixed size using max pooling.
 
     Args:
-      output_size: An integer or tuple/list of 3 integers specifying (pooled_depth, pooled_height, pooled_width).
-        The new size of output channels.
-      data_format: A string,
-        one of `channels_last` (default) or `channels_first`.
-        The ordering of the dimensions in the inputs.
-        `channels_last` corresponds to inputs with shape
-        `(batch, height, width, channels)` while `channels_first`
-        corresponds to inputs with shape `(batch, channels, height, width)`.
-
-    Input shape:
-      - If `data_format='channels_last'`:
-        5D tensor with shape `(batch_size, spatial_dim1, spatial_dim2, spatial_dim3, channels)`.
-      - If `data_format='channels_first'`:
-        5D tensor with shape `(batch_size, channels, spatial_dim1, spatial_dim2, spatial_dim3)`.
-
-    Output shape:
-      - If `data_format='channels_last'`:
-        5D tensor with shape `(batch_size, pooled_dim1, pooled_dim2, pooled_dim3, channels)`.
-      - If `data_format='channels_first'`:
-        5D tensor with shape `(batch_size, channels, pooled_dim1, pooled_dim2, pooled_dim3)`.
+        output_size: An integer or tuple/list of 3 integers specifying
+          (pooled_depth, pooled_rows, pooled_cols).
     """
 
     def __init__(self, output_size, **kwargs):
