@@ -30,6 +30,14 @@ class AdaptivePooling2D(layers.Layer):
         self.output_size = ensure_tuple_rep(output_size, 2)
         super().__init__(**kwargs)
 
+    def build(self, input_shape):
+        if len(input_shape) != 4:
+            raise ValueError(
+                f"{self.__class__.__name__} expects input with 4 dims (batch, H, W, C), "
+                f"but got {input_shape}"
+            )
+        super().build(input_shape)
+
     def call(self, inputs):
         # Assume channels_last: (batch, H, W, C)
         h_bins = self.output_size[0]
@@ -144,6 +152,14 @@ class AdaptivePooling3D(layers.Layer):
         self.reduce_function = reduce_function
         self.output_size = ensure_tuple_rep(output_size, 3)
         super().__init__(**kwargs)
+
+    def build(self, input_shape):
+        if len(input_shape) != 4:
+            raise ValueError(
+                f"{self.__class__.__name__} expects input with 4 dims (batch, H, W, C), "
+                f"but got {input_shape}"
+            )
+        super().build(input_shape)
 
     def call(self, inputs):
         # Assume channels_last: (batch, D, H, W, C)
