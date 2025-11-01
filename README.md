@@ -12,7 +12,7 @@
 - **Backend Agnostic:** Compatible with `tensorflow`, `torch`, and `jax`.
 - **User-Friendly API:** High-level interface for transformations and model creation of both 2D and 3D.
 - **Scalable Execution:** Supports training and inference on **single/multi-GPU** and **TPU-VM** setups.
-- **Essential Components:** Includes standard medical specific metrics and losses, such as Dice.
+- **Essential Components:** Includes standard medical specific metrics and losses, such as Dice. Support **GradCAM** for segmentation and classificaiton on both 2D and 3D input.
 - **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data.
 
 
@@ -224,6 +224,11 @@ Spacing
 |----------|----------|----------|
 | Covid-19   | <a target="_blank" href="notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
 
+**Classification**: Available guides for 2D classification task.
+
+| Task (Classification) | GitHub | Kaggle |
+|----------|----------|----------|
+| Covid-19   | <a target="_blank" href="notebooks/medicai-x-medmnist-starter-on-multi-class.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-x-medmnist-starter-on-multi-class"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
 
 # 📚 Documentation
 
