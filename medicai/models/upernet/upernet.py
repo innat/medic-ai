@@ -75,7 +75,6 @@ class UPerNet(keras.Model, DescribeMixin):
         decoder_filters=256,
         decoder_normalization="batch",
         decoder_activation="relu",
-        decoder_block_type="upsampling",
         head_upsample=4,
         classifier_activation="sigmoid",
         name=None,
@@ -251,7 +250,6 @@ class UPerNet(keras.Model, DescribeMixin):
         self.encoder_depth = encoder_depth
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
-        self.decoder_block_type = decoder_block_type
         self.decoder_filters = decoder_filters
         self.decoder_activation = decoder_activation
         self.decoder_normalization = decoder_normalization
@@ -267,7 +265,6 @@ class UPerNet(keras.Model, DescribeMixin):
                 "num_classes": self.num_classes,
                 "classifier_activation": self.classifier_activation,
                 "decoder_filters": self.decoder_filters,
-                "decoder_block_type": self.decoder_block_type,
                 "decoder_normalization": self.decoder_normalization,
                 "decoder_activation": self.decoder_activation,
                 "head_upsample": self.head_upsample,

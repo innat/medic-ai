@@ -154,9 +154,9 @@ class AdaptivePooling3D(layers.Layer):
         super().__init__(**kwargs)
 
     def build(self, input_shape):
-        if len(input_shape) != 4:
+        if len(input_shape) != 5:
             raise ValueError(
-                f"{self.__class__.__name__} expects input with 4 dims (batch, H, W, C), "
+                f"{self.__class__.__name__} expects input with 4 dims (batch, D, H, W, C), "
                 f"but got {input_shape}"
             )
         super().build(input_shape)
