@@ -1,8 +1,10 @@
+import keras
 from keras import layers, ops
 
 from medicai.utils.swi_utils import ensure_tuple_rep
 
 
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptivePooling2D(layers.Layer):
     """Parent class for 2D pooling layers with adaptive kernel size.
 
@@ -39,11 +41,11 @@ class AdaptivePooling2D(layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs):
-        # Assume channels_last: (batch, H, W, C)
+        # (batch, H, W, C)
         h_bins = self.output_size[0]
         w_bins = self.output_size[1]
 
-        # Get input dimensions H and W (at axes 1 and 2)
+        # Get input dimensions H and W
         input_shape = ops.shape(inputs)
         h = input_shape[1]
         w = input_shape[2]
@@ -98,6 +100,7 @@ class AdaptivePooling2D(layers.Layer):
         return {**base_config, **config}
 
 
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptiveAveragePooling2D(AdaptivePooling2D):
     """Adaptive Average Pooling 2D layer (channels_last).
 
@@ -112,6 +115,7 @@ class AdaptiveAveragePooling2D(AdaptivePooling2D):
         super().__init__(ops.mean, output_size, **kwargs)
 
 
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptiveMaxPooling2D(AdaptivePooling2D):
     """Adaptive Max Pooling 2D layer (channels_last).
 
@@ -126,6 +130,7 @@ class AdaptiveMaxPooling2D(AdaptivePooling2D):
         super().__init__(ops.max, output_size, **kwargs)
 
 
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptivePooling3D(layers.Layer):
     """Parent class for 3D pooling layers with adaptive kernel size.
 
@@ -162,12 +167,12 @@ class AdaptivePooling3D(layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs):
-        # Assume channels_last: (batch, D, H, W, C)
+        # (batch, D, H, W, C)
         d_bins = self.output_size[0]
         h_bins = self.output_size[1]
         w_bins = self.output_size[2]
 
-        # Get input dimensions D, H, W (at axes 1, 2, 3)
+        # Get input dimensions D, H, W
         input_shape = ops.shape(inputs)
         d = input_shape[1]  # Depth
         h = input_shape[2]  # Height
@@ -234,123 +239,7 @@ class AdaptivePooling3D(layers.Layer):
         return {**base_config, **config}
 
 
-# class AdaptivePooling3D(layers.Layer):
-#     """Parent class for 3D pooling layers with adaptive kernel size.
-
-#     This layer performs pooling over the input depth (D), height (H), and width (W)
-#     dimensions such that the output dimensions match the specified `output_size`.
-#     It supports arbitrary input sizes.
-
-#     It assumes the 'channels_last' data format: (batch, D, H, W, C).
-
-#     Args:
-#         reduce_function: The reduction method to apply, e.g. `keras.ops.mean` or
-#           `keras.ops.max`.
-#         output_size: An integer or tuple/list of 3 integers specifying
-#             (pooled_depth, pooled_rows, pooled_cols). The new size of
-#             the D, H, and W dimensions.
-#     """
-
-#     def __init__(
-#         self,
-#         reduce_function,
-#         output_size,
-#         **kwargs,
-#     ):
-#         self.reduce_function = reduce_function
-#         self.output_size = ensure_tuple_rep(output_size, 3)
-#         super().__init__(**kwargs)
-
-#     def build(self, input_shape):
-#         if len(input_shape) != 5:
-#             raise ValueError(
-#                 f"{self.__class__.__name__} expects input with 4 dims (batch, D, H, W, C), "
-#                 f"but got {input_shape}"
-#             )
-#         super().build(input_shape)
-
-#     def call(self, inputs):
-#         # Assume channels_last: (batch, D, H, W, C)
-#         d_bins = self.output_size[0]
-#         h_bins = self.output_size[1]
-#         w_bins = self.output_size[2]
-
-#         # Get the full input shape using ops.shape
-#         input_shape = ops.shape(inputs)
-#         batch_size = input_shape[0]  # Batch
-#         d = input_shape[1]  # Depth
-#         h = input_shape[2]  # Height
-#         w = input_shape[3]  # Width
-#         channels = input_shape[4]  # Channels
-
-#         # Calculate the start and end indices for each bin using linspace
-#         d_idx = ops.linspace(0, ops.cast(d, inputs.dtype), d_bins + 1)
-#         h_idx = ops.linspace(0, ops.cast(h, inputs.dtype), h_bins + 1)
-#         w_idx = ops.linspace(0, ops.cast(w, inputs.dtype), w_bins + 1)
-
-#         depth_outputs = []
-#         for i in range(d_bins):
-#             # Calculate Depth indices (axis 1)
-#             d_start = ops.cast(ops.floor(d_idx[i]), "int32")
-#             d_end = ops.cast(ops.ceil(d_idx[i + 1]), "int32")
-#             d_end = ops.where(d_end > d, d, d_end)
-#             d_size = d_end - d_start  # Explicit size calculation
-
-#             row_outputs = []
-#             for j in range(h_bins):
-#                 # Calculate Height indices (axis 2)
-#                 h_start = ops.cast(ops.floor(h_idx[j]), "int32")
-#                 h_end = ops.cast(ops.ceil(h_idx[j + 1]), "int32")
-#                 h_end = ops.where(h_end > h, h, h_end)
-#                 h_size = h_end - h_start  # Explicit size calculation
-
-#                 col_outputs = []
-#                 for k in range(w_bins):
-#                     # Calculate Width indices (axis 3)
-#                     w_start = ops.cast(ops.floor(w_idx[k]), "int32")
-#                     w_end = ops.cast(ops.ceil(w_idx[k + 1]), "int32")
-#                     w_end = ops.where(w_end > w, w, w_end)
-#                     w_size = w_end - w_start  # Explicit size calculation
-
-#                     # Slice the region using explicit dynamic slice sizes
-#                     start_indices = [0, d_start, h_start, w_start, 0]
-#                     slice_sizes = [batch_size, d_size, h_size, w_size, channels]
-#                     region = ops.slice(inputs, start_indices, slice_sizes)
-
-#                     # Reduction axes are D (1), H (2), W (3)
-#                     # The `reduce_function` needs to handle potential zero-sized slices.
-#                     # Keras ops generally handle this, but it's important to note.
-#                     pooled = self.reduce_function(region, axis=[1, 2, 3], keepdims=True)
-#                     col_outputs.append(pooled)
-
-#                 # Concatenate pooled regions along the width axis (axis 3)
-#                 row_outputs.append(ops.concatenate(col_outputs, axis=3))
-
-#             # Concatenate pooled rows along the height axis (axis 2)
-#             depth_outputs.append(ops.concatenate(row_outputs, axis=2))
-
-#         # Concatenate pooled depth slices along the depth axis (axis 1)
-#         outputs = ops.concatenate(depth_outputs, axis=1)
-#         return outputs
-
-#     def compute_output_shape(self, input_shape):
-#         shape = (
-#             input_shape[0],
-#             self.output_size[0],
-#             self.output_size[1],
-#             self.output_size[2],
-#             input_shape[4],
-#         )
-#         return shape
-
-#     def get_config(self):
-#         config = {
-#             "output_size": self.output_size,
-#         }
-#         base_config = super().get_config()
-#         return {**base_config, **config}
-
-
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptiveAveragePooling3D(AdaptivePooling3D):
     """Adaptive Average Pooling 3D layer (channels_last).
 
@@ -365,6 +254,7 @@ class AdaptiveAveragePooling3D(AdaptivePooling3D):
         super().__init__(ops.mean, output_size, **kwargs)
 
 
+@keras.saving.register_keras_serializable(package="medicai")
 class AdaptiveMaxPooling3D(AdaptivePooling3D):
     """Adaptive Max Pooling 3D layer (channels_last).
 

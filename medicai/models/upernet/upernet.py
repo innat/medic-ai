@@ -107,8 +107,7 @@ class UPerNet(keras.Model, DescribeMixin):
                 UPerNet decoder blocks. It is a string specifying the normalization type.
                 - If a string is provided, the specified normalization type will be used instead.
                     Supported arguments:
-                        [False, "batch", "layer", "unit", "group", "instance", "sync_batch]
-                - If `False`, no normalization layer will be used.
+                        ["batch", "layer", "unit", "group", "instance", "sync_batch]
                 Supported options include:
                     - `"batch"`: `keras.layers.BatchNormalization`
                     - `"layer"`: `keras.layers.LayerNormalization`
