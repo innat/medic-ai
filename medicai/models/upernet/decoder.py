@@ -1,7 +1,7 @@
 from keras import layers, ops
 
 from medicai.layers import ConvBnAct, ResizingND
-from medicai.utils import get_norm_layer, get_pooling_layer
+from medicai.utils import get_pooling_layer
 
 
 def PyramidPoolingModule(
