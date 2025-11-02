@@ -126,7 +126,7 @@ class UPerNet(keras.Model, DescribeMixin):
                 used for all feature maps in the PPM and FPN stages.
             num_classes: An integer specifying the number of classes for the
                 final segmentation mask.
-            head_upsample : int or tuple/list of ints, default=4
+            head_upsample : int or tuple/list of ints, default=2
                 Optional upsampling factor for the final segmentation head.
                 - If an `int` > 1, all spatial dimensions are upsampled by this factor.
                 - If a `tuple` or `list`, each element specifies the upsampling factor for the
