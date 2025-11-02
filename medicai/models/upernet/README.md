@@ -9,7 +9,7 @@
 
 ## Build Model
 
-You can easily instantiate a UPerNet model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`).
+You can easily instantiate a **UPerNet** model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`).
 
 ```python
 from medicai.models import UPerNet

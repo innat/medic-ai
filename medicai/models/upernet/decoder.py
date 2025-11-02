@@ -92,26 +92,14 @@ def UPerNetDecoder(
     """
 
     def apply(bottleneck):
-        # 1. Normalize all features (bottleneck + skip layers)
-        all_features = [bottleneck] + skip_layers  # [P5, P4, P3, P2, P1]
-        normalized_features = []
-        for i, feat in enumerate(all_features):
-            norm_layer = get_norm_layer(
-                layer_type="batch",
-                axis=-1,
-                epsilon=1e-6,
-                name=f"{prefix}_norm_p{len(all_features) - i}",
-            )
-            normalized_features.append(norm_layer(feat))
-
-        psp_input = normalized_features[0]  # [P5]
-        fpn_lateral_features = normalized_features[1:]  # [P4, P3, P2, P1]
+        psp_input = bottleneck  # [P5]
+        fpn_lateral_features = skip_layers  # [P4, P3, P2, P1]
 
         # Create level names dynamically based on number of skip layers + bottleneck
         num_levels = len(skip_layers) + 1
         level_names = [f"p{num_levels - i}" for i in range(num_levels)]
 
-        # 2. Pass lowest resolution feature to PSP module
+        # 1. Pass lowest resolution feature to PSP module
         psp_out = PyramidPoolingModule(
             out_channels=decoder_filters,
             pool_scales=(1, 2, 3, 6),
@@ -120,7 +108,7 @@ def UPerNetDecoder(
             prefix=f"{prefix}_ppm",
         )(psp_input)
 
-        # 3. Feature Pyramid Network (FPN)
+        # 2. Feature Pyramid Network (FPN)
         fpn_features = [psp_out]
         fpn_conv_blocks = [
             ConvBnAct(
@@ -165,7 +153,7 @@ def UPerNetDecoder(
 
             fpn_features.append(fused)
 
-        # 4. Upsample all FPN outputs to the highest resolution (P1)
+        # 3. Upsample all FPN outputs to the highest resolution (P1)
         target_spatial_shape = ops.shape(fpn_features[-1])[1:-1]
         resized_fpn_features = []
 
@@ -177,12 +165,12 @@ def UPerNetDecoder(
             )(feature)
             resized_fpn_features.append(resized_feature)
 
-        # 5. Concatenate all features (reverse order: P1→P2→P3→P4→P5)
+        # 4. Concatenate all features (reverse order: P1→P2→P3→P4→P5)
         stacked_features = layers.Concatenate(axis=-1, name=f"{prefix}_fpn_concat")(
             resized_fpn_features[::-1]
         )
 
-        # 6. Final fusion 3x3 Conv to unify decoder output
+        # 5. Final fusion 3x3 Conv to unify decoder output
         fused_output = ConvBnAct(
             decoder_filters,
             kernel_size=3,
