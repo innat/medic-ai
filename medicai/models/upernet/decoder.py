@@ -1,16 +1,17 @@
-from keras import layers
+from keras import layers, ops
 
 from medicai.layers import ConvBnAct, ResizingND
 from medicai.utils import get_norm_layer, get_pooling_layer
 
 
 def PyramidPoolingModule(
-    out_channels: int,
+    out_channels,
     pool_scales=(1, 2, 3, 6),
     decoder_normalization="batch",
+    decoder_activation="relu",
     prefix="upernet_ppm",
 ):
-    """Pyramid Pooling Module (PSP) that captures multi-scale context by pooling
+    """Pyramid Pooling Module (PPM) that captures multi-scale context by pooling
     the input feature map into multiple grid scales, applying 1x1 conv to each,
     resizing them back to the original size, and concatenating them.
     """
@@ -32,7 +33,7 @@ def PyramidPoolingModule(
                     out_channels,
                     kernel_size=1,
                     padding="valid",
-                    activation="relu",
+                    activation=decoder_activation,
                     normalization=decoder_normalization,
                     name=f"{prefix}_conv_1x1_s{size}",
                 )(x)
@@ -44,7 +45,7 @@ def PyramidPoolingModule(
 
     def apply(feature):
         spatial_dims = len(feature.shape) - 2
-        input_spatial_shape = tuple(dim if dim is None else int(dim) for dim in feature.shape[1:-1])
+        input_spatial_shape = ops.shape(feature)[1:-1]
 
         # List to collect multi-scale pooled features
         pyramid_features = [feature]
@@ -69,7 +70,7 @@ def PyramidPoolingModule(
             out_channels,
             kernel_size=3,
             padding="same",
-            activation="relu",
+            activation=decoder_activation,
             normalization=decoder_normalization,
             name=f"{prefix}_final_3x3",
         )(fused)
@@ -92,25 +93,30 @@ def UPerNetDecoder(
 
     def apply(bottleneck):
         # 1. Normalize all features (bottleneck + skip layers)
-        all_features = [bottleneck] + skip_layers  # [P5, P4, P3, P2]
+        all_features = [bottleneck] + skip_layers  # [P5, P4, P3, P2, P1]
         normalized_features = []
         for i, feat in enumerate(all_features):
             norm_layer = get_norm_layer(
-                layer_type=decoder_normalization,
+                layer_type="batch",
                 axis=-1,
                 epsilon=1e-6,
-                name=f"{prefix}_norm_p{len(all_features) - i + 1}",
+                name=f"{prefix}_norm_p{len(all_features) - i}",
             )
             normalized_features.append(norm_layer(feat))
 
         psp_input = normalized_features[0]  # [P5]
-        fpn_lateral_features = normalized_features[1:]  # [P4, P3, P2]
+        fpn_lateral_features = normalized_features[1:]  # [P4, P3, P2, P1]
+
+        # Create level names dynamically based on number of skip layers + bottleneck
+        num_levels = len(skip_layers) + 1
+        level_names = [f"p{num_levels - i}" for i in range(num_levels)]
 
         # 2. Pass lowest resolution feature to PSP module
         psp_out = PyramidPoolingModule(
             out_channels=decoder_filters,
             pool_scales=(1, 2, 3, 6),
             decoder_normalization=decoder_normalization,
+            decoder_activation=decoder_activation,
             prefix=f"{prefix}_ppm",
         )(psp_input)
 
@@ -123,14 +129,14 @@ def UPerNetDecoder(
                 padding="same",
                 activation=decoder_activation,
                 normalization=decoder_normalization,
-                name=f"{prefix}_fpn_conv_3x3_p{i+4}",
+                name=f"{prefix}_fpn_conv_3x3_{level_names[i+1]}",
             )
             for i in range(len(fpn_lateral_features))
         ]
 
-        # Iterate through lateral features (P4 → P3 → P2) - bottom-to-up.
+        # Iterate through lateral features (P4 → P3 → P2 → P1) - bottom-up.
         for i, lateral_feature in enumerate(fpn_lateral_features):
-            level = i + 4
+            level = level_names[i + 1]
             state_feature = fpn_features[-1]
 
             # 1. Lateral 1x1 Conv (align channels)
@@ -140,43 +146,38 @@ def UPerNetDecoder(
                 padding="valid",
                 activation=decoder_activation,
                 normalization=decoder_normalization,
-                name=f"{prefix}_fpn_lateral_1x1_p{level}",
+                name=f"{prefix}_fpn_lateral_1x1_{level}",
             )(lateral_feature)
 
             # 2. Resize state to match lateral resolution
-            target_spatial_shape = tuple(
-                dim if dim is None else int(dim) for dim in lateral_feature.shape[1:-1]
-            )
+            target_spatial_shape = ops.shape(lateral_feature)[1:-1]
             state_feature = ResizingND(
                 target_shape=target_spatial_shape,
                 interpolation="bilinear" if spatial_dims == 2 else "trilinear",
-                name=f"{prefix}_fpn_resize_p{level}",
+                name=f"{prefix}_fpn_resize_{level}",
             )(state_feature)
 
             # 3. Fuse (Add)
-            fused = layers.Add(name=f"{prefix}_fpn_add_p{level}")([state_feature, lateral_feature])
+            fused = layers.Add(name=f"{prefix}_fpn_add_{level}")([state_feature, lateral_feature])
 
             # 4. Post-FPN Conv
             fused = fpn_conv_blocks[i](fused)
 
             fpn_features.append(fused)
 
-        # 4. Upsample all FPN outputs to the highest resolution (P2)
-        target_size_tensor = fpn_features[-1]
-        target_spatial_shape = tuple(
-            dim if dim is None else int(dim) for dim in target_size_tensor.shape[1:-1]
-        )
-
+        # 4. Upsample all FPN outputs to the highest resolution (P1)
+        target_spatial_shape = ops.shape(fpn_features[-1])[1:-1]
         resized_fpn_features = []
+
         for i, feature in enumerate(fpn_features):
             resized_feature = ResizingND(
                 target_shape=target_spatial_shape,
                 interpolation="bilinear" if spatial_dims == 2 else "trilinear",
-                name=f"{prefix}_fpn_resize_to_p2_{i}",
+                name=f"{prefix}_fpn_resize_to_p1_{i}",
             )(feature)
             resized_fpn_features.append(resized_feature)
 
-        # 5. Concatenate all features (reverse order: P2→P3→P4→PSP)
+        # 5. Concatenate all features (reverse order: P1→P2→P3→P4→P5)
         stacked_features = layers.Concatenate(axis=-1, name=f"{prefix}_fpn_concat")(
             resized_fpn_features[::-1]
         )

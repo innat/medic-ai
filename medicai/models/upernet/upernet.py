@@ -75,7 +75,7 @@ class UPerNet(keras.Model, DescribeMixin):
         decoder_filters=256,
         decoder_normalization="batch",
         decoder_activation="relu",
-        head_upsample=4,
+        head_upsample=2,
         classifier_activation="sigmoid",
         name=None,
         **kwargs,
@@ -107,7 +107,8 @@ class UPerNet(keras.Model, DescribeMixin):
                 UPerNet decoder blocks. It is a string specifying the normalization type.
                 - If a string is provided, the specified normalization type will be used instead.
                     Supported arguments:
-                        ["batch", "layer", "unit", "group", "instance", "sync_batch]
+                        [False, "batch", "layer", "unit", "group", "instance", "sync_batch]
+                - If `False`, no normalization layer will be used.
                 Supported options include:
                     - `"batch"`: `keras.layers.BatchNormalization`
                     - `"layer"`: `keras.layers.LayerNormalization`
@@ -149,9 +150,9 @@ class UPerNet(keras.Model, DescribeMixin):
         pyramid_outputs = encoder.pyramid_outputs
 
         # For UPerNet, encoder depth should be 5.
-        if not (4 <= encoder_depth <= 5):
+        if encoder_depth not in (3, 4, 5):
             raise ValueError(
-                f"To build {self.__class__.__name__}, encoder_depth must be 4 or 5. "
+                f"To build {self.__class__.__name__}, encoder_depth must be 3, 4 or 5. "
                 "We need at least 1 bottleneck and 3 lateral features for FPN."
             )
 
@@ -192,7 +193,7 @@ class UPerNet(keras.Model, DescribeMixin):
         # Prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
         bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
-        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:-1]]  # [P4, P3, P2]
+        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:]]  # [P4, P3, P2]
 
         # UNet++ Decoder
         decoder = UPerNetDecoder(
