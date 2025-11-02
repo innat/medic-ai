@@ -81,7 +81,7 @@ class UPerNet(keras.Model, DescribeMixin):
         **kwargs,
     ):
         """
-        Initializes the UNet model.
+        Initializes the UPerNet model.
 
         Args:
             input_shape: A tuple specifying the input shape of the model,
@@ -101,7 +101,7 @@ class UPerNet(keras.Model, DescribeMixin):
                 If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
                 be used for skip connection. If `encoder_depth=4`, bottleneck key
                 would be P4, and P3..P1 will be used for skip connection.
-                The `encoder_depth` should be in [4, 5]. This can be used to
+                The `encoder_depth` should be in [3, 4, 5]. This can be used to
                 reduce the size of the model. Default: 5.
             decoder_normalization (str | bool): Controls the use of normalization layers in
                 UPerNet decoder blocks. It is a string specifying the normalization type.
@@ -153,7 +153,8 @@ class UPerNet(keras.Model, DescribeMixin):
         if encoder_depth not in (3, 4, 5):
             raise ValueError(
                 f"To build {self.__class__.__name__}, encoder_depth must be 3, 4 or 5. "
-                "We need at least 1 bottleneck and 3 lateral features for FPN."
+                "We need at least 1 deep feature for Pyramid Pooling Module "
+                "and at least 2 shallower lateral features for Feature Pyramid Network."
             )
 
         # Determine required pyramid levels dynamically
@@ -195,7 +196,7 @@ class UPerNet(keras.Model, DescribeMixin):
         bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
         skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:]]  # [P4, P3, P2]
 
-        # UNet++ Decoder
+        # UPerNet Decoder
         decoder = UPerNetDecoder(
             spatial_dims=spatial_dims,
             skip_layers=skip_layers,
