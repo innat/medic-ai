@@ -38,7 +38,7 @@ class AdaptivePooling2D(layers.Layer):
         Performs the adaptive pooling logic for a single axis (H or W).
         """
         # 1. Get dimensions and kernel sizes
-        input_dim = ops.shape(inputs)[axis]
+        input_dim = inputs.shape[axis]
         small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
 
         # 2. Define 2D kernel size
@@ -64,7 +64,7 @@ class AdaptivePooling2D(layers.Layer):
         )
 
         # 4. Compute indices and gather the results
-        small_pool_len = ops.shape(small_pool)[axis]
+        small_pool_len = small_pool.shape[axis]
         gather_indices = compute_adaptive_gather_indices(
             input_dim=input_dim,
             output_size=output_size,
@@ -134,7 +134,7 @@ class AdaptivePooling3D(keras.layers.Layer):
 
     def pool_single_axis(self, inputs, output_size, axis):
         # 1. Get dimensions and kernel sizes
-        input_dim = ops.shape(inputs)[axis]
+        input_dim = inputs.shape[axis]
         small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
 
         # 2. Define Ksize for the pooling operation.
@@ -169,7 +169,7 @@ class AdaptivePooling3D(keras.layers.Layer):
         )
 
         # 4. Compute indices and gather the results
-        small_pool_len = ops.shape(small_pool)[axis]
+        small_pool_len = small_pool.shape[axis]
         gather_indices = compute_adaptive_gather_indices(
             input_dim=input_dim,
             output_size=output_size,
