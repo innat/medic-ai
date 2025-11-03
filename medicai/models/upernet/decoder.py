@@ -45,7 +45,9 @@ def PyramidPoolingModule(
 
     def apply(feature):
         spatial_dims = len(feature.shape) - 2
-        input_spatial_shape = ops.shape(feature)[1:-1]
+        # input_spatial_shape = feature.shape[1:-1]
+        input_shape = ops.shape(feature)
+        input_spatial_shape = [int(input_shape[i]) for i in range(1, 1 + spatial_dims)]
 
         # List to collect multi-scale pooled features
         pyramid_features = [feature]
@@ -138,7 +140,9 @@ def UPerNetDecoder(
             )(lateral_feature)
 
             # 2. Resize state to match lateral resolution
-            target_spatial_shape = ops.shape(lateral_feature)[1:-1]
+            # target_spatial_shape = lateral_feature.shape[1:-1]
+            lateral_shape = ops.shape(lateral_feature)
+            target_spatial_shape = [int(lateral_shape[i]) for i in range(1, 1 + spatial_dims)]
             state_feature = ResizingND(
                 target_shape=target_spatial_shape,
                 interpolation="bilinear" if spatial_dims == 2 else "trilinear",
@@ -154,7 +158,9 @@ def UPerNetDecoder(
             fpn_features.append(fused)
 
         # 3. Upsample all FPN outputs to the highest resolution (P1)
-        target_spatial_shape = ops.shape(fpn_features[-1])[1:-1]
+        # target_spatial_shape = fpn_features[-1].shape[1:-1]
+        highest_res_shape = ops.shape(fpn_features[-1])
+        target_spatial_shape = [int(highest_res_shape[i]) for i in range(1, 1 + spatial_dims)]
         resized_fpn_features = []
 
         for i, feature in enumerate(fpn_features):
