@@ -1,3 +1,5 @@
+import math
+
 import keras
 from keras import layers, ops
 
@@ -249,11 +251,9 @@ def get_adaptive_window_sizes(input_dim, output_dim):
     Returns:
         A tuple (small_window, big_window) as int32 Tensors.
     """
-    input_dim = ops.cast(input_dim, "float32")
-    output_dim = ops.cast(output_dim, "float32")
-    small_window = ops.cast(ops.ceil(input_dim / output_dim), "int32")
+    small_window = math.ceil(input_dim / output_dim)
     big_window = small_window + 1
-    return int(small_window), int(big_window)
+    return small_window, big_window
 
 
 def compute_adaptive_gather_indices(input_dim, output_size, big_window, small_pool_len):
