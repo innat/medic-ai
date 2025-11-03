@@ -4,7 +4,7 @@
 
 **UPerNet** ([Unified Perceptual Parsing Network](https://arxiv.org/abs/1807.10221)) is a robust, general-purpose deep learning architecture for dense prediction tasks such as semantic segmentation, scene parsing, and medical image segmentation. It combines two key modules:
 
-1. **Pyramid Pooling Module (PPM):** Extracts multi-scale contextual information from the deepest feature map (e.g., $P5$) using adaptive pooling at multiple scales..
+1. **Pyramid Pooling Module (PPM):** Extracts multi-scale contextual information from the deepest feature map (e.g., $P5$) using adaptive pooling at multiple scales.
 2. **Feature Pyramid Network (FPN):** Implements a **top-down fusion pathway** that progressively merges semantic-rich deep features with high-resolution shallow features (e.g., $P4$, $P3$, $P2$, $P1$).
 
 ## Build Model
@@ -31,7 +31,7 @@ model_2d = UPerNet(
 
 **Encoder Feature Access**
 
-The encoder exposes its intermediate multi-scale feature maps through the attribute model.`encoder.pyramid_outputs`. Each key corresponds to a pyramid stage, where $P1$ represents the earliest (shallowest) feature map and $P(n+1)$ represents the deepest one.
+The encoder exposes its intermediate multi-scale feature maps through the attribute model `encoder.pyramid_outputs`. Each key corresponds to a pyramid stage, where $P1$ represents the earliest (shallowest) feature map and $P(n+1)$ represents the deepest one.
 
 ```python
 model = UPerNet(
