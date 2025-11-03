@@ -110,14 +110,14 @@ class UPerNet(keras.Model, DescribeMixin):
                             groups=-1, epsilon=1e-05, scale=False, center=False
                         )`
                     - `"sync_batch"`: `partial(keras.layers.BatchNormalization, synchronized=True)`
-            decoder_activation (str): Controls the use of activation layers in UNet decoder blocks.
+            decoder_activation (str): Controls the use of activation layers in UPerNet decoder blocks.
                 It should the activation string identifier in available in keras.
                 Default: 'relu'
-            decoder_filters: An integer specifying the number of channels
-                used for all feature maps in the PPM and FPN stages.
+            decoder_filters: An integer specifying the number of channels used for all feature
+                maps in the PyramidPoolingModule (PPM) and FeaturePyramidNetwork (FPN) stages.
             num_classes: An integer specifying the number of classes for the
                 final segmentation mask.
-            head_upsample : int or tuple/list of ints, default=2
+            head_upsample : int or tuple/list of ints, default=4
                 Optional upsampling factor for the final segmentation head.
                 - If an `int` > 1, all spatial dimensions are upsampled by this factor.
                 - If a `tuple` or `list`, each element specifies the upsampling factor for the
@@ -171,6 +171,7 @@ class UPerNet(keras.Model, DescribeMixin):
         decoder_activation = validate_activation(decoder_activation)
 
         # Prepare head and skip layers
+        # For UPerNet, we take deepeset feature (P5) for PPM block and others for FPN block.
         sorted_keys = sorted(available_keys, key=lambda x: int(x[1:]), reverse=True)
         bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
         skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:4]]  # [P4, P3, P2]

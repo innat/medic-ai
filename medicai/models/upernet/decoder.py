@@ -1,4 +1,4 @@
-from keras import layers, ops
+from keras import layers
 
 from medicai.layers import ConvBnAct, ResizingND
 from medicai.utils import get_pooling_layer
@@ -93,7 +93,7 @@ def UPerNetDecoder(
 
     def apply(bottleneck):
         psp_input = bottleneck  # [P5]
-        fpn_lateral_features = skip_layers  # [P4, P3, P2, P1]
+        fpn_lateral_features = skip_layers  # [P4, P3, P2]
 
         # Create level names dynamically based on number of skip layers + bottleneck
         num_levels = len(skip_layers) + 1
@@ -122,7 +122,7 @@ def UPerNetDecoder(
             for i in range(len(fpn_lateral_features))
         ]
 
-        # Iterate through lateral features (P4 → P3 → P2 → P1) - top-down.
+        # Iterate through lateral features (P4 → P3 → P2) - top-down.
         for i, lateral_feature in enumerate(fpn_lateral_features):
             level = level_names[i + 1]
             state_feature = fpn_features[-1]
@@ -165,7 +165,7 @@ def UPerNetDecoder(
             )(feature)
             resized_fpn_features.append(resized_feature)
 
-        # 4. Concatenate all features (reverse order: P1→P2→P3→P4→P5)
+        # 4. Concatenate all features (reverse order: P2 → P3 → P4 → P5)
         stacked_features = layers.Concatenate(axis=-1, name=f"{prefix}_fpn_concat")(
             resized_fpn_features[::-1]
         )

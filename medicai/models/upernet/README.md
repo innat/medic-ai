@@ -2,14 +2,14 @@
 
 <img width="904" height="534" alt="image" src="https://github.com/user-attachments/assets/e26fdea4-6e60-4db9-a2ae-d32a8e5eaac0" />
 
-**UPerNet** ([Unified Perceptual Parsing Network](https://arxiv.org/abs/1807.10221)) is a robust, general-purpose deep learning architecture for dense prediction tasks such as semantic segmentation, scene parsing, and medical image segmentation. It combines two key modules:
+**UPerNet** ([Unified Perceptual Parsing Network](https://arxiv.org/abs/1807.10221)) is a robust, general-purpose deep learning architecture for dense prediction tasks such as semantic segmentation, scene parsing, and medical image segmentation. This implementation supports both 2D and 3D variants of UPerNet, with multiple pre-built encoders including `EfficientNet`, `Swin Transformer`, `ConvNeXt`, and many more. The **UPerNet** combines two key modules:
 
 1. **Pyramid Pooling Module (PPM):** Extracts multi-scale contextual information from the deepest feature map (e.g., $P5$) using adaptive pooling at multiple scales.
 2. **Feature Pyramid Network (FPN):** Implements a **top-down fusion pathway** that progressively merges semantic-rich deep features with high-resolution shallow features (e.g., $P4$, $P3$, $P2$, $P1$).
 
 ## Build Model
 
-You can easily instantiate a **UPerNet** model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`).
+You can easily instantiate a **UPerNet** model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`). The `input_shape` automatically determines whether a `2D` or `3D` model will be built.
 
 ```python
 from medicai.models import UPerNet
@@ -27,11 +27,18 @@ model_2d = UPerNet(
     input_shape=(256, 256, 3),
     num_classes=19
 )
+
+# Example 2: 2D ConvNeXt backbone for image segmentation
+model = UPerNet(
+    encoder_name="convnext_tiny",
+    input_shape=(224, 224, 3),
+    num_classes=5
+)
 ```
 
 **Encoder Feature Access**
 
-The encoder exposes its intermediate multi-scale feature maps through the attribute model `encoder.pyramid_outputs`. Each key corresponds to a pyramid stage, where $P1$ represents the earliest (shallowest) feature map and $P(n+1)$ represents the deepest one.
+The encoder exposes its intermediate multi-scale feature maps through the attribute model `model.encoder.pyramid_outputs`. Each key corresponds to a pyramid stage, where $P1$ represents the earliest (shallowest) feature map and $P(n+1)$ represents the deepest.
 
 ```python
 model = UPerNet(
@@ -48,75 +55,32 @@ model.encoder.pyramid_outputs
 }
 ```
 
-## Encoder Depth
+According to the original **UPerNet design**, the Pyramid Pooling Module (PPM) operates on the deepest feature ($P5$), while the Feature Pyramid Network (FPN) fuses the intermediate stages ($P4$, $P3$, $P2$) in a top-down manner. For encoders with only four stages (e.g., **ConvNeXt**), the model uses $P4$ for the PPM and [$P3$, $P2$, $P1$] for the FPN. Note, unlike other segmentation models, **UPerNet** does not expose an `encoder_depth` argument to manually configure the number of encoder stages.
 
-The parameter `encoder_depth` determines how many feature levels from the encoder are used by the **UPerNet** decoder.
 
 | Encoder Depth | Pyramid Pooling Module | Feature Pyramid Network |
 | :-----------: | :-----------------------: | :----------------------: |
-| 5 (Default)   | $P5$                      | $P4$, $P3$, $P2$, $P1$   |
+| 5 (Default)   | $P5$                      | $P4$, $P3$, $P2$         |
 | 4             | $P4$                      | $P3$, $P2$, $P1$         |
-| 3             | $P3$                      | $P2$, $P1$               |
 
-```python
-from medicai.models import UPerNet
-
-# Example: 3D UPerNet with reduced encoder depth
-model = UPerNet(
-    encoder_name="efficientnetv2_m", 
-    input_shape=(96, 96, 96, 1),
-    encoder_depth=4
-)
-```
 
 ## Model Customization Examples
 
 Different backbones may produce varying numbers of feature maps or pyramid stages.
-For instance:
-
-- **ConvNeXt** typically outputs $4$ stages.
-- **Swin Transformer** outputs $5$ stages, but some have identical resolutions in the last two.
-
-In such cases, we need to adjust both `encoder_depth` and `head_upsample` to match the architecture.
+For example, the **Swin Transformer** backbone outputs five stages, but the last two may share identical spatial resolutions. In such cases, you can adjust the `head_upsample` parameter to align the decoder output with the input resolution.
 
 ```python
 from medicai.models import UPerNet
 
-# ConvNeXt backbone
-model = UPerNet(
-    encoder_name="convnext_tiny",
-    input_shape=(224, 224, 3),
-    encoder_depth=4,
-    head_upsample=4
-)
-
-# ConvNeXt with shallower pyramid
-model = UPerNet(
-    encoder_name="convnext_tiny",
-    input_shape=(224, 224, 3),
-    encoder_depth=3,
-    head_upsample=4
-)
-
 # Swin Transformer backbone
 model = UPerNet(
     encoder_name="swin_tiny",
-    input_shape=(224, 224, 3),
-    encoder_depth=5,
-    head_upsample=4
-)
-
-# Swin Transformer with reduced depth
-model = UPerNet(
-    encoder_name="swin_tiny",
-    input_shape=(224, 224, 3),
-    encoder_depth=3,
-    head_upsample=4
+    input_shape=(96,96,96,4),
+    num_classes=3,
+    head_upsample=8
 )
 ```
 
----
+## Hardware Compatibility
 
-## ⚠️ Backend Limitation
-
-> **Note**: The UPerNet implementation uses **Adaptive Average Pooling** in the **PPM** stage. Since **JAX** currently does not support `dynamic slicing` during adaptive pooling, this model does not support **JAX** backend training at the moment. It runs seamlessly on **TensorFlow** and **PyTorch** backends.
+This implementation of **UPerNet** has been tested and verified on both **GPU** (`tensorflow` backend) and **TPU-VM** (`jax` backend) environments.
