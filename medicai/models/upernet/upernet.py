@@ -194,7 +194,7 @@ class UPerNet(keras.Model, DescribeMixin):
         # Prepare head and skip layers
         sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
         bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
-        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:]]  # [P4, P3, P2]
+        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:-1]]  # [P4, P3, P2, P1]
 
         # UPerNet Decoder
         decoder = UPerNetDecoder(

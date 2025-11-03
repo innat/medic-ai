@@ -122,7 +122,7 @@ def UPerNetDecoder(
             for i in range(len(fpn_lateral_features))
         ]
 
-        # Iterate through lateral features (P4 → P3 → P2 → P1) - bottom-up.
+        # Iterate through lateral features (P4 → P3 → P2 → P1) - top-down.
         for i, lateral_feature in enumerate(fpn_lateral_features):
             level = level_names[i + 1]
             state_feature = fpn_features[-1]
