@@ -7,7 +7,6 @@ from medicai.utils import (
     get_conv_layer,
     get_norm_layer,
     registration,
-    resize_volumes,
     resolve_encoder,
     validate_activation,
 )

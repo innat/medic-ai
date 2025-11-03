@@ -70,12 +70,11 @@ class UPerNet(keras.Model, DescribeMixin):
         input_shape=None,
         encoder_name=None,
         encoder=None,
-        encoder_depth=5,
         num_classes=1,
         decoder_filters=256,
         decoder_normalization="batch",
         decoder_activation="relu",
-        head_upsample=2,
+        head_upsample=4,
         classifier_activation="sigmoid",
         name=None,
         **kwargs,
@@ -95,14 +94,6 @@ class UPerNet(keras.Model, DescribeMixin):
                 pre-configured backbone from the `medicai.models.list_models()` to use as
                 the encoder. This is a convenient option for using a backbone from
                 the library without having to instantiate it manually.
-            encoder_depth: An integer specifying how many stages of the encoder
-                backbone to use. A number of stages used in encoder in range [3, 5].
-                Expected available intermediate or pyramid level, P1, P2, ... P5.
-                If `encoder_depth=5`, bottleneck key would be P5, and P4...P1 will
-                be used for skip connection. If `encoder_depth=4`, bottleneck key
-                would be P4, and P3..P1 will be used for skip connection.
-                The `encoder_depth` should be in [3, 4, 5]. This can be used to
-                reduce the size of the model. Default: 5.
             decoder_normalization (str | bool): Controls the use of normalization layers in
                 UPerNet decoder blocks. It is a string specifying the normalization type.
                 - If a string is provided, the specified normalization type will be used instead.
@@ -149,26 +140,14 @@ class UPerNet(keras.Model, DescribeMixin):
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = encoder.pyramid_outputs
 
-        # For UPerNet, encoder depth should be 5.
-        if encoder_depth not in (3, 4, 5):
-            raise ValueError(
-                f"To build {self.__class__.__name__}, encoder_depth must be 3, 4 or 5. "
-                "We need at least 1 deep feature for Pyramid Pooling Module "
-                "and at least 2 shallower lateral features for Feature Pyramid Network."
-            )
-
         # Determine required pyramid levels dynamically
-        required_keys = {f"P{i}" for i in range(1, encoder_depth + 1)}
         available_keys = set(pyramid_outputs.keys())
 
         # Find missing ones
-        missing_keys = required_keys - available_keys
-        if missing_keys:
+        if len(available_keys) not in (4, 5):
             raise ValueError(
-                f"The encoder's `pyramid_outputs` is missing required pyramid levels. "
-                f"Missing: {missing_keys}. "
-                f"Expected keys (based on encoder_depth={encoder_depth}): {required_keys}, "
-                f"but got: {available_keys}"
+                f"UPerNet requires 4 or 5 pyramid levels, but got {len(available_keys)}. "
+                f"Available keys: {available_keys}"
             )
 
         # number of classes must be positive.
@@ -192,9 +171,9 @@ class UPerNet(keras.Model, DescribeMixin):
         decoder_activation = validate_activation(decoder_activation)
 
         # Prepare head and skip layers
-        sorted_keys = sorted(required_keys, key=lambda x: int(x[1:]), reverse=True)
+        sorted_keys = sorted(available_keys, key=lambda x: int(x[1:]), reverse=True)
         bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
-        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:-1]]  # [P4, P3, P2, P1]
+        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:4]]  # [P4, P3, P2]
 
         # UPerNet Decoder
         decoder = UPerNetDecoder(
@@ -239,7 +218,6 @@ class UPerNet(keras.Model, DescribeMixin):
         self._input_shape = input_shape
         self.encoder_name = encoder_name
         self.encoder = encoder
-        self.encoder_depth = encoder_depth
         self.num_classes = num_classes
         self.classifier_activation = classifier_activation
         self.decoder_filters = decoder_filters
@@ -253,7 +231,6 @@ class UPerNet(keras.Model, DescribeMixin):
             {
                 "input_shape": self._input_shape,
                 "encoder_name": self.encoder_name,
-                "encoder_depth": self.encoder_depth,
                 "num_classes": self.num_classes,
                 "classifier_activation": self.classifier_activation,
                 "decoder_filters": self.decoder_filters,
