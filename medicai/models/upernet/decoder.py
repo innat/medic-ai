@@ -153,7 +153,7 @@ def UPerNetDecoder(
 
             fpn_features.append(fused)
 
-        # 3. Upsample all FPN outputs to the highest resolution (P1)
+        # 3. Upsample all FPN outputs to the resolution of the P2-level feature map
         target_spatial_shape = fpn_features[-1].shape[1:-1]
         resized_fpn_features = []
 

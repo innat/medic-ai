@@ -28,7 +28,7 @@ model_2d = UPerNet(
     num_classes=19
 )
 
-# Example 2: 2D ConvNeXt backbone for image segmentation
+# Example 3: 2D ConvNeXt backbone for image segmentation
 model = UPerNet(
     encoder_name="convnext_tiny",
     input_shape=(224, 224, 3),

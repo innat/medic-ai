@@ -5,6 +5,7 @@
 The AdaptivePooling implementation is cross-platform and device-agnostic, working reliably on ($\text{tf}$), ($\text{torch}$), and $\text{jax}$ across **GPUs** and **TPUs**. Its output is numerically identical to `torch.nn.AdaptiveAvgPool` (within standard tolerances of $1\text{e-}6$).
 
 ```python
+import numpy as np
 import torch
 from torch import nn
 
@@ -64,7 +65,7 @@ def run_test_3d(pool_size=(5, 7, 9)):
     compare_outputs(keras_out_avg, torch_out_avg, transpose_axes=(0, 2, 3, 4, 1))
     print(f"3D Tests (Max & Avg) passed for pool size {pool_size}.")
 ```
-```bash
+```python
 run_test_2d()
 run_test_3d()
 # 2D Tests (Max & Avg) passed for pool size (5, 7).
