@@ -4,22 +4,15 @@ from keras import layers, ops
 from medicai.utils.swi_utils import ensure_tuple_rep
 
 
-@keras.saving.register_keras_serializable(package="medicai")
 class AdaptivePooling2D(layers.Layer):
-    """Parent class for 2D pooling layers with adaptive kernel size.
-
-    This layer performs pooling over the input height (H) and width (W) dimensions
-    such that the output dimensions match the specified `output_size`.
-    It supports arbitrary input sizes, even when the input H/W is not divisible
-    by the output H/W.
-
-    It assumes the 'channels_last' data format: (batch, H, W, C).
+    """
+    Parent class for 2D pooling layers with adaptive kernel size using the
+    efficient, vectorized Two-Pool Gather method. This implementation assumes
+    'channels_last' (B, H, W, C) data format.
 
     Args:
-        reduce_function: The reduction method to apply, e.g. `keras.ops.mean` or
-          `keras.ops.max`.
-        output_size: An integer or tuple/list of 2 integers specifying
-          (pooled_rows, pooled_cols). The new size of the H and W dimensions.
+        reduce_function: The Keras pooling op (ops.average_pool or ops.max_pool).
+        output_size: An integer or tuple/list of 2 integers (H_out, W_out).
     """
 
     def __init__(
@@ -40,112 +33,84 @@ class AdaptivePooling2D(layers.Layer):
             )
         super().build(input_shape)
 
+    def pool_single_axis(self, inputs, output_size, axis):
+        """
+        Performs the adaptive pooling logic for a single axis (H or W).
+        """
+        # 1. Get dimensions and kernel sizes
+        input_dim = ops.shape(inputs)[axis]
+        small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
+
+        # 2. Define 2D kernel size
+        if axis == 1:
+            ksize_small, ksize_big = (small_window, 1), (big_window, 1)
+        else:
+            ksize_small, ksize_big = (1, small_window), (1, big_window)
+
+        # 3. Perform the two fixed-size pools (Stride=1, Padding='valid')
+        small_pool = self.reduce_function(
+            inputs,
+            pool_size=ksize_small,
+            strides=(1, 1),
+            padding="valid",
+            data_format="channels_last",
+        )
+        big_pool = self.reduce_function(
+            inputs,
+            pool_size=ksize_big,
+            strides=(1, 1),
+            padding="valid",
+            data_format="channels_last",
+        )
+
+        # 4. Compute indices and gather the results
+        small_pool_len = ops.shape(small_pool)[axis]
+        gather_indices = compute_adaptive_gather_indices(
+            input_dim=input_dim,
+            output_size=output_size,
+            big_window=big_window,
+            small_pool_len=small_pool_len,
+        )
+
+        # Concatenate and Gather (vectorized selection of the correct window)
+        combined_pool = ops.concatenate([small_pool, big_pool], axis=axis)
+        return ops.take(combined_pool, gather_indices, axis=axis)
+
     def call(self, inputs):
-        # (batch, H, W, C)
-        h_bins = self.output_size[0]
-        w_bins = self.output_size[1]
+        # 1. Handle (1, 1) case (Global Avg/Max Pooling)
+        if self.output_size == (1, 1):
+            if self.reduce_function == ops.average_pool:
+                return ops.mean(inputs, axis=[1, 2], keepdims=True)
+            else:
+                return ops.max(inputs, axis=[1, 2], keepdims=True)
 
-        # Get input dimensions H and W
-        input_shape = ops.shape(inputs)
-        h = input_shape[1]
-        w = input_shape[2]
-
-        # Calculate the start and end indices for each bin using linspace
-        h_idx = ops.linspace(0, h, h_bins + 1)
-        w_idx = ops.linspace(0, w, w_bins + 1)
-
-        outputs = []
-        for i in range(h_bins):
-            row_outputs = []
-
-            # Calculate height indices (axes 1)
-            h_start = ops.cast(ops.floor(h_idx[i]), "int32")
-            h_end = ops.cast(ops.ceil(h_idx[i + 1]), "int32")
-            h_end = ops.where(h_end > h, h, h_end)
-
-            for j in range(w_bins):
-                # Calculate width indices (axes 2)
-                w_start = ops.cast(ops.floor(w_idx[j]), "int32")
-                w_end = ops.cast(ops.ceil(w_idx[j + 1]), "int32")
-                w_end = ops.where(w_end > w, w, w_end)
-
-                # Slicing: inputs[:, H_slice, W_slice, :]
-                region = inputs[:, h_start:h_end, w_start:w_end, :]
-
-                # Reduction axes are H (1) and W (2)
-                pooled = self.reduce_function(region, axis=[1, 2], keepdims=True)
-                row_outputs.append(pooled)
-
-            # Concatenate pooled regions along the width axis (axis 2)
-            outputs.append(ops.concatenate(row_outputs, axis=2))
-
-        # Concatenate pooled rows along the height axis (axis 1)
-        outputs = ops.concatenate(outputs, axis=1)
-        return outputs
+        # 2. Sequentially pool Height (axis=1) then Width (axis=2)
+        x = self.pool_single_axis(inputs, output_size=self.output_size[0], axis=1)
+        x = self.pool_single_axis(x, output_size=self.output_size[1], axis=2)
+        return x
 
     def compute_output_shape(self, input_shape):
-        shape = (
-            input_shape[0],
-            self.output_size[0],
-            self.output_size[1],
-            input_shape[3],
-        )
-        return shape
+        return (input_shape[0], self.output_size[0], self.output_size[1], input_shape[3])
 
     def get_config(self):
-        config = {
-            "output_size": self.output_size,
-        }
-        base_config = super().get_config()
-        return {**base_config, **config}
+        config = super().get_config()
+        config.update(
+            {
+                "output_size": self.output_size,
+            }
+        )
+        return config
 
 
-@keras.saving.register_keras_serializable(package="medicai")
-class AdaptiveAveragePooling2D(AdaptivePooling2D):
-    """Adaptive Average Pooling 2D layer (channels_last).
-
-    This layer resizes the 2D input (H, W) to a fixed size using average pooling.
-
-    Args:
-        output_size: An integer or tuple/list of 2 integers specifying
-          (pooled_rows, pooled_cols).
+class AdaptivePooling3D(keras.layers.Layer):
     """
-
-    def __init__(self, output_size, **kwargs):
-        super().__init__(ops.mean, output_size, **kwargs)
-
-
-@keras.saving.register_keras_serializable(package="medicai")
-class AdaptiveMaxPooling2D(AdaptivePooling2D):
-    """Adaptive Max Pooling 2D layer (channels_last).
-
-    This layer resizes the 2D input (H, W) to a fixed size using max pooling.
+    Parent class for 3D pooling layers with adaptive kernel size using the
+    vectorized Two-Pool Gather method. This implementation assumes
+    'channels_last' (B, D, H, W, C) data format.
 
     Args:
-        output_size: An integer or tuple/list of 2 integers specifying
-          (pooled_rows, pooled_cols).
-    """
-
-    def __init__(self, output_size, **kwargs):
-        super().__init__(ops.max, output_size, **kwargs)
-
-
-@keras.saving.register_keras_serializable(package="medicai")
-class AdaptivePooling3D(layers.Layer):
-    """Parent class for 3D pooling layers with adaptive kernel size.
-
-    This layer performs pooling over the input depth (D), height (H), and width (W)
-    dimensions such that the output dimensions match the specified `output_size`.
-    It supports arbitrary input sizes.
-
-    It assumes the 'channels_last' data format: (batch, D, H, W, C).
-
-    Args:
-        reduce_function: The reduction method to apply, e.g. `keras.ops.mean` or
-          `keras.ops.max`.
-        output_size: An integer or tuple/list of 3 integers specifying
-           (pooled_depth, pooled_rows, pooled_cols). The new size of
-           the D, H, and W dimensions.
+        reduce_function: The Keras pooling op (ops.average_pool or ops.max_pool).
+        output_size: An integer or tuple/list of 3 integers (D_out, H_out, W_out).
     """
 
     def __init__(
@@ -156,6 +121,7 @@ class AdaptivePooling3D(layers.Layer):
     ):
         self.reduce_function = reduce_function
         self.output_size = ensure_tuple_rep(output_size, 3)
+        self.data_format = "channels_last"
         super().__init__(**kwargs)
 
     def build(self, input_shape):
@@ -166,104 +132,160 @@ class AdaptivePooling3D(layers.Layer):
             )
         super().build(input_shape)
 
+    def pool_single_axis(self, inputs, output_size, axis):
+        # 1. Get dimensions and kernel sizes
+        input_dim = ops.shape(inputs)[axis]
+        small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
+
+        # 2. Define Ksize for the pooling operation.
+        ksize_ones = [1, 1, 1]
+
+        # Map axis (1, 2, 3) to kernel list index (0, 1, 2)
+        spatial_axis = axis - 1
+
+        # Set the pooling dimension in the 3D kernel tuple
+        ksize_small_list = ksize_ones[:]
+        ksize_small_list[spatial_axis] = small_window
+        ksize_small = tuple(ksize_small_list)
+
+        ksize_big_list = ksize_ones[:]
+        ksize_big_list[spatial_axis] = big_window
+        ksize_big = tuple(ksize_big_list)
+
+        # 3. Perform the two fixed-size pools (Stride=1, Padding='valid')
+        small_pool = self.reduce_function(
+            inputs,
+            pool_size=ksize_small,
+            strides=(1, 1, 1),
+            padding="valid",
+            data_format=self.data_format,
+        )
+        big_pool = self.reduce_function(
+            inputs,
+            pool_size=ksize_big,
+            strides=(1, 1, 1),
+            padding="valid",
+            data_format=self.data_format,
+        )
+
+        # 4. Compute indices and gather the results
+        small_pool_len = ops.shape(small_pool)[axis]
+        gather_indices = compute_adaptive_gather_indices(
+            input_dim=input_dim,
+            output_size=output_size,
+            big_window=big_window,
+            small_pool_len=small_pool_len,
+        )
+
+        # Concatenate and Gather (vectorized selection)
+        combined_pool = ops.concatenate([small_pool, big_pool], axis=axis)
+        return ops.take(combined_pool, gather_indices, axis=axis)
+
     def call(self, inputs):
-        # (batch, D, H, W, C)
-        d_bins = self.output_size[0]
-        h_bins = self.output_size[1]
-        w_bins = self.output_size[2]
+        # 1. Handle (1, 1, 1) case (Global Avg/Max Pooling)
+        if self.output_size == (1, 1, 1):
+            if self.reduce_function == ops.average_pool:
+                return ops.mean(inputs, axis=[1, 2, 3], keepdims=True)
+            else:
+                return ops.max(inputs, axis=[1, 2, 3], keepdims=True)
 
-        # Get input dimensions D, H, W
-        input_shape = ops.shape(inputs)
-        d = input_shape[1]  # Depth
-        h = input_shape[2]  # Height
-        w = input_shape[3]  # Width
-
-        # Calculate the start and end indices for each bin using linspace
-        d_idx = ops.linspace(0, d, d_bins + 1)
-        h_idx = ops.linspace(0, h, h_bins + 1)
-        w_idx = ops.linspace(0, w, w_bins + 1)
-
-        depth_outputs = []
-        for i in range(d_bins):
-            # Calculate Depth indices (axis 1)
-            d_start = ops.cast(ops.floor(d_idx[i]), "int32")
-            d_end = ops.cast(ops.ceil(d_idx[i + 1]), "int32")
-            d_end = ops.where(d_end > d, d, d_end)
-
-            row_outputs = []
-            for j in range(h_bins):
-                # Calculate Height indices (axis 2)
-                h_start = ops.cast(ops.floor(h_idx[j]), "int32")
-                h_end = ops.cast(ops.ceil(h_idx[j + 1]), "int32")
-                h_end = ops.where(h_end > h, h, h_end)
-
-                col_outputs = []
-                for k in range(w_bins):
-                    # Calculate Width indices (axis 3)
-                    w_start = ops.cast(ops.floor(w_idx[k]), "int32")
-                    w_end = ops.cast(ops.ceil(w_idx[k + 1]), "int32")
-                    w_end = ops.where(w_end > w, w, w_end)
-
-                    # Slicing: inputs[:, D_slice, H_slice, W_slice, :]
-                    region = inputs[:, d_start:d_end, h_start:h_end, w_start:w_end, :]
-
-                    # Reduction axes are D (1), H (2), W (3)
-                    pooled = self.reduce_function(region, axis=[1, 2, 3], keepdims=True)
-                    col_outputs.append(pooled)
-
-                # Concatenate pooled regions along the width axis (axis 3)
-                row_outputs.append(ops.concatenate(col_outputs, axis=3))
-
-            # Concatenate pooled rows along the height axis (axis 2)
-            depth_outputs.append(ops.concatenate(row_outputs, axis=2))
-
-        # Concatenate pooled depth slices along the depth axis (axis 1)
-        outputs = ops.concatenate(depth_outputs, axis=1)
-        return outputs
+        # 2. Sequentially pool Depth (axis 1), Height (axis 2), then Width (axis 3)
+        x = self.pool_single_axis(inputs, output_size=self.output_size[0], axis=1)
+        x = self.pool_single_axis(x, output_size=self.output_size[1], axis=2)
+        x = self.pool_single_axis(x, output_size=self.output_size[2], axis=3)
+        return x
 
     def compute_output_shape(self, input_shape):
-        shape = (
+        return (
             input_shape[0],
             self.output_size[0],
             self.output_size[1],
             self.output_size[2],
             input_shape[4],
         )
-        return shape
 
     def get_config(self):
-        config = {
-            "output_size": self.output_size,
-        }
-        base_config = super().get_config()
-        return {**base_config, **config}
+        config = super().get_config()
+        config.update({"output_size": self.output_size})
+        return config
 
 
-@keras.saving.register_keras_serializable(package="medicai")
+class AdaptiveAveragePooling2D(AdaptivePooling2D):
+    """Adaptive Average Pooling 2D layer using the vectorized Two-Pool Gather method."""
+
+    def __init__(self, output_size, **kwargs):
+        super().__init__(ops.average_pool, output_size, **kwargs)
+
+
+class AdaptiveMaxPooling2D(AdaptivePooling2D):
+    """Adaptive Max Pooling 2D layer using the vectorized Two-Pool Gather method."""
+
+    def __init__(self, output_size, **kwargs):
+        super().__init__(ops.max_pool, output_size, **kwargs)
+
+
 class AdaptiveAveragePooling3D(AdaptivePooling3D):
-    """Adaptive Average Pooling 3D layer (channels_last).
-
-    This layer resizes the 3D input (D, H, W) to a fixed size using average pooling.
-
-    Args:
-        output_size: An integer or tuple/list of 3 integers specifying
-          (pooled_depth, pooled_rows, pooled_cols).
-    """
+    """Adaptive Average Pooling 3D layer using the vectorized Two-Pool Gather method."""
 
     def __init__(self, output_size, **kwargs):
-        super().__init__(ops.mean, output_size, **kwargs)
+        super().__init__(ops.average_pool, output_size, **kwargs)
 
 
-@keras.saving.register_keras_serializable(package="medicai")
 class AdaptiveMaxPooling3D(AdaptivePooling3D):
-    """Adaptive Max Pooling 3D layer (channels_last).
-
-    This layer resizes the 3D input (D, H, W) to a fixed size using max pooling.
-
-    Args:
-        output_size: An integer or tuple/list of 3 integers specifying
-          (pooled_depth, pooled_rows, pooled_cols).
-    """
+    """Adaptive Max Pooling 3D layer using the vectorized Two-Pool Gather method."""
 
     def __init__(self, output_size, **kwargs):
-        super().__init__(ops.max, output_size, **kwargs)
+        super().__init__(ops.max_pool, output_size, **kwargs)
+
+
+def get_adaptive_window_sizes(input_dim, output_dim):
+    """Calculates the two possible kernel sizes (small/big window) needed
+    for adaptive pooling.
+
+    Args:
+        input_dim: The input dimension size (D, H, or W).
+        output_dim: The target output dimension size.
+
+    Returns:
+        A tuple (small_window, big_window) as int32 Tensors.
+    """
+    input_dim = ops.cast(input_dim, "float32")
+    output_dim = ops.cast(output_dim, "float32")
+    small_window = ops.cast(ops.ceil(input_dim / output_dim), "int32")
+    big_window = small_window + 1
+    return small_window, big_window
+
+
+def compute_adaptive_gather_indices(input_dim, output_size, big_window, small_pool_len):
+    """Computes the indices to 'gather' the correct slice from the combined
+    (small_pool + big_pool) tensor.
+
+    Args:
+        input_dim: The input dimension size.
+        output_size: The target output dimension size.
+        big_window: The size of the largest possible pooling window.
+        small_pool_len: The size of the small_pool result tensor along the axis.
+
+    Returns:
+        A 1D int32 Tensor of indices for ops.take.
+    """
+    input_dim = ops.cast(input_dim, "float32")
+    output_size = ops.cast(output_size, "float32")
+
+    # 1. Calculate window start/end boundaries
+    window_starts = ops.floor((ops.arange(output_size, dtype="float32") * input_dim) / output_size)
+    window_ends = ops.ceil(
+        (ops.arange(1, output_size + 1, dtype="float32") * input_dim) / output_size
+    )
+
+    # 2. Determine which output bin requires the 'big' window size
+    window_sizes = ops.cast(window_ends, "int32") - ops.cast(window_starts, "int32")
+    is_big_window = window_sizes == big_window
+
+    # 3. Calculate indices for the combined [small_pool, big_pool] tensor
+    small_indices = ops.cast(window_starts, "int32")
+    big_indices = small_indices + small_pool_len
+
+    # Select the index from the correct section of the combined pool
+    gather_indices = ops.where(is_big_window, big_indices, small_indices)
+    return gather_indices
