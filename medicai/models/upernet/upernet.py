@@ -1,0 +1,252 @@
+import keras
+from keras import layers
+
+from medicai.layers import ResizingND
+from medicai.utils import (
+    DescribeMixin,
+    get_conv_layer,
+    keras_constants,
+    registration,
+    resolve_encoder,
+    validate_activation,
+)
+
+from .decoder import UPerNetDecoder
+
+
+@keras.saving.register_keras_serializable(package="upernet")
+@registration.register(name="upernet", type="segmentation")
+class UPerNet(keras.Model, DescribeMixin):
+    """
+    The UPerNet (Unified Perceptual Parsing) model for semantic segmentation.
+
+    UPerNet combines two key modules to effectively utilize features from various
+    encoder resolutions:
+
+    1.  **Pyramid Pooling Module (PPM):** Processes the **deepest** feature map
+        (bottleneck, e.g., P5) to capture multi-scale context information.
+    2.  **Feature Pyramid Network (FPN):** Performs a **top-down fusion** across
+        intermediate feature maps (skip layers, e.g., P4, P3, P2) to produce
+        high-resolution features that retain strong semantic information.
+
+    The features from the PPM and the FPN are concatenated, then fused using a
+    final convolutional block to produce the segmentation output. This structure
+    makes UPerNet highly effective for accurate and detailed scene understanding.
+
+    Example:
+        >>> from medicai.models import UPerNet
+        >>> model = UPerNet(
+        ...     input_shape=(256, 256, 3),
+        ...     encoder_name="resnet50"
+        ... )
+        >>> model = UPerNet(
+        ...     input_shape=(96, 96, 96, 1),
+        ...     encoder_name="convnext_tiny",
+        ...     encoder_depth=4,
+        ...     head_upsample=8
+        ... )
+        >>> model = UPerNet(
+        ...     input_shape=(96, 96, 96, 1),
+        ...     encoder_name="swin_tiny",
+        ...     encoder_depth=4,
+        ...     head_upsample=8
+        ... )
+
+    """
+
+    ALLOWED_BACKBONE_FAMILIES = [
+        "resnet",
+        "densenet",
+        "efficientnet",
+        "convnext",
+        "senet",
+        "xception",
+        "swin",
+    ]
+
+    def __init__(
+        self,
+        *,
+        input_shape=None,
+        encoder_name=None,
+        encoder=None,
+        num_classes=1,
+        decoder_filters=256,
+        decoder_normalization="batch",
+        decoder_activation="relu",
+        head_upsample=4,
+        classifier_activation="sigmoid",
+        name=None,
+        **kwargs,
+    ):
+        """
+        Initializes the UPerNet model.
+
+        Args:
+            input_shape: A tuple specifying the input shape of the model,
+                not including the batch size.
+            encoder: (Optional) A Keras model to use as the encoder (backbone).
+                This argument is intended for passing a custom or pre-trained
+                model. If provided, the model must have a `pyramid_outputs` attribute,
+                which should be a dictionary of intermediate feature vectors from shallow
+                to deep layers (e.g., `'P1'`, `'P2'`, ...).
+            encoder_name: (Optional) A string specifying the name of a
+                pre-configured backbone from the `medicai.models.list_models()` to use as
+                the encoder. This is a convenient option for using a backbone from
+                the library without having to instantiate it manually.
+            decoder_normalization (str | bool): Controls the use of normalization layers in
+                UPerNet decoder blocks. It is a string specifying the normalization type.
+                - If a string is provided, the specified normalization type will be used instead.
+                    Supported arguments:
+                        [False, "batch", "layer", "unit", "group", "instance", "sync_batch"]
+                - If `False`, no normalization layer will be used.
+                Supported options include:
+                    - `"batch"`: `keras.layers.BatchNormalization`
+                    - `"layer"`: `keras.layers.LayerNormalization`
+                    - `"unit"`: `keras.layers.UnitNormalization`
+                    - `"group"`: `keras.layers.GroupNormalization`
+                    - `"instance"`: `partial(
+                            keras.layers.GroupNormalization,
+                            groups=-1, epsilon=1e-05, scale=False, center=False
+                        )`
+                    - `"sync_batch"`: `partial(keras.layers.BatchNormalization, synchronized=True)`
+            decoder_activation (str): Controls the use of activation layers in UPerNet decoder blocks.
+                It should the activation string identifier in available in keras.
+                Default: 'relu'
+            decoder_filters: An integer specifying the number of channels used for all feature
+                maps in the PyramidPoolingModule (PPM) and FeaturePyramidNetwork (FPN) stages.
+            num_classes: An integer specifying the number of classes for the
+                final segmentation mask.
+            head_upsample : int or tuple/list of ints, default=4
+                Optional upsampling factor for the final segmentation head.
+                - If an `int` > 1, all spatial dimensions are upsampled by this factor.
+                - If a `tuple` or `list`, each element specifies the upsampling factor for the
+                    corresponding spatial dimension (2D: (H, W), 3D: (D, H, W)).
+                - If 1 or all elements are 1, no upsampling is applied.
+                This is useful when the decoder output is smaller than the desired output resolution.
+            classifier_activation: A string specifying the activation function
+                for the final classification layer.
+            name: (Optional) The name of the model.
+            **kwargs: Additional keyword arguments.
+        """
+
+        encoder, input_shape = resolve_encoder(
+            encoder=encoder,
+            encoder_name=encoder_name,
+            input_shape=input_shape,
+            allowed_families=UPerNet.ALLOWED_BACKBONE_FAMILIES,
+        )
+        inputs = encoder.input
+        spatial_dims = len(input_shape) - 1
+        pyramid_outputs = encoder.pyramid_outputs
+
+        # Determine required pyramid levels dynamically
+        available_keys = set(pyramid_outputs.keys())
+
+        # Find missing ones
+        if len(available_keys) not in (4, 5):
+            raise ValueError(
+                f"UPerNet requires 4 or 5 pyramid levels, but got {len(available_keys)}. "
+                f"Available keys: {available_keys}"
+            )
+
+        # number of classes must be positive.
+        if num_classes <= 0:
+            raise ValueError(
+                f"Number of classes (`num_classes`) must be greater than 0, "
+                f"but received {num_classes}."
+            )
+
+        if isinstance(decoder_normalization, str):
+            decoder_normalization = decoder_normalization.lower()
+
+        if decoder_normalization not in keras_constants.VALID_DECODER_NORMS:
+            raise ValueError(
+                f"Invalid value for `decoder_normalization`: {decoder_normalization!r}. "
+                f"Supported values are: {keras_constants.VALID_DECODER_NORMS}"
+            )
+
+        # verify input activation.
+        classifier_activation = validate_activation(classifier_activation)
+        decoder_activation = validate_activation(decoder_activation)
+
+        # Prepare head and skip layers
+        # For UPerNet, we take deepeset feature (P5) for PPM block and others for FPN block.
+        sorted_keys = sorted(available_keys, key=lambda x: int(x[1:]), reverse=True)
+        bottleneck = pyramid_outputs[sorted_keys[0]]  # P5
+        skip_layers = [pyramid_outputs[key] for key in sorted_keys[1:4]]  # [P4, P3, P2]
+
+        # UPerNet Decoder
+        decoder = UPerNetDecoder(
+            spatial_dims=spatial_dims,
+            skip_layers=skip_layers,
+            decoder_filters=decoder_filters,
+            decoder_normalization=decoder_normalization,
+            decoder_activation=decoder_activation,
+        )
+        x = decoder(bottleneck)
+
+        # Final segmentation head
+        x = get_conv_layer(
+            spatial_dims, layer_type="conv", filters=num_classes, kernel_size=1, padding="same"
+        )(x)
+
+        # Some encoder like, i.e. convnext need final upsampling.
+        if isinstance(head_upsample, (int, float)):
+            if head_upsample > 1:
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                )(x)
+        elif isinstance(head_upsample, (list, tuple)):
+            if any(s > 1 for s in head_upsample):
+                x = ResizingND(
+                    scale_factor=head_upsample,
+                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+                )(x)
+        else:
+            raise ValueError(
+                f"`head_upsample` must be int, float, tuple, or list, got {type(head_upsample)}"
+            )
+
+        outputs = layers.Activation(classifier_activation, dtype="float32", name="predictions")(x)
+
+        super().__init__(
+            inputs=inputs, outputs=outputs, name=name or f"UPerNet{spatial_dims}D", **kwargs
+        )
+
+        # Store config
+        self._input_shape = input_shape
+        self.encoder_name = encoder_name
+        self.encoder = encoder
+        self.num_classes = num_classes
+        self.classifier_activation = classifier_activation
+        self.decoder_filters = decoder_filters
+        self.decoder_activation = decoder_activation
+        self.decoder_normalization = decoder_normalization
+        self.head_upsample = head_upsample
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "input_shape": self._input_shape,
+                "encoder_name": self.encoder_name,
+                "num_classes": self.num_classes,
+                "classifier_activation": self.classifier_activation,
+                "decoder_filters": self.decoder_filters,
+                "decoder_normalization": self.decoder_normalization,
+                "decoder_activation": self.decoder_activation,
+                "head_upsample": self.head_upsample,
+            }
+        )
+
+        if self.encoder_name is None and self.encoder is not None:
+            config.update({"encoder": keras.saving.serialize_keras_object(self.encoder)})
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        if "encoder" in config and isinstance(config["encoder"], dict):
+            config["encoder"] = keras.layers.deserialize(config["encoder"])
+        return super().from_config(config)

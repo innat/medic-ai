@@ -84,85 +84,6 @@ custom_encoder = SwinBackboneV2(
 model = SwinUNETR(encoder=custom_encoder)
 ```
 
-The available `model/encoder` can be listed down, showing below.
-
-```python
-import medicai
-medicai.models.list_models()
-
-                   Model Registry Catalog
-┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┓
-┃ Segmentor        ┃ Backbone Family ┃ Variants            ┃
-┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━┩
-│ • attention_unet │ convnext        │ • convnext_base     │
-│ • unet           │                 │ • convnext_large    │
-│ • unet_plus_plus │                 │ • convnext_small    │
-│                  │                 │ • convnext_tiny     │
-│                  │                 │ • convnext_xlarge   │
-│                  │                 │ • convnextv2_atto   │
-│                  │                 │ • convnextv2_base   │
-│                  │                 │ • convnextv2_femto  │
-│                  │                 │ • convnextv2_huge   │
-│                  │                 │ • convnextv2_large  │
-│                  │                 │ • convnextv2_nano   │
-│                  │                 │ • convnextv2_pico   │
-│                  │                 │ • convnextv2_small  │
-│                  │                 │ • convnextv2_tiny   │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • attention_unet │ densenet        │ • densenet121       │
-│ • trans_unet     │                 │ • densenet169       │
-│ • unet           │                 │ • densenet201       │
-│ • unet_plus_plus │                 │                     │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • attention_unet │ efficientnet    │ • efficientnet_b0   │
-│ • unet           │                 │ • efficientnet_b1   │
-│ • unet_plus_plus │                 │ • efficientnet_b2   │
-│                  │                 │ • efficientnet_b3   │
-│                  │                 │ • efficientnet_b4   │
-│                  │                 │ • efficientnet_b5   │
-│                  │                 │ • efficientnet_b6   │
-│                  │                 │ • efficientnet_b7   │
-│                  │                 │ • efficientnet_b8   │
-│                  │                 │ • efficientnet_l2   │
-│                  │                 │ • efficientnetv2_b0 │
-│                  │                 │ • efficientnetv2_b1 │
-│                  │                 │ • efficientnetv2_b2 │
-│                  │                 │ • efficientnetv2_b3 │
-│                  │                 │ • efficientnetv2_l  │
-│                  │                 │ • efficientnetv2_m  │
-│                  │                 │ • efficientnetv2_s  │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • segformer      │ mit             │ • mit_b0            │
-│                  │                 │ • mit_b1            │
-│                  │                 │ • mit_b2            │
-│                  │                 │ • mit_b3            │
-│                  │                 │ • mit_b4            │
-│                  │                 │ • mit_b5            │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • attention_unet │ resnet          │ • resnet101         │
-│ • trans_unet     │                 │ • resnet101v2       │
-│ • unet           │                 │ • resnet152         │
-│ • unet_plus_plus │                 │ • resnet152v2       │
-│                  │                 │ • resnet18          │
-│                  │                 │ • resnet200vd       │
-│                  │                 │ • resnet34          │
-│                  │                 │ • resnet50          │
-│                  │                 │ • resnet50v2        │
-│                  │                 │ • resnet50vd        │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • swin_unetr     │ swin            │ • swin_base         │
-│                  │                 │ • swin_base_v2      │
-│                  │                 │ • swin_small        │
-│                  │                 │ • swin_small_v2     │
-│                  │                 │ • swin_tiny         │
-│                  │                 │ • swin_tiny_v2      │
-├──────────────────┼─────────────────┼─────────────────────┤
-│ • unetr          │ vit             │ • vit_base          │
-│                  │                 │ • vit_huge          │
-│                  │                 │ • vit_large         │
-.....
-```
-
 # 📊 Features
 
 **Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
@@ -184,6 +105,7 @@ medicai.models.list_models()
 | [**UNet++**](medicai/models/unet_plus_plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**AttentionUNet**](medicai/models/unet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**DeepLabV3Plus**](medicai/models/deeplabv3plus/README.md) | 2D, 3D | Segmentation | CNN |
+| [**UPerNet**](medicai/models/upernet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNETR**](medicai/models/unetr/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR-V2**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |

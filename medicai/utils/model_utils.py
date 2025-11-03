@@ -78,12 +78,17 @@ def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
         layer_type (str): "upsampling" or "padding".
         **kwargs: Additional arguments passed to the selected layer.
     """
-    assert spatial_dims in (2, 3), "spatial_dims must be 2 or 3"
-    assert layer_type in (
+    if spatial_dims not in (2, 3):
+        raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
+
+    if layer_type not in (
         "upsampling",
         "padding",
         "cropping",
-    ), "layer_type must be 'upsampling' or 'padding' or 'cropping'"
+    ):
+        raise ValueError(
+            f"layer_type must be 'upsampling' or 'padding' or 'cropping'. Got: {layer_type}"
+        )
 
     layers_map = {
         "upsampling": {2: layers.UpSampling2D, 3: layers.UpSampling3D},
@@ -117,21 +122,44 @@ def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
         # Global average pooling 3D
         gap3d = get_pooling_layer(3, "avg", global_pool=True)
     """
-    assert spatial_dims in (2, 3), "spatial_dims must be 2, or 3"
-    assert layer_type in ("max", "avg"), "pool_type must be 'max' or 'avg'"
+    if spatial_dims not in (2, 3):
+        raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
 
-    if global_pool:
+    if layer_type not in (
+        "max",
+        "avg",
+        "adaptive_max",
+        "adaptive_avg",
+    ):
+        raise ValueError(
+            "layer_type must be one of 'max', 'avg', 'adaptive_max', or 'adaptive_avg'. "
+            f"Got: {layer_type}"
+        )
+
+    if layer_type.startswith("adaptive"):
+        from medicai.layers import (
+            AdaptiveAveragePooling2D,
+            AdaptiveAveragePooling3D,
+            AdaptiveMaxPooling2D,
+            AdaptiveMaxPooling3D,
+        )
+
+    if layer_type == "adaptive_max":
+        layers_map = {2: AdaptiveMaxPooling2D, 3: AdaptiveMaxPooling3D}
+    elif layer_type == "adaptive_avg":
+        layers_map = {2: AdaptiveAveragePooling2D, 3: AdaptiveAveragePooling3D}
+    elif global_pool:
         layers_map = {
             "max": {2: layers.GlobalMaxPooling2D, 3: layers.GlobalMaxPooling3D},
             "avg": {2: layers.GlobalAveragePooling2D, 3: layers.GlobalAveragePooling3D},
-        }
+        }[layer_type]
     else:
         layers_map = {
             "max": {2: layers.MaxPooling2D, 3: layers.MaxPooling3D},
             "avg": {2: layers.AveragePooling2D, 3: layers.AveragePooling3D},
-        }
+        }[layer_type]
 
-    LayerClass = layers_map[layer_type][spatial_dims]
+    LayerClass = layers_map[spatial_dims]
     return LayerClass(**kwargs)
 
 
