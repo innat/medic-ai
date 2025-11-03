@@ -38,7 +38,7 @@ class AdaptivePooling2D(layers.Layer):
         Performs the adaptive pooling logic for a single axis (H or W).
         """
         # 1. Get dimensions and kernel sizes
-        input_dim = inputs.shape[axis]
+        input_dim = int(inputs.shape[axis])
         small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
 
         # 2. Define 2D kernel size
