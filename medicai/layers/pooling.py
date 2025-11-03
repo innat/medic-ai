@@ -134,7 +134,7 @@ class AdaptivePooling3D(keras.layers.Layer):
 
     def pool_single_axis(self, inputs, output_size, axis):
         # 1. Get dimensions and kernel sizes
-        input_dim = inputs.shape[axis]
+        input_dim = int(inputs.shape[axis])
         small_window, big_window = get_adaptive_window_sizes(input_dim, output_size)
 
         # 2. Define Ksize for the pooling operation.
