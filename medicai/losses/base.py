@@ -20,9 +20,6 @@ class BaseDiceLoss(keras.losses.Loss):
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. This is used in some variations
-            like the F-beta loss. Defaults to False.
         dice_weight (float): The trade-off weight for the Dice loss component.
             Must be >= 0.0. A higher value gives more importance to Dice loss.
             Defaults to 1.0.
@@ -39,7 +36,6 @@ class BaseDiceLoss(keras.losses.Loss):
         num_classes,
         class_ids=None,
         smooth=1e-7,
-        squared_pred=False,
         dice_weight=1.0,
         ce_weight=1.0,
         name=None,
@@ -62,7 +58,6 @@ class BaseDiceLoss(keras.losses.Loss):
         self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
-        self.squared_pred = squared_pred
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
         self.smooth = smooth or keras.backend.epsilon()
@@ -134,9 +129,7 @@ class BaseDiceLoss(keras.losses.Loss):
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
-        union = ops.sum(y_true, axis=spatial_dims) + ops.sum(
-            ops.square(y_pred) if self.squared_pred else y_pred, axis=spatial_dims
-        )
+        union = ops.sum(y_true, axis=spatial_dims) + ops.sum(y_pred, axis=spatial_dims)
 
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - ops.mean(dice_score)

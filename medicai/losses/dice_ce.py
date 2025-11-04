@@ -25,8 +25,6 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
             classes and averaged.
         smooth (float, optional): A small smoothing factor for the Dice loss to
             prevent division by zero. Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
         dice_weight (float): The trade-off weight for the Dice loss component.
             Must be >= 0.0. A higher value gives more importance to Dice loss.
             Defaults to 1.0.
@@ -77,8 +75,6 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             classes and averaged.
         smooth (float, optional): A small smoothing factor for the Dice loss to
             prevent division by zero. Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
         dice_weight (float): The trade-off weight for the Dice loss component.
             Must be >= 0.0. A higher value gives more importance to Dice loss.
             Defaults to 1.0.
@@ -141,8 +137,6 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
             all channels are considered.
         smooth (float, optional): A small smoothing factor for the Dice loss to
             prevent division by zero. Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
         dice_weight (float): The trade-off weight for the Dice loss component.
             Must be >= 0.0. A higher value gives more importance to Dice loss.
             Defaults to 1.0.
