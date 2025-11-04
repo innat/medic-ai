@@ -181,8 +181,6 @@ class BaseIoULoss(BaseDiceLoss):
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
-            dice_weight=1.0,
-            ce_weight=1.0,
             name=name,
             **kwargs,
         )
@@ -237,8 +235,6 @@ class BaseTverskyLoss(BaseDiceLoss):
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
-            dice_weight=1.0,
-            ce_weight=1.0,
             name=name,
             **kwargs,
         )
@@ -282,13 +278,11 @@ class BaseGeneralizedDiceLoss(BaseDiceLoss):
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
-            dice_weight=1.0,
-            ce_weight=1.0,
             name=name,
             **kwargs,
         )
 
-    def generalized_dice_loss(y_true, y_pred, type_weight, smooth):
+    def generalized_dice_loss(self, y_true, y_pred):
         # Get spatial dimensions (all except batch and channel)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
@@ -300,17 +294,17 @@ class BaseGeneralizedDiceLoss(BaseDiceLoss):
         seg_vol = ops.sum(y_pred, axis=spatial_dims)
 
         # Calculate weights based on type_weight (using the original ref_vol)
-        if type_weight == "square":
-            weights = 1.0 / (ref_vol**2 + smooth)
-        elif type_weight == "simple":
-            weights = 1.0 / (ref_vol + smooth)
-        elif type_weight == "uniform":
+        if self.type_weight == "square":
+            weights = 1.0 / (ref_vol**2 + self.smooth)
+        elif self.type_weight == "simple":
+            weights = 1.0 / (ref_vol + self.smooth)
+        elif self.type_weight == "uniform":
             weights = ops.ones_like(ref_vol)
         else:
-            raise ValueError(f'The variable type_weight "{type_weight}" is not defined.')
+            raise ValueError(f'The variable type_weight "{self.type_weight}" is not defined.')
 
         # Mask weights to zero where the reference volume is near-zero (i.e., class is absent)
-        weights = ops.where(ref_vol < smooth, ops.zeros_like(weights), weights)
+        weights = ops.where(ref_vol < self.smooth, ops.zeros_like(weights), weights)
 
         # Calculate generalized dice score components
         generalised_dice_numerator = 2.0 * ops.sum(weights * intersection, axis=-1)  # [batch]
@@ -318,7 +312,7 @@ class BaseGeneralizedDiceLoss(BaseDiceLoss):
 
         # Apply smoothing to the overall fraction denominator
         generalised_dice_score = generalised_dice_numerator / (
-            generalised_dice_denominator + smooth
+            generalised_dice_denominator + self.smooth
         )
 
         # Handle NaN scores (set score to 1.0 -> loss to 0.0)
@@ -337,6 +331,4 @@ class BaseGeneralizedDiceLoss(BaseDiceLoss):
         return self.generalized_dice_loss(
             y_true_processed,
             y_pred_processed,
-            type_weight=self.type_weight,
-            smooth=self.smooth,
         )
