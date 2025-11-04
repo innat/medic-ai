@@ -277,6 +277,8 @@ class MixViTB0(MiTBase, DescribeMixin):
                 of the MLP block in each stage.
                 *Effect:* Controls the capacity of the feed-forward network. Default: [4, 4, 4, 4].
         """
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
 
         super().__init__(
             input_shape=input_shape,
@@ -284,7 +286,7 @@ class MixViTB0(MiTBase, DescribeMixin):
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[32, 64, 160, 256],
-            sr_ratios=[4, 2, 1, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
@@ -406,13 +408,16 @@ class MixViTB1(MiTBase, DescribeMixin):
                 *Effect:* Controls the capacity of the feed-forward network. Default: [4, 4, 4, 4].
         """
 
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
+
         super().__init__(
             input_shape=input_shape,
             max_drop_path_rate=0.1,
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[64, 128, 320, 512],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
@@ -535,13 +540,16 @@ class MixViTB2(MiTBase, DescribeMixin):
                 *Effect:* Controls the capacity of the feed-forward network. Default: [4, 4, 4, 4].
         """
 
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
+
         super().__init__(
             input_shape=input_shape,
             max_drop_path_rate=0.1,
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[64, 128, 320, 512],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
@@ -668,13 +676,16 @@ class MixViTB3(MiTBase, DescribeMixin):
                 *Effect:* Controls the capacity of the feed-forward network. Default: [4, 4, 4, 4].
         """
 
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
+
         super().__init__(
             input_shape=input_shape,
             max_drop_path_rate=0.1,
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[64, 128, 320, 512],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
@@ -797,13 +808,16 @@ class MixViTB4(MiTBase, DescribeMixin):
                 *Effect:* Controls the capacity of the feed-forward network. Default: [4, 4, 4, 4].
         """
 
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
+
         super().__init__(
             input_shape=input_shape,
             max_drop_path_rate=0.1,
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[64, 128, 320, 512],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
@@ -932,13 +946,16 @@ class MixViTB5(MiTBase, DescribeMixin):
                 Default: [4, 4, 4, 4].
         """
 
+        spatial_dims = len(input_shape) - 1
+        sr_ratio = [8, 4, 2, 1] if spatial_dims == 2 else [4, 2, 1, 1]
+
         super().__init__(
             input_shape=input_shape,
             max_drop_path_rate=0.1,
             layer_norm_epsilon=1e-6,
             qkv_bias=True,
             project_dim=[64, 128, 320, 512],
-            sr_ratios=[8, 4, 2, 1],
+            sr_ratios=sr_ratio,
             patch_sizes=[7, 3, 3, 3],
             strides=[4, 2, 2, 2],
             num_heads=[1, 2, 5, 8],
