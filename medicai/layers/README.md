@@ -71,3 +71,40 @@ run_test_3d()
 # 2D Tests (Max & Avg) passed for pool size (5, 7).
 # 3D Tests (Max & Avg) passed for pool size (5, 7, 9).
 ```
+
+# Resizing 
+
+## Resizing N-Dimensional Data
+
+In `medicai`, you can find `ResizingND` layer which support both 2D and 3D interpolation. For 2D interpolation, it uses `keras.ops.image.resize` method. For 3D interpolation, a custom 3D interpolation methods are implemented, supported 3D interpolation methods are: `trilinear` and `nearest`. 
+
+```python
+size_out = 128
+align_corners = False
+method = 'trilinear' # "trilinear", 'nearest'
+
+torch_input = torch.rand(2, 3, 96, 96, 96)
+upsample_op = torch.nn.Upsample(
+    size=(size_out, size_out, size_out),
+    mode=method, 
+    align_corners=align_corners
+)
+
+output_torch = upsample_op(torch_input).detach().numpy() 
+output_torch = output_torch.transpose(0, 2, 3, 4, 1)
+resize_op = medicai.layers.ResizingND(
+    target_shape=(size_out, size_out, size_out), 
+    interpolation=method, 
+    align_corners=align_corners
+)
+output_keras = resize_op(output_torch).numpy() 
+
+print(np.abs(output_keras - output_torch).max()) # 0.0
+print(np.mean(np.abs(output_keras - output_torch))) # 0.0
+
+np.testing.assert_allclose(
+    output_keras, output_torch, atol=1e-6, rtol=1e-6
+) # ok
+```
+
+For 3D input, this layer only support `channel_last` by default. Additionally, it supports dynamic input shape while building the model, except `jax` backend in keras as `jax` only works with static shape. Also, `medicai.layers.ResizingND` can take `scale_factor` instead of `target_shape`.
