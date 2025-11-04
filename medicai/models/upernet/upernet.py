@@ -62,6 +62,7 @@ class UPerNet(keras.Model, DescribeMixin):
         "senet",
         "xception",
         "swin",
+        "mit",
     ]
 
     def __init__(
