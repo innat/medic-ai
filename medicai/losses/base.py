@@ -283,6 +283,8 @@ class BaseGeneralizedDiceLoss(BaseDiceLoss):
         )
 
     def generalized_dice_loss(self, y_true, y_pred):
+        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+
         # Get spatial dimensions (all except batch and channel)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
