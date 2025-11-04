@@ -150,3 +150,193 @@ class BaseDiceLoss(keras.losses.Loss):
         y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
         dice = self.dice_loss(y_true_processed, y_pred_processed)
         return dice
+
+
+class BaseIoULoss(BaseDiceLoss):
+    """Base class for IoU/Jaccard-based loss functions.
+
+    Implements IoU loss for evaluating set overlap between predicted and
+    ground truth segmentation masks.
+
+    Args:
+        from_logits (bool): Whether `y_pred` is expected to be logits.
+        num_classes (int): Number of segmentation classes.
+        class_ids (int, list of int, or None): Classes to include in loss.
+        smooth (float): Smoothing constant to avoid division by zero.
+        name (str): Optional name, defaults to "iou_loss".
+    """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        name=None,
+        **kwargs,
+    ):
+        name = name or "iou_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=1.0,
+            ce_weight=1.0,
+            name=name,
+            **kwargs,
+        )
+
+    def iou_loss(self, y_true, y_pred):
+        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+
+        # Determine spatial dimensions dynamically (e.g., [1, 2] for 4D input)
+        # We exclude batch dim (0) and channel/class dim (-1)
+        spatial_dims = list(range(1, len(y_pred.shape) - 1))
+
+        # Intersection: (B, C) tensor
+        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
+
+        # Total area (Union): (B, C) tensor
+        # IoU Denominator = Area(A) + Area(B) - Area(A intersect B)
+        total = (
+            ops.sum(y_true, axis=spatial_dims) + ops.sum(y_pred, axis=spatial_dims) - intersection
+        )
+
+        # IoU Score per batch element and per class: (B, C) tensor
+        # Add smooth factor to avoid division by zero
+        iou_score = (intersection + self.smooth) / (total + self.smooth)
+
+        # Jaccard Loss: 1.0 - mean IoU score
+        # Averaged over the entire batch
+        return 1.0 - ops.mean(iou_score)
+
+    def call(self, y_true, y_pred):
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed = self._process_inputs(y_true)
+
+        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
+        return self.iou_loss(y_true_processed, y_pred_processed)
+
+
+class BaseTverskyLoss(BaseDiceLoss):
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        alpha=0.5,
+        beta=0.5,
+        class_ids=None,
+        smooth=1e-7,
+        name=None,
+        **kwargs,
+    ):
+        name = name or "tversky_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=1.0,
+            ce_weight=1.0,
+            name=name,
+            **kwargs,
+        )
+        self.alpha = alpha
+        self.beta = beta
+
+    def tversky_loss(self, y_true, y_pred):
+        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        spatial_dims = list(range(1, len(y_pred.shape) - 1))
+
+        tp = ops.sum(y_true * y_pred, axis=spatial_dims)
+        fp = ops.sum(y_pred * (1 - y_true), axis=spatial_dims)
+        fn = ops.sum((1 - y_pred) * y_true, axis=spatial_dims)
+
+        tversky_index = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
+        return 1.0 - ops.mean(tversky_index)
+
+    def call(self, y_true, y_pred):
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed = self._process_inputs(y_true)
+
+        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
+        return self.tversky_loss(y_true_processed, y_pred_processed)
+
+
+class BaseGeneralizedDiceLoss(BaseDiceLoss):
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        type_weight="square",
+        class_ids=None,
+        smooth=1e-7,
+        name=None,
+        **kwargs,
+    ):
+        name = name or "generalized_dice_loss"
+        self.type_weight = type_weight.lower()
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=1.0,
+            ce_weight=1.0,
+            name=name,
+            **kwargs,
+        )
+
+    def generalized_dice_loss(y_true, y_pred, type_weight, smooth):
+        # Get spatial dimensions (all except batch and channel)
+        spatial_dims = list(range(1, len(y_pred.shape) - 1))
+
+        # Calculate reference volumes (sum over spatial dimensions)
+        ref_vol = ops.sum(y_true, axis=spatial_dims)
+
+        # Calculate intersection and segmentation volumes
+        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
+        seg_vol = ops.sum(y_pred, axis=spatial_dims)
+
+        # Calculate weights based on type_weight (using the original ref_vol)
+        if type_weight == "square":
+            weights = 1.0 / (ref_vol**2 + smooth)
+        elif type_weight == "simple":
+            weights = 1.0 / (ref_vol + smooth)
+        elif type_weight == "uniform":
+            weights = ops.ones_like(ref_vol)
+        else:
+            raise ValueError(f'The variable type_weight "{type_weight}" is not defined.')
+
+        # Mask weights to zero where the reference volume is near-zero (i.e., class is absent)
+        weights = ops.where(ref_vol < smooth, ops.zeros_like(weights), weights)
+
+        # Calculate generalized dice score components
+        generalised_dice_numerator = 2.0 * ops.sum(weights * intersection, axis=-1)  # [batch]
+        generalised_dice_denominator = ops.sum(weights * (seg_vol + ref_vol), axis=-1)  # [batch]
+
+        # Apply smoothing to the overall fraction denominator
+        generalised_dice_score = generalised_dice_numerator / (
+            generalised_dice_denominator + smooth
+        )
+
+        # Handle NaN scores (set score to 1.0 -> loss to 0.0)
+        generalised_dice_score = ops.where(
+            ops.isnan(generalised_dice_score),
+            ops.ones_like(generalised_dice_score),
+            generalised_dice_score,
+        )
+
+        return 1.0 - generalised_dice_score
+
+    def call(self, y_true, y_pred):
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed = self._process_inputs(y_true)
+        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
+        return self.generalized_dice_loss(
+            y_true_processed,
+            y_pred_processed,
+            type_weight=self.type_weight,
+            smooth=self.smooth,
+        )
