@@ -299,6 +299,17 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         weighted_total = ops.sum(weights * (seg_vol + ref_vol), axis=-1)
         gld_component = (2.0 * weighted_intersection) / (weighted_total + self.smooth)
 
+        # No foreground anywhere: y_true and y_pred contains background cases
+        no_foreground = ops.all(
+            ops.less(ref_vol + seg_vol, self.smooth),
+            axis=-1,
+        )
+        gld_component = ops.where(
+            no_foreground,
+            ops.ones_like(gld_component),
+            gld_component,
+        )
+
         # Handle potential NaN scores by treating them as a perfect score (loss 0.0).
         gld_component = ops.where(
             ops.isnan(gld_component),

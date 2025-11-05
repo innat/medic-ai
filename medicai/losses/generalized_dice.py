@@ -218,7 +218,7 @@ class BinaryGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
 
             Defaults to 'mean'.
         name (str, optional): Name of the loss function.
-            Defaults to "binary_dice_loss".
+            Defaults to "binary_generalized_dice_loss".
         **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
 
