@@ -368,23 +368,17 @@ the core metric in `compute_loss`.
     specific_args="", default_name="base_loss"
 )
 
-DICE_SPECIFIC_ARGS = """    dice_weight (float): The trade-off weight for the Dice loss component.
-        Must be >= 0.0. A higher value gives more importance to Dice loss.
-        Defaults to 1.0.
-    ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-        Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
-        Defaults to 1.0.
-"""
+
 DICE_LOSS_DOCSTRING = """Base class for Dice-based loss functions.
 
-This class implements the core 1.0 - Dice Score logic.
+This class implements the core `1.0 - Dice Score` logic.
 """ + BASE_COMMON_ARGS.format(
-    specific_args=DICE_SPECIFIC_ARGS, default_name="dice_loss"
+    specific_args="", default_name="dice_loss"
 )
 
 IOU_LOSS_DOCSTRING = """Base class for IoU/Jaccard-based loss functions.
 
-This class implements the core 1.0 - IoU/Jaccard Score logic.
+This class implements the core `1.0 - IoU/Jaccard Score` logic.
 """ + BASE_COMMON_ARGS.format(
     specific_args="", default_name="iou_loss"
 )
@@ -398,7 +392,7 @@ TVERSKY_SPECIFIC_ARGS = """    alpha (float, optional): Weight for **False Posit
 """
 TVERSKY_LOSS_DOCSTRING = """Base class for Tversky-based loss functions.
 
-This class implements the core 1.0 - Tversky Index logic, generalizing Dice and Jaccard.
+This class implements the core `1.0 - Tversky Index` logic, generalizing Dice and Jaccard.
 """ + BASE_COMMON_ARGS.format(
     specific_args=TVERSKY_SPECIFIC_ARGS, default_name="tversky_loss"
 )
