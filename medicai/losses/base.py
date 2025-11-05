@@ -299,13 +299,6 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         weighted_total = ops.sum(weights * (seg_vol + ref_vol), axis=-1)
         gld_component = (2.0 * weighted_intersection) / (weighted_total + self.smooth)
 
-        # For classes absent in both ground truth and prediction (true negatives),
-        # the score should be 1.0 (loss 0.0).
-        is_true_negative = ops.logical_and(
-            ops.less(ref_vol, self.smooth), ops.less(seg_vol, self.smooth)
-        )
-        gld_component = ops.where(is_true_negative, ops.ones_like(gld_component), gld_component)
-
         # Handle potential NaN scores by treating them as a perfect score (loss 0.0).
         gld_component = ops.where(
             ops.isnan(gld_component),
