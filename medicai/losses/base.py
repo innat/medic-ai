@@ -127,7 +127,7 @@ class BaseDiceLoss(BaseLoss):
         name=None,
         **kwargs,
     ):
-        name = name or "iou_loss"
+        name = name or "dice_loss"
 
         if dice_weight < 0.0:
             raise ValueError("dice_weight should be not less than 0.0.")
@@ -305,20 +305,20 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         weights = ops.where(ref_vol < self.smooth, ops.zeros_like(weights), weights)
 
         # Calculate generalized dice score components
-        gld_numerator = 2.0 * ops.sum(weights * intersection, axis=-1)  # [batch]
-        gld_denominator = ops.sum(weights * (seg_vol + ref_vol), axis=-1)  # [batch]
+        gld_numerator = 2.0 * weights * intersection
+        gld_denominator = weights * (seg_vol + ref_vol)
 
         # Apply smoothing to the overall fraction denominator
-        gld_score = gld_numerator / (gld_denominator + self.smooth)
+        gld_component = gld_numerator / (gld_denominator + self.smooth)
 
         # Handle NaN scores (set score to 1.0 -> loss to 0.0)
-        gld_score = ops.where(
-            ops.isnan(gld_score),
-            ops.ones_like(gld_score),
-            gld_score,
+        gld_component = ops.where(
+            ops.isnan(gld_component),
+            ops.zeros_like(gld_component),
+            gld_component,
         )
 
-        return 1.0 - gld_score
+        return 1.0 - gld_component
 
 
 BASE_COMMON_ARGS = """
@@ -338,7 +338,7 @@ Args:
         and this parameter controls how it is aggregated.
         
         * **'sum'**: Sum the loss tensor over all batch elements and classes.
-        * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+        * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size x Number of Classes).
         * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over 
             all elements, then divide by the Batch Size**.
         * **'none'**: Return the loss tensor without aggregation, preserving the 

@@ -26,7 +26,8 @@ class SparseIoULoss(BaseIoULoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -104,7 +105,8 @@ class CategoricalIoULoss(BaseIoULoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -177,7 +179,8 @@ class BinaryIoULoss(BaseIoULoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the

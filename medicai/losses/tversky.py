@@ -28,7 +28,8 @@ class SparseTverskyLoss(BaseTverskyLoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -112,7 +113,8 @@ class CategoricalTverskyLoss(BaseTverskyLoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -191,7 +193,8 @@ class BinaryTverskyLoss(BaseTverskyLoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -213,6 +216,31 @@ class BinaryTverskyLoss(BaseTverskyLoss, DescribeMixin):
         name (str, optional): Name of the loss function. Defaults to "binary_tversky_loss".
         **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        alpha=0.5,
+        beta=0.5,
+        class_ids=None,
+        smooth=1e-7,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "binary_tversky_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            alpha=alpha,
+            beta=beta,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def _process_predictions(self, y_pred):
         if self.from_logits:
