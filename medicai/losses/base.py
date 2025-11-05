@@ -295,11 +295,9 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         weights = ops.where(ref_vol < self.smooth, ops.zeros_like(weights), weights)
 
         # Calculate generalized dice score components
-        gld_numerator = 2.0 * weights * intersection
-        gld_denominator = weights * (seg_vol + ref_vol)
-
-        # Apply smoothing to the overall fraction denominator
-        gld_component = gld_numerator / (gld_denominator + self.smooth)
+        weighted_intersection = ops.sum(weights * intersection, axis=-1)
+        weighted_total = ops.sum(weights * (seg_vol + ref_vol), axis=-1)
+        gld_component = (2.0 * weighted_intersection) / (weighted_total + self.smooth)
 
         # For classes absent in both ground truth and prediction (true negatives),
         # the score should be 1.0 (loss 0.0).
