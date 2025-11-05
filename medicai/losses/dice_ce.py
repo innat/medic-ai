@@ -72,6 +72,13 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         **kwargs,
     ):
         name = name or "sparse_dice_crossentropy"
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight should be not less than 0.0.")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight should be not less than 0.0.")
+
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
@@ -171,6 +178,13 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         **kwargs,
     ):
         name = name or "categorical_dice_crossentropy"
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight should be not less than 0.0.")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight should be not less than 0.0.")
+
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
@@ -246,7 +260,8 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
             and this parameter controls how it is aggregated.
 
             * **'sum'**: Sum the loss tensor over all batch elements and classes.
-            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size x Number of Classes).
+            * **'mean'**: Compute the **mean of the loss tensor over all elements**
+                (Batch Size x Number of Classes).
             * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
                 all elements, then divide by the Batch Size**.
             * **'none'**: Return the loss tensor without aggregation, preserving the
@@ -282,6 +297,13 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         **kwargs,
     ):
         name = name or "binary_dice_crossentropy"
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight should be not less than 0.0.")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight should be not less than 0.0.")
+
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,

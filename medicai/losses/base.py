@@ -121,21 +121,11 @@ class BaseDiceLoss(BaseLoss):
         num_classes,
         class_ids=None,
         smooth=1e-7,
-        dice_weight=1.0,
-        ce_weight=1.0,
         reduction="mean",
         name=None,
         **kwargs,
     ):
         name = name or "dice_loss"
-
-        if dice_weight < 0.0:
-            raise ValueError("dice_weight should be not less than 0.0.")
-        if ce_weight < 0.0:
-            raise ValueError("ce_weight should be not less than 0.0.")
-
-        self.dice_weight = dice_weight
-        self.ce_weight = ce_weight
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
@@ -311,10 +301,17 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         # Apply smoothing to the overall fraction denominator
         gld_component = gld_numerator / (gld_denominator + self.smooth)
 
-        # Handle NaN scores (set score to 1.0 -> loss to 0.0)
+        # For classes absent in both ground truth and prediction (true negatives),
+        # the score should be 1.0 (loss 0.0).
+        is_true_negative = ops.logical_and(
+            ops.less(ref_vol, self.smooth), ops.less(seg_vol, self.smooth)
+        )
+        gld_component = ops.where(is_true_negative, ops.ones_like(gld_component), gld_component)
+
+        # Handle potential NaN scores by treating them as a perfect score (loss 0.0).
         gld_component = ops.where(
             ops.isnan(gld_component),
-            ops.zeros_like(gld_component),
+            ops.ones_like(gld_component),
             gld_component,
         )
 
@@ -338,7 +335,8 @@ Args:
         and this parameter controls how it is aggregated.
         
         * **'sum'**: Sum the loss tensor over all batch elements and classes.
-        * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size x Number of Classes).
+        * **'mean'**: Compute the **mean of the loss tensor over all elements** 
+            (Batch Size x Number of Classes).
         * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over 
             all elements, then divide by the Batch Size**.
         * **'none'**: Return the loss tensor without aggregation, preserving the 
