@@ -5,6 +5,7 @@ from medicai.losses.dice import SparseDiceLoss  # noqa: F401
 from medicai.losses.dice_ce import BinaryDiceCELoss  # noqa: F401
 from medicai.losses.dice_ce import CategoricalDiceCELoss  # noqa: F401
 from medicai.losses.dice_ce import SparseDiceCELoss  # noqa: F401
+from medicai.losses.generalized_dice import BinaryGeneralizedDiceLoss  # noqa: F401
 from medicai.losses.generalized_dice import CategoricalGeneralizedDiceLoss  # noqa: F401
 from medicai.losses.generalized_dice import SparseGeneralizedDiceLoss  # noqa: F401
 from medicai.losses.iou import BinaryIoULoss  # noqa: F401
