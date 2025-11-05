@@ -359,6 +359,11 @@ Args:
         Defaults to 'mean'.
     name (str, optional): Name of the loss function. Defaults to "{default_name}".
     **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
+
+Note: Unlike other losses, Generalized Dice loss aggregates all classes into a single 
+score per batch element, so with reduction='none', it returns shape [batch] instead 
+of [batch, num_classes].
+
 """
 
 BASE_LOSS_DOCSTRING = """Base class for common segmentation loss functions.

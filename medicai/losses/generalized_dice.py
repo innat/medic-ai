@@ -179,7 +179,7 @@ if predictions are logits.
 """
     + GENERALIZED_DICE_DOCSTRING
 )
-CategoricalGeneralizedDiceLoss.__doc__ = SPARSE_LOSS_DOCSTRING.format(
+CategoricalGeneralizedDiceLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING.format(
     name="categorical_generalized_dice_loss"
 )
 

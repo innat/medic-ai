@@ -151,9 +151,7 @@ activation on logits.
 """
     + DICE_DOCSTRING
 )
-CategoricalDiceLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING.format(
-    name="categorical_generalized_dice_loss"
-)
+CategoricalDiceLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING.format(name="categorical_dice_loss")
 
 SPARSE_LOSS_DOCSTRING = (
     """Dice loss for sparse categorical segmentation labels.
