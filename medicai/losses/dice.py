@@ -10,22 +10,74 @@ class SparseDiceLoss(BaseDiceLoss, DescribeMixin):
 
     This loss function adapts the Dice loss to work with sparse labels
     (integer class indices) by one-hot encoding them before calculating
-    the Dice coefficient.
+    the Dice coefficient. It uses a **Softmax** activation on logits.
 
     Args:
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
-        name (str, optional): Name of the loss function. Defaults to "sparse_dice_loss".
-        **kwargs: Additional keyword arguments passed to `BaseDiceLoss`.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
+        name (str, optional): Name of the loss function.
+            Defaults to "sparse_dice_loss".
+        **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "sparse_dice_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def _process_predictions(self, y_pred):
         if self.from_logits:
@@ -45,22 +97,75 @@ class CategoricalDiceLoss(BaseDiceLoss, DescribeMixin):
     """Dice loss for categorical (one-hot encoded) segmentation labels.
 
     This loss function calculates the Dice loss directly using the provided
-    one-hot encoded labels and prediction probabilities.
+    one-hot encoded labels and prediction probabilities. It uses a **Softmax**
+    activation on logits.
 
     Args:
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
-        name (str, optional): Name of the loss function. Defaults to "categorical_dice_loss".
-        **kwargs: Additional keyword arguments passed to `BaseDiceLoss`.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
+        name (str, optional): Name of the loss function.
+            Defaults to "categorical_dice_loss".
+        **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "categorical_dice_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def _process_predictions(self, y_pred):
         if self.from_logits:
@@ -70,30 +175,80 @@ class CategoricalDiceLoss(BaseDiceLoss, DescribeMixin):
 
 
 class BinaryDiceLoss(BaseDiceLoss, DescribeMixin):
-    """Dice loss for binary segmentation tasks.
+    """Dice loss for binary or multi-label segmentation tasks.
 
-    This loss function is specifically designed for binary segmentation where
-    the labels typically have a single channel (representing the foreground).
-    It applies a sigmoid activation to logits if provided.
+    This loss function is specifically designed for binary or multi-label
+    segmentation where the labels typically have a single or multi-label channel
+    (representing the foreground). It uses a **Sigmoid** activation on logits.
 
     Args:
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a sigmoid activation.
-        num_classes (int): For binary tasks, this is typically 1, but can be 2
-            if the background is explicitly represented. The `class_id` parameter
-            can be used to target the foreground channel if `num_classes` is 2.
+        num_classes (int): Must be set to **1** for true binary segmentation,
+            or **2** if the input/output explicitly contains two channels (e.g.,
+            foreground and background).
+        dice_weight (float): The trade-off weight for the Dice loss component.
+            Defaults to 1.0.
+        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
-            For binary tasks, you might specify `class_id=0` or `class_id=[0]`
-            to target the foreground channel if `num_classes=2`. If None, and
-            `num_classes=1`, it will calculate for the single channel.
+            If None and `num_classes=1`, the loss is calculated on the single channel.
         smooth (float, optional): A small smoothing factor to prevent division by zero.
             Defaults to 1e-7.
-        squared_pred (bool, optional): If True, the predictions in the denominator
-            of the Dice coefficient will be squared. Defaults to False.
-        name (str, optional): Name of the loss function. Defaults to "binary_dice_loss".
-        **kwargs: Additional keyword arguments passed to `BaseDiceLoss`.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
+        name (str, optional): Name of the loss function.
+            Defaults to "binary_dice_loss".
+        **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "binary_dice_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def _process_predictions(self, y_pred):
         if self.from_logits:

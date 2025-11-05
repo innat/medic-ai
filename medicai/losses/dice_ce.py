@@ -31,9 +31,58 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
             Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
             Defaults to 1.0.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
         name (str, optional): Name of the loss function. Defaults to "sparse_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `SparseDiceLoss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "sparse_dice_crossentropy"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def call(self, y_true, y_pred):
         """Computes the combined Sparse Dice and Categorical Cross-Entropy loss.
@@ -81,9 +130,58 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
             Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
             Defaults to 1.0.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
         name (str, optional): Name of the loss function. Defaults to "categorical_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `CategoricalDiceLoss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "categorical_dice_crossentropy"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def call(self, y_true, y_pred):
         """Computes the combined Categorical Dice and Categorical Cross-Entropy loss.
@@ -143,9 +241,58 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
             Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
             Defaults to 1.0.
+        reduction (str, optional): Type of reduction to apply to the loss.
+            The output of `call()` is the loss value per batch element/class,
+            and this parameter controls how it is aggregated.
+
+            * **'sum'**: Sum the loss tensor over all batch elements and classes.
+            * **'mean'**: Compute the **mean of the loss tensor over all elements** (Batch Size × Number of Classes).
+            * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
+                all elements, then divide by the Batch Size**.
+            * **'none'**: Return the loss tensor without aggregation, preserving the
+                shape `(Batch Size, Num Classes)`.
+
+            Example:
+                # After spatial reduction (output of `compute_loss`):
+                per_sample_per_class_loss = [
+                    [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
+                    [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
+                ]
+
+                # reduction="sum": 2.9
+                # reduction="mean": 2.9 / 6 = 0.483
+                # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
+                # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+            Defaults to 'mean'.
         name (str, optional): Name of the loss function. Defaults to "binary_dice_crossentropy".
         **kwargs: Additional keyword arguments passed to `BinaryDiceLoss`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "binary_dice_crossentropy"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            dice_weight=dice_weight,
+            ce_weight=ce_weight,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
 
     def call(self, y_true, y_pred):
         """Computes the combined Binary Dice and Binary/Categorical Cross-Entropy loss.
