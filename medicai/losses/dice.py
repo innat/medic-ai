@@ -16,10 +16,6 @@ class SparseDiceLoss(BaseDiceLoss, DescribeMixin):
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
@@ -101,10 +97,6 @@ class CategoricalDiceLoss(BaseDiceLoss, DescribeMixin):
         from_logits (bool): Whether `y_pred` is expected to be logits. If True,
             the predictions will be passed through a softmax activation.
         num_classes (int): The total number of classes in the segmentation task.
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None, the Dice loss will be calculated for all classes and averaged.
@@ -181,10 +173,6 @@ class BinaryDiceLoss(BaseDiceLoss, DescribeMixin):
         num_classes (int): Must be set to **1** for true binary segmentation,
             or **2** if the input/output explicitly contains two channels (e.g.,
             foreground and background).
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Defaults to 1.0.
         class_ids (int, list of int, or None): If an integer or a list of integers,
             the Dice loss will be calculated only for the specified class(es).
             If None and `num_classes=1`, the loss is calculated on the single channel.
