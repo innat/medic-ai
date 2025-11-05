@@ -98,14 +98,14 @@ class BaseLoss(keras.losses.Loss):
         )
 
     def call(self, y_true, y_pred):
-        """Computes the Dice loss.
+        """Computes the loss.
 
         Args:
             y_true (Tensor): Ground truth tensor.
             y_pred (Tensor): Prediction tensor.
 
         Returns:
-            Tensor: The computed Dice loss.
+            Tensor: The computed loss.
         """
         y_pred_processed = self._process_predictions(y_pred)
         y_true_processed = self._process_inputs(y_true)
