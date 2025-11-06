@@ -90,9 +90,9 @@ class BinaryGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
+            weight_type=weight_type,
             class_ids=class_ids,
             smooth=smooth,
-            weight_type=weight_type,
             reduction=reduction,
             name=name,
             **kwargs,
