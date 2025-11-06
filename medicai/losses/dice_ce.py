@@ -1,8 +1,8 @@
-import keras
 from keras import ops
 
 from medicai.utils import DescribeMixin
 
+from .base import BASE_COMMON_ARGS
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
@@ -221,7 +221,7 @@ This loss function combines the Categorical Dice loss with the standard
 Categorical Cross-Entropy loss. It is suitable for multi-class segmentation
 tasks where the ground truth labels are one-hot encoded.
 
-""" + DICE_CE_DOCSTRING.format(
+""" + BASE_COMMON_ARGS.format(
     specific_args=DICE_CE_DOCSTRING, default_name="categorical_dice_crossentropy"
 )
 
@@ -233,15 +233,14 @@ Cross-Entropy loss. It is often used in multi-class segmentation tasks
 to leverage the strengths of both loss functions, encouraging both region
 overlap (Dice) and per-pixel classification accuracy (Cross-Entropy).
 
-""" + DICE_CE_DOCSTRING.format(
+""" + BASE_COMMON_ARGS.format(
     specific_args=DICE_CE_DOCSTRING, default_name="sparse_dice_crossentropy"
 )
 
-BINARY_LOSS_DOCSTRING = """Combined Binary Dice and Binary/Categorical Cross-Entropy Loss.
+BINARY_LOSS_DOCSTRING = """Combined Binary Dice and Binary Cross-Entropy Loss.
 
-This loss function combines the Binary Dice loss with either Binary or
-Categorical Cross-Entropy, depending on the number of channels in the
-prediction tensor (`y_pred`):
+This loss function combines the Binary Dice loss with Binary Cross-Entropy, 
+regardless of the number of channels in the prediction tensor (`y_pred`):
 
 - If `y_pred` has one channel (shape `(..., 1)`), it's treated as a
     single-class binary segmentation problem (e.g., foreground vs. background).
@@ -250,10 +249,8 @@ prediction tensor (`y_pred`):
 - If `y_pred` has more than one channel (shape `(..., C)` where C > 1),
     it's treated as a multi-label binary segmentation problem, where each
     channel represents the probability of a specific binary class being present.
-    Categorical Cross-Entropy is used in this case, with the ground truth
-    (`y_true`) expected to be one-hot encoded or have a compatible shape.
 
-""" + DICE_CE_DOCSTRING.format(
+""" + BASE_COMMON_ARGS.format(
     specific_args=DICE_CE_DOCSTRING, default_name="binary_dice_crossentropy"
 )
 
