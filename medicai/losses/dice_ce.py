@@ -85,7 +85,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
         # Compute CE loss
-        ce_loss = cross_entropy(y_true, y_pred)
+        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
         combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
@@ -121,7 +121,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
-        self.reduction = reduction
+        self.hybrid_reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Categorical Dice and Categorical Cross-Entropy loss.
@@ -140,7 +140,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
         # Compute CE loss
-        ce_loss = cross_entropy(y_true, y_pred)
+        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
         combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
@@ -176,7 +176,7 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
-        self.reduction = reduction
+        self.hybrid_reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Binary Dice and Binary/Categorical Cross-Entropy loss.
@@ -200,10 +200,10 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
         # Compute BCE loss
-        bce_loss = binary_cross_entropy(y_true, y_pred)
+        bce_loss = binary_cross_entropy(y_true_processed, y_pred_processed)
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * bce_loss)
-        combined_loss = apply_reduction(combined_loss, self.reduction)
+        combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
         return combined_loss
 
 

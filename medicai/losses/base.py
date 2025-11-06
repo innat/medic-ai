@@ -80,7 +80,7 @@ class BaseLoss(keras.losses.Loss):
         return y_true
 
     def _process_inputs(self, y_true, y_pred):
-        y_true_processed = self._process_inputs(y_true)
+        y_true_processed = self._process_targets(y_true)
         y_pred_processed = self._process_predictions(y_pred)
         y_true_processed, y_pred_processed = self._get_desired_class_channels(
             y_true_processed, y_pred_processed
