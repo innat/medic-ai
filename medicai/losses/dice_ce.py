@@ -6,6 +6,37 @@ from medicai.utils import DescribeMixin
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
+def cross_entropy(y_true, y_pred):
+    spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    ce_loss = -y_true * ops.log(y_pred)
+    ce_loss = ops.mean(ce_loss, axis=spatial_dims)
+    return ce_loss
+
+
+def binary_cross_entropy(y_true, y_pred):
+    spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    ce_loss = -(y_true * ops.log(y_pred) + (1.0 - y_true) * ops.log(1.0 - y_pred))
+    ce_loss = ops.mean(ce_loss, axis=spatial_dims)
+    return ce_loss
+
+
+def apply_reduction(loss, reduction):
+    if reduction == "none":
+        return loss
+    elif reduction == "sum":
+        return ops.sum(loss)
+    elif reduction == "mean":
+        return ops.mean(loss)
+    elif reduction == "sum_over_batch_size":
+        batch_size = ops.cast(ops.shape(loss)[0], loss.dtype)
+        return ops.sum(loss) / (batch_size + ops.cast(ops.equal(batch_size, 0.0), loss.dtype))
+    else:
+        raise ValueError(
+            f"Unsupported reduction type: {reduction} "
+            "Supported methods are none, mean, sum, sum_over_batch_size"
+        )
+
+
 class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
     def __init__(
         self,
@@ -19,6 +50,16 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         name=None,
         **kwargs,
     ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name,
+            **kwargs,
+        )
+
         name = name or "sparse_dice_crossentropy"
         if dice_weight < 0.0:
             raise ValueError("dice_weight should be not less than 0.0.")
@@ -27,15 +68,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
-        super().__init__(
-            from_logits=from_logits,
-            num_classes=num_classes,
-            class_ids=class_ids,
-            smooth=smooth,
-            reduction=reduction,
-            name=name,
-            **kwargs,
-        )
+        self.reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Sparse Dice and Categorical Cross-Entropy loss.
@@ -48,15 +81,18 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
             Tensor: The combined loss.
         """
         dice_loss = super().call(y_true, y_pred)
+        y_true = self._process_inputs(y_true)
+        y_pred = self._process_predictions(y_pred)
+        y_pred = ops.clip(y_pred, self.smooth, 1.0 - self.smooth)
 
         if self.class_ids is not None:
-            y_true = super()._process_inputs(y_true)
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
-        ce_loss = keras.losses.categorical_crossentropy(
-            y_true, y_pred, from_logits=self.from_logits
-        )
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        ce_loss = cross_entropy(y_true, y_pred)
+
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
+        combined_loss = apply_reduction(combined_loss, self.reduction)
+        return combined_loss
 
 
 class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
@@ -72,6 +108,15 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         name=None,
         **kwargs,
     ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name,
+            **kwargs,
+        )
         name = name or "categorical_dice_crossentropy"
         if dice_weight < 0.0:
             raise ValueError("dice_weight should be not less than 0.0.")
@@ -80,15 +125,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
-        super().__init__(
-            from_logits=from_logits,
-            num_classes=num_classes,
-            class_ids=class_ids,
-            smooth=smooth,
-            reduction=reduction,
-            name=name,
-            **kwargs,
-        )
+        self.reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Categorical Dice and Categorical Cross-Entropy loss.
@@ -101,14 +138,17 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             Tensor: The combined loss.
         """
         dice_loss = super().call(y_true, y_pred)
+        y_true = self._process_inputs(y_true)
+        y_pred = self._process_predictions(y_pred)
+        y_pred = ops.clip(y_pred, self.smooth, 1.0 - self.smooth)
 
         if self.class_ids is not None:
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
-        ce_loss = keras.losses.categorical_crossentropy(
-            y_true, y_pred, from_logits=self.from_logits
-        )
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        ce_loss = cross_entropy(y_true, y_pred)
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
+        combined_loss = apply_reduction(combined_loss, self.reduction)
+        return combined_loss
 
 
 class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
@@ -124,6 +164,15 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         name=None,
         **kwargs,
     ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name,
+            **kwargs,
+        )
         name = name or "binary_dice_crossentropy"
         if dice_weight < 0.0:
             raise ValueError("dice_weight should be not less than 0.0.")
@@ -132,15 +181,7 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
-        super().__init__(
-            from_logits=from_logits,
-            num_classes=num_classes,
-            class_ids=class_ids,
-            smooth=smooth,
-            reduction=reduction,
-            name=name,
-            **kwargs,
-        )
+        self.reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Binary Dice and Binary/Categorical Cross-Entropy loss.
@@ -162,13 +203,12 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         if self.class_ids is not None:
             y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
 
-        ce_loss = keras.losses.binary_crossentropy(
-            y_true,
-            y_pred,
-            from_logits=self.from_logits,
-        )
+        y_pred = self._process_predictions(y_pred)
+        bce_loss = binary_cross_entropy(y_true, y_pred)
 
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * bce_loss)
+        combined_loss = apply_reduction(combined_loss, self.reduction)
+        return combined_loss
 
 
 DICE_CE_DOCSTRING = """
