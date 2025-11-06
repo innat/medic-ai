@@ -237,7 +237,7 @@ class BaseTverskyLoss(BaseLoss):
         # False Negatives (FN): predicted as negative but actually positive
         fn = ops.sum((1 - y_pred) * y_true, axis=spatial_dims)
 
-        # Tversky index: weighted ratio of TP over TP + α·FP + β·FN
+        # Tversky index: weighted ratio of TP over TP + alpha*FP + beta*FN
         tversky_index = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
         return 1.0 - tversky_index
 
@@ -411,6 +411,12 @@ GDL_SPECIFIC_ARGS = """    weight_type (str, optional): The weighting scheme to 
 GDL_LOSS_DOCSTRING = """Base class for Generalized Dice Loss (GDL) functions.
 
 This class implements the core 1.0 - GDL logic, designed to address class imbalance.
+
+Note:
+    Unlike other losses, Generalized Dice Loss aggregates across all classes before
+    applying reduction. Therefore, with `reduction='none'`, it returns shape `[batch]`
+    instead of `[batch, num_classes]`.
+
 """ + BASE_COMMON_ARGS.format(
     specific_args=GDL_SPECIFIC_ARGS, default_name="generalized_dice_loss"
 )

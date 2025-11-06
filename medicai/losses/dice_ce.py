@@ -60,9 +60,9 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
             **kwargs,
         )
         if dice_weight < 0.0:
-            raise ValueError("dice_weight should be not less than 0.0.")
+            raise ValueError("dice_weight must be >= 0.0")
         if ce_weight < 0.0:
-            raise ValueError("ce_weight should be not less than 0.0.")
+            raise ValueError("ce_weight must be >= 0.0")
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
@@ -115,9 +115,9 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             **kwargs,
         )
         if dice_weight < 0.0:
-            raise ValueError("dice_weight should be not less than 0.0.")
+            raise ValueError("dice_weight must be >= 0.0")
         if ce_weight < 0.0:
-            raise ValueError("ce_weight should be not less than 0.0.")
+            raise ValueError("ce_weight must be >= 0.0")
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight
@@ -170,9 +170,9 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
             **kwargs,
         )
         if dice_weight < 0.0:
-            raise ValueError("dice_weight should be not less than 0.0.")
+            raise ValueError("dice_weight must be >= 0.0")
         if ce_weight < 0.0:
-            raise ValueError("ce_weight should be not less than 0.0.")
+            raise ValueError("ce_weight must be >= 0.0")
 
         self.dice_weight = dice_weight
         self.ce_weight = ce_weight

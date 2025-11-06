@@ -105,48 +105,36 @@ class BinaryGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
             return y_pred
 
 
-EXTRA_INFO = """
-\nNote: Unlike other losses, Generalized Dice loss aggregates all classes into a single 
-score per batch element, so with reduction='none', it returns shape [batch] instead 
-of [batch, num_classes].
-"""
-
-SPARSE_LOSS_DOCSTRING = (
-    """Generalized Dice loss for sparse categorical segmentation labels.
+SPARSE_LOSS_DOCSTRING = """Generalized Dice loss for sparse categorical segmentation labels.
 
 This loss function adapts the Generalized Dice loss to work with sparse labels
 (integer class indices) by one-hot encoding them before calculating
 the Generalized Dice. It uses a **Softmax** activation on logits.
 
-"""
-    + BASE_COMMON_ARGS.format(specific_args="", default_name="sparse_generalized_dice_loss")
-    + EXTRA_INFO
+""" + BASE_COMMON_ARGS.format(
+    specific_args="", default_name="sparse_generalized_dice_loss"
 )
 
 
-CATEGORICAL_LOSS_DOCSTRING = (
-    """Generalized Dice loss for categorical (one-hot encoded) segmentation labels.
+CATEGORICAL_LOSS_DOCSTRING = """Generalized Dice loss for categorical (one-hot encoded) segmentation labels.
 
 This loss function calculates the Generalized Dice Loss (GDL) directly using the provided
 one-hot encoded labels and prediction probabilities, applying a softmax activation
 if predictions are logits.
 
-"""
-    + BASE_COMMON_ARGS.format(specific_args="", default_name="categorical_generalized_dice_loss")
-    + EXTRA_INFO
+""" + BASE_COMMON_ARGS.format(
+    specific_args="", default_name="categorical_generalized_dice_loss"
 )
 
 
-BINARY_LOSS_DOCSTRING = (
-    """Generalized Dice loss for binary or multi-label segmentation tasks.
+BINARY_LOSS_DOCSTRING = """Generalized Dice loss for binary or multi-label segmentation tasks.
 
 This loss function is specifically designed for binary or multi-label
 segmentation where the labels typically have a single or multi-label channel
 (representing the foreground). It uses a **Sigmoid** activation on logits.
 
-"""
-    + BASE_COMMON_ARGS.format(specific_args="", default_name="binary_generalized_dice_loss")
-    + EXTRA_INFO
+""" + BASE_COMMON_ARGS.format(
+    specific_args="", default_name="binary_generalized_dice_loss"
 )
 
 SparseGeneralizedDiceLoss.__doc__ = SPARSE_LOSS_DOCSTRING
