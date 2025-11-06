@@ -1,0 +1,152 @@
+from keras import ops
+
+from medicai.utils import DescribeMixin
+
+from .base import BASE_COMMON_ARGS, BaseTverskyLoss
+
+
+class SparseTverskyLoss(BaseTverskyLoss, DescribeMixin):
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        alpha=0.5,
+        beta=0.5,
+        class_ids=None,
+        smooth=1e-7,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "sparse_tversky_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            alpha=alpha,
+            beta=beta,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
+
+    def _process_predictions(self, y_pred):
+        if self.from_logits:
+            return ops.softmax(y_pred, axis=-1)
+        else:
+            return y_pred
+
+    def _process_targets(self, y_true):
+        if y_true.shape[-1] == 1:
+            y_true = ops.squeeze(y_true, axis=-1)
+
+        y_true = ops.one_hot(y_true, num_classes=self.num_classes)
+        return y_true
+
+
+class CategoricalTverskyLoss(BaseTverskyLoss, DescribeMixin):
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        alpha=0.5,
+        beta=0.5,
+        class_ids=None,
+        smooth=1e-7,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "categorical_tversky_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            alpha=alpha,
+            beta=beta,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
+
+    def _process_predictions(self, y_pred):
+        if self.from_logits:
+            return ops.softmax(y_pred, axis=-1)
+        else:
+            return y_pred
+
+
+class BinaryTverskyLoss(BaseTverskyLoss, DescribeMixin):
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        alpha=0.5,
+        beta=0.5,
+        class_ids=None,
+        smooth=1e-7,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        name = name or "binary_tversky_loss"
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            alpha=alpha,
+            beta=beta,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction=reduction,
+            name=name,
+            **kwargs,
+        )
+
+    def _process_predictions(self, y_pred):
+        if self.from_logits:
+            return ops.sigmoid(y_pred)
+        else:
+            return y_pred
+
+
+TWERSKY_DOCSTRING = """
+    alpha (float, optional): Weight for false positives (FP). Defaults to 0.5.
+    beta (float, optional): Weight for false negatives (FN). Defaults to 0.5.
+"""
+
+SPARSE_LOSS_DOCSTRING = """Tversky loss for sparse categorical segmentation labels.
+
+This loss function adapts the Tversky loss to work with sparse labels
+(integer class indices) by one-hot encoding them before calculating
+the Tversky coefficient. It uses a **Softmax** activation on logits.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=TWERSKY_DOCSTRING, default_name="sparse_tversky_loss"
+)
+
+CATEGORICAL_LOSS_DOCSTRING = """Tversky loss for categorical (one-hot encoded) 
+segmentation labels.
+
+This loss function calculates the Tversky loss directly using the provided
+one-hot encoded labels and prediction probabilities. 
+It uses a **Softmax** activation on logits.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=TWERSKY_DOCSTRING, default_name="categorical_tversky_loss"
+)
+
+BINARY_LOSS_DOCSTRING = """Tversky loss for binary segmentation tasks.
+
+This loss function is specifically designed for binary segmentation where
+the labels typically have a single channel (representing the foreground).
+It uses a **Sigmoid** activation on logits.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=TWERSKY_DOCSTRING, default_name="binary_tversky_loss"
+)
+
+SparseTverskyLoss.__doc__ = SPARSE_LOSS_DOCSTRING
+CategoricalTverskyLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING
+BinaryTverskyLoss.__doc__ = BINARY_LOSS_DOCSTRING

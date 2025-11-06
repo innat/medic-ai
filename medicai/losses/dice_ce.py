@@ -1,39 +1,72 @@
-import keras
 from keras import ops
 
 from medicai.utils import DescribeMixin
 
+from .base import BASE_COMMON_ARGS
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
+def cross_entropy(y_true, y_pred):
+    spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    ce_loss = -y_true * ops.log(y_pred)
+    ce_loss = ops.mean(ce_loss, axis=spatial_dims)
+    return ce_loss
+
+
+def binary_cross_entropy(y_true, y_pred):
+    spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    ce_loss = -(y_true * ops.log(y_pred) + (1.0 - y_true) * ops.log(1.0 - y_pred))
+    ce_loss = ops.mean(ce_loss, axis=spatial_dims)
+    return ce_loss
+
+
+def apply_reduction(loss, reduction):
+    if reduction == "none":
+        return loss
+    elif reduction == "sum":
+        return ops.sum(loss)
+    elif reduction == "mean":
+        return ops.mean(loss)
+    elif reduction == "sum_over_batch_size":
+        batch_size = ops.cast(ops.shape(loss)[0], loss.dtype)
+        return ops.sum(loss) / batch_size
+    else:
+        raise ValueError(
+            f"Unsupported reduction type: {reduction} "
+            "Supported methods are none, mean, sum, sum_over_batch_size"
+        )
+
+
 class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
-    """Combined Sparse Dice and Categorical Cross-Entropy Loss.
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name or "sparse_dice_crossentropy",
+            **kwargs,
+        )
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight must be >= 0.0")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight must be >= 0.0")
 
-    This loss function combines the Sparse Dice loss with the Categorical
-    Cross-Entropy loss. It is often used in multi-class segmentation tasks
-    to leverage the strengths of both loss functions, encouraging both region
-    overlap (Dice) and per-pixel classification accuracy (Cross-Entropy).
-
-    Args:
-        from_logits (bool): Whether `y_pred` is expected to be logits. If True,
-            the predictions will be passed through a softmax activation for Dice
-            loss and used directly for Cross-Entropy.
-        num_classes (int): The total number of classes in the segmentation task.
-        class_ids (int, list of int, or None): If an integer or a list of integers,
-            both the Dice and Cross-Entropy losses will be calculated only for the
-            specified class(es). If None, both losses will be calculated for all
-            classes and averaged.
-        smooth (float, optional): A small smoothing factor for the Dice loss to
-            prevent division by zero. Defaults to 1e-7.
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Must be >= 0.0. A higher value gives more importance to Dice loss.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
-            Defaults to 1.0.
-        name (str, optional): Name of the loss function. Defaults to "sparse_dice_crossentropy".
-        **kwargs: Additional keyword arguments passed to `SparseDiceLoss`.
-    """
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
+        self.hybrid_reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Sparse Dice and Categorical Cross-Entropy loss.
@@ -45,45 +78,50 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         Returns:
             Tensor: The combined loss.
         """
-        dice_loss = super().call(y_true, y_pred)
+        # Prepare inputs
+        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
 
-        if self.class_ids is not None:
-            y_true = super()._process_inputs(y_true)
-            y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        # Compute dice loss using parent's compute_loss
+        dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
-        ce_loss = keras.losses.categorical_crossentropy(
-            y_true, y_pred, from_logits=self.from_logits
-        )
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        # Compute CE loss
+        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
+
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
+        combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
+        return combined_loss
 
 
 class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
-    """Combined Categorical Dice and Categorical Cross-Entropy Loss.
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name or "categorical_dice_crossentropy",
+            **kwargs,
+        )
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight must be >= 0.0")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight must be >= 0.0")
 
-    This loss function combines the Categorical Dice loss with the standard
-    Categorical Cross-Entropy loss. It is suitable for multi-class segmentation
-    tasks where the ground truth labels are one-hot encoded.
-
-    Args:
-        from_logits (bool): Whether `y_pred` is expected to be logits. If True,
-            the predictions will be passed through a softmax activation for both
-            Dice and Cross-Entropy losses.
-        num_classes (int): The total number of classes in the segmentation task.
-        class_ids (int, list of int, or None): If an integer or a list of integers,
-            both the Dice and Cross-Entropy losses will be calculated only for the
-            specified class(es). If None, both losses will be calculated for all
-            classes and averaged.
-        smooth (float, optional): A small smoothing factor for the Dice loss to
-            prevent division by zero. Defaults to 1e-7.
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Must be >= 0.0. A higher value gives more importance to Dice loss.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
-            Defaults to 1.0.
-        name (str, optional): Name of the loss function. Defaults to "categorical_dice_crossentropy".
-        **kwargs: Additional keyword arguments passed to `CategoricalDiceLoss`.
-    """
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
+        self.hybrid_reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Categorical Dice and Categorical Cross-Entropy loss.
@@ -95,57 +133,50 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         Returns:
             Tensor: The combined loss.
         """
-        dice_loss = super().call(y_true, y_pred)
+        # Prepare inputs
+        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
 
-        if self.class_ids is not None:
-            y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        # Compute dice loss using parent's compute_loss
+        dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
-        ce_loss = keras.losses.categorical_crossentropy(
-            y_true, y_pred, from_logits=self.from_logits
-        )
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        # Compute CE loss
+        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
+
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
+        combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
+        return combined_loss
 
 
 class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
-    """Combined Binary Dice and Binary/Categorical Cross-Entropy Loss.
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        class_ids=None,
+        smooth=1e-7,
+        dice_weight=1.0,
+        ce_weight=1.0,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            class_ids=class_ids,
+            smooth=smooth,
+            reduction="none",
+            name=name or "binary_dice_crossentropy",
+            **kwargs,
+        )
+        if dice_weight < 0.0:
+            raise ValueError("dice_weight must be >= 0.0")
+        if ce_weight < 0.0:
+            raise ValueError("ce_weight must be >= 0.0")
 
-    This loss function combines the Binary Dice loss with either Binary or
-    Categorical Cross-Entropy, depending on the number of channels in the
-    prediction tensor (`y_pred`):
-
-    - If `y_pred` has one channel (shape `(..., 1)`), it's treated as a
-      single-class binary segmentation problem (e.g., foreground vs. background).
-      Binary Cross-Entropy is used in this case.
-
-    - If `y_pred` has more than one channel (shape `(..., C)` where C > 1),
-      it's treated as a multi-label binary segmentation problem, where each
-      channel represents the probability of a specific binary class being present.
-      Categorical Cross-Entropy is used in this case, with the ground truth
-      (`y_true`) expected to be one-hot encoded or have a compatible shape.
-
-    Args:
-        from_logits (bool): Whether `y_pred` is expected to be logits. If True,
-            the predictions will be passed through a sigmoid activation for Dice
-            loss and used directly for Cross-Entropy.
-        num_classes (int): For single-class binary tasks, this is typically 1.
-            For multi-label binary tasks, this should match the number of channels
-            in `y_pred`.
-        class_ids (int, list of int, or None): If an integer or a list of integers,
-            the Dice and Cross-Entropy losses will be calculated for the specified
-            channel(s). For single-class binary tasks, you might use `class_id=0`
-            or `[0]`. For multi-label, you can target specific labels. If None,
-            all channels are considered.
-        smooth (float, optional): A small smoothing factor for the Dice loss to
-            prevent division by zero. Defaults to 1e-7.
-        dice_weight (float): The trade-off weight for the Dice loss component.
-            Must be >= 0.0. A higher value gives more importance to Dice loss.
-            Defaults to 1.0.
-        ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-            Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
-            Defaults to 1.0.
-        name (str, optional): Name of the loss function. Defaults to "binary_dice_crossentropy".
-        **kwargs: Additional keyword arguments passed to `BinaryDiceLoss`.
-    """
+        self.dice_weight = dice_weight
+        self.ce_weight = ce_weight
+        self.hybrid_reduction = reduction
 
     def call(self, y_true, y_pred):
         """Computes the combined Binary Dice and Binary/Categorical Cross-Entropy loss.
@@ -162,15 +193,67 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         Returns:
             Tensor: The combined loss.
         """
-        dice_loss = super().call(y_true, y_pred)
+        # Prepare inputs
+        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
 
-        if self.class_ids is not None:
-            y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        # Compute dice loss using parent's compute_loss
+        dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
 
-        ce_loss = keras.losses.binary_crossentropy(
-            y_true,
-            y_pred,
-            from_logits=self.from_logits,
-        )
+        # Compute BCE loss
+        bce_loss = binary_cross_entropy(y_true_processed, y_pred_processed)
 
-        return (self.dice_weight * dice_loss) + (self.ce_weight * ops.mean(ce_loss))
+        combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * bce_loss)
+        combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
+        return combined_loss
+
+
+DICE_CE_DOCSTRING = """    dice_weight (float): The trade-off weight for the Dice loss 
+    component. Must be >= 0.0. A higher value gives more importance to Dice loss.
+        Defaults to 1.0.
+    ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
+        Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
+        Defaults to 1.0.
+"""
+
+CATEGORICAL_LOSS_DOCSTRING = """Combined Categorical Dice and Categorical Cross-Entropy Loss.
+
+This loss function combines the Categorical Dice loss with the standard
+Categorical Cross-Entropy loss. It is suitable for multi-class segmentation
+tasks where the ground truth labels are one-hot encoded.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=DICE_CE_DOCSTRING, default_name="categorical_dice_crossentropy"
+)
+
+
+SPARSE_LOSS_DOCSTRING = """Combined Sparse Dice and Categorical Cross-Entropy Loss.
+
+This loss function combines the Sparse Dice loss with the Categorical
+Cross-Entropy loss. It is often used in multi-class segmentation tasks
+to leverage the strengths of both loss functions, encouraging both region
+overlap (Dice) and per-pixel classification accuracy (Cross-Entropy).
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=DICE_CE_DOCSTRING, default_name="sparse_dice_crossentropy"
+)
+
+BINARY_LOSS_DOCSTRING = """Combined Binary Dice and Binary Cross-Entropy Loss.
+
+This loss function combines the Binary Dice loss with Binary Cross-Entropy, 
+regardless of the number of channels in the prediction tensor (`y_pred`):
+
+- If `y_pred` has one channel (shape `(..., 1)`), it's treated as a
+    single-class binary segmentation problem (e.g., foreground vs. background).
+    Binary Cross-Entropy is used in this case.
+
+- If `y_pred` has more than one channel (shape `(..., C)` where C > 1),
+    it's treated as a multi-label binary segmentation problem, where each
+    channel represents the probability of a specific binary class being present.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=DICE_CE_DOCSTRING, default_name="binary_dice_crossentropy"
+)
+
+CategoricalDiceCELoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING
+SparseDiceCELoss.__doc__ = SPARSE_LOSS_DOCSTRING
+BinaryDiceCELoss.__doc__ = BINARY_LOSS_DOCSTRING
