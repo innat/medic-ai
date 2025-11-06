@@ -2,7 +2,7 @@ from keras import ops
 
 from medicai.utils import DescribeMixin
 
-from .base import BaseGeneralizedDiceLoss
+from .base import BASE_COMMON_ARGS, BaseGeneralizedDiceLoss
 
 
 class SparseGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
@@ -35,7 +35,7 @@ class SparseGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
         else:
             return y_pred
 
-    def _process_inputs(self, y_true):
+    def _process_targets(self, y_true):
         if y_true.shape[-1] == 1:
             y_true = ops.squeeze(y_true, axis=-1)
 
@@ -105,52 +105,8 @@ class BinaryGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
             return y_pred
 
 
-GENERALIZED_DICE_DOCSTRING = """
-Args:
-from_logits (bool): Whether `y_pred` is expected to be logits. If True,
-    the predictions will be passed through a sigmoid activation.
-num_classes (int): Must be set to **1** for true binary segmentation,
-    or **2** if the input/output explicitly contains two channels (e.g.,
-    foreground and background).
-class_ids (int, list of int, or None): If an integer or a list of integers,
-    the Dice loss will be calculated only for the specified class(es).
-    If None and `num_classes=1`, the loss is calculated on the single channel.
-smooth (float, optional): A small smoothing factor to prevent division by zero.
-    Defaults to 1e-7.
-weight_type (str, optional): The weighting scheme to balance class contributions.
-    Options include: 'square' (inverse square of class volume), 'simple' (inverse
-    of class volume), or 'uniform' (no weighting).
-    Defaults to 'square'.
-reduction (str, optional): Type of reduction to apply to the loss.
-    The output of `call()` is the loss value per batch element/class,
-    and this parameter controls how it is aggregated.
-
-    * **'sum'**: Sum the loss tensor over all batch elements and classes.
-    * **'mean'**: Compute the **mean of the loss tensor over all elements**
-        (Batch Size x Number of Classes).
-    * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over
-        all elements, then divide by the Batch Size**.
-    * **'none'**: Return the loss tensor without aggregation, preserving the
-        shape `(Batch Size, Num Classes)`.
-
-    Example:
-        # After spatial reduction (output of `compute_loss`):
-        per_sample_per_class_loss = [
-            [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses
-            [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses
-        ]
-
-        # reduction="sum": 2.9
-        # reduction="mean": 2.9 / 6 = 0.483
-        # reduction="sum_over_batch_size": 2.9 / 2 = 1.45
-        # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
-
-    Defaults to 'mean'.
-name (str, optional): Name of the loss function.
-    Defaults to {name}.
-**kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
-
-Note: Unlike other losses, Generalized Dice loss aggregates all classes into a single 
+EXTRA_INFO = """
+\nNote: Unlike other losses, Generalized Dice loss aggregates all classes into a single 
 score per batch element, so with reduction='none', it returns shape [batch] instead 
 of [batch, num_classes].
 """
@@ -163,11 +119,10 @@ This loss function adapts the Generalized Dice loss to work with sparse labels
 the Generalized Dice. It uses a **Softmax** activation on logits.
 
 """
-    + GENERALIZED_DICE_DOCSTRING
+    + BASE_COMMON_ARGS.format(specific_args="", default_name="sparse_generalized_dice_loss")
+    + EXTRA_INFO
 )
-SparseGeneralizedDiceLoss.__doc__ = SPARSE_LOSS_DOCSTRING.format(
-    name="sparse_generalized_dice_loss"
-)
+
 
 CATEGORICAL_LOSS_DOCSTRING = (
     """Generalized Dice loss for categorical (one-hot encoded) segmentation labels.
@@ -177,11 +132,10 @@ one-hot encoded labels and prediction probabilities, applying a softmax activati
 if predictions are logits.
 
 """
-    + GENERALIZED_DICE_DOCSTRING
+    + BASE_COMMON_ARGS.format(specific_args="", default_name="categorical_generalized_dice_loss")
+    + EXTRA_INFO
 )
-CategoricalGeneralizedDiceLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING.format(
-    name="categorical_generalized_dice_loss"
-)
+
 
 BINARY_LOSS_DOCSTRING = (
     """Generalized Dice loss for binary or multi-label segmentation tasks.
@@ -191,8 +145,10 @@ segmentation where the labels typically have a single or multi-label channel
 (representing the foreground). It uses a **Sigmoid** activation on logits.
 
 """
-    + GENERALIZED_DICE_DOCSTRING
+    + BASE_COMMON_ARGS.format(specific_args="", default_name="binary_generalized_dice_loss")
+    + EXTRA_INFO
 )
-BinaryGeneralizedDiceLoss.__doc__ = BINARY_LOSS_DOCSTRING.format(
-    name="binary_generalized_dice_loss"
-)
+
+SparseGeneralizedDiceLoss.__doc__ = SPARSE_LOSS_DOCSTRING
+CategoricalGeneralizedDiceLoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING
+BinaryGeneralizedDiceLoss.__doc__ = BINARY_LOSS_DOCSTRING

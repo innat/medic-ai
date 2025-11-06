@@ -76,8 +76,17 @@ class BaseLoss(keras.losses.Loss):
     def _process_predictions(self, y_pred):
         return y_pred
 
-    def _process_inputs(self, y_true):
+    def _process_targets(self, y_true):
         return y_true
+
+    def _process_inputs(self, y_true, y_pred):
+        y_true_processed = self._process_inputs(y_true)
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed, y_pred_processed = self._get_desired_class_channels(
+            y_true_processed, y_pred_processed
+        )
+        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
+        return y_true_processed, y_pred_processed
 
     def compute_loss(self, y_true, y_pred):
         """
@@ -107,11 +116,9 @@ class BaseLoss(keras.losses.Loss):
         Returns:
             Tensor: The computed loss.
         """
-        y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = self._process_inputs(y_true)
-        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
-        dice = self.compute_loss(y_true_processed, y_pred_processed)
-        return dice
+        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
+        loss = self.compute_loss(y_true_processed, y_pred_processed)
+        return loss
 
 
 class BaseDiceLoss(BaseLoss):
@@ -125,14 +132,13 @@ class BaseDiceLoss(BaseLoss):
         name=None,
         **kwargs,
     ):
-        name = name or "dice_loss"
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
             reduction=reduction,
-            name=name,
+            name=name or "dice_loss",
             **kwargs,
         )
 
@@ -146,15 +152,9 @@ class BaseDiceLoss(BaseLoss):
         Returns:
             Tensor: The Dice loss.
         """
-        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
-
-        # Dynamically determine the spatial dimensions to sum over.
-        # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
-
         intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
         union = ops.sum(y_true, axis=spatial_dims) + ops.sum(y_pred, axis=spatial_dims)
-
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - dice_score
 
@@ -170,22 +170,18 @@ class BaseIoULoss(BaseLoss):
         name=None,
         **kwargs,
     ):
-        name = name or "iou_loss"
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
             reduction=reduction,
-            name=name,
+            name=name or "iou_loss",
             **kwargs,
         )
 
     def compute_loss(self, y_true, y_pred):
-        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
-
-        # Determine spatial dimensions dynamically (e.g., [1, 2] for 4D input)
-        # We exclude batch dim (0) and channel/class dim (-1)
+        # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # Intersection: (B, C) tensor
@@ -200,9 +196,6 @@ class BaseIoULoss(BaseLoss):
         # IoU Score per batch element and per class: (B, C) tensor
         # Add smooth factor to avoid division by zero
         iou_score = (intersection + self.smooth) / (total + self.smooth)
-
-        # Jaccard Loss: 1.0 - mean IoU score
-        # Averaged over the entire batch
         return 1.0 - iou_score
 
 
@@ -219,32 +212,43 @@ class BaseTverskyLoss(BaseLoss):
         name=None,
         **kwargs,
     ):
-        name = name or "tversky_loss"
-        self.alpha = alpha
-        self.beta = beta
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
             reduction=reduction,
-            name=name,
+            name=name or "tversky_loss",
             **kwargs,
         )
+        self.alpha = alpha
+        self.beta = beta
 
     def compute_loss(self, y_true, y_pred):
-        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
+        # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
+        # True Positives (TP): correctly predicted positive pixels
         tp = ops.sum(y_true * y_pred, axis=spatial_dims)
+
+        # False Positives (FP): predicted as positive but actually negative
         fp = ops.sum(y_pred * (1 - y_true), axis=spatial_dims)
+
+        # False Negatives (FN): predicted as negative but actually positive
         fn = ops.sum((1 - y_pred) * y_true, axis=spatial_dims)
 
+        # Tversky index: weighted ratio of TP over TP + α·FP + β·FN
         tversky_index = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
         return 1.0 - tversky_index
 
 
 class BaseGeneralizedDiceLoss(BaseLoss):
+    WEIGHT_TYPE = [
+        "square",
+        "simple",
+        "uniform",
+    ]
+
     def __init__(
         self,
         from_logits,
@@ -256,50 +260,50 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         name=None,
         **kwargs,
     ):
-        name = name or "generalized_dice_loss"
-        self.weight_type = weight_type.lower()
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
             smooth=smooth,
             reduction=reduction,
-            name=name,
+            name=name or "generalized_dice_loss",
             **kwargs,
         )
+        self.weight_type = weight_type.lower()
+        if self.weight_type not in self.WEIGHT_TYPE:
+            raise ValueError(
+                f'Invalid weight_type "{weight_type}". '
+                f'Supported values are: {", ".join(self.WEIGHT_TYPE)}.'
+            )
 
     def compute_loss(self, y_true, y_pred):
-        y_true, y_pred = self._get_desired_class_channels(y_true, y_pred)
-
-        # Get spatial dimensions (all except batch and channel)
+        # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
-        # Calculate reference volumes (sum over spatial dimensions)
+        # Reference volumes (sum over spatial dimensions)
         ref_vol = ops.sum(y_true, axis=spatial_dims)
 
-        # Calculate intersection and segmentation volumes
+        # Intersection and prediction volumes
         intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
         seg_vol = ops.sum(y_pred, axis=spatial_dims)
 
-        # Calculate weights based on weight_type (using the original ref_vol)
+        # Compute weights according to weight_type
         if self.weight_type == "square":
             weights = 1.0 / (ref_vol**2 + self.smooth)
         elif self.weight_type == "simple":
             weights = 1.0 / (ref_vol + self.smooth)
-        elif self.weight_type == "uniform":
+        else:  # uniform
             weights = ops.ones_like(ref_vol)
-        else:
-            raise ValueError(f'The variable weight_type "{self.weight_type}" is not defined.')
 
-        # Mask weights to zero where the reference volume is near-zero (i.e., class is absent)
+        # Mask weights where the class is absent
         weights = ops.where(ref_vol < self.smooth, ops.zeros_like(weights), weights)
 
-        # Calculate generalized dice score components
+        # Generalized Dice score
         weighted_intersection = ops.sum(weights * intersection, axis=-1)
         weighted_total = ops.sum(weights * (seg_vol + ref_vol), axis=-1)
         gld_component = (2.0 * weighted_intersection) / (weighted_total + self.smooth)
 
-        # No foreground anywhere: y_true and y_pred contains background cases
+        # Handle empty foreground (no class present)
         no_foreground = ops.all(
             ops.less(ref_vol + seg_vol, self.smooth),
             axis=-1,
@@ -310,13 +314,12 @@ class BaseGeneralizedDiceLoss(BaseLoss):
             gld_component,
         )
 
-        # Handle potential NaN scores by treating them as a perfect score (loss 0.0).
+        # Handle NaN values safely
         gld_component = ops.where(
             ops.isnan(gld_component),
             ops.ones_like(gld_component),
             gld_component,
         )
-
         return 1.0 - gld_component
 
 
@@ -362,7 +365,7 @@ Args:
 
 """
 
-BASE_LOSS_DOCSTRING = """Base class for common segmentation loss functions.
+BASE_LOSS_DOCSTRING = """Base class for segmentation loss functions.
 
 This class provides a foundation for calculating overlap-based losses (Dice, IoU, Tversky, etc.)
 It handles class ID selection, smoothing, and prediction processing before computing 
@@ -386,8 +389,8 @@ This class implements the core `1.0 - IoU/Jaccard Score` logic.
     specific_args="", default_name="iou_loss"
 )
 
-TVERSKY_SPECIFIC_ARGS = """    alpha (float, optional): Weight for **False Positives (FP)**. Controls the penalty 
-        for predicting positive when the ground truth is negative. 
+TVERSKY_SPECIFIC_ARGS = """    alpha (float, optional): Weight for **False Positives (FP)**. 
+        Controls the penalty for predicting positive when the ground truth is negative. 
         Defaults to 0.5 (Tversky becomes Dice with alpha=0.5, beta=0.5).
     beta (float, optional): Weight for **False Negatives (FN)**. Controls the penalty 
         for predicting negative when the ground truth is positive.
@@ -400,9 +403,9 @@ This class implements the core `1.0 - Tversky Index` logic, generalizing Dice an
     specific_args=TVERSKY_SPECIFIC_ARGS, default_name="tversky_loss"
 )
 
-GDL_SPECIFIC_ARGS = """    weight_type (str, optional): The weighting scheme to balance class contributions.
-        Options include: 'square' (inverse square of class volume), 'simple' (inverse 
-        of class volume), or 'uniform' (no weighting).
+GDL_SPECIFIC_ARGS = """    weight_type (str, optional): The weighting scheme to balance 
+        class contributions. Options include: 'square' (inverse square of class volume),
+        'simple' (inverse of class volume), or 'uniform' (no weighting).
         Defaults to 'square'.
 """
 GDL_LOSS_DOCSTRING = """Base class for Generalized Dice Loss (GDL) functions.
