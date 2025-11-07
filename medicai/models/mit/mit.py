@@ -186,17 +186,6 @@ class MixViTB0(MiTBase, DescribeMixin):
     >>> # 3D Model (e.g., for medical volumes)
     >>> model_3d = MixViTB0(input_shape=(64, 64, 64, 1), num_classes=5, ...)
 
-    Note:
-    The list of spatial reduction ratios for MixViTB0 is set `[4, 2, 1, 1]`.
-    This follows official `SegFormer3D` model. In official 2D `SegFormer`, it
-    is set `[8, 4, 2, 1]`. To build official 2D `SegFormer` with `MixViTB0`, use
-    `MiTBackbone`.
-
-    Reference:
-        'SegFormer3D: an Efficient Transformer for 3D Medical Image Segmentation'
-        - Encoder: MiT-B0
-        - Paper: https://arxiv.org/abs/2404.10156
-
     Initializes the Mix Transformer B0 (MiT-B0) model.
 
     This constructor automatically sets the MiT-B0-specific hyper-parameters
