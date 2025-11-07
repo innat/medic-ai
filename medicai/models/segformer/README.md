@@ -1,6 +1,6 @@
 # SegFormer
 
-<img width="1033" height="536" alt="Image" src="https://github.com/user-attachments/assets/b9b46a09-83af-439a-b824-9cfb879b1177" />
+<img width="516" height="268" alt="Image" src="https://github.com/user-attachments/assets/b9b46a09-83af-439a-b824-9cfb879b1177" />
 
 **SegFormer** model for `2D` or `3D` semantic segmentation. It combines a hierarchical **MixVisionTransformer** (MiT) encoder with a lightweight MLP decoder head. This design is highly efficient for semantic segmentation tasks on high-resolution images or volumes.
 
