@@ -496,7 +496,7 @@ class ResNet152(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnet")
-@registration.register(name="resnet50_v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet50v2(ResNetBase, DescribeMixin):
     """
     ResNet-50 v2 model for classification.
@@ -559,7 +559,7 @@ class ResNet50v2(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnet")
-@registration.register(name="resnet101_v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet101v2(ResNetBase, DescribeMixin):
     """
     ResNet-101 v2 model for classification.
@@ -621,7 +621,7 @@ class ResNet101v2(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnet")
-@registration.register(name="resnet152_v2", family="resnet")
+@registration.register(family="resnet")
 class ResNet152v2(ResNetBase, DescribeMixin):
     """
     ResNet-152 v2 model for classification.
@@ -684,7 +684,7 @@ class ResNet152v2(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnet")
-@registration.register(name="resnet50_vd", family="resnet")
+@registration.register(family="resnet")
 class ResNet50vd(ResNetBase, DescribeMixin):
     """
     ResNet-50 "very deep" (vd) model for classification.
@@ -747,7 +747,7 @@ class ResNet50vd(ResNetBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="resnet")
-@registration.register(name="resnet200_vd", family="resnet")
+@registration.register(family="resnet")
 class ResNet200vd(ResNetBase, DescribeMixin):
     """
     ResNet-200 "very deep" (vd) model for classification.

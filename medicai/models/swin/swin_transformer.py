@@ -515,7 +515,7 @@ class SwinBase(SwinVariantsBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="swin")
-@registration.register(name="swin_tiny_v2", family="swin")
+@registration.register(name="swinv2_tiny", family="swin")
 class SwinTinyV2(SwinVariantsBase, DescribeMixin):
     """Swin Tiny V2 model, a small-scale Swin Transformer V2 for vision tasks.
 
@@ -631,7 +631,7 @@ class SwinTinyV2(SwinVariantsBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="swin")
-@registration.register(name="swin_small_v2", family="swin")
+@registration.register(name="swinv2_small", family="swin")
 class SwinSmallV2(SwinVariantsBase, DescribeMixin):
     """Swin Small V2 model, a medium-scale Swin Transformer V2 for vision tasks.
 
@@ -747,7 +747,7 @@ class SwinSmallV2(SwinVariantsBase, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="swin")
-@registration.register(name="swin_base_v2", family="swin")
+@registration.register(name="swinv2_base", family="swin")
 class SwinBaseV2(SwinVariantsBase, DescribeMixin):
     """Swin Base V2 model, a large-scale Swin Transformer V2 for vision tasks.
 
