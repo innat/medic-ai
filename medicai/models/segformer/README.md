@@ -6,7 +6,7 @@
 
 ## Build Model
 
-You can easily instantiate a SegFormer model by specifying an encoder backbone (`encoder_name`) and the input shape (`input_shape`). The dimensionality of `input_shape` automatically determines whether a 2D or 3D model is constructed.
+You can easily instantiate a **SegFormer** model by specifying an encoder backbone (`encoder_name`) and the input shape (`input_shape`). The dimensionality of `input_shape` automatically determines whether a `2D` or `3D` model is constructed.
 
 ```python
 from medicai.models import SegFormer
@@ -24,7 +24,7 @@ model = SegFormer(
 
 **Encoder Feature Access**
 
-The SegFormer encoder exposes its intermediate multi-scale feature maps through
+The **SegFormer** encoder exposes its intermediate multi-scale feature maps through
 `model.encoder.pyramid_outputs`. Each key corresponds to a pyramid stage, where $P1$ represents the shallowest features and $P4$ the deepest.
 
 ```python
@@ -42,7 +42,7 @@ model.encoder.pyramid_outputs
 ```
 
 By design, **SegFormer** performs four stages of downsampling with spatial resolutions
-scaling by $[1/4, 1/8, 1/16, 1/32]$ relative to the input.
+scaling by `[1/4, 1/8, 1/16, 1/32]` relative to the input.
 
 ## Encoder Depth
 
