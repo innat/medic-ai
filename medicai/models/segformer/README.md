@@ -18,7 +18,7 @@ model = SegFormer(
 
 # Build a 2D SegFormer
 model = SegFormer(
-    encoder_name='mit_b0', input_shape=(96,96,1
+    encoder_name='mit_b0', input_shape=(96,96,1)
 )
 ```
 
