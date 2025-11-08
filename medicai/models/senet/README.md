@@ -64,7 +64,7 @@ backbone = ResNetBackbone(
     width_per_group=4,
 
     # se-config
-    se_block=False,
+    se_block=True,
     se_ratio=16,
     se_activation="relu",
 )
