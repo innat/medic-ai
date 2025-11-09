@@ -368,6 +368,7 @@ class SwinWindowAttention(keras.Model):
         self.attn_drop_rate = attn_drop_rate
         self.proj_drop_rate = proj_drop_rate
         self.spatial_dims = len(self.window_size)
+        self.supports_masking = True
 
     def get_relative_position_index(self):
         """
@@ -917,6 +918,7 @@ class SwinWindowAttentionV2(layers.Layer):
         self.proj_drop_rate = proj_drop_rate
         self.qkv_bias = qkv_bias
         self.spatial_dims = len(window_size)
+        self.supports_masking = True
 
         if pretrained_window_size is None:
             self.pretrained_window_size = (0,) * self.spatial_dims
