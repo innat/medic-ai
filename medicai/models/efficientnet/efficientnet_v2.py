@@ -112,7 +112,7 @@ class EfficientNetBaseV2(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_b0", family="efficientnet")
+@registration.register(name="efficientnet_v2_b0", family="efficientnet")
 class EfficientNetV2B0(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -145,7 +145,7 @@ class EfficientNetV2B0(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_b1", family="efficientnet")
+@registration.register(name="efficientnet_v2_b1", family="efficientnet")
 class EfficientNetV2B1(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -178,7 +178,7 @@ class EfficientNetV2B1(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_b2", family="efficientnet")
+@registration.register(name="efficientnet_v2_b2", family="efficientnet")
 class EfficientNetV2B2(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -211,7 +211,7 @@ class EfficientNetV2B2(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_b3", family="efficientnet")
+@registration.register(name="efficientnet_v2_b3", family="efficientnet")
 class EfficientNetV2B3(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -244,7 +244,7 @@ class EfficientNetV2B3(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_s", family="efficientnet")
+@registration.register(name="efficientnet_v2_s", family="efficientnet")
 class EfficientNetV2S(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -277,7 +277,7 @@ class EfficientNetV2S(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_m", family="efficientnet")
+@registration.register(name="efficientnet_v2_m", family="efficientnet")
 class EfficientNetV2M(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -310,7 +310,7 @@ class EfficientNetV2M(EfficientNetBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="efficientnet")
-@registration.register(name="efficientnetv2_l", family="efficientnet")
+@registration.register(name="efficientnet_v2_l", family="efficientnet")
 class EfficientNetV2L(EfficientNetBaseV2, DescribeMixin):
     def __init__(
         self,

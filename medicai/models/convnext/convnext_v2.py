@@ -169,7 +169,7 @@ class ConvNeXtVariantsBaseV2(keras.Model):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_atto", family="convnext")
+@registration.register(name="convnext_v2_atto", family="convnext")
 class ConvNeXtV2Atto(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -198,7 +198,7 @@ class ConvNeXtV2Atto(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_femto", family="convnext")
+@registration.register(name="convnext_v2_femto", family="convnext")
 class ConvNeXtV2Femto(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -227,7 +227,7 @@ class ConvNeXtV2Femto(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_pico", family="convnext")
+@registration.register(name="convnext_v2_pico", family="convnext")
 class ConvNeXtV2Pico(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -256,7 +256,7 @@ class ConvNeXtV2Pico(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_nano", family="convnext")
+@registration.register(name="convnext_v2_nano", family="convnext")
 class ConvNeXtV2Nano(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -285,7 +285,7 @@ class ConvNeXtV2Nano(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_tiny", family="convnext")
+@registration.register(name="convnext_v2_tiny", family="convnext")
 class ConvNeXtV2Tiny(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -314,7 +314,7 @@ class ConvNeXtV2Tiny(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_small", family="convnext")
+@registration.register(name="convnext_v2_small", family="convnext")
 class ConvNeXtV2Small(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -343,7 +343,7 @@ class ConvNeXtV2Small(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_base", family="convnext")
+@registration.register(name="convnext_v2_base", family="convnext")
 class ConvNeXtV2Base(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -372,7 +372,7 @@ class ConvNeXtV2Base(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_large", family="convnext")
+@registration.register(name="convnext_v2_large", family="convnext")
 class ConvNeXtV2Large(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
@@ -401,7 +401,7 @@ class ConvNeXtV2Large(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="convnext")
-@registration.register(name="convnextv2_huge", family="convnext")
+@registration.register(name="convnext_v2_huge", family="convnext")
 class ConvNeXtV2Huge(ConvNeXtVariantsBaseV2, DescribeMixin):
     def __init__(
         self,
