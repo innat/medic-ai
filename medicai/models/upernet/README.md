@@ -16,7 +16,7 @@ from medicai.models import UPerNet
 
 # Example 1: 3D UPerNet for volumetric segmentation
 model_3d = UPerNet(
-    encoder_name="efficientnetv2_m", 
+    encoder_name="efficientnet_v2_m", 
     input_shape=(96, 96, 96, 1),
     num_classes=2
 )

@@ -147,15 +147,15 @@ medicai.models.list_models(family='senet')
 ┃ Segmentor        ┃ Backbone Family ┃ Variants        ┃
 ┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
 │ • attention_unet │ senet           │ • seresnet101   │
-│ • trans_unet     │                 │ • seresnet101v2 │
+│ • trans_unet     │                 │ • seresnet101_v2 │
 │ • unet           │                 │ • seresnet152   │
-│ • unet_plus_plus │                 │ • seresnet152v2 │
+│ • unet_plus_plus │                 │ • seresnet152_v2 │
 │                  │                 │ • seresnet18    │
-│                  │                 │ • seresnet200vd │
+│                  │                 │ • seresnet200_vd │
 │                  │                 │ • seresnet34    │
 │                  │                 │ • seresnet50    │
-│                  │                 │ • seresnet50v2  │
-│                  │                 │ • seresnet50vd  │
+│                  │                 │ • seresnet50_v2  │
+│                  │                 │ • seresnet50_vd  │
 │                  │                 │ • seresnext101  │
 │                  │                 │ • seresnext50   │
 └──────────────────┴─────────────────┴─────────────────┘

@@ -104,12 +104,12 @@ medicai.models.list_models(family='efficientnet')
 │                  │                 │ • efficientnet_b7   │
 │                  │                 │ • efficientnet_b8   │
 │                  │                 │ • efficientnet_l2   │
-│                  │                 │ • efficientnetv2_b0 │
-│                  │                 │ • efficientnetv2_b1 │
-│                  │                 │ • efficientnetv2_b2 │
-│                  │                 │ • efficientnetv2_b3 │
-│                  │                 │ • efficientnetv2_l  │
-│                  │                 │ • efficientnetv2_m  │
-│                  │                 │ • efficientnetv2_s  │
+│                  │                 │ • efficientnet_v2_b0 │
+│                  │                 │ • efficientnet_v2_b1 │
+│                  │                 │ • efficientnet_v2_b2 │
+│                  │                 │ • efficientnet_v2_b3 │
+│                  │                 │ • efficientnet_v2_l  │
+│                  │                 │ • efficientnet_v2_m  │
+│                  │                 │ • efficientnet_v2_s  │
 └──────────────────┴─────────────────┴─────────────────────┘
 ```

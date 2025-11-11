@@ -51,7 +51,7 @@ class SEResNet50(SEInitMixin, ResNet50, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="seresnet")
-@registration.register(family="senet")
+@registration.register(name="seresnet50_v2", family="senet")
 class SEResNet50v2(SEInitMixin, ResNet50v2, DescribeMixin):
     """SE-ResNet50v2: ResNet50v2 backbone with Squeeze-and-Excitation blocks."""
 
@@ -59,7 +59,7 @@ class SEResNet50v2(SEInitMixin, ResNet50v2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="seresnet")
-@registration.register(family="senet")
+@registration.register(name="seresnet50_vd", family="senet")
 class SEResNet50vd(SEInitMixin, ResNet50vd, DescribeMixin):
     """SE-ResNet50vd: ResNet50vd backbone with Squeeze-and-Excitation blocks."""
 
@@ -75,7 +75,7 @@ class SEResNet101(SEInitMixin, ResNet101, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="seresnet")
-@registration.register(family="senet")
+@registration.register(name="seresnet101_v2", family="senet")
 class SEResNet101v2(SEInitMixin, ResNet101v2, DescribeMixin):
     """SE-ResNet101v2: ResNet101v2 backbone with Squeeze-and-Excitation blocks."""
 
@@ -91,7 +91,7 @@ class SEResNet152(SEInitMixin, ResNet152, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="seresnet")
-@registration.register(family="senet")
+@registration.register(name="seresnet152_v2", family="senet")
 class SEResNet152v2(SEInitMixin, ResNet152v2, DescribeMixin):
     """SE-ResNet152v2: ResNet152v2 backbone with Squeeze-and-Excitation blocks."""
 
@@ -99,7 +99,7 @@ class SEResNet152v2(SEInitMixin, ResNet152v2, DescribeMixin):
 
 
 @keras.saving.register_keras_serializable(package="seresnet")
-@registration.register(family="senet")
+@registration.register(name="seresnet200_vd", family="senet")
 class SEResNet200vd(SEInitMixin, ResNet200vd, DescribeMixin):
     """SE-ResNet200vd: ResNet200vd backbone with Squeeze-and-Excitation blocks."""
 

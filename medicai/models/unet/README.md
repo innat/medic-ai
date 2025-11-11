@@ -11,12 +11,12 @@ from medicai.models import UNet
 
 # build 3d unet model
 model = UNet(
-    encoder_name='efficientnetv2_m', input_shape=(96, 96, 96, 1)
+    encoder_name='efficientnet_v2_m', input_shape=(96, 96, 96, 1)
 )
 
 # build 2d unet model
 model = UNet(
-    encoder_name='efficientnetv2_m', input_shape=(96, 96, 1)
+    encoder_name='efficientnet_v2_m', input_shape=(96, 96, 1)
 )
 ```
 
@@ -28,7 +28,7 @@ By default, the `decoder_block_type="upsampling"`, but we can use trainable conv
 from medicai.models import UNet
 
 model = UNet(
-    encoder_name='efficientnetv2_m', 
+    encoder_name='efficientnet_v2_m', 
     input_shape=(96, 96, 96, 1),
     decoder_block_type="transpose"
 )
@@ -42,7 +42,7 @@ We can use `encoder_depth` to specifying how many stages of the encoder backbone
 from medicai.models import UNet
 
 model = UNet(
-    encoder_name='efficientnetv2_m', 
+    encoder_name='efficientnet_v2_m', 
     input_shape=(96, 96, 96, 1),
     encoder_depth=3
 )
