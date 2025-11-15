@@ -100,6 +100,20 @@ def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
     return LayerClass(**kwargs)
 
 
+def get_dropout_layer(spatial_dims, layer_type, **kwargs):
+    if spatial_dims not in (2, 3):
+        raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
+
+    if layer_type not in ("spatial_dropout",):
+        raise ValueError(f"layer_type must be 'spatial_dropout'. Got: {layer_type}")
+
+    layers_map = {
+        "spatial_dropout": {2: layers.SpatialDropout2D, 3: layers.SpatialDropout3D},
+    }
+    LayerClass = layers_map[layer_type][spatial_dims]
+    return LayerClass(**kwargs)
+
+
 def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
     """
     Returns a pooling layer (Max or Average) for 1D, 2D, or 3D inputs, including global pooling.
