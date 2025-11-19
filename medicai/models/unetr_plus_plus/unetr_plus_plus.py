@@ -1,4 +1,5 @@
 import keras
+import numpy as np
 
 from medicai.blocks import UNetOutBlock
 from medicai.utils import (
@@ -15,7 +16,7 @@ from .encoder_layers import UNetResBlock, UNETRPlusPlusUpsamplingBlock
 @keras.saving.register_keras_serializable(package="unetr_plusplus")
 @registration.register(name="unetr_plusplus", type="segmentation")
 class UNETRPlusPlus(keras.Model, DescribeMixin):
-    ALLOWED_BACKBONE_FAMILIES = ["unetr_plusplus_encoder"]
+    ALLOWED_BACKBONE_FAMILIES = ["unetr_plusplus"]
 
     def __init__(
         self,
@@ -62,7 +63,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
 
         skips = [pyramid_outputs[key] for key in required_keys]
         classifier_activation = validate_activation(classifier_activation)
-        target_sequence_length = self.get_target_sequence_length(input_shape)
+        target_sequence_length = self.get_target_sequence_length(encoder)
 
         # Build UNETR++ decoder.
         unetr_plusplus_head = self.build_decoder(
@@ -112,7 +113,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 sequence_length=target_sequence_length[0],
                 norm_name=norm_name,
                 name="unetr_plus_decoder_block_3",
-            )(dec4, enc3)
+            )([dec4, enc3])
 
             dec2 = UNETRPlusPlusUpsamplingBlock(
                 filters=feature_size * 4,
@@ -121,7 +122,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 sequence_length=target_sequence_length[1],
                 norm_name=norm_name,
                 name="unetr_plus_decoder_block_2",
-            )(dec3, enc2)
+            )([dec3, enc2])
 
             dec1 = UNETRPlusPlusUpsamplingBlock(
                 filters=feature_size * 2,
@@ -130,7 +131,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 sequence_length=target_sequence_length[2],
                 norm_name=norm_name,
                 name="unetr_plus_decoder_block_1",
-            )(dec2, enc1)
+            )([dec2, enc1])
 
             out = UNETRPlusPlusUpsamplingBlock(
                 filters=feature_size,
@@ -140,7 +141,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 norm_name=norm_name,
                 conv_decoder=True,
                 name="unetr_plus_decoder_block_out",
-            )(dec1, convBlock)
+            )([dec1, convBlock])
 
             output = UNetOutBlock(
                 num_classes=num_classes,
@@ -152,18 +153,30 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
         return apply
 
     @staticmethod
-    def get_target_sequence_length(input_shape):
-        patch_sizes = [8, 16, 32, 128]
-        spatial_shape = input_shape[:-1]
+    def get_target_sequence_length(encoder):
+        """
+        Determines token sequence lengths for each encoder stage.
+        Works for:
+        - UNETR++ encoder (has encoder.sequence_lengths)
+        - Arbitrary CNN encoder
+        - Arbitrary resolution inputs (2D or 3D)
+        """
+        # compute from pyramid_outputs spatial shapes
+        if hasattr(encoder, "pyramid_outputs"):
+            seq = []
+            keys = ["P3", "P2", "P1"]
+            for k in keys:
+                feat = encoder.pyramid_outputs[k]
+                print(k, feat.shape)
+                spatial = feat.shape[1:-1]
+                seq.append(int(np.prod(spatial)))
+            seq.append(seq[-1] * 4)
+            return seq
 
-        target_sequence_length = []
-        for p in patch_sizes:
-            size = 1
-            for _ in spatial_shape:
-                size *= p
-            target_sequence_length.append(size)
-
-        return target_sequence_length
+        raise ValueError(
+            "Cannot infer `sequence_length` for decoder. "
+            "Encoder must provide pyramid_outputs` with spatial dimensions."
+        )
 
     def get_config(self):
         config = {

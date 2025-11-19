@@ -339,14 +339,14 @@ class UNetResBlock(layers.Layer):
                 spatial_dim = (spatial_dim + self.stride - 1) // self.stride
             spatial_shape.append(spatial_dim)
 
-        output_shape = [batch_size] + spatial_shape + [self.out_channels]
+        output_shape = [batch_size] + spatial_shape + [self.filters]
         return tuple(output_shape)
 
     def get_config(self):
         config = super().get_config()
         config.update(
             {
-                "out_channels": self.out_channels,
+                "filters": self.filters,
                 "kernel_size": self.kernel_size,
                 "stride": self.stride,
                 "norm_name": self.norm_name,

@@ -173,7 +173,7 @@ class UNETRPlusPlusUpsamplingBlock(keras.layers.Layer):
         kernel_size=3,
         upsample_kernel_size=2,
         norm_name="instance",
-        proj_size=64,
+        spatial_reduced_tokens=64,
         num_heads=4,
         sequence_length=0,
         depth=3,
@@ -187,7 +187,7 @@ class UNETRPlusPlusUpsamplingBlock(keras.layers.Layer):
         self.kernel_size = kernel_size
         self.upsample_kernel_size = upsample_kernel_size
         self.norm_name = norm_name
-        self.proj_size = proj_size
+        self.spatial_reduced_tokens = spatial_reduced_tokens
         self.num_heads = num_heads
         self.sequence_length = sequence_length
         self.depth = depth
@@ -229,7 +229,7 @@ class UNETRPlusPlusUpsamplingBlock(keras.layers.Layer):
                 block = UNETRPlusPlusTransformer(
                     sequence_length=self.sequence_length,
                     hidden_size=self.filters,
-                    proj_size=self.proj_size,
+                    spatial_reduced_tokens=self.spatial_reduced_tokens,
                     num_heads=self.num_heads,
                     dropout_rate=self.dropout_rate,
                     pos_embed=True,
@@ -262,7 +262,7 @@ class UNETRPlusPlusUpsamplingBlock(keras.layers.Layer):
                 "kernel_size": self.kernel_size,
                 "upsample_kernel_size": self.upsample_kernel_size,
                 "norm_name": self.norm_name,
-                "proj_size": self.proj_size,
+                "spatial_reduced_tokens": self.spatial_reduced_tokens,
                 "num_heads": self.num_heads,
                 "sequence_length": self.sequence_length,
                 "depth": self.depth,

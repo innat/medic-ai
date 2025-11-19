@@ -368,6 +368,8 @@ class EfficientPairedAttention(keras.layers.Layer):
                 "spatial_reduced_tokens": self.spatial_reduced_tokens,
                 "num_heads": self.num_heads,
                 "qkv_bias": self.qkv_bias,
+                "channel_attn_drop": self.channel_attn_drop,
+                "spatial_attn_drop": self.spatial_attn_drop,
             }
         )
         return config

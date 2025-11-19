@@ -32,10 +32,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         *,
         input_shape,
         input_tensor=None,
-        stem_kernel_sizes=4,
-        stem_strides=4,
-        downsampling_kernel_sizes=2,
-        downsampling_strides=2,
+        patch_size=[4, 4, 4],
         encoder_filters=[32, 64, 128, 256],
         spatial_reduced_tokens=[64, 64, 64, 32],
         depths=[3, 3, 3, 3],
@@ -81,11 +78,8 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         pyramid_outputs = {}
 
         # Ensure to correct shape for 2D and 3D ops.
-        stem_kernel_sizes = ensure_tuple_rep(stem_kernel_sizes, spatial_dims)
-        stem_strides = ensure_tuple_rep(stem_strides, spatial_dims)
-        downsampling_kernel_sizes = ensure_tuple_rep(downsampling_kernel_sizes, spatial_dims)
-        downsampling_strides = ensure_tuple_rep(downsampling_strides, spatial_dims)
-        sequence_lengths = self.calculate_downsampled_input_sizes(input_shape)
+        patch_size = ensure_tuple_rep(patch_size, spatial_dims)
+        sequence_lengths = self.calculate_downsampled_input_sizes(input_shape, patch_size)
 
         inputs = parse_model_inputs(input_shape, input_tensor, name="unetr_pp_input")
         x = inputs
@@ -95,17 +89,17 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
             spatial_dims,
             layer_type="conv",
             filters=encoder_filters[0],
-            kernel_size=stem_kernel_sizes,
-            strides=stem_strides,
+            kernel_size=patch_size,
+            strides=patch_size,
             use_bias=False,
             name="stem_conv",
         )(x)
-        x = utils.get_norm_layer(layer_type="group", groups=inputs.shape[-1], name="stem_norm")(x)
+        x = utils.get_norm_layer(layer_type="group", groups=input_shape[-1], name="stem_norm")(x)
 
         # stage 0 transformer blocks
         for j in range(depths[0]):
             x = UNETRPlusPlusTransformer(
-                sequence_lengths=sequence_lengths[0],
+                sequence_length=sequence_lengths[0],
                 hidden_size=encoder_filters[0],
                 spatial_reduced_tokens=spatial_reduced_tokens[0],
                 num_heads=num_heads,
@@ -123,8 +117,8 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
                 spatial_dims,
                 layer_type="conv",
                 filters=encoder_filters[i],
-                kernel_size=downsampling_kernel_sizes,
-                strides=downsampling_strides,
+                kernel_size=2,
+                strides=2,
                 use_bias=False,
                 name=f"downsample_conv_{i}",
             )(x)
@@ -135,7 +129,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
             # Transformer blocks
             for j in range(depths[i]):
                 x = UNETRPlusPlusTransformer(
-                    input_size=sequence_lengths[i],
+                    sequence_length=sequence_lengths[i],
                     hidden_size=encoder_filters[i],
                     spatial_reduced_tokens=spatial_reduced_tokens[i],
                     num_heads=num_heads,
@@ -153,23 +147,22 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
             **kwargs,
         )
 
+        self.sequence_lengths = sequence_lengths
         self.pyramid_outputs = pyramid_outputs
         self.encoder_filters = encoder_filters
-        self.stem_kernel_sizes = stem_kernel_sizes
-        self.stem_strides = stem_strides
-        self.downsampling_kernel_sizes = downsampling_kernel_sizes
-        self.downsampling_strides = downsampling_strides
         self.spatial_reduced_tokens = spatial_reduced_tokens
+        self.patch_size = patch_size
         self.depths = depths
         self.num_heads = num_heads
         self.transformer_dropout_rate = transformer_dropout_rate
 
     @staticmethod
-    def calculate_downsampled_input_sizes(input_shape):
+    def calculate_downsampled_input_sizes(input_shape, patch_size):
         spatial_dims_only = input_shape[:-1]
 
         # Calculate downsampling factors for each stage: [4, 8, 16, 32]
-        downsampling_factors = [4 * (2**i) for i in range(4)]
+        stem_down = patch_size[0]
+        downsampling_factors = [stem_down * (2**i) for i in range(4)]
 
         # For each stage, calculate product of (dim // factor) for all dims
         input_sizes = [
@@ -182,10 +175,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         config = {
             "input_shape": self.input_shape[1:],
             "encoder_filters": self.encoder_filters,
-            "stem_kernel_sizes": self.stem_kernel_sizes,
-            "stem_strides": self.stem_strides,
-            "downsampling_kernel_sizes": self.downsampling_kernel_sizes,
-            "downsampling_strides": self.downsampling_strides,
+            "patch_size": self.patch_size,
             "spatial_reduced_tokens": self.spatial_reduced_tokens,
             "depths": self.depths,
             "num_heads": self.num_heads,
