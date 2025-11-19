@@ -95,7 +95,7 @@ from .transunet import TransUNet
 from .unet import AttentionUNet, UNet
 from .unet_plus_plus import UNetPlusPlus
 from .unetr import UNETR
-from .unetr_plus_plus import UNETRPlusPlusEncoder
+from .unetr_plus_plus import UNETRPlusPlus, UNETRPlusPlusEncoder
 from .upernet import UPerNet
 from .vit import ViTBackbone, ViTBase, ViTHuge, ViTLarge
 from .xception import Xception, XceptionBackbone

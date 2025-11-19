@@ -32,7 +32,6 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         *,
         input_shape,
         input_tensor=None,
-        sequence_lengths=[32 * 32 * 32, 16 * 16 * 16, 8 * 8 * 8, 4 * 4 * 4],
         stem_kernel_sizes=4,
         stem_strides=4,
         downsampling_kernel_sizes=2,
@@ -81,14 +80,17 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = {}
 
+        # Ensure to correct shape for 2D and 3D ops.
         stem_kernel_sizes = ensure_tuple_rep(stem_kernel_sizes, spatial_dims)
         stem_strides = ensure_tuple_rep(stem_strides, spatial_dims)
         downsampling_kernel_sizes = ensure_tuple_rep(downsampling_kernel_sizes, spatial_dims)
         downsampling_strides = ensure_tuple_rep(downsampling_strides, spatial_dims)
-        inputs = parse_model_inputs(input_shape, input_tensor, name="input_spec")
+        sequence_lengths = self.calculate_downsampled_input_sizes(input_shape)
+
+        inputs = parse_model_inputs(input_shape, input_tensor, name="unetr_pp_input")
         x = inputs
 
-        # Stem layer
+        # stem layer
         x = utils.get_conv_layer(
             spatial_dims,
             layer_type="conv",
@@ -100,7 +102,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         )(x)
         x = utils.get_norm_layer(layer_type="group", groups=inputs.shape[-1], name="stem_norm")(x)
 
-        # Stage 0 transformer blocks
+        # stage 0 transformer blocks
         for j in range(depths[0]):
             x = UNETRPlusPlusTransformer(
                 sequence_lengths=sequence_lengths[0],
@@ -109,14 +111,14 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
                 num_heads=num_heads,
                 dropout_rate=transformer_dropout_rate,
                 pos_embed=True,
-                name=f"stage0_transformer_block_{j}",
+                name=f"stage_0_transformer_block_{j}",
             )(x)
 
         pyramid_outputs["P1"] = x
 
-        # Stages 1-3
+        # stages 1-3
         for i in range(1, 4):
-            # Downsampling
+            # downsampling
             x = utils.get_conv_layer(
                 spatial_dims,
                 layer_type="conv",
@@ -139,7 +141,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
                     num_heads=num_heads,
                     dropout_rate=transformer_dropout_rate,
                     pos_embed=True,
-                    name=f"stage{i}_transformer_block_{j}",
+                    name=f"stage_{i}_transformer_block_{j}",
                 )(x)
 
             pyramid_outputs[f"P{i+1}"] = x
@@ -161,6 +163,20 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         self.depths = depths
         self.num_heads = num_heads
         self.transformer_dropout_rate = transformer_dropout_rate
+
+    @staticmethod
+    def calculate_downsampled_input_sizes(input_shape):
+        spatial_dims_only = input_shape[:-1]
+
+        # Calculate downsampling factors for each stage: [4, 8, 16, 32]
+        downsampling_factors = [4 * (2**i) for i in range(4)]
+
+        # For each stage, calculate product of (dim // factor) for all dims
+        input_sizes = [
+            np.prod([dim // factor for dim in spatial_dims_only]) for factor in downsampling_factors
+        ]
+
+        return input_sizes
 
     def get_config(self):
         config = {

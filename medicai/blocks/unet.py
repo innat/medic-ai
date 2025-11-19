@@ -1,10 +1,26 @@
-import numpy as np
 from keras import layers
 
 from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer
 
 
 class UNetBasicBlock(layers.Layer):
+    """
+    A basic building block for a UNet, consisting of two convolutional layers
+    with normalization and LeakyReLU activation, and optional dropout.
+
+    Args:
+        filters (int): The number of output channels for both convolutional layers.
+        kernel_size (int): The size of the convolutional kernel in all spatial dimensions (default: 3).
+        stride (int): The stride of the first convolutional layer in all spatial dimensions (default: 1).
+        norm_name (Optional[str]): The name of the normalization layer to use.
+            Options are "instance" (requires tensorflow-addons), "batch", or None for no normalization (default: "instance").
+        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no dropout is applied (default: None).
+
+    Returns:
+        Callable: A function that takes an input tensor and returns the output
+            tensor after applying the basic block.
+    """
+
     def __init__(
         self,
         filters,
@@ -100,6 +116,26 @@ class UNetBasicBlock(layers.Layer):
 
 
 class UNetOutBlock(layers.Layer):
+    """The output block of a UNet, consisting of a 1x1x1 convolutional layer
+    to map the features to the desired number of classes, with optional dropout
+    and a final activation function.
+
+    Args:
+        num_classes (int): The number of output classes for the segmentation task.
+            This determines the number of output channels of the convolutional layer.
+        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None,
+            no dropout is applied (default: None).
+        activation (Optional[Union[str, layers.Activation]]): The activation function
+            to apply to the output of the convolutional layer. This can be a string
+            (e.g., 'softmax', 'sigmoid') or a Keras activation layer instance.
+            If None, no activation is applied (default: None).
+
+    Returns:
+        Callable: A function that takes an input tensor and returns the output
+            tensor after applying the 1x1x1 convolution and optional dropout
+            and activation.
+    """
+
     def __init__(
         self, num_classes, dropout_rate=None, activation=None, name="unet_out_block", **kwargs
     ):
@@ -156,6 +192,27 @@ class UNetOutBlock(layers.Layer):
 
 
 class UNetResBlock(layers.Layer):
+    """
+    A residual building block for a UNet, consisting of two convolutional layers
+    with normalization, LeakyReLU activation, optional dropout, and a skip connection.
+
+    Args:
+        filters (int): The number of output channels for the convolutional layers.
+        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
+            (default: 3).
+        stride (int): The stride of the first convolutional layer in all spatial dimensions
+            (default: 1).
+        norm_name (Optional[str]): The name of the normalization layer to use.
+            Options are "instance" (requires tensorflow-addons), "batch", or None for no
+            normalization (default: "instance").
+        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
+            dropout is applied (default: None).
+
+    Returns:
+        Callable: A function that takes an input tensor and returns the output
+            tensor after applying the residual block.
+    """
+
     def __init__(
         self,
         filters,

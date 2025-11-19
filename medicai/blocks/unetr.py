@@ -5,6 +5,27 @@ from medicai.utils import get_conv_layer
 
 
 class UNETRBasicBlock(layers.Layer):
+    """
+    A basic building block for a 3D UNet, consisting of two convolutional layers
+    with normalization and LeakyReLU activation, and optional dropout.
+
+    Args:
+        filters (int): The number of output channels for both convolutional layers.
+        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
+            (default: 3).
+        stride (int): The stride of the first convolutional layer in all spatial dimensions
+            (default: 1).
+        norm_name (Optional[str]): The name of the normalization layer to use.
+            Options are "instance" (requires tensorflow-addons), "batch", or None for no
+            normalization (default: "instance").
+        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
+            dropout is applied (default: None).
+
+    Returns:
+        Callable: A function that takes an input tensor and returns the output
+            tensor after applying the basic block.
+    """
+
     def __init__(
         self,
         filters,
@@ -13,7 +34,7 @@ class UNETRBasicBlock(layers.Layer):
         norm_name="instance",
         res_block=True,
         name="unetr_basic_block",
-        *kwargs
+        **kwargs
     ):
         super().__init__(name=name, **kwargs)
 
@@ -61,6 +82,23 @@ class UNETRBasicBlock(layers.Layer):
 
 
 class UNETRUpsamplingBlock(layers.Layer):
+    """
+    A basic building block for a 3D UNet, consisting of two convolutional layers
+    with normalization and LeakyReLU activation, and optional dropout.
+
+    Args:
+        out_channels (int): The number of output channels for both convolutional layers.
+        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
+            (default: 3).
+        stride (int): The stride of the first convolutional layer in all spatial dimensions
+            (default: 1).
+        norm_name (Optional[str]): The name of the normalization layer to use.
+            Options are "instance" (requires tensorflow-addons), "batch", or None for no
+            normalization (default: "instance").
+        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
+            dropout is applied (default: None).
+    """
+
     def __init__(
         self,
         filters,
@@ -143,6 +181,42 @@ class UNETRUpsamplingBlock(layers.Layer):
 
 
 class UNETRPreUpsamplingBlock(layers.Layer):
+    """
+    Functional closure version of a UNETR projection upsampling block.
+
+    This block performs upsampling using a transpose convolution followed
+    by optional convolutional or residual sub-blocks. It returns a callable
+    function `apply(x)` that applies the block to an input tensor.
+
+    Args:
+        filters (int): Number of output channels for the upsampled feature.
+        num_layer (int): Number of convolutional/residual sub-blocks after the initial
+            transpose convolution.
+        kernel_size (int or tuple): Kernel size for the convolutional sub-blocks.
+        stride (int or tuple): Stride for the convolutional sub-blocks.
+        upsample_kernel_size (int or tuple): Kernel size / stride for the initial transpose
+            convolution.
+        conv_block (bool): If True, apply convolutional sub-blocks after transpose conv.
+        res_block (bool): If True and conv_block is True, use residual blocks (`UnetResBlock`)
+                        instead of basic convolutional blocks (`UnetBasicBlock`).
+
+    Example:
+        # Create a 3D UNETR upsampling block
+        up_block = UNETRPreUpsamplingBlock(
+            spatial_dims=3,
+            out_channels=128,
+            num_layer=2,
+            kernel_size=3,
+            stride=1,
+            upsample_kernel_size=2,
+            conv_block=True,
+            res_block=True,
+        )
+
+        # Apply it to a feature tensor `x`
+        y = up_block(x)
+    """
+
     def __init__(
         self,
         filters,

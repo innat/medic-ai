@@ -70,7 +70,7 @@ class UNETRPlusPlusTransformer(keras.layers.Layer):
         self.spatial_dims = len(input_shape) - 2
         self.total_spatial = np.prod(input_shape[1:-1])
 
-        self.norm = layers.LayerNormalization(epsilon=1e-5, name=f"{self.prefix}_norm")
+        self.norm = layers.LayerNormalization(epsilon=1e-5)
         self.norm.build((None, self.sequence_length, self.hidden_size))
 
         self.gamma = self.add_weight(
@@ -102,7 +102,6 @@ class UNETRPlusPlusTransformer(keras.layers.Layer):
             kernel_size=3,
             stride=1,
             norm_name="batch",
-            name=f"{self.prefix}_unet_residual_block",
         )
         self.conv1.build(input_shape)
 
@@ -112,14 +111,12 @@ class UNETRPlusPlusTransformer(keras.layers.Layer):
                     self.spatial_dims,
                     layer_type="spatial_dropout",
                     rate=self.dropout_rate,
-                    name=f"{self.prefix}_spatial_dropout",
                 ),
                 get_conv_layer(
                     self.spatial_dims,
                     layer_type="conv",
                     filters=self.hidden_size,
                     kernel_size=1,
-                    name=f"{self.prefix}_conv2",
                 ),
             ]
         )
@@ -167,3 +164,110 @@ class UNETRPlusPlusTransformer(keras.layers.Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[:-1] + (self.hidden_size,)
+
+
+class UNETRPlusPlusUpsamplingBlock(keras.layers.Layer):
+    def __init__(
+        self,
+        filters,
+        kernel_size=3,
+        upsample_kernel_size=2,
+        norm_name="instance",
+        proj_size=64,
+        num_heads=4,
+        sequence_length=0,
+        depth=3,
+        conv_decoder=False,
+        dropout_rate=0.1,
+        name="unetr_pp_block",
+        **kwargs,
+    ):
+        super().__init__(name=name, **kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.upsample_kernel_size = upsample_kernel_size
+        self.norm_name = norm_name
+        self.proj_size = proj_size
+        self.num_heads = num_heads
+        self.sequence_length = sequence_length
+        self.depth = depth
+        self.conv_decoder = conv_decoder
+        self.dropout_rate = dropout_rate
+        self.prefix = name
+
+    def build(self, input_shape):
+        x_shape, skip_shape = input_shape
+        spatial_dims = len(x_shape) - 2
+
+        # Upsampling layer
+        self.up = get_conv_layer(
+            spatial_dims,
+            layer_type="conv_transpose",
+            filters=self.filters,
+            kernel_size=self.upsample_kernel_size,
+            strides=self.upsample_kernel_size,
+            use_bias=False,
+        )
+
+        self.add = layers.Add()
+
+        # Decoder block(s): conv OR transformer(s)
+        self.blocks = []
+
+        if self.conv_decoder:
+            self.blocks.append(
+                UNetResBlock(
+                    filters=self.filters,
+                    kernel_size=self.kernel_size,
+                    stride=1,
+                    norm_name=self.norm_name,
+                )
+            )
+        else:
+            # Transformer decoder (multiple layers)
+            for i in range(self.depth):
+                block = UNETRPlusPlusTransformer(
+                    sequence_length=self.sequence_length,
+                    hidden_size=self.filters,
+                    proj_size=self.proj_size,
+                    num_heads=self.num_heads,
+                    dropout_rate=self.dropout_rate,
+                    pos_embed=True,
+                    name=f"{self.prefix}_{i}",
+                )
+                self.blocks.append(block)
+
+        x_shape, skip_shape = input_shape
+        self.up.build(x_shape)
+        for block in self.blocks:
+            block.build(skip_shape)
+        self.built = True
+
+    def call(self, inputs, training=None):
+        x, skip = inputs
+
+        x = self.up(x, training=training)
+        x = self.add([x, skip])
+
+        for block in self.blocks:
+            x = block(x, training=training)
+
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "filters": self.filters,
+                "kernel_size": self.kernel_size,
+                "upsample_kernel_size": self.upsample_kernel_size,
+                "norm_name": self.norm_name,
+                "proj_size": self.proj_size,
+                "num_heads": self.num_heads,
+                "sequence_length": self.sequence_length,
+                "depth": self.depth,
+                "conv_decoder": self.conv_decoder,
+                "dropout_rate": self.dropout_rate,
+            }
+        )
+        return config
