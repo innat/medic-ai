@@ -1,6 +1,6 @@
 import keras
 
-from medicai.blocks import UnetOutBlock, UNETRPlusPlusUpBlock
+from medicai.blocks import UNetOutBlock, UNETRPlusPlusUpBlock
 from medicai.utils import (
     DescribeMixin,
     keras_constants,
@@ -145,8 +145,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 conv_decoder=True,
             )(dec1, convBlock)
 
-            output = UnetOutBlock(
-                spatial_dims=spatial_dims,
+            output = UNetOutBlock(
                 num_classes=num_classes,
                 activation=classifier_activation,
             )(out)
