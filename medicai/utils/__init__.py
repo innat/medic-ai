@@ -7,6 +7,7 @@ from medicai.utils.inference import SlidingWindowInference, sliding_window_infer
 from medicai.utils.model_utils import (
     get_act_layer,
     get_conv_layer,
+    get_dropout_layer,
     get_norm_layer,
     get_pooling_layer,
     get_reshaping_layer,

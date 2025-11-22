@@ -1,6 +1,6 @@
 import keras
 
-from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrUpBlock
+from medicai.blocks import UNetOutBlock, UNETRBasicBlock, UNETRUpsamplingBlock
 from medicai.utils import DescribeMixin, registration, resolve_encoder, validate_activation
 
 
@@ -105,7 +105,6 @@ class SwinUNETR(keras.Model, DescribeMixin):
         inputs = encoder.input
         skips = [pyramid_outputs[key] for key in required_keys]
         unetr_head = self.build_decoder(
-            spatial_dims=spatial_dims,
             num_classes=num_classes,
             feature_size=feature_size,
             res_block=True,
@@ -131,7 +130,6 @@ class SwinUNETR(keras.Model, DescribeMixin):
 
     def build_decoder(
         self,
-        spatial_dims,
         num_classes=4,
         feature_size=16,
         res_block=True,
@@ -160,9 +158,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             hidden_states_out = inputs[1:]
 
             # Encoder 1 (process raw input)
-            enc0 = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=feature_size,
+            enc0 = UNETRBasicBlock(
+                filters=feature_size,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
@@ -170,9 +167,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             )(enc_input)
 
             # Encoder 2 (process hidden_states_out[0])
-            enc1 = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=feature_size,
+            enc1 = UNETRBasicBlock(
+                filters=feature_size,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
@@ -180,9 +176,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             )(hidden_states_out[0])
 
             # Encoder 3 (process hidden_states_out[1])
-            enc2 = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=feature_size * 2,
+            enc2 = UNETRBasicBlock(
+                filters=feature_size * 2,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
@@ -190,9 +185,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             )(hidden_states_out[1])
 
             # Encoder 4 (process hidden_states_out[2])
-            enc3 = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=feature_size * 4,
+            enc3 = UNETRBasicBlock(
+                filters=feature_size * 4,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
@@ -200,9 +194,8 @@ class SwinUNETR(keras.Model, DescribeMixin):
             )(hidden_states_out[2])
 
             # Encoder 5 (process hidden_states_out[4] as bottleneck)
-            dec4 = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=feature_size * 16,
+            dec4 = UNETRBasicBlock(
+                filters=feature_size * 16,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
@@ -210,56 +203,51 @@ class SwinUNETR(keras.Model, DescribeMixin):
             )(hidden_states_out[4])
 
             # Decoder 5 (upsample dec4 and concatenate with hidden_states_out[3])
-            dec3 = UnetrUpBlock(
-                spatial_dims,
-                out_channels=feature_size * 8,
+            dec3 = UNETRUpsamplingBlock(
+                filters=feature_size * 8,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
-            )(dec4, hidden_states_out[3])
+            )([dec4, hidden_states_out[3]])
 
             # Decoder 4 (upsample dec3 and concatenate with enc3)
-            dec2 = UnetrUpBlock(
-                spatial_dims,
-                out_channels=feature_size * 4,
+            dec2 = UNETRUpsamplingBlock(
+                filters=feature_size * 4,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
-            )(dec3, enc3)
+            )([dec3, enc3])
 
             # Decoder 3 (upsample dec2 and concatenate with enc2)
-            dec1 = UnetrUpBlock(
-                spatial_dims,
-                out_channels=feature_size * 2,
+            dec1 = UNETRUpsamplingBlock(
+                filters=feature_size * 2,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
-            )(dec2, enc2)
+            )([dec2, enc2])
 
             # Decoder 2 (upsample dec1 and concatenate with enc1)
-            dec0 = UnetrUpBlock(
-                spatial_dims,
-                out_channels=feature_size,
+            dec0 = UNETRUpsamplingBlock(
+                filters=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
-            )(dec1, enc1)
+            )([dec1, enc1])
 
-            out = UnetrUpBlock(
-                spatial_dims,
-                out_channels=feature_size,
+            out = UNETRUpsamplingBlock(
+                filters=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
-            )(dec0, enc0)
+            )([dec0, enc0])
 
             # Final output (process dec0 and produce logits)
-            logits = UnetOutBlock(spatial_dims, num_classes, activation=classifier_activation)(out)
+            logits = UNetOutBlock(num_classes, activation=classifier_activation)(out)
             return logits
 
         return apply
