@@ -6,15 +6,17 @@ from .base import BASE_COMMON_ARGS
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
-def cross_entropy(y_true, y_pred):
+def cross_entropy(y_true, y_pred, smooth=1e-7):
     spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    y_pred = ops.clip(y_pred, smooth, 1.0 - smooth)
     ce_loss = -y_true * ops.log(y_pred)
     ce_loss = ops.mean(ce_loss, axis=spatial_dims)
     return ce_loss
 
 
-def binary_cross_entropy(y_true, y_pred):
+def binary_cross_entropy(y_true, y_pred, smooth=1e-7):
     spatial_dims = list(range(1, len(y_pred.shape) - 1))
+    y_pred = ops.clip(y_pred, smooth, 1.0 - smooth)
     ce_loss = -(y_true * ops.log(y_pred) + (1.0 - y_true) * ops.log(1.0 - y_pred))
     ce_loss = ops.mean(ce_loss, axis=spatial_dims)
     return ce_loss
@@ -43,6 +45,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
         ce_weight=1.0,
@@ -54,6 +57,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction="none",
             name=name or "sparse_dice_crossentropy",
@@ -98,6 +102,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
         ce_weight=1.0,
@@ -109,6 +114,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction="none",
             name=name or "categorical_dice_crossentropy",
@@ -153,6 +159,7 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
         ce_weight=1.0,
@@ -164,6 +171,7 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction="none",
             name=name or "binary_dice_crossentropy",

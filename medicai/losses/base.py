@@ -10,6 +10,7 @@ class BaseLoss(keras.losses.Loss):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -25,6 +26,7 @@ class BaseLoss(keras.losses.Loss):
         super().__init__(name=name, reduction=reduction, **kwargs)
 
         self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
+        self.ignore_class_ids = ignore_class_ids
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.smooth = smooth or keras.backend.epsilon()
@@ -86,6 +88,20 @@ class BaseLoss(keras.losses.Loss):
             y_true_processed, y_pred_processed
         )
         y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
+
+        if self.ignore_class_ids:
+            ignore_classes = ops.cast(self.ignore_class_ids, dtype=y_true.dtype)
+            is_ignored_mask = ops.equal(ops.expand_dims(y_true, axis=-1), ignore_classes)
+            is_ignored_mask = ops.any(is_ignored_mask, axis=-1)
+            valid_mask = ops.cast(ops.logical_not(is_ignored_mask), y_true.dtype)
+            if self.num_classes > 1:
+                valid_mask = ops.expand_dims(valid_mask, -1)
+                valid_mask = ops.tile(
+                    valid_mask, [1] * len(valid_mask.shape[:-1]) + [y_pred_processed.shape[-1]]
+                )
+            y_true_processed = y_true_processed * valid_mask
+            y_pred_processed = y_pred_processed * valid_mask
+
         return y_true_processed, y_pred_processed
 
     def compute_loss(self, y_true, y_pred):
@@ -127,6 +143,7 @@ class BaseDiceLoss(BaseLoss):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -136,6 +153,7 @@ class BaseDiceLoss(BaseLoss):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "dice_loss",
@@ -165,6 +183,7 @@ class BaseIoULoss(BaseLoss):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -174,6 +193,7 @@ class BaseIoULoss(BaseLoss):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "iou_loss",
@@ -207,6 +227,7 @@ class BaseTverskyLoss(BaseLoss):
         alpha=0.5,
         beta=0.5,
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -216,6 +237,7 @@ class BaseTverskyLoss(BaseLoss):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "tversky_loss",
@@ -255,6 +277,7 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         num_classes,
         weight_type="square",
         class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -264,6 +287,7 @@ class BaseGeneralizedDiceLoss(BaseLoss):
             from_logits=from_logits,
             num_classes=num_classes,
             class_ids=class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "generalized_dice_loss",
