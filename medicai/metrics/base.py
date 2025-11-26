@@ -37,6 +37,7 @@ class BaseDiceMetric(Metric):
         from_logits,
         num_classes,
         class_ids=None,
+        ignore_class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
         name=None,
@@ -53,6 +54,7 @@ class BaseDiceMetric(Metric):
         super().__init__(name=name, **kwargs)
 
         self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
+        self.ignore_class_ids = ignore_class_ids
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
@@ -133,6 +135,19 @@ class BaseDiceMetric(Metric):
             y_true_processed, y_pred_processed
         )
 
+        if self.ignore_class_ids:
+            ignore_classes = ops.cast(self.ignore_class_ids, dtype=y_true.dtype)
+            is_ignored_mask = ops.equal(ops.expand_dims(y_true, axis=-1), ignore_classes)
+            is_ignored_mask = ops.any(is_ignored_mask, axis=-1)
+            valid_mask = ops.cast(ops.logical_not(is_ignored_mask), y_true.dtype)
+            if self.num_classes > 1:
+                valid_mask = ops.expand_dims(valid_mask, -1)
+                valid_mask = ops.tile(
+                    valid_mask, [1] * len(valid_mask.shape[:-1]) + [y_pred_processed.shape[-1]]
+                )
+            y_true_processed = y_true_processed * valid_mask
+            y_pred_processed = y_pred_processed * valid_mask
+
         # Dynamically determine the spatial dimensions to sum over.
         # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
@@ -143,15 +158,26 @@ class BaseDiceMetric(Metric):
         gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
         pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
 
+        # Check if ALL pixels are ignored (all zeros in y_true_processed and y_pred_processed)
+        total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])  # H*W or D*H*W
+        total_pixels_per_sample = ops.cast(total_pixels_per_sample, y_true.dtype)
+        # If all pixels are ignored in a sample, we should ignore that sample entirely
+        all_ignored_mask = ops.all(
+            ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
+        )  # [B]
+        all_ignored_mask = ops.expand_dims(all_ignored_mask, -1)  # [B, 1]
+        all_ignored_mask = ops.tile(all_ignored_mask, [1, gt_sum.shape[-1]])  # [B, C]
+
         # Valid samples mask
         if self.ignore_empty:
             # Invalid when GT is empty AND prediction is NOT empty
-            invalid_mask = ops.logical_and(
-                gt_sum == 0, pred_sum != 0  # Empty GT  # Non-empty prediction
+            invalid_mask = ops.logical_or(
+                ops.logical_and(gt_sum == 0, pred_sum != 0),  # Empty GT but non-empty prediction
+                all_ignored_mask,  # All pixels ignored
             )
             valid_mask = ops.logical_not(invalid_mask)  # [B, C]
         else:
-            valid_mask = ops.ones_like(gt_sum, dtype="bool")
+            valid_mask = ops.logical_not(all_ignored_mask)  # [B, C]
 
         # Convert mask to float and expand dimensions for broadcasting
         valid_mask_float = ops.cast(valid_mask, "float32")  # [B, C]
