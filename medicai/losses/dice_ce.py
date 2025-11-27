@@ -6,12 +6,21 @@ from .base import BASE_COMMON_ARGS
 from .dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
-def cross_entropy(y_true, y_pred, smooth=1e-7):
+def cross_entropy(y_true, y_pred, smooth=1e-7, mask=None):
     spatial_dims = list(range(1, len(y_pred.shape) - 1))
     y_pred = ops.clip(y_pred, smooth, 1.0 - smooth)
     ce_loss = -y_true * ops.log(y_pred)
-    ce_loss = ops.mean(ce_loss, axis=spatial_dims)
-    return ce_loss
+
+    if mask is not None:
+        masked_ce_loss = ce_loss * mask
+        masked_ce_loss = ops.sum(masked_ce_loss, axis=spatial_dims)
+        valid_pixels = ops.sum(mask, axis=spatial_dims)
+        valid_pixels = ops.maximum(valid_pixels, 1.0)
+        mean_ce_loss = masked_ce_loss / valid_pixels
+        return mean_ce_loss
+    else:
+        ce_loss = ops.mean(ce_loss, axis=spatial_dims)
+        return ce_loss
 
 
 def binary_cross_entropy(y_true, y_pred, smooth=1e-7):
@@ -44,7 +53,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
         ignore_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
@@ -56,7 +65,7 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
             ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction="none",
@@ -83,13 +92,15 @@ class SparseDiceCELoss(SparseDiceLoss, DescribeMixin):
             Tensor: The combined loss.
         """
         # Prepare inputs
-        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
+        y_true_processed, y_pred_processed, valid_mask = self._process_inputs(y_true, y_pred)
 
         # Compute dice loss using parent's compute_loss
-        dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
+        dice_loss = self.compute_loss(y_true_processed, y_pred_processed, valid_mask)
 
         # Compute CE loss
-        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
+        ce_loss = cross_entropy(
+            y_true_processed, y_pred_processed, smooth=self.smooth, mask=valid_mask
+        )
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
         combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
@@ -101,7 +112,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
         ignore_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
@@ -113,7 +124,7 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
             ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction="none",
@@ -140,13 +151,15 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             Tensor: The combined loss.
         """
         # Prepare inputs
-        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
+        y_true_processed, y_pred_processed, valid_mask = self._process_inputs(y_true, y_pred)
 
         # Compute dice loss using parent's compute_loss
-        dice_loss = self.compute_loss(y_true_processed, y_pred_processed)
+        dice_loss = self.compute_loss(y_true_processed, y_pred_processed, valid_mask)
 
         # Compute CE loss
-        ce_loss = cross_entropy(y_true_processed, y_pred_processed)
+        ce_loss = cross_entropy(
+            y_true_processed, y_pred_processed, smooth=self.smooth, mask=valid_mask
+        )
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * ce_loss)
         combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
@@ -158,8 +171,7 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
-        ignore_class_ids=None,
+        target_class_ids=None,
         smooth=1e-7,
         dice_weight=1.0,
         ce_weight=1.0,
@@ -170,8 +182,8 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
-            ignore_class_ids=ignore_class_ids,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=None,
             smooth=smooth,
             reduction="none",
             name=name or "binary_dice_crossentropy",

@@ -123,9 +123,9 @@ class BaseDiceMetric(Metric):
             sample_weight (Tensor, optional): Optional weighting of the samples.
                 Not currently used in this base implementation.
         """
-        y_pred = ops.cast(y_pred, y_true.dtype)
         y_true = ops.convert_to_tensor(y_true)
         y_pred = ops.convert_to_tensor(y_pred)
+        y_pred = ops.cast(y_pred, y_true.dtype)
 
         y_pred_processed = self._process_predictions(y_pred)
         y_true_processed = self._process_inputs(y_true)
