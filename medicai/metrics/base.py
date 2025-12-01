@@ -136,25 +136,22 @@ class BaseDiceMetric(Metric):
         )
 
         if self.ignore_class_ids:
-            ignore_classes = ops.cast(self.ignore_class_ids, dtype=y_true.dtype)
-            is_ignored_mask = ops.equal(ops.expand_dims(y_true, axis=-1), ignore_classes)
-            is_ignored_mask = ops.any(is_ignored_mask, axis=-1)
-            valid_mask = ops.cast(ops.logical_not(is_ignored_mask), y_true.dtype)
-            if self.num_classes > 1:
-                valid_mask = ops.expand_dims(valid_mask, -1)
-                valid_mask = ops.tile(
-                    valid_mask, [1] * len(valid_mask.shape[:-1]) + [y_pred_processed.shape[-1]]
-                )
-            y_true_processed = y_true_processed * valid_mask
-            y_pred_processed = y_pred_processed * valid_mask
+            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype=y_true.dtype)
+            is_ignored_mask = ops.any(
+                ops.equal(ops.argmax(y_true_processed, axis=-1, keepdims=True), ignore_classes),
+                axis=-1,
+            )
+            valid_mask = ops.cast(~is_ignored_mask, y_pred_processed.dtype)
+        else:
+            valid_mask = ops.ones_like(y_pred_processed[..., 0], dtype=y_pred_processed.dtype)
 
         # Dynamically determine the spatial dimensions to sum over.
         # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
 
         # Calculate metrics
-        intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
-        union = y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        intersection = valid_mask * y_true_processed * y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        union = valid_mask * y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
         gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
         pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
 
