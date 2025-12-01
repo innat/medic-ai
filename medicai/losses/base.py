@@ -120,7 +120,7 @@ class BaseLoss(keras.losses.Loss):
 
         return y_true_processed, y_pred_processed, valid_mask
 
-    def compute_loss(self, y_true, y_pred):
+    def compute_loss(self, y_true, y_pred, mask):
         """
         Abstract method to compute the core loss (Dice, IoU, Tversky, etc.).
 
@@ -176,7 +176,7 @@ class BaseDiceLoss(BaseLoss):
             **kwargs,
         )
 
-    def compute_loss(self, y_true, y_pred, valid_mask):
+    def compute_loss(self, y_true, y_pred, mask):
         """Calculates the Dice loss.
 
         Args:
@@ -187,9 +187,9 @@ class BaseDiceLoss(BaseLoss):
             Tensor: The Dice loss.
         """
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
-        intersection = ops.sum(valid_mask * y_true * y_pred, axis=spatial_dims)
-        union = ops.sum(valid_mask * y_true, axis=spatial_dims) + ops.sum(
-            valid_mask * y_pred, axis=spatial_dims
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
+        union = ops.sum(mask * y_true, axis=spatial_dims) + ops.sum(
+            mask * y_pred, axis=spatial_dims
         )
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - dice_score
@@ -218,18 +218,18 @@ class BaseIoULoss(BaseLoss):
             **kwargs,
         )
 
-    def compute_loss(self, y_true, y_pred, valid_mask):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # Intersection: (B, C) tensor
-        intersection = ops.sum(valid_mask * y_true * y_pred, axis=spatial_dims)
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
 
         # Total area (Union): (B, C) tensor
         # IoU Denominator = Area(A) + Area(B) - Area(A intersect B)
         total = (
-            ops.sum(valid_mask * y_true, axis=spatial_dims)
-            + ops.sum(valid_mask * y_pred, axis=spatial_dims)
+            ops.sum(mask * y_true, axis=spatial_dims)
+            + ops.sum(mask * y_pred, axis=spatial_dims)
             - intersection
         )
 
@@ -266,18 +266,18 @@ class BaseTverskyLoss(BaseLoss):
         self.alpha = alpha
         self.beta = beta
 
-    def compute_loss(self, y_true, y_pred, valid_mask):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # True Positives (TP): correctly predicted positive pixels
-        tp = ops.sum(valid_mask * y_true * y_pred, axis=spatial_dims)
+        tp = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
 
         # False Positives (FP): predicted as positive but actually negative
-        fp = ops.sum(valid_mask * y_pred * (1 - y_true), axis=spatial_dims)
+        fp = ops.sum(mask * y_pred * (1 - y_true), axis=spatial_dims)
 
         # False Negatives (FN): predicted as negative but actually positive
-        fn = ops.sum(valid_mask * (1 - y_pred) * y_true, axis=spatial_dims)
+        fn = ops.sum(mask * (1 - y_pred) * y_true, axis=spatial_dims)
 
         # Tversky index: weighted ratio of TP over TP + alpha*FP + beta*FN
         tversky_index = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
@@ -320,16 +320,16 @@ class BaseGeneralizedDiceLoss(BaseLoss):
                 f'Supported values are: {", ".join(self.WEIGHT_TYPE)}.'
             )
 
-    def compute_loss(self, y_true, y_pred, valid_mask):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # Reference volumes (sum over spatial dimensions)
-        ref_vol = ops.sum(valid_mask * y_true, axis=spatial_dims)
+        ref_vol = ops.sum(mask * y_true, axis=spatial_dims)
 
         # Intersection and prediction volumes
-        intersection = ops.sum(valid_mask * y_true * y_pred, axis=spatial_dims)
-        seg_vol = ops.sum(valid_mask * y_pred, axis=spatial_dims)
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
+        seg_vol = ops.sum(mask * y_pred, axis=spatial_dims)
 
         # Compute weights according to weight_type
         if self.weight_type == "square":
