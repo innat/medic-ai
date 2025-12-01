@@ -145,6 +145,9 @@ class BaseDiceMetric(Metric):
         else:
             valid_mask = ops.ones_like(y_pred_processed[..., 0], dtype=y_pred_processed.dtype)
 
+        valid_mask = ops.expand_dims(valid_mask, axis=-1)
+        valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
+
         # Dynamically determine the spatial dimensions to sum over.
         # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
