@@ -112,7 +112,7 @@ class BaseLoss(keras.losses.Loss):
             valid_mask = ops.ones_like(y_pred_processed[..., 0], dtype=y_pred_processed.dtype)
 
         y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
-        y_true_processed, y_pred_processed = self._get_target_class_channels(
+        y_true_processed, y_pred_processed = self._get_desired_class_channels(
             y_true_processed, y_pred_processed
         )
         valid_mask = ops.expand_dims(valid_mask, axis=-1)
