@@ -41,7 +41,7 @@ class BaseLoss(keras.losses.Loss):
                 return list(range(self.num_classes))
 
         elif isinstance(class_ids, int):
-            if not 0 <= class_ids < self.num_classes:
+            if not allow_none and not 0 <= class_ids < self.num_classes:
                 raise ValueError(
                     f"Class ID {class_ids} is out of the valid range [0, {self.num_classes - 1}]."
                 )
@@ -50,7 +50,7 @@ class BaseLoss(keras.losses.Loss):
         # Handle list case
         elif isinstance(class_ids, list):
             for cid in class_ids:
-                if not 0 <= cid < self.num_classes:
+                if not allow_none and not 0 <= cid < self.num_classes:
                     raise ValueError(
                         f"Class ID {cid} is out of the valid range [0, {self.num_classes - 1}]."
                     )

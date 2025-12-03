@@ -153,7 +153,9 @@ class BaseDiceMetric(Metric):
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
 
         # Calculate metrics
-        intersection = valid_mask * y_true_processed * y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        intersection = (
+            valid_mask * y_true_processed * y_pred_processed
+        )  # [B, D, H, W, C] or [B, H, W, C]
         union = valid_mask * y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
         gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
         pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
