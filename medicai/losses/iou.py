@@ -49,7 +49,6 @@ class CategoricalIoULoss(BaseIoULoss, DescribeMixin):
         from_logits,
         num_classes,
         target_class_ids=None,
-        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -60,7 +59,7 @@ class CategoricalIoULoss(BaseIoULoss, DescribeMixin):
             from_logits=from_logits,
             num_classes=num_classes,
             target_class_ids=target_class_ids,
-            ignore_class_ids=ignore_class_ids,
+            ignore_class_ids=None,
             smooth=smooth,
             reduction=reduction,
             name=name,
@@ -80,17 +79,24 @@ class BinaryIoULoss(BaseIoULoss, DescribeMixin):
         from_logits,
         num_classes,
         target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
         **kwargs,
     ):
+        if ignore_class_ids is not None and num_classes > 1:
+            raise ValueError(
+                "`ignore_class_ids` is only supported when `num_classes=1` "
+                "(binary or sparse segmentation). One-hot or multi-label cases "
+                "with `num_classes > 1` are not supported."
+            )
         name = name or "binary_iou_loss"
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             target_class_ids=target_class_ids,
-            ignore_class_ids=None,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name,

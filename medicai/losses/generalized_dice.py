@@ -51,7 +51,6 @@ class CategoricalGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
         from_logits,
         num_classes,
         target_class_ids=None,
-        ignore_class_ids=None,
         weight_type="square",
         smooth=1e-7,
         reduction="mean",
@@ -64,7 +63,7 @@ class CategoricalGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
             num_classes=num_classes,
             weight_type=weight_type,
             target_class_ids=target_class_ids,
-            ignore_class_ids=ignore_class_ids,
+            ignore_class_ids=None,
             smooth=smooth,
             reduction=reduction,
             name=name,
@@ -85,18 +84,25 @@ class BinaryGeneralizedDiceLoss(BaseGeneralizedDiceLoss, DescribeMixin):
         num_classes,
         weight_type="square",
         target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
         **kwargs,
     ):
+        if ignore_class_ids is not None and num_classes > 1:
+            raise ValueError(
+                "`ignore_class_ids` is only supported when `num_classes=1` "
+                "(binary or sparse segmentation). One-hot or multi-label cases "
+                "with `num_classes > 1` are not supported."
+            )
         name = name or "binary_generalized_dice_loss"
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             weight_type=weight_type,
             target_class_ids=target_class_ids,
-            ignore_class_ids=None,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name,
