@@ -98,18 +98,19 @@ class BaseLoss(keras.losses.Loss):
         return y_true
 
     def _process_inputs(self, y_true, y_pred):
-        y_true_processed = self._process_targets(y_true)
-        y_pred_processed = self._process_predictions(y_pred)
 
         if self.ignore_class_ids:
-            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype=y_true.dtype)
+            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype="int32")
             is_ignored_mask = ops.any(
-                ops.equal(ops.argmax(y_true_processed, axis=-1, keepdims=True), ignore_classes),
+                ops.equal(y_true, ignore_classes),
                 axis=-1,
             )
-            valid_mask = ops.cast(~is_ignored_mask, y_pred_processed.dtype)
+            valid_mask = ops.cast(~is_ignored_mask, y_pred.dtype)
         else:
-            valid_mask = ops.ones_like(y_pred_processed[..., 0], dtype=y_pred_processed.dtype)
+            valid_mask = ops.ones_like(y_pred[..., 0], dtype=y_pred.dtype)
+
+        y_true_processed = self._process_targets(y_true)
+        y_pred_processed = self._process_predictions(y_pred)
 
         y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
         y_true_processed, y_pred_processed = self._get_desired_class_channels(

@@ -53,13 +53,13 @@ class BaseDiceMetric(Metric):
 
         super().__init__(name=name, **kwargs)
 
-        self.target_class_ids = self._validate_class_ids(target_class_ids, allow_none=False)
-        self.ignore_class_ids = self._validate_class_ids(ignore_class_ids, allow_none=True)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
         self.threshold = threshold
         self.smooth = smooth or keras.backend.epsilon()
+        self.target_class_ids = self._validate_class_ids(target_class_ids, allow_none=False)
+        self.ignore_class_ids = self._validate_class_ids(ignore_class_ids, allow_none=True)
 
         # State variables
         self.total_intersection = self.add_variable(
@@ -111,6 +111,34 @@ class BaseDiceMetric(Metric):
     def _process_targets(self, y_true):
         return y_true
 
+    def _process_inputs(self, y_true, y_pred):
+        y_true = ops.convert_to_tensor(y_true)
+        y_pred = ops.convert_to_tensor(y_pred)
+        y_pred = ops.cast(y_pred, y_true.dtype)
+
+        if self.ignore_class_ids:
+            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype="int32")
+            is_ignored_mask = ops.any(
+                ops.equal(y_true, ignore_classes),
+                axis=-1,
+            )
+            valid_mask = ops.cast(~is_ignored_mask, y_pred.dtype)
+        else:
+            valid_mask = ops.ones_like(y_pred[..., 0], dtype=y_pred.dtype)
+
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed = self._process_targets(y_true)
+
+        # Select only the classes we want to evaluate
+        y_true_processed, y_pred_processed = self._get_desired_class_channels(
+            y_true_processed, y_pred_processed
+        )
+
+        # reshape valid mask
+        valid_mask = ops.expand_dims(valid_mask, axis=-1)
+        valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
+        return y_true_processed, y_pred_processed, valid_mask
+
     def _get_desired_class_channels(self, y_true, y_pred):
         if self.target_class_ids is None:
             return y_true, y_pred
@@ -139,37 +167,14 @@ class BaseDiceMetric(Metric):
             sample_weight (Tensor, optional): Optional weighting of the samples.
                 Not currently used in this base implementation.
         """
-        y_true = ops.convert_to_tensor(y_true)
-        y_pred = ops.convert_to_tensor(y_pred)
-        y_pred = ops.cast(y_pred, y_true.dtype)
-
-        y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = self._process_targets(y_true)
-
-        # Select only the classes we want to evaluate
-        y_true_processed, y_pred_processed = self._get_desired_class_channels(
-            y_true_processed, y_pred_processed
-        )
-
-        if self.ignore_class_ids:
-            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype=y_true.dtype)
-            is_ignored_mask = ops.any(
-                ops.equal(ops.argmax(y_true_processed, axis=-1, keepdims=True), ignore_classes),
-                axis=-1,
-            )
-            valid_mask = ops.cast(~is_ignored_mask, y_pred_processed.dtype)
-        else:
-            valid_mask = ops.ones_like(y_pred_processed[..., 0], dtype=y_pred_processed.dtype)
-
-        valid_mask = ops.expand_dims(valid_mask, axis=-1)
-        valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
+        y_true_processed, y_pred_processed, valid_mask = self._process_inputs(y_true, y_pred)
 
         # Dynamically determine the spatial dimensions to sum over.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
 
         # Calculate metrics
         intersection = valid_mask * y_true_processed * y_pred_processed
-        union = valid_mask * y_true_processed + y_pred_processed
+        union = valid_mask * y_true_processed + valid_mask * y_pred_processed
         gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
         pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
 

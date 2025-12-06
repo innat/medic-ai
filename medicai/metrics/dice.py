@@ -35,17 +35,24 @@ class BinaryDiceMetric(BaseDiceMetric, DescribeMixin):
         from_logits,
         num_classes,
         target_class_ids=None,
+        ignore_class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
         threshold=0.5,
         name=None,
         **kwargs,
     ):
+        if ignore_class_ids is not None and num_classes > 1:
+            raise ValueError(
+                "`ignore_class_ids` is only supported when `num_classes=1` "
+                "(binary or sparse segmentation). One-hot or multi-label cases "
+                "with `num_classes > 1` are not supported."
+            )
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
             target_class_ids=target_class_ids,
-            ignore_class_ids=None,
+            ignore_class_ids=ignore_class_ids,
             ignore_empty=ignore_empty,
             smooth=smooth,
             threshold=threshold,
@@ -89,7 +96,6 @@ class CategoricalDiceMetric(BaseDiceMetric):
         from_logits,
         num_classes,
         target_class_ids=None,
-        ignore_class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
         name=None,
@@ -99,7 +105,7 @@ class CategoricalDiceMetric(BaseDiceMetric):
             from_logits=from_logits,
             num_classes=num_classes,
             target_class_ids=target_class_ids,
-            ignore_class_ids=ignore_class_ids,
+            ignore_class_ids=None,
             ignore_empty=ignore_empty,
             smooth=smooth,
             name=name or "categorical_dice_score",
