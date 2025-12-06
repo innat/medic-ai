@@ -229,7 +229,9 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         dice_loss = self.compute_loss(y_true_processed, y_pred_processed, valid_mask)
 
         # Compute BCE loss
-        bce_loss = binary_cross_entropy(y_true_processed, y_pred_processed, mask=valid_mask)
+        bce_loss = binary_cross_entropy(
+            y_true_processed, y_pred_processed, smooth=self.smooth, mask=valid_mask
+        )
 
         combined_loss = (self.dice_weight * dice_loss) + (self.ce_weight * bce_loss)
         combined_loss = apply_reduction(combined_loss, self.hybrid_reduction)
