@@ -36,7 +36,7 @@ class BaseDiceMetric(Metric):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
         ignore_class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
@@ -53,8 +53,8 @@ class BaseDiceMetric(Metric):
 
         super().__init__(name=name, **kwargs)
 
-        self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
-        self.ignore_class_ids = ignore_class_ids
+        self.target_class_ids = self._validate_class_ids(target_class_ids, allow_none=False)
+        self.ignore_class_ids = self._validate_class_ids(ignore_class_ids, allow_none=True)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
@@ -63,40 +63,56 @@ class BaseDiceMetric(Metric):
 
         # State variables
         self.total_intersection = self.add_variable(
-            name="total_intersection", shape=(len(self.class_ids),), initializer="zeros"
+            name="total_intersection", shape=(len(self.target_class_ids),), initializer="zeros"
         )
         self.total_union = self.add_variable(
-            name="total_union", shape=(len(self.class_ids),), initializer="zeros"
+            name="total_union", shape=(len(self.target_class_ids),), initializer="zeros"
         )
         self.valid_counts = self.add_variable(
-            name="valid_counts", shape=(len(self.class_ids),), initializer="zeros"
+            name="valid_counts", shape=(len(self.target_class_ids),), initializer="zeros"
         )
 
-    def _validate_and_get_class_ids(self, class_ids, num_classes):
+    def _validate_class_ids(self, class_ids, allow_none=False):
         if class_ids is None:
-            return list(range(num_classes))
+            if allow_none:
+                # Used for ignore_class_ids: None means don't ignore any.
+                return None
+            else:
+                # Used for target_class_ids: None means target all classes.
+                return list(range(self.num_classes))
+
         elif isinstance(class_ids, int):
+            if not allow_none and not 0 <= class_ids < self.num_classes:
+                raise ValueError(
+                    f"Class ID {class_ids} is out of the valid range [0, {self.num_classes - 1}]."
+                )
             return [class_ids]
+
+        # Handle list case
         elif isinstance(class_ids, list):
             for cid in class_ids:
-                if not 0 <= cid < num_classes:
+                if not allow_none and not 0 <= cid < self.num_classes:
                     raise ValueError(
-                        f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
+                        f"Class ID {cid} is out of the valid range [0, {self.num_classes - 1}]."
                     )
             return class_ids
+
+        # When invalid type
         else:
-            raise ValueError(
-                "class_id must be an integer, a list of integers, or None to consider all classes."
-            )
+            valid_types = "an integer, or a list of integers"
+            if not allow_none:
+                valid_types += ", or None to consider all classes"
+
+            raise ValueError(f"class_ids must be {valid_types}.")
 
     def _process_predictions(self, y_pred):
         return y_pred
 
-    def _process_inputs(self, y_true):
+    def _process_targets(self, y_true):
         return y_true
 
     def _get_desired_class_channels(self, y_true, y_pred):
-        if self.class_ids is None:
+        if self.target_class_ids is None:
             return y_true, y_pred
 
         if self.num_classes == 1:
@@ -105,7 +121,7 @@ class BaseDiceMetric(Metric):
         selected_y_true = []
         selected_y_pred = []
 
-        for class_index in self.class_ids:
+        for class_index in self.target_class_ids:
             selected_y_true.append(y_true[..., class_index : class_index + 1])
             selected_y_pred.append(y_pred[..., class_index : class_index + 1])
 
@@ -128,7 +144,7 @@ class BaseDiceMetric(Metric):
         y_pred = ops.cast(y_pred, y_true.dtype)
 
         y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = self._process_inputs(y_true)
+        y_true_processed = self._process_targets(y_true)
 
         # Select only the classes we want to evaluate
         y_true_processed, y_pred_processed = self._get_desired_class_channels(
@@ -216,6 +232,6 @@ class BaseDiceMetric(Metric):
         )
 
     def reset_states(self):
-        self.total_intersection.assign(ops.zeros(len(self.class_ids)))
-        self.total_union.assign(ops.zeros(len(self.class_ids)))
-        self.valid_counts.assign(ops.zeros(len(self.class_ids)))
+        self.total_intersection.assign(ops.zeros(len(self.target_class_ids)))
+        self.total_union.assign(ops.zeros(len(self.target_class_ids)))
+        self.valid_counts.assign(ops.zeros(len(self.target_class_ids)))

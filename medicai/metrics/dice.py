@@ -30,6 +30,29 @@ class BinaryDiceMetric(BaseDiceMetric, DescribeMixin):
         **kwargs: Additional keyword arguments passed to `BaseDiceMetric`.
     """
 
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        target_class_ids=None,
+        ignore_empty=True,
+        smooth=1e-6,
+        threshold=0.5,
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=None,
+            ignore_empty=ignore_empty,
+            smooth=smooth,
+            threshold=threshold,
+            name=name or "binary_dice_score",
+            **kwargs,
+        )
+
     def _process_predictions(self, y_pred):
         if self.from_logits:
             return ops.cast(ops.sigmoid(y_pred) > self.threshold, dtype="float32")
@@ -60,6 +83,28 @@ class CategoricalDiceMetric(BaseDiceMetric):
         name (str, optional): Name of the metric. Defaults to "categorical_dice".
         **kwargs: Additional keyword arguments passed to `BaseDiceMetric`.
     """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        target_class_ids=None,
+        ignore_class_ids=None,
+        ignore_empty=True,
+        smooth=1e-6,
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
+            ignore_empty=ignore_empty,
+            smooth=smooth,
+            name=name or "categorical_dice_score",
+            **kwargs,
+        )
 
     def _process_predictions(self, y_pred):
         if self.from_logits:
@@ -93,13 +138,35 @@ class SparseDiceMetric(BaseDiceMetric):
         **kwargs: Additional keyword arguments passed to `BaseDiceMetric`.
     """
 
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        target_class_ids=None,
+        ignore_class_ids=None,
+        ignore_empty=True,
+        smooth=1e-6,
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
+            ignore_empty=ignore_empty,
+            smooth=smooth,
+            name=name or "sparse_categorical_dice_score",
+            **kwargs,
+        )
+
     def _process_predictions(self, y_pred):
         if self.from_logits:
             return ops.one_hot(ops.argmax(y_pred, axis=-1), num_classes=self.num_classes)
         else:
             return y_pred
 
-    def _process_inputs(self, y_true):
+    def _process_targets(self, y_true):
         if y_true.shape[-1] == 1:
             y_true = ops.squeeze(y_true, axis=-1)
         y_true = ops.one_hot(ops.cast(y_true, "int32"), num_classes=self.num_classes)
