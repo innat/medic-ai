@@ -175,8 +175,8 @@ class BaseDiceMetric(Metric):
         # Calculate metrics
         intersection = valid_mask * y_true_processed * y_pred_processed
         union = valid_mask * y_true_processed + valid_mask * y_pred_processed
-        gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
-        pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
+        gt_sum = ops.sum(y_true_processed * valid_mask, axis=spatial_dims)  # [B, C]
+        pred_sum = ops.sum(y_pred_processed * valid_mask, axis=spatial_dims)  # [B, C]
 
         # Check if ALL pixels are ignored (all zeros in y_true_processed and y_pred_processed)
         # And if all pixels are ignored in a sample, we should ignore that sample entirely
