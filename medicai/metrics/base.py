@@ -165,28 +165,24 @@ class BaseDiceMetric(Metric):
         valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
 
         # Dynamically determine the spatial dimensions to sum over.
-        # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
 
         # Calculate metrics
-        intersection = (
-            valid_mask * y_true_processed * y_pred_processed
-        )  # [B, D, H, W, C] or [B, H, W, C]
-        union = valid_mask * y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
+        intersection = valid_mask * y_true_processed * y_pred_processed
+        union = valid_mask * y_true_processed + y_pred_processed
         gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
         pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
 
         # Check if ALL pixels are ignored (all zeros in y_true_processed and y_pred_processed)
-        total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])  # H*W or D*H*W
+        # And if all pixels are ignored in a sample, we should ignore that sample entirely
+        total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])
         total_pixels_per_sample = ops.cast(total_pixels_per_sample, y_true.dtype)
-        # If all pixels are ignored in a sample, we should ignore that sample entirely
         all_ignored_mask = ops.all(
             ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
         )  # [B]
         all_ignored_mask = ops.expand_dims(all_ignored_mask, -1)  # [B, 1]
         all_ignored_mask = ops.tile(all_ignored_mask, [1, gt_sum.shape[-1]])  # [B, C]
 
-        # Valid samples mask
         if self.ignore_empty:
             # Invalid when GT is empty AND prediction is NOT empty
             invalid_mask = ops.logical_or(
