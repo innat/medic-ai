@@ -183,7 +183,7 @@ class BaseDiceMetric(Metric):
         total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])
         total_pixels_per_sample = ops.cast(total_pixels_per_sample, y_true.dtype)
         all_ignored_mask = ops.all(
-            ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
+            ops.all(y_true_processed == 0, axis=spatial_dims), axis=-1
         )  # [B]
         all_ignored_mask = ops.expand_dims(all_ignored_mask, -1)  # [B, 1]
         all_ignored_mask = ops.tile(all_ignored_mask, [1, gt_sum.shape[-1]])  # [B, C]
