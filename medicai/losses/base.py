@@ -130,6 +130,7 @@ class BaseLoss(keras.losses.Loss):
         Args:
             y_true: Ground truth tensor.
             y_pred: Prediction tensor.
+            mask: Valid mask to compute loss, effective if ignore_class_ids are given.
 
         Returns:
             Tensor: The computed loss value.
