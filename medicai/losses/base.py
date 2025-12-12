@@ -9,7 +9,8 @@ class BaseLoss(keras.losses.Loss):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -24,27 +25,44 @@ class BaseLoss(keras.losses.Loss):
 
         super().__init__(name=name, reduction=reduction, **kwargs)
 
-        self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.smooth = smooth or keras.backend.epsilon()
+        self.target_class_ids = self._validate_class_ids(target_class_ids, allow_none=False)
+        self.ignore_class_ids = self._validate_class_ids(ignore_class_ids, allow_none=True)
 
-    def _validate_and_get_class_ids(self, class_ids, num_classes):
+    def _validate_class_ids(self, class_ids, allow_none=False):
         if class_ids is None:
-            return list(range(num_classes))
+            if allow_none:
+                # Used for ignore_class_ids: None means don't ignore any.
+                return None
+            else:
+                # Used for target_class_ids: None means target all classes.
+                return list(range(self.num_classes))
+
         elif isinstance(class_ids, int):
+            if not allow_none and not 0 <= class_ids < self.num_classes:
+                raise ValueError(
+                    f"Class ID {class_ids} is out of the valid range [0, {self.num_classes - 1}]."
+                )
             return [class_ids]
+
+        # Handle list case
         elif isinstance(class_ids, list):
             for cid in class_ids:
-                if not 0 <= cid < num_classes:
+                if not allow_none and not 0 <= cid < self.num_classes:
                     raise ValueError(
-                        f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
+                        f"Class ID {cid} is out of the valid range [0, {self.num_classes - 1}]."
                     )
             return class_ids
+
+        # When invalid type
         else:
-            raise ValueError(
-                "class_ids must be an integer, a list of integers, or None to consider all classes."
-            )
+            valid_types = "an integer, or a list of integers"
+            if not allow_none:
+                valid_types += ", or None to consider all classes"
+
+            raise ValueError(f"class_ids must be {valid_types}.")
 
     def _get_desired_class_channels(self, y_true, y_pred):
         """Selects the channels corresponding to the desired class IDs.
@@ -64,7 +82,7 @@ class BaseLoss(keras.losses.Loss):
         selected_y_true = []
         selected_y_pred = []
 
-        for class_index in self.class_ids:
+        for class_index in self.target_class_ids:
             selected_y_true.append(y_true[..., class_index : class_index + 1])
             selected_y_pred.append(y_pred[..., class_index : class_index + 1])
 
@@ -80,15 +98,30 @@ class BaseLoss(keras.losses.Loss):
         return y_true
 
     def _process_inputs(self, y_true, y_pred):
+
+        if self.ignore_class_ids:
+            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype="int32")
+            is_ignored_mask = ops.any(
+                ops.equal(y_true, ignore_classes),
+                axis=-1,
+            )
+            valid_mask = ops.cast(~is_ignored_mask, y_pred.dtype)
+        else:
+            valid_mask = ops.ones_like(y_pred[..., 0], dtype=y_pred.dtype)
+
         y_true_processed = self._process_targets(y_true)
         y_pred_processed = self._process_predictions(y_pred)
+
+        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
         y_true_processed, y_pred_processed = self._get_desired_class_channels(
             y_true_processed, y_pred_processed
         )
-        y_pred_processed = ops.clip(y_pred_processed, self.smooth, 1.0 - self.smooth)
-        return y_true_processed, y_pred_processed
+        valid_mask = ops.expand_dims(valid_mask, axis=-1)
+        valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
 
-    def compute_loss(self, y_true, y_pred):
+        return y_true_processed, y_pred_processed, valid_mask
+
+    def compute_loss(self, y_true, y_pred, mask):
         """
         Abstract method to compute the core loss (Dice, IoU, Tversky, etc.).
 
@@ -97,6 +130,7 @@ class BaseLoss(keras.losses.Loss):
         Args:
             y_true: Ground truth tensor.
             y_pred: Prediction tensor.
+            mask: Valid mask to compute loss, effective if ignore_class_ids are given.
 
         Returns:
             Tensor: The computed loss value.
@@ -116,8 +150,8 @@ class BaseLoss(keras.losses.Loss):
         Returns:
             Tensor: The computed loss.
         """
-        y_true_processed, y_pred_processed = self._process_inputs(y_true, y_pred)
-        loss = self.compute_loss(y_true_processed, y_pred_processed)
+        y_true_processed, y_pred_processed, valid_mask = self._process_inputs(y_true, y_pred)
+        loss = self.compute_loss(y_true_processed, y_pred_processed, valid_mask)
         return loss
 
 
@@ -126,7 +160,8 @@ class BaseDiceLoss(BaseLoss):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -135,14 +170,15 @@ class BaseDiceLoss(BaseLoss):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "dice_loss",
             **kwargs,
         )
 
-    def compute_loss(self, y_true, y_pred):
+    def compute_loss(self, y_true, y_pred, mask):
         """Calculates the Dice loss.
 
         Args:
@@ -153,8 +189,10 @@ class BaseDiceLoss(BaseLoss):
             Tensor: The Dice loss.
         """
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
-        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
-        union = ops.sum(y_true, axis=spatial_dims) + ops.sum(y_pred, axis=spatial_dims)
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
+        union = ops.sum(mask * y_true, axis=spatial_dims) + ops.sum(
+            mask * y_pred, axis=spatial_dims
+        )
         dice_score = (2.0 * intersection + self.smooth) / (union + self.smooth)
         return 1.0 - dice_score
 
@@ -164,7 +202,8 @@ class BaseIoULoss(BaseLoss):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -173,24 +212,27 @@ class BaseIoULoss(BaseLoss):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "iou_loss",
             **kwargs,
         )
 
-    def compute_loss(self, y_true, y_pred):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # Intersection: (B, C) tensor
-        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
 
         # Total area (Union): (B, C) tensor
         # IoU Denominator = Area(A) + Area(B) - Area(A intersect B)
         total = (
-            ops.sum(y_true, axis=spatial_dims) + ops.sum(y_pred, axis=spatial_dims) - intersection
+            ops.sum(mask * y_true, axis=spatial_dims)
+            + ops.sum(mask * y_pred, axis=spatial_dims)
+            - intersection
         )
 
         # IoU Score per batch element and per class: (B, C) tensor
@@ -206,7 +248,8 @@ class BaseTverskyLoss(BaseLoss):
         num_classes,
         alpha=0.5,
         beta=0.5,
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -215,7 +258,8 @@ class BaseTverskyLoss(BaseLoss):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "tversky_loss",
@@ -224,18 +268,18 @@ class BaseTverskyLoss(BaseLoss):
         self.alpha = alpha
         self.beta = beta
 
-    def compute_loss(self, y_true, y_pred):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # True Positives (TP): correctly predicted positive pixels
-        tp = ops.sum(y_true * y_pred, axis=spatial_dims)
+        tp = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
 
         # False Positives (FP): predicted as positive but actually negative
-        fp = ops.sum(y_pred * (1 - y_true), axis=spatial_dims)
+        fp = ops.sum(mask * y_pred * (1 - y_true), axis=spatial_dims)
 
         # False Negatives (FN): predicted as negative but actually positive
-        fn = ops.sum((1 - y_pred) * y_true, axis=spatial_dims)
+        fn = ops.sum(mask * (1 - y_pred) * y_true, axis=spatial_dims)
 
         # Tversky index: weighted ratio of TP over TP + alpha*FP + beta*FN
         tversky_index = (tp + self.smooth) / (tp + self.alpha * fp + self.beta * fn + self.smooth)
@@ -254,7 +298,8 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         from_logits,
         num_classes,
         weight_type="square",
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         smooth=1e-7,
         reduction="mean",
         name=None,
@@ -263,7 +308,8 @@ class BaseGeneralizedDiceLoss(BaseLoss):
         super().__init__(
             from_logits=from_logits,
             num_classes=num_classes,
-            class_ids=class_ids,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
             smooth=smooth,
             reduction=reduction,
             name=name or "generalized_dice_loss",
@@ -276,16 +322,16 @@ class BaseGeneralizedDiceLoss(BaseLoss):
                 f'Supported values are: {", ".join(self.WEIGHT_TYPE)}.'
             )
 
-    def compute_loss(self, y_true, y_pred):
+    def compute_loss(self, y_true, y_pred, mask):
         # Exclude batch dim (0) and channel/class dim (-1)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
         # Reference volumes (sum over spatial dimensions)
-        ref_vol = ops.sum(y_true, axis=spatial_dims)
+        ref_vol = ops.sum(mask * y_true, axis=spatial_dims)
 
         # Intersection and prediction volumes
-        intersection = ops.sum(y_true * y_pred, axis=spatial_dims)
-        seg_vol = ops.sum(y_pred, axis=spatial_dims)
+        intersection = ops.sum(mask * y_true * y_pred, axis=spatial_dims)
+        seg_vol = ops.sum(mask * y_pred, axis=spatial_dims)
 
         # Compute weights according to weight_type
         if self.weight_type == "square":
@@ -330,9 +376,15 @@ Args:
         (sigmoid/softmax).
     num_classes (int): The total number of classes in the segmentation task.
 {specific_args}
-    class_ids (int, list of int, or None): If an integer or a list of integers,
-        the loss will be calculated only for the specified class(es).
+    target_class_ids (int, list of int, or None): If an integer or a list of 
+        integers, the loss will be calculated only for the specified class(es).
         If None, the loss will be calculated for all classes and averaged.
+        Default: None.
+    ignore_class_ids (int, list of int, or None): The ID of a class to be ignored 
+        during computation. This is useful, for example, in segmentation
+        problems featuring a "void" or un-label class (usually -1 or 255) in
+        segmentation maps. If None, the loss will be calculated for all classes 
+        and averaged. Default: None.
     smooth (float, optional): A small smoothing factor to prevent division by zero.
         Defaults to 1e-7.
     reduction (str, optional): Type of reduction to apply to the loss. 

@@ -36,7 +36,8 @@ class BaseDiceMetric(Metric):
         self,
         from_logits,
         num_classes,
-        class_ids=None,
+        target_class_ids=None,
+        ignore_class_ids=None,
         ignore_empty=True,
         smooth=1e-6,
         name=None,
@@ -52,49 +53,94 @@ class BaseDiceMetric(Metric):
 
         super().__init__(name=name, **kwargs)
 
-        self.class_ids = self._validate_and_get_class_ids(class_ids, num_classes)
         self.num_classes = num_classes
         self.from_logits = from_logits
         self.ignore_empty = ignore_empty
         self.threshold = threshold
         self.smooth = smooth or keras.backend.epsilon()
+        self.target_class_ids = self._validate_class_ids(target_class_ids, allow_none=False)
+        self.ignore_class_ids = self._validate_class_ids(ignore_class_ids, allow_none=True)
 
         # State variables
         self.total_intersection = self.add_variable(
-            name="total_intersection", shape=(len(self.class_ids),), initializer="zeros"
+            name="total_intersection", shape=(len(self.target_class_ids),), initializer="zeros"
         )
         self.total_union = self.add_variable(
-            name="total_union", shape=(len(self.class_ids),), initializer="zeros"
+            name="total_union", shape=(len(self.target_class_ids),), initializer="zeros"
         )
         self.valid_counts = self.add_variable(
-            name="valid_counts", shape=(len(self.class_ids),), initializer="zeros"
+            name="valid_counts", shape=(len(self.target_class_ids),), initializer="zeros"
         )
 
-    def _validate_and_get_class_ids(self, class_ids, num_classes):
+    def _validate_class_ids(self, class_ids, allow_none=False):
         if class_ids is None:
-            return list(range(num_classes))
+            if allow_none:
+                # Used for ignore_class_ids: None means don't ignore any.
+                return None
+            else:
+                # Used for target_class_ids: None means target all classes.
+                return list(range(self.num_classes))
+
         elif isinstance(class_ids, int):
+            if not allow_none and not 0 <= class_ids < self.num_classes:
+                raise ValueError(
+                    f"Class ID {class_ids} is out of the valid range [0, {self.num_classes - 1}]."
+                )
             return [class_ids]
+
+        # Handle list case
         elif isinstance(class_ids, list):
             for cid in class_ids:
-                if not 0 <= cid < num_classes:
+                if not allow_none and not 0 <= cid < self.num_classes:
                     raise ValueError(
-                        f"Class ID {cid} is out of the valid range [0, {num_classes - 1}]."
+                        f"Class ID {cid} is out of the valid range [0, {self.num_classes - 1}]."
                     )
             return class_ids
+
+        # When invalid type
         else:
-            raise ValueError(
-                "class_id must be an integer, a list of integers, or None to consider all classes."
-            )
+            valid_types = "an integer, or a list of integers"
+            if not allow_none:
+                valid_types += ", or None to consider all classes"
+
+            raise ValueError(f"class_ids must be {valid_types}.")
 
     def _process_predictions(self, y_pred):
         return y_pred
 
-    def _process_inputs(self, y_true):
+    def _process_targets(self, y_true):
         return y_true
 
+    def _process_inputs(self, y_true, y_pred):
+        y_true = ops.convert_to_tensor(y_true)
+        y_pred = ops.convert_to_tensor(y_pred)
+        y_pred = ops.cast(y_pred, y_true.dtype)
+
+        if self.ignore_class_ids:
+            ignore_classes = ops.convert_to_tensor(self.ignore_class_ids, dtype="int32")
+            is_ignored_mask = ops.any(
+                ops.equal(y_true, ignore_classes),
+                axis=-1,
+            )
+            valid_mask = ops.cast(~is_ignored_mask, y_pred.dtype)
+        else:
+            valid_mask = ops.ones_like(y_pred[..., 0], dtype=y_pred.dtype)
+
+        y_pred_processed = self._process_predictions(y_pred)
+        y_true_processed = self._process_targets(y_true)
+
+        # Select only the classes we want to evaluate
+        y_true_processed, y_pred_processed = self._get_desired_class_channels(
+            y_true_processed, y_pred_processed
+        )
+
+        # reshape valid mask
+        valid_mask = ops.expand_dims(valid_mask, axis=-1)
+        valid_mask = ops.broadcast_to(valid_mask, ops.shape(y_pred_processed))
+        return y_true_processed, y_pred_processed, valid_mask
+
     def _get_desired_class_channels(self, y_true, y_pred):
-        if self.class_ids is None:
+        if self.target_class_ids is None:
             return y_true, y_pred
 
         if self.num_classes == 1:
@@ -103,7 +149,7 @@ class BaseDiceMetric(Metric):
         selected_y_true = []
         selected_y_pred = []
 
-        for class_index in self.class_ids:
+        for class_index in self.target_class_ids:
             selected_y_true.append(y_true[..., class_index : class_index + 1])
             selected_y_pred.append(y_pred[..., class_index : class_index + 1])
 
@@ -121,37 +167,36 @@ class BaseDiceMetric(Metric):
             sample_weight (Tensor, optional): Optional weighting of the samples.
                 Not currently used in this base implementation.
         """
-        y_pred = ops.cast(y_pred, y_true.dtype)
-        y_true = ops.convert_to_tensor(y_true)
-        y_pred = ops.convert_to_tensor(y_pred)
-
-        y_pred_processed = self._process_predictions(y_pred)
-        y_true_processed = self._process_inputs(y_true)
-
-        # Select only the classes we want to evaluate
-        y_true_processed, y_pred_processed = self._get_desired_class_channels(
-            y_true_processed, y_pred_processed
-        )
+        y_true_processed, y_pred_processed, valid_mask = self._process_inputs(y_true, y_pred)
 
         # Dynamically determine the spatial dimensions to sum over.
-        # This works for both 2D (batch, H, W, C) and 3D (batch, D, H, W, C) inputs.
         spatial_dims = list(range(1, len(y_pred_processed.shape) - 1))
 
         # Calculate metrics
-        intersection = y_true_processed * y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
-        union = y_true_processed + y_pred_processed  # [B, D, H, W, C] or [B, H, W, C]
-        gt_sum = ops.sum(y_true_processed, axis=spatial_dims)  # [B, C]
-        pred_sum = ops.sum(y_pred_processed, axis=spatial_dims)  # [B, C]
+        intersection = valid_mask * y_true_processed * y_pred_processed
+        union = valid_mask * y_true_processed + valid_mask * y_pred_processed
+        gt_sum = ops.sum(y_true_processed * valid_mask, axis=spatial_dims)  # [B, C]
+        pred_sum = ops.sum(y_pred_processed * valid_mask, axis=spatial_dims)  # [B, C]
 
-        # Valid samples mask
+        # Check if ALL pixels are ignored (all zeros in y_true_processed and y_pred_processed)
+        # And if all pixels are ignored in a sample, we should ignore that sample entirely
+        total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])
+        total_pixels_per_sample = ops.cast(total_pixels_per_sample, y_true.dtype)
+        all_ignored_mask = ops.all(
+            ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
+        )  # [B]
+        all_ignored_mask = ops.expand_dims(all_ignored_mask, -1)  # [B, 1]
+        all_ignored_mask = ops.tile(all_ignored_mask, [1, gt_sum.shape[-1]])  # [B, C]
+
         if self.ignore_empty:
             # Invalid when GT is empty AND prediction is NOT empty
-            invalid_mask = ops.logical_and(
-                gt_sum == 0, pred_sum != 0  # Empty GT  # Non-empty prediction
+            invalid_mask = ops.logical_or(
+                ops.logical_and(gt_sum == 0, pred_sum != 0),  # Empty GT but non-empty prediction
+                all_ignored_mask,  # All pixels ignored
             )
             valid_mask = ops.logical_not(invalid_mask)  # [B, C]
         else:
-            valid_mask = ops.ones_like(gt_sum, dtype="bool")
+            valid_mask = ops.logical_not(all_ignored_mask)  # [B, C]
 
         # Convert mask to float and expand dimensions for broadcasting
         valid_mask_float = ops.cast(valid_mask, "float32")  # [B, C]
@@ -188,6 +233,6 @@ class BaseDiceMetric(Metric):
         )
 
     def reset_states(self):
-        self.total_intersection.assign(ops.zeros(len(self.class_ids)))
-        self.total_union.assign(ops.zeros(len(self.class_ids)))
-        self.valid_counts.assign(ops.zeros(len(self.class_ids)))
+        self.total_intersection.assign(ops.zeros(len(self.target_class_ids)))
+        self.total_union.assign(ops.zeros(len(self.target_class_ids)))
+        self.valid_counts.assign(ops.zeros(len(self.target_class_ids)))
