@@ -12,3 +12,4 @@ from medicai.transforms.resize import Resize
 from medicai.transforms.scaling import ScaleIntensityRange
 from medicai.transforms.spacing import Spacing
 from medicai.transforms.tensor_bundle import TensorBundle
+from medicai.transforms.random_cutout import RandCutOut
