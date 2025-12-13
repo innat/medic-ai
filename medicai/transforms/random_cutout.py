@@ -35,25 +35,30 @@ class RandCutOut:
         self.fill_value = fill_value
         self.label_fill_value = label_fill_value
 
-    def __call__(self, inputs: Union["TensorBundle", Dict[str, tf.Tensor]]):
+    def __call__(self, inputs: Union["TensorBundle", Dict[str, tf.Tensor]]) -> TensorBundle:
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)
 
-        if tf.random.uniform([]) >= self.prob:
-            return inputs
+        rand_val = tf.random.uniform(())
 
-        image_key, label_key = self.keys
-        image = inputs.data[image_key]
-        label = inputs.data[label_key]
+        def apply_cutout():
+            cutout_data = inputs.data.copy()
+            image_key, label_key = self.keys
+            image = cutout_data[image_key]
+            label = cutout_data[label_key]
 
-        mask = self._generate_mask(image)
-        mask_bool = tf.cast(mask, tf.bool)  # convert mask to boolean
+            mask = self._generate_mask(image)
+            mask_bool = tf.cast(mask, tf.bool)
 
-        # apply mask safely with tf.where
-        inputs.data[image_key] = tf.where(mask_bool, image, self.fill_value)
-        inputs.data[label_key] = tf.where(mask_bool, label, self.label_fill_value)
+            cutout_data[image_key] = tf.where(mask_bool, image, self.fill_value)
+            cutout_data[label_key] = tf.where(mask_bool, label, self.label_fill_value)
+            return cutout_data
 
-        return inputs
+        def skip_cutout():
+            return inputs.data.copy()
+
+        applied_ops = tf.cond(rand_val <= self.prob, apply_cutout, skip_cutout)
+        return TensorBundle(applied_ops, inputs.meta)
 
     def _generate_mask(self, volume):
         """
