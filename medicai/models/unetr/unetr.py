@@ -1,7 +1,12 @@
 import keras
 from keras import ops
 
-from medicai.blocks import UnetOutBlock, UnetrBasicBlock, UnetrPrUpBlock, UnetrUpBlock
+from medicai.blocks import (
+    UNetOutBlock,
+    UNETRBasicBlock,
+    UNETRPreUpsamplingBlock,
+    UNETRUpsamplingBlock,
+)
 from medicai.utils import DescribeMixin, registration, resolve_encoder, validate_activation
 
 
@@ -196,18 +201,16 @@ class UNETR(keras.Model, DescribeMixin):
             x2, x3, x4, last_output = inputs[1:]
 
             # Encoder path
-            enc1 = UnetrBasicBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size,
+            enc1 = UNETRBasicBlock(
+                filters=feature_size,
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
             )(enc_input)
 
-            enc2 = UnetrPrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 2,
+            enc2 = UNETRPreUpsamplingBlock(
+                filters=feature_size * 2,
                 num_layer=2,
                 kernel_size=3,
                 stride=1,
@@ -216,9 +219,8 @@ class UNETR(keras.Model, DescribeMixin):
                 res_block=res_block,
             )(proj_feat(x2, hidden_size, feat_size))
 
-            enc3 = UnetrPrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 4,
+            enc3 = UNETRPreUpsamplingBlock(
+                filters=feature_size * 4,
                 num_layer=1,
                 kernel_size=3,
                 stride=1,
@@ -227,9 +229,8 @@ class UNETR(keras.Model, DescribeMixin):
                 res_block=res_block,
             )(proj_feat(x3, hidden_size, feat_size))
 
-            enc4 = UnetrPrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 8,
+            enc4 = UNETRPreUpsamplingBlock(
+                filters=feature_size * 8,
                 num_layer=0,
                 kernel_size=3,
                 stride=1,
@@ -240,37 +241,32 @@ class UNETR(keras.Model, DescribeMixin):
 
             # Decoder path
             dec4 = proj_feat(last_output, hidden_size, feat_size)
-            dec3 = UnetrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 8,
+            dec3 = UNETRUpsamplingBlock(
+                filters=feature_size * 8,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
-            )(dec4, enc4)
-            dec2 = UnetrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 4,
+            )([dec4, enc4])
+            dec2 = UNETRUpsamplingBlock(
+                filters=feature_size * 4,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
-            )(dec3, enc3)
-            dec1 = UnetrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size * 2,
+            )([dec3, enc3])
+            dec1 = UNETRUpsamplingBlock(
+                filters=feature_size * 2,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
-            )(dec2, enc2)
-            out = UnetrUpBlock(
-                spatial_dims=len(feat_size),
-                out_channels=feature_size,
+            )([dec2, enc2])
+            out = UNETRUpsamplingBlock(
+                filters=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
-            )(dec1, enc1)
+            )([dec1, enc1])
 
-            return UnetOutBlock(
-                spatial_dims=len(feat_size),
+            return UNetOutBlock(
                 num_classes=num_classes,
                 activation=classifier_activation,
             )(out)

@@ -4,7 +4,7 @@ import keras
 import numpy as np
 from keras import layers
 
-from medicai.blocks import UnetrBasicBlock
+from medicai.blocks import UNETRBasicBlock
 from medicai.utils import DescribeMixin, get_norm_layer, parse_model_inputs
 
 from .swin_layers import (
@@ -96,9 +96,8 @@ class SwinBackboneBase(keras.Model):
 
         # if True, apply residual convolution from SwinUNETR-V2
         if stage_wise_conv:
-            x = UnetrBasicBlock(
-                spatial_dims,
-                out_channels=embed_dim,
+            x = UNETRBasicBlock(
+                filters=embed_dim,
                 kernel_size=3,
                 stride=1,
                 norm_name="instance",
@@ -110,9 +109,8 @@ class SwinBackboneBase(keras.Model):
 
             # if True, apply residual convolution, used in SwinUNETR-V2
             if stage_wise_conv and i > 0:  # Skip for i=0 since we already processed P1
-                x = UnetrBasicBlock(
-                    spatial_dims,
-                    out_channels=embed_dim * 2**i,
+                x = UNETRBasicBlock(
+                    filters=embed_dim * 2**i,
                     kernel_size=3,
                     stride=1,
                     norm_name="instance",
