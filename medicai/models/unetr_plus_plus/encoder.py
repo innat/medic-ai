@@ -46,25 +46,28 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         Args:
             input_shape: A tuple specifying the input shape of the model,
                 not including the batch dimension. Supports both 2D and 3D.
+                Examples:
+                - 3D: (D, H, W, C)
+                - 2D: (H, W, C)
             input_tensor: (Optional) A Keras tensor to use as the model input.
                 If not provided, a new input tensor will be created.
             sequence_lengths: A list of integers representing the flattened
                 spatial sequence lengths for each stage. Used by transformer
                 blocks to determine the token count.
-            stem_kernel_sizes: Integer or sequence specifying the kernel size
-                for the convolutional stem. Automatically broadcast per
-                spatial dimension.
-            stem_strides: Integer or sequence specifying the stride of the
-                convolutional stem.
-            downsampling_kernel_sizes: Integer or sequence specifying the
-                kernel size for downsampling layers in stages 1-3.
-            downsampling_strides: Integer or sequence specifying the stride
-                for downsampling layers in stages 1-3.
-            encoder_filters: A list of integers specifying the number of
-                feature channels produced at each stage of the encoder.
-            spatial_reduced_tokens: A list of integers specifying the number
-                of reduced spatial tokens used by EPA inside each transformer
-                block.
+            patch_size: Integer or tuple specifying the patch size used by
+                the convolutional stem. The stem downsamples the input
+                independently along each spatial dimension according to
+                this value. Anisotropic patching is supported.
+                Examples:
+                - (4, 4, 4): isotropic 3D patching
+                - (1, 4, 4): anisotropic patching (no downsampling in depth)
+            filters: List of integers specifying the number of feature
+                channels produced at each encoder stage. The length of
+                this list determines the number of hierarchical stages.
+            spatial_reduced_tokens: List of integers specifying the number
+                of spatial tokens retained after spatial reduction inside
+                the Efficient Paired Attention (EPA) module for each stage.
+                This controls the attention computation cost.
             depths: A list of integers specifying the number of transformer
                 blocks at each encoder stage.
             num_heads: Number of attention heads used in the transformer

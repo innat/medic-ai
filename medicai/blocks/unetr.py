@@ -294,6 +294,17 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             if conv_layer is not None:
                 conv_layer.build(tuple(input_shape))
 
+        # # Initial transpose conv
+        # self.transp_conv_init.build(input_shape)
+        # current_shape = self.transp_conv_init.compute_output_shape(input_shape)
+        # # Build each block layer by layer
+        # for up_layer, conv_layer in self.blocks:
+        #     up_layer.build(current_shape)
+        #     current_shape = up_layer.compute_output_shape(current_shape)
+        #     if conv_layer is not None:
+        #         conv_layer.build(current_shape)
+        #         current_shape = conv_layer.compute_output_shape(current_shape)
+
         self.built = True
 
     def call(self, inputs, training=None):

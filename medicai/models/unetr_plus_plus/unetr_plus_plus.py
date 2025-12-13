@@ -1,7 +1,7 @@
 import keras
 import numpy as np
 
-from medicai.blocks import UNetOutBlock
+from medicai.blocks import UNetOutBlock, UNetResBlock
 from medicai.utils import (
     DescribeMixin,
     keras_constants,
@@ -10,7 +10,7 @@ from medicai.utils import (
     validate_activation,
 )
 
-from .encoder_layers import UNetResBlock, UNETRPlusPlusUpsamplingBlock
+from .encoder_layers import UNETRPlusPlusUpsamplingBlock
 
 
 @keras.saving.register_keras_serializable(package="unetr_plusplus")
@@ -170,7 +170,6 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
             keys = ["P3", "P2", "P1"]
             for k in keys:
                 feat = encoder.pyramid_outputs[k]
-                print(k, feat.shape)
                 spatial = feat.shape[1:-1]
                 seq.append(int(np.prod(spatial)))
             seq.append(seq[-1] * 4)
