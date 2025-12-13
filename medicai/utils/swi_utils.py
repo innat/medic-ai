@@ -91,22 +91,38 @@ def dense_patch_slices(
 
 
 def compute_importance_map(
-    patch_size: Sequence[int],
-    mode: str = "constant",
-    sigma_scale: Sequence[float] = (0.125,),
+    patch_size,
+    mode="constant",
+    sigma_scale=0.125,
     dtype=np.float32,
-) -> np.ndarray:
+):
     """Compute importance map for blending."""
+
     if mode == "constant":
         return np.ones(patch_size, dtype=dtype)
 
     elif mode == "gaussian":
-        sigma = [s * p for s, p in zip(sigma_scale, patch_size)]
-        grid = np.meshgrid(*[np.arange(p, dtype=dtype) for p in patch_size], indexing="ij")
-        center = [(p - 1) / 2 for p in patch_size]
-        dist = np.sqrt(sum((g - c) ** 2 for g, c in zip(grid, center)))
-        return np.exp(-0.5 * (dist / sigma) ** 2)
+        sigma_scale = ensure_tuple_rep(sigma_scale, len(patch_size))
+        sigmas = [p * s for p, s in zip(patch_size, sigma_scale)]
 
+        importance_map = None
+        for i, (p, sigma) in enumerate(zip(patch_size, sigmas)):
+            x = np.arange(
+                start=-(p - 1) / 2.0,
+                stop=(p - 1) / 2.0 + 1,
+                dtype=dtype,
+            )
+            g = np.exp(-(x**2) / (2 * sigma**2))  # 1D Gaussian
+
+            shape = [1] * len(patch_size)
+            shape[i] = p
+            g = g.reshape(shape)
+
+            importance_map = g if importance_map is None else importance_map * g
+
+        min_non_zero = max(float(importance_map.min()), 1e-3)
+        importance_map = np.clip(importance_map, min_non_zero, None)
+        return importance_map.astype(dtype)
     else:
         raise ValueError(f"Unsupported mode: {mode}")
 
