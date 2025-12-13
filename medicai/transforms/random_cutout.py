@@ -16,13 +16,15 @@ class RandCutOut:
 
     def __init__(
         self,
-        keys,
-        mask_size,
-        num_cuts,
-        prob=0.5,
-        fill_value=0.0,
-        label_fill_value=0,
+        keys: Sequence[str],
+        mask_size: Sequence[int],
+        num_cuts: int,
+        prob: float = 0.5,
+        fill_value: float = 0.0,
+        label_fill_value: int = 0,
     ):
+        assert len(keys) == 2, "keys must be a sequence of two strings: [image_key, label_key]"
+        assert len(mask_size) == 3, "mask_size must be a sequence of three integers for 3D."
         self.keys = keys
         self.mask_size = mask_size
         self.num_cuts = num_cuts
@@ -42,10 +44,11 @@ class RandCutOut:
         label = inputs.data[label_key]
 
         mask = self._generate_mask(image)
+        mask_bool = tf.cast(mask, tf.bool)  # convert mask to boolean
 
-        inputs.data[image_key] = image * mask + self.fill_value * (1.0 - mask)
-
-        inputs.data[label_key] = label * mask + self.label_fill_value * (1.0 - mask)
+        # apply mask safely with tf.where
+        inputs.data[image_key] = tf.where(mask_bool, image, self.fill_value)
+        inputs.data[label_key] = tf.where(mask_bool, label, self.label_fill_value)
 
         return inputs
 
