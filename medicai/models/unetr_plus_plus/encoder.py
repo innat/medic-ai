@@ -33,7 +33,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         input_shape,
         input_tensor=None,
         patch_size=[4, 4, 4],
-        encoder_filters=[32, 64, 128, 256],
+        filters=[32, 64, 128, 256],
         spatial_reduced_tokens=[64, 64, 64, 32],
         depths=[3, 3, 3, 3],
         num_heads=4,
@@ -88,7 +88,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         x = utils.get_conv_layer(
             spatial_dims,
             layer_type="conv",
-            filters=encoder_filters[0],
+            filters=filters[0],
             kernel_size=patch_size,
             strides=patch_size,
             use_bias=False,
@@ -100,7 +100,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         for j in range(depths[0]):
             x = UNETRPlusPlusTransformer(
                 sequence_length=sequence_lengths[0],
-                hidden_size=encoder_filters[0],
+                hidden_size=filters[0],
                 spatial_reduced_tokens=spatial_reduced_tokens[0],
                 num_heads=num_heads,
                 dropout_rate=transformer_dropout_rate,
@@ -116,21 +116,21 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
             x = utils.get_conv_layer(
                 spatial_dims,
                 layer_type="conv",
-                filters=encoder_filters[i],
+                filters=filters[i],
                 kernel_size=2,
                 strides=2,
                 use_bias=False,
                 name=f"downsample_conv_{i}",
             )(x)
             x = utils.get_norm_layer(
-                layer_type="group", groups=encoder_filters[i], name=f"downsample_norm_{i}"
+                layer_type="group", groups=filters[i], name=f"downsample_norm_{i}"
             )(x)
 
             # Transformer blocks
             for j in range(depths[i]):
                 x = UNETRPlusPlusTransformer(
                     sequence_length=sequence_lengths[i],
-                    hidden_size=encoder_filters[i],
+                    hidden_size=filters[i],
                     spatial_reduced_tokens=spatial_reduced_tokens[i],
                     num_heads=num_heads,
                     dropout_rate=transformer_dropout_rate,
@@ -149,7 +149,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
 
         self.sequence_lengths = sequence_lengths
         self.pyramid_outputs = pyramid_outputs
-        self.encoder_filters = encoder_filters
+        self.filters = filters
         self.spatial_reduced_tokens = spatial_reduced_tokens
         self.patch_size = patch_size
         self.depths = depths
@@ -158,23 +158,29 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
 
     @staticmethod
     def calculate_downsampled_input_sizes(input_shape, patch_size):
-        spatial_dims_only = input_shape[:-1]
+        spatial_shape = input_shape[:-1]
+        spatial_dims = len(spatial_shape)
+        patch_size = ensure_tuple_rep(patch_size, spatial_dims)
+        sizes = []
 
-        # Calculate downsampling factors for each stage: [4, 8, 16, 32]
-        stem_down = patch_size[0]
-        downsampling_factors = [stem_down * (2**i) for i in range(4)]
+        # Stage 0 (stem only)
+        current = [spatial_shape[d] // patch_size[d] for d in range(spatial_dims)]
+        sizes.append(current)
 
-        # For each stage, calculate product of (dim // factor) for all dims
-        input_sizes = [
-            np.prod([dim // factor for dim in spatial_dims_only]) for factor in downsampling_factors
-        ]
+        # Stages 1–3 (each halves spatial dims)
+        for _ in range(3):
+            current = [dim // 2 for dim in current]
+            sizes.append(current)
 
-        return input_sizes
+        # Flatten to token counts (for transformer)
+        sequence_lengths = [int(np.prod(s)) for s in sizes]
+
+        return sequence_lengths
 
     def get_config(self):
         config = {
             "input_shape": self.input_shape[1:],
-            "encoder_filters": self.encoder_filters,
+            "filters": self.filters,
             "patch_size": self.patch_size,
             "spatial_reduced_tokens": self.spatial_reduced_tokens,
             "depths": self.depths,

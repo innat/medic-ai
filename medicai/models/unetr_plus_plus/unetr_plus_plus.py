@@ -64,6 +64,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
         skips = [pyramid_outputs[key] for key in required_keys]
         classifier_activation = validate_activation(classifier_activation)
         target_sequence_length = self.get_target_sequence_length(encoder)
+        final_upsampling_kernel = self.get_final_upsample_kernel(encoder)
 
         # Build UNETR++ decoder.
         unetr_plusplus_head = self.build_decoder(
@@ -72,6 +73,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
             norm_name=norm_name,
             classifier_activation=classifier_activation,
             target_sequence_length=target_sequence_length,
+            final_upsampling_kernel=final_upsampling_kernel,
         )
         outputs = unetr_plusplus_head([inputs] + skips)
 
@@ -91,6 +93,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
         norm_name,
         classifier_activation,
         target_sequence_length,
+        final_upsampling_kernel,
     ):
 
         def apply(inputs):
@@ -136,7 +139,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
             out = UNETRPlusPlusUpsamplingBlock(
                 filters=feature_size,
                 kernel_size=3,
-                upsample_kernel_size=4,
+                upsample_kernel_size=final_upsampling_kernel,
                 sequence_length=target_sequence_length[3],
                 norm_name=norm_name,
                 conv_decoder=True,
@@ -175,6 +178,25 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
 
         raise ValueError(
             "Cannot infer `sequence_length` for decoder. "
+            "Encoder must provide pyramid_outputs` with spatial dimensions."
+        )
+
+    @staticmethod
+    def get_final_upsample_kernel(encoder):
+        """
+        Computes the upsampling factor needed to recover input resolution
+        from P1 resolution.
+        """
+        if hasattr(encoder, "pyramid_outputs"):
+            input_spatial = encoder.input.shape[1:-1]
+            p1_spatial = encoder.pyramid_outputs["P1"].shape[1:-1]
+            upsample = tuple(
+                int(in_dim // p1_dim) for in_dim, p1_dim in zip(input_spatial, p1_spatial)
+            )
+            return upsample
+
+        raise ValueError(
+            "Cannot infer final upsampling kernel for decoder. "
             "Encoder must provide pyramid_outputs` with spatial dimensions."
         )
 
