@@ -23,8 +23,11 @@ class RandCutOut:
         fill_value: float = 0.0,
         label_fill_value: int = 0,
     ):
-        assert len(keys) == 2, "keys must be a sequence of two strings: [image_key, label_key]"
-        assert len(mask_size) == 3, "mask_size must be a sequence of three integers for 3D."
+        if len(keys) != 2:
+            raise ValueError("keys must be a sequence of two strings: [image_key, label_key]")
+        if len(mask_size) != 3:
+            raise ValueError("mask_size must be a sequence of three integers for 3D.")
+
         self.keys = keys
         self.mask_size = mask_size
         self.num_cuts = num_cuts
