@@ -4,6 +4,7 @@ from medicai.transforms.depth_interpolate import depth_interpolation_methods
 from medicai.transforms.normalize_intensity import NormalizeIntensity
 from medicai.transforms.orientation import Orientation
 from medicai.transforms.random_crop_pos_neg import RandCropByPosNegLabel
+from medicai.transforms.random_cutout import RandCutOut
 from medicai.transforms.random_flip import RandFlip
 from medicai.transforms.random_rot90 import RandRotate90
 from medicai.transforms.random_shift_intensity import RandShiftIntensity
