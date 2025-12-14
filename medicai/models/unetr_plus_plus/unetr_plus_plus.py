@@ -16,6 +16,57 @@ from .encoder_layers import UNETRPlusPlusUpsamplingBlock
 @keras.saving.register_keras_serializable(package="unetr_plusplus")
 @registration.register(name="unetr_plusplus", type="segmentation")
 class UNETRPlusPlus(keras.Model, DescribeMixin):
+    """
+    Implements the UNETR++ model, a robust 3D segmentation architecture
+    that enhances the original UNETR by integrating a hierarchical,
+    convolutional-based decoder (similar to U-Net) to process the output
+    from a Vision Transformer (ViT) or standard CNN encoder.
+
+    The model expects an encoder that provides four pyramid output stages (P1, P2, P3, P4).
+    The last feature map (P4/ViT output) is projected and then fed into the decoder.
+
+    Args:
+        input_shape (tuple, optional): The shape of the input tensor (e.g., (128, 128, 128, 1)).
+            Must be specified if `encoder` or `encoder_name` is None.
+        encoder_name (str, optional): Name of the backbone encoder model to use
+            (e.g., 'unetr_plusplus_small').
+        encoder (keras.Model, optional): A pre-instantiated encoder model.
+            Must provide `pyramid_outputs` with keys P1, P2, P3, P4.
+        num_classes (int): The number of output classes for segmentation. (default: 1).
+        feature_size (int): Base number of filters in the decoder stages (e.g., 16, 32).
+            Decoder channels are scaled by multiples of this size. (default: 16).
+        norm_name (str): The normalization layer name used in the decoder blocks
+            ('instance', 'batch'). (default: "instance").
+        classifier_activation (str): The activation function for the final output layer
+            ('sigmoid' for binary, 'softmax' for multi-class). (default: "sigmoid").
+        name (str): The model name. (default: "UNETRPlusPlus").
+
+    Example:
+        ```python
+        from medicai.models import UNETRPlusPlus, UNETRPlusPlusEncoder
+
+        # Case 1
+        input_shape = (128, 128, 128, 4)
+        model = UNETRPlusPlus(
+            input_shape=input_shape,
+            encoder_name="unetr_plusplus_encoder",
+            num_classes=3,
+            classifier_activation=None
+        )
+
+        # Case 2
+        input_shape = (16, 160, 160, 1)
+        encoder = UNETRPlusPlusEncoder(
+            input_shape=(16, 160, 160, 1),
+            patch_size=(1, 4, 4)
+        )
+        model = UNETRPlusPlus(
+            encoder=encoder,
+            num_classes=3
+        )
+        ```
+    """
+
     ALLOWED_BACKBONE_FAMILIES = ["unetr_plusplus"]
 
     def __init__(

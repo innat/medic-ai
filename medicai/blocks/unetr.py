@@ -83,20 +83,26 @@ class UNETRBasicBlock(layers.Layer):
 
 class UNETRUpsamplingBlock(layers.Layer):
     """
-    A basic building block for a 3D UNet, consisting of two convolutional layers
-    with normalization and LeakyReLU activation, and optional dropout.
+    A UNETR Decoder block that performs feature upsampling, concatenation with
+    a skip connection, and subsequent feature processing.
+
+
+    This block typically takes two inputs: the feature map to be upsampled
+    from the previous decoder stage (x_in) and the corresponding skip connection
+    from the encoder (x_skip).
 
     Args:
-        out_channels (int): The number of output channels for both convolutional layers.
-        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
-            (default: 3).
-        stride (int): The stride of the first convolutional layer in all spatial dimensions
+        filters (int): The number of output channels after feature processing.
+        kernel_size (int or tuple): The kernel size for the internal convolutional processing
+            block (Basic or Residual). (default: 3).
+        stride (int or tuple): The stride for the internal convolutional processing block.
             (default: 1).
-        norm_name (Optional[str]): The name of the normalization layer to use.
-            Options are "instance" (requires tensorflow-addons), "batch", or None for no
-            normalization (default: "instance").
-        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
-            dropout is applied (default: None).
+        upsample_kernel_size (int or tuple): Kernel size/stride for the transpose convolution
+            layer used for upsampling. (default: 2).
+        norm_name (Optional[str]): The name of the normalization layer to use in the internal
+            processing block (default: "instance").
+        res_block (bool): If True, uses a residual block (`UnetResBlock`) for feature
+            processing; otherwise, uses a basic block (`UnetBasicBlock`). (default: True).
     """
 
     def __init__(
@@ -183,29 +189,27 @@ class UNETRUpsamplingBlock(layers.Layer):
 
 class UNETRPreUpsamplingBlock(layers.Layer):
     """
-    Functional closure version of a UNETR projection upsampling block.
+    A Keras Layer that implements the UNETR Projection Upsampling block.
 
-    This block performs upsampling using a transpose convolution followed
-    by optional convolutional or residual sub-blocks. It returns a callable
-    function `apply(x)` that applies the block to an input tensor.
+    This block performs an initial transpose convolution to upsample features,
+    followed by a sequence of 'num_layer' blocks. Each subsequent block consists
+    of another transpose convolution (upsample) and an optional convolutional
+    sub-block (basic or residual).
 
     Args:
-        filters (int): Number of output channels for the upsampled feature.
-        num_layer (int): Number of convolutional/residual sub-blocks after the initial
-            transpose convolution.
-        kernel_size (int or tuple): Kernel size for the convolutional sub-blocks.
-        stride (int or tuple): Stride for the convolutional sub-blocks.
-        upsample_kernel_size (int or tuple): Kernel size / stride for the initial transpose
-            convolution.
-        conv_block (bool): If True, apply convolutional sub-blocks after transpose conv.
-        res_block (bool): If True and conv_block is True, use residual blocks (`UnetResBlock`)
-                        instead of basic convolutional blocks (`UnetBasicBlock`).
+        filters (int): Number of output channels for the block.
+        num_layer (int): Number of repeated (Upsample + Conv) stages after the initial upsample.
+        kernel_size (int or tuple): Kernel size for the optional convolutional sub-blocks.
+        stride (int or tuple): Stride for the optional convolutional sub-blocks.
+        upsample_kernel_size (int or tuple): Kernel/stride size for all transpose convolutions.
+        conv_block (bool): If True, applies convolutional/residual sub-blocks after transpose convs.
+        res_block (bool): If True and conv_block is True, uses UnetResBlock; otherwise,
+            uses UnetBasicBlock.
 
     Example:
         # Create a 3D UNETR upsampling block
         up_block = UNETRPreUpsamplingBlock(
-            spatial_dims=3,
-            out_channels=128,
+            filters=128,
             num_layer=2,
             kernel_size=3,
             stride=1,
@@ -213,8 +217,8 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             conv_block=True,
             res_block=True,
         )
-
-        # Apply it to a feature tensor `x`
+        # Assuming input x is 3D, e.g., (B, 16, 16, 16, C)
+        # This block will perform 1 + 2 = 3 upsampling steps.
         y = up_block(x)
     """
 
@@ -241,8 +245,7 @@ class UNETRPreUpsamplingBlock(layers.Layer):
     def build(self, input_shape):
         spatial_dims = len(input_shape) - 2
 
-        # 1. The Initial Upsampling Layer (corresponds to transp_conv_init)
-        self.transp_conv_init = get_conv_layer(  # Renamed for clarity
+        self.transp_conv_init = get_conv_layer(
             spatial_dims,
             layer_type="conv_transpose",
             filters=self.filters,
@@ -250,16 +253,13 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             strides=self.upsample_kernel_size,
             padding="same",
         )
-        self.transp_conv_init.build(input_shape) # Build the first layer
+        self.transp_conv_init.build(input_shape)
 
-        # 2. Sequential Blocks (corresponds to block_fns)
         self.blocks = []
-        
-        # Start shape tracking after the first upsample
         current_shape = self.transp_conv_init.compute_output_shape(input_shape)
 
         for _ in range(self.num_layer):
-            # Transpose Conv layer (instantiated inside the loop, same as original logic)
+            # Transpose Conv layer (instantiated inside the loop
             up_layer = get_conv_layer(
                 spatial_dims,
                 layer_type="conv_transpose",
@@ -288,11 +288,11 @@ class UNETRPreUpsamplingBlock(layers.Layer):
                         stride=self.stride,
                         norm_name="instance",
                     )
-                
+
                 # Build the conv layer
                 conv_layer.build(current_shape)
                 current_shape = conv_layer.compute_output_shape(current_shape)
-                
+
             self.blocks.append((up_layer, conv_layer))
 
         self.built = True
@@ -310,88 +310,6 @@ class UNETRPreUpsamplingBlock(layers.Layer):
                 x = conv_layer(x, training=training)
 
         return x
-
-    # def build(self, input_shape):
-    #     spatial_dims = len(input_shape) - 2
-
-    #     self.transp_conv = get_conv_layer(
-    #         spatial_dims,
-    #         layer_type="conv_transpose",
-    #         filters=self.filters,
-    #         kernel_size=self.upsample_kernel_size,
-    #         strides=self.upsample_kernel_size,
-    #         padding="same",
-    #     )
-
-    #     self.blocks = []
-    #     for _ in range(self.num_layer):
-
-    #         # Always start with transpose conv
-    #         up_layer = get_conv_layer(
-    #             spatial_dims,
-    #             layer_type="conv_transpose",
-    #             filters=self.filters,
-    #             kernel_size=self.upsample_kernel_size,
-    #             strides=self.upsample_kernel_size,
-    #             padding="same",
-    #         )
-
-    #         if self.conv_block:
-    #             if self.res_block:
-    #                 conv_layer = UNetResBlock(
-    #                     filters=self.filters,
-    #                     kernel_size=self.kernel_size,
-    #                     stride=self.stride,
-    #                     norm_name="instance",
-    #                 )
-    #             else:
-    #                 conv_layer = UNetBasicBlock(
-    #                     filters=self.filters,
-    #                     kernel_size=self.kernel_size,
-    #                     stride=self.stride,
-    #                     norm_name="instance",
-    #                 )
-    #             self.blocks.append((up_layer, conv_layer))
-    #         else:
-    #             # Only transpose conv
-    #             self.blocks.append((up_layer, None))
-
-    #     # Initial transpose conv
-    #     # self.transp_conv_init.build(input_shape)
-    #     # input_shape = list(input_shape)
-    #     # input_shape[-1] = self.filters
-    #     # # Build each block layer by layer
-    #     # for up_layer, conv_layer in self.blocks:
-    #     #     up_layer.build(tuple(input_shape))
-    #     #     input_shape[-1] = self.filters
-    #     #     if conv_layer is not None:
-    #     #         conv_layer.build(tuple(input_shape))
-
-    #     # Initial transpose conv
-    #     self.transp_conv.build(input_shape)
-    #     current_shape = self.transp_conv.compute_output_shape(input_shape)
-    #     # Build each block layer by layer
-    #     for up_layer, conv_layer in self.blocks:
-    #         up_layer.build(current_shape)
-    #         current_shape = up_layer.compute_output_shape(current_shape)
-    #         if conv_layer is not None:
-    #             conv_layer.build(current_shape)
-    #             current_shape = conv_layer.compute_output_shape(current_shape)
-
-    #     self.built = True
-
-    # def call(self, inputs, training=None):
-    #     x = inputs
-
-    #     # Initial upsample
-    #     x = self.transp_conv(x, training=training)
-
-    #     # Sequential blocks
-    #     for up_layer, conv_layer in self.blocks:
-    #         x = up_layer(x, training=training)
-    #         if conv_layer is not None:
-    #             x = conv_layer(x, training=training)
-    #     return x
 
     def get_config(self):
         config = super().get_config()
