@@ -344,6 +344,7 @@ def resolve_encoder(encoder, encoder_name, input_shape, allowed_families, **kwar
             )
 
         if encoder_name.lower() not in registration._backbone_registry:
+            # TODO: Return supported family specific encoder name, not all!
             raise ValueError(
                 f"Encoder '{encoder_name}' not found in the registry. "
                 f"Available: {list(registration._backbone_registry.keys())}"
