@@ -329,6 +329,7 @@ class EfficientPairedAttention(keras.layers.Layer):
         v_SA_t = ops.transpose(v_SA, (0, 1, 3, 2))
 
         # Normalize q and k - l2 norm
+        # TODO: Should the norm be applied after transpose or before!
         q_norm = self.safe_normalize(q_shared_t, axis=-1, epsilon=1e-6)
         k_norm = self.safe_normalize(k_shared_t, axis=-1, epsilon=1e-6)
 
