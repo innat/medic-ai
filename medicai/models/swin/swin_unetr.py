@@ -164,6 +164,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="decoder_input_cnn_stem",
             )(enc_input)
 
             # Encoder 2 (process hidden_states_out[0])
@@ -173,6 +174,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_stage1_refine",
             )(hidden_states_out[0])
 
             # Encoder 3 (process hidden_states_out[1])
@@ -182,6 +184,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_stage2_refine",
             )(hidden_states_out[1])
 
             # Encoder 4 (process hidden_states_out[2])
@@ -191,6 +194,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_stage3_refine",
             )(hidden_states_out[2])
 
             # Encoder 5 (process hidden_states_out[4] as bottleneck)
@@ -200,6 +204,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_bottleneck",
             )(hidden_states_out[4])
 
             # Decoder 5 (upsample dec4 and concatenate with hidden_states_out[3])
@@ -209,6 +214,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_up_stage3",
             )([dec4, hidden_states_out[3]])
 
             # Decoder 4 (upsample dec3 and concatenate with enc3)
@@ -218,6 +224,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_up_stage2",
             )([dec3, enc3])
 
             # Decoder 3 (upsample dec2 and concatenate with enc2)
@@ -227,6 +234,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_up_stage1",
             )([dec2, enc2])
 
             # Decoder 2 (upsample dec1 and concatenate with enc1)
@@ -236,6 +244,7 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_up_stage0",
             )([dec1, enc1])
 
             out = UNETRUpsamplingBlock(
@@ -244,10 +253,15 @@ class SwinUNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="swin_decoder_output_stage",
             )([dec0, enc0])
 
             # Final output (process dec0 and produce logits)
-            logits = UNetOutBlock(num_classes, activation=classifier_activation)(out)
+            logits = UNetOutBlock(
+                num_classes,
+                activation=classifier_activation,
+                name="swinunetr_segmentation_head",
+            )(out)
             return logits
 
         return apply

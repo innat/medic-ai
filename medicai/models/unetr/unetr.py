@@ -207,6 +207,7 @@ class UNETR(keras.Model, DescribeMixin):
                 stride=1,
                 norm_name=norm_name,
                 res_block=res_block,
+                name="decoder_input_cnn_stem",
             )(enc_input)
 
             enc2 = UNETRPreUpsamplingBlock(
@@ -217,6 +218,7 @@ class UNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 conv_block=conv_block,
                 res_block=res_block,
+                name="unetr_token_projection_stage1",
             )(proj_feat(x2, hidden_size, feat_size))
 
             enc3 = UNETRPreUpsamplingBlock(
@@ -227,6 +229,7 @@ class UNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 conv_block=conv_block,
                 res_block=res_block,
+                name="unetr_token_projection_stage2",
             )(proj_feat(x3, hidden_size, feat_size))
 
             enc4 = UNETRPreUpsamplingBlock(
@@ -237,6 +240,7 @@ class UNETR(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 conv_block=conv_block,
                 res_block=res_block,
+                name="unetr_token_projection_stage3",
             )(proj_feat(x4, hidden_size, feat_size))
 
             # Decoder path
@@ -246,29 +250,34 @@ class UNETR(keras.Model, DescribeMixin):
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
+                name="unetr_decoder_up_stage3",
             )([dec4, enc4])
             dec2 = UNETRUpsamplingBlock(
                 filters=feature_size * 4,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
+                name="unetr_decoder_up_stage2",
             )([dec3, enc3])
             dec1 = UNETRUpsamplingBlock(
                 filters=feature_size * 2,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
+                name="unetr_decoder_up_stage1",
             )([dec2, enc2])
             out = UNETRUpsamplingBlock(
                 filters=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=2,
                 res_block=res_block,
+                name="unetr_decoder_output_stage",
             )([dec1, enc1])
 
             return UNetOutBlock(
                 num_classes=num_classes,
                 activation=classifier_activation,
+                name="unetr_segmentation_head",
             )(out)
 
         return apply

@@ -106,7 +106,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 kernel_size=3,
                 stride=1,
                 norm_name=norm_name,
-                name="stem_unet_residual_block",
+                name="decoder_input_projection",
             )(enc_input)
 
             dec3 = UNETRPlusPlusUpsamplingBlock(
@@ -115,7 +115,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 sequence_length=target_sequence_length[0],
                 norm_name=norm_name,
-                name="unetr_plus_decoder_block_3",
+                name="unetrpp_decoder_up_stage3",
             )([dec4, enc3])
 
             dec2 = UNETRPlusPlusUpsamplingBlock(
@@ -124,7 +124,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 sequence_length=target_sequence_length[1],
                 norm_name=norm_name,
-                name="unetr_plus_decoder_block_2",
+                name="unetrpp_decoder_up_stage2",
             )([dec3, enc2])
 
             dec1 = UNETRPlusPlusUpsamplingBlock(
@@ -133,7 +133,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 sequence_length=target_sequence_length[2],
                 norm_name=norm_name,
-                name="unetr_plus_decoder_block_1",
+                name="netrpp_decoder_up_stage1",
             )([dec2, enc1])
 
             out = UNETRPlusPlusUpsamplingBlock(
@@ -142,13 +142,13 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 upsample_kernel_size=final_upsampling_kernel,
                 norm_name=norm_name,
                 conv_decoder=True,
-                name="unetr_plus_decoder_block_out",
+                name="unetrpp_decoder_output_stage",
             )([dec1, convBlock])
 
             output = UNetOutBlock(
                 num_classes=num_classes,
                 activation=classifier_activation,
-                name="unetr_plus_head",
+                name="unetrpp_segmentation_head",
             )(out)
             return output
 
