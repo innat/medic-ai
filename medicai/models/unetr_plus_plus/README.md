@@ -86,15 +86,18 @@ model = UNETRPlusPlus(
 
 # Encoder Feature Access
 
-The UNETR++ encoder exposes its hierarchical transformer features through the attribute model.encoder.pyramid_outputs. Each key corresponds to a transformer stage, where:
+The UNETR++ encoder exposes its hierarchical transformer features through `model.encoder.pyramid_outputs`. Each key corresponds to a transformer stage, where:
+
 - $P1$ denotes the highest-resolution (shallowest) token feature map.
 - $P4$ denotes the lowest-resolution (deepest) token feature map.
+
 These multi-scale representations are used directly by the **UNETR++** decoder for skip connections.
 
 ```python
 model = UNETRPlusPlus(
     encoder_name="unetr_plusplus_encoder",
-    input_shape=(96, 96, 96, 1)
+    input_shape=(96, 96, 96, 1),
+    num_classes=3
 )
 
 model.encoder.pyramid_outputs
@@ -108,6 +111,6 @@ model.encoder.pyramid_outputs
 
 # Skip Connection Design Choice
 
-Unlike **UNETR**, in **UNETR++** implementation uses element-wise addition (+) instead of concatenation (concat) for skip connections. Additive fusion requires strict channel and spatial alignment between encoder and decoder features, which tightly couples the decoder to a specific encoder design. This makes it difficult to support arbitrary backbones such as **ConvNeXt** or **MiT**, which produce heterogeneous feature dimensions.
+Unlike **UNETR**, this **UNETR++** implementation uses element-wise addition (+) instead of concatenation (concat) for skip connections. Additive fusion requires strict channel and spatial alignment between encoder and decoder features, which tightly couples the decoder to a specific encoder design. This makes it difficult to support arbitrary backbones such as **ConvNeXt** or **MiT**, which produce heterogeneous feature dimensions.
 
 
