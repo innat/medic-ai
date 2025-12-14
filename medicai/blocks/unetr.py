@@ -238,10 +238,80 @@ class UNETRPreUpsamplingBlock(layers.Layer):
         self.conv_block = conv_block
         self.res_block = res_block
 
+    # def build(self, input_shape):
+    #     spatial_dims = len(input_shape) - 2
+
+    #     self.transp_conv_init = get_conv_layer(
+    #         spatial_dims,
+    #         layer_type="conv_transpose",
+    #         filters=self.filters,
+    #         kernel_size=self.upsample_kernel_size,
+    #         strides=self.upsample_kernel_size,
+    #         padding="same",
+    #     )
+
+    #     self.blocks = []
+    #     for _ in range(self.num_layer):
+
+    #         # Always start with transpose conv
+    #         up_layer = get_conv_layer(
+    #             spatial_dims,
+    #             layer_type="conv_transpose",
+    #             filters=self.filters,
+    #             kernel_size=self.upsample_kernel_size,
+    #             strides=self.upsample_kernel_size,
+    #             padding="same",
+    #         )
+
+    #         if self.conv_block:
+    #             if self.res_block:
+    #                 conv_layer = UNetResBlock(
+    #                     filters=self.filters,
+    #                     kernel_size=self.kernel_size,
+    #                     stride=self.stride,
+    #                     norm_name="instance",
+    #                 )
+    #             else:
+    #                 conv_layer = UNetBasicBlock(
+    #                     filters=self.filters,
+    #                     kernel_size=self.kernel_size,
+    #                     stride=self.stride,
+    #                     norm_name="instance",
+    #                 )
+    #             self.blocks.append((up_layer, conv_layer))
+    #         else:
+    #             # Only transpose conv
+    #             self.blocks.append((up_layer, None))
+
+    #     # Initial transpose conv
+    #     # self.transp_conv_init.build(input_shape)
+    #     # input_shape = list(input_shape)
+    #     # input_shape[-1] = self.filters
+    #     # # Build each block layer by layer
+    #     # for up_layer, conv_layer in self.blocks:
+    #     #     up_layer.build(tuple(input_shape))
+    #     #     input_shape[-1] = self.filters
+    #     #     if conv_layer is not None:
+    #     #         conv_layer.build(tuple(input_shape))
+
+    #     # Initial transpose conv
+    #     self.transp_conv_init.build(input_shape)
+    #     current_shape = self.transp_conv_init.compute_output_shape(input_shape)
+    #     # Build each block layer by layer
+    #     for up_layer, conv_layer in self.blocks:
+    #         up_layer.build(current_shape)
+    #         current_shape = up_layer.compute_output_shape(current_shape)
+    #         if conv_layer is not None:
+    #             conv_layer.build(current_shape)
+    #             current_shape = conv_layer.compute_output_shape(current_shape)
+
+    #     self.built = True
+
     def build(self, input_shape):
         spatial_dims = len(input_shape) - 2
-
-        self.transp_conv_init = get_conv_layer(
+        
+        # 1. The Initial Upsampling Layer (The Projection)
+        self.transp_conv = get_conv_layer(
             spatial_dims,
             layer_type="conv_transpose",
             filters=self.filters,
@@ -249,61 +319,46 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             strides=self.upsample_kernel_size,
             padding="same",
         )
+        
+        # Manually build the transpose conv
+        self.transp_conv.build(input_shape)
+        
+        # Calculate shape after upsampling to build the subsequent blocks
+        # We rely on the layer's own logic to calculate output shape
+        current_shape = self.transp_conv.compute_output_shape(input_shape)
 
+        # 2. Subsequent Convolutional Blocks
         self.blocks = []
-        for _ in range(self.num_layer):
-
-            # Always start with transpose conv
-            up_layer = get_conv_layer(
-                spatial_dims,
-                layer_type="conv_transpose",
-                filters=self.filters,
-                kernel_size=self.upsample_kernel_size,
-                strides=self.upsample_kernel_size,
-                padding="same",
-            )
-
-            if self.conv_block:
+        
+        # If conv_block is False, we might skip this loop entirely 
+        # or strictly follow num_layer logic depending on your architecture requirements.
+        if self.conv_block:
+            for i in range(self.num_layer):
                 if self.res_block:
-                    conv_layer = UNetResBlock(
+                    layer = UNetResBlock(
+                        spatial_dims=spatial_dims, # Ensure sub-blocks get dims
                         filters=self.filters,
                         kernel_size=self.kernel_size,
                         stride=self.stride,
                         norm_name="instance",
                     )
                 else:
-                    conv_layer = UNetBasicBlock(
+                    layer = UNetBasicBlock(
+                        spatial_dims=spatial_dims,
                         filters=self.filters,
                         kernel_size=self.kernel_size,
                         stride=self.stride,
                         norm_name="instance",
                     )
-                self.blocks.append((up_layer, conv_layer))
-            else:
-                # Only transpose conv
-                self.blocks.append((up_layer, None))
-
-        # Initial transpose conv
-        # self.transp_conv_init.build(input_shape)
-        # input_shape = list(input_shape)
-        # input_shape[-1] = self.filters
-        # # Build each block layer by layer
-        # for up_layer, conv_layer in self.blocks:
-        #     up_layer.build(tuple(input_shape))
-        #     input_shape[-1] = self.filters
-        #     if conv_layer is not None:
-        #         conv_layer.build(tuple(input_shape))
-
-        # Initial transpose conv
-        self.transp_conv_init.build(input_shape)
-        current_shape = self.transp_conv_init.compute_output_shape(input_shape)
-        # Build each block layer by layer
-        for up_layer, conv_layer in self.blocks:
-            up_layer.build(current_shape)
-            current_shape = up_layer.compute_output_shape(current_shape)
-            if conv_layer is not None:
-                conv_layer.build(current_shape)
-                current_shape = conv_layer.compute_output_shape(current_shape)
+                
+                # Build the layer immediately
+                layer.build(current_shape)
+                
+                # Update shape for the next layer (though usually ResBlocks keep shape same)
+                current_shape = layer.compute_output_shape(current_shape)
+                
+                # Add to list
+                self.blocks.append(layer)
 
         self.built = True
 
