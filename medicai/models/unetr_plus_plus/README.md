@@ -6,7 +6,7 @@
 
 ## Build Model
 
-You can easily instantiate a **UPerNet** model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`). The `input_shape` automatically determines whether a `2D` or `3D` model will be built.
+We can easily instantiate a **UNETR++** model by specifying an encoder backbone (`encoder_name`) and the input dimensions (`input_shape`). The `input_shape` automatically determines whether a `2D` or `3D` model will be built.
 
 ```python
 from medicai.models import UNETRPlusPlus
@@ -59,7 +59,7 @@ This setup is suitable for:
 
 **Anisotropic Input Support**
 
-Many medical datasets exhibit **anisotropic** voxel spacing, particularly along the depth (slice) dimension. To support such cases, UNETR++ allows explicit control over the patch size at the encoder level, enabling **anisotropic** tokenization while keeping the decoder unchanged. To do this, we can manually instantiate the encoder and pass it into the **UNETR++** model.
+Many medical datasets exhibit **anisotropic** voxel spacing, particularly along the depth (slice) dimension. To support such cases, **UNETR++** allows explicit control over the **patch size** at the encoder level, enabling **anisotropic** tokenization while keeping the decoder unchanged. To do this, we can manually instantiate the encoder and pass it into the **UNETR++** model.
 
 ```python
 from medicai.models import UNETRPlusPlus, UNETRPlusPlusEncoder
@@ -106,9 +106,8 @@ model.encoder.pyramid_outputs
 }
 ```
 
-# Key Differences from UNETR
+# Skip Connection Design Choice
 
-- **Hierarchical Transformer Encoder**: Unlike UNETR’s single-scale ViT encoder, UNETR++ builds a multi-stage pyramid of transformer features.
-- **Efficient Paired Attention (EPA)**: Reduces quadratic attention cost while maintaining global context modeling.
-- **Improved Multi-Scale Fusion**: Encoder features at multiple resolutions improve boundary accuracy and small-structure segmentation.
+Unlike **UNETR**, in **UNETR++** implementation uses concatenation (concat) instead of element-wise addition (+) for skip connections. Additive fusion requires strict channel and spatial alignment between encoder and decoder features, which tightly couples the decoder to a specific encoder design. This makes it difficult to support arbitrary backbones such as **ConvNeXt** or **MiT**, which produce heterogeneous feature dimensions.
+
 
