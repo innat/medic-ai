@@ -107,6 +107,7 @@ model = SwinUNETR(encoder=custom_encoder)
 | [**DeepLabV3Plus**](medicai/models/deeplabv3plus/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UPerNet**](medicai/models/upernet/README.md) | 2D, 3D | Segmentation | CNN |
 | [**UNETR**](medicai/models/unetr/README.md) | 2D, 3D | Segmentation | Transformer |
+| [**UNETR++**](medicai/models/unetr_plus_plus/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SwinUNETR-V2**](medicai/models/swin/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**TransUNet**](medicai/models/transunet/README.md) | 2D, 3D | Segmentation | Transformer |
