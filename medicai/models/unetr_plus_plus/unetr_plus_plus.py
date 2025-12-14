@@ -133,7 +133,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 upsample_kernel_size=2,
                 sequence_length=target_sequence_length[2],
                 norm_name=norm_name,
-                name="netrpp_decoder_up_stage1",
+                name="unetrpp_decoder_up_stage1",
             )([dec2, enc1])
 
             out = UNETRPlusPlusUpsamplingBlock(
@@ -211,7 +211,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
 
         raise ValueError(
             "Cannot infer final upsampling kernel for decoder. "
-            "Encoder must provide pyramid_outputs` with spatial dimensions."
+            "Encoder must provide `pyramid_outputs` with spatial dimensions."
         )
 
     def get_config(self):

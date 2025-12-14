@@ -328,19 +328,23 @@ class UNetResBlock(layers.Layer):
         return out
 
     def compute_output_shape(self, input_shape):
-        spatial_dims = len(input_shape) - 2
-        batch_size = input_shape[0]
+        # spatial_dims = len(input_shape) - 2
+        # batch_size = input_shape[0]
 
-        spatial_shape = []
-        for i in range(1, spatial_dims + 1):
-            spatial_dim = input_shape[i]
-            if self.stride > 1:
-                # For 'same' padding with stride, output size is ceil(input_size / stride)
-                spatial_dim = (spatial_dim + self.stride - 1) // self.stride
-            spatial_shape.append(spatial_dim)
+        # spatial_shape = []
+        # for i in range(1, spatial_dims + 1):
+        #     spatial_dim = input_shape[i]
+        #     if self.stride > 1:
+        #         # For 'same' padding with stride, output size is ceil(input_size / stride)
+        #         spatial_dim = (spatial_dim + self.stride - 1) // self.stride
+        #     spatial_shape.append(spatial_dim)
 
-        output_shape = [batch_size] + spatial_shape + [self.filters]
-        return tuple(output_shape)
+        # output_shape = [batch_size] + spatial_shape + [self.filters]
+        # return tuple(output_shape)
+
+        shape = self.conv1.compute_output_shape(input_shape)
+        shape = self.conv2.compute_output_shape(shape)
+        return shape
 
     def get_config(self):
         config = super().get_config()
