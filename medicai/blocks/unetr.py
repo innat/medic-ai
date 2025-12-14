@@ -336,7 +336,6 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             for i in range(self.num_layer):
                 if self.res_block:
                     layer = UNetResBlock(
-                        spatial_dims=spatial_dims, # Ensure sub-blocks get dims
                         filters=self.filters,
                         kernel_size=self.kernel_size,
                         stride=self.stride,
@@ -344,7 +343,6 @@ class UNETRPreUpsamplingBlock(layers.Layer):
                     )
                 else:
                     layer = UNetBasicBlock(
-                        spatial_dims=spatial_dims,
                         filters=self.filters,
                         kernel_size=self.kernel_size,
                         stride=self.stride,
