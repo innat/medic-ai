@@ -364,7 +364,7 @@ class UNETRPreUpsamplingBlock(layers.Layer):
         x = inputs
 
         # Initial upsample
-        x = self.transp_conv_init(x, training=training)
+        x = self.transp_conv(x, training=training)
 
         # Sequential blocks
         for up_layer, conv_layer in self.blocks:
