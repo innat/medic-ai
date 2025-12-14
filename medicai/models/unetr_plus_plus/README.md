@@ -2,7 +2,7 @@
 
 <img width="1158" height="455" alt="image" src="https://github.com/user-attachments/assets/7ac19033-6885-4f4a-80f3-653c36944a5d" />
 
-**UNETR++** is an advanced transformer-based segmentation architecture designed for high-resolution 2D and 3D medical image segmentation. It extends the original **UNETR** by introducing hierarchical token representations, efficient paired attention (**EPA**), and a multi-scale feature pyramid, enabling more efficient and accurate modeling of both global context and fine spatial details.
+[**UNETR++**](https://arxiv.org/abs/2212.04497) is an advanced transformer-based segmentation architecture designed for high-resolution 2D and 3D medical image segmentation. It extends the original **UNETR** by introducing hierarchical token representations, efficient paired attention (**EPA**), and a multi-scale feature pyramid, enabling more efficient and accurate modeling of both global context and fine spatial details.
 
 ## Build Model
 
