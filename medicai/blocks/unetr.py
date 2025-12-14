@@ -367,10 +367,14 @@ class UNETRPreUpsamplingBlock(layers.Layer):
         x = self.transp_conv(x, training=training)
 
         # Sequential blocks
-        for up_layer, conv_layer in self.blocks:
-            x = up_layer(x, training=training)
-            if conv_layer is not None:
-                x = conv_layer(x, training=training)
+        # for up_layer, conv_layer in self.blocks:
+        #     x = up_layer(x, training=training)
+        #     if conv_layer is not None:
+        #         x = conv_layer(x, training=training)
+
+        if self.conv_block:
+            for block in self.blocks:
+                x = block(x, training=training)
 
         return x
 
