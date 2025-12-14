@@ -261,6 +261,7 @@ class EfficientPairedAttention(keras.layers.Layer):
         )
 
         # temperature parameters (per head) for scaling attention logits
+        # TODO: https://github.com/Amshaker/unetr_plus_plus/issues/80
         self.temperature_ca = self.add_weight(
             name=f"{self.prefix}_temperature_ca",
             shape=(self.num_heads, 1, 1),
@@ -330,6 +331,7 @@ class EfficientPairedAttention(keras.layers.Layer):
 
         # Normalize q and k - l2 norm
         # TODO: Should the norm be applied after transpose or before!
+        # TODO: Check: https://github.com/Amshaker/unetr_plus_plus/issues/62
         q_norm = self.safe_normalize(q_shared_t, axis=-1, epsilon=1e-6)
         k_norm = self.safe_normalize(k_shared_t, axis=-1, epsilon=1e-6)
 
