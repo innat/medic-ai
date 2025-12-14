@@ -108,6 +108,6 @@ model.encoder.pyramid_outputs
 
 # Skip Connection Design Choice
 
-Unlike **UNETR**, in **UNETR++** implementation uses concatenation (concat) instead of element-wise addition (+) for skip connections. Additive fusion requires strict channel and spatial alignment between encoder and decoder features, which tightly couples the decoder to a specific encoder design. This makes it difficult to support arbitrary backbones such as **ConvNeXt** or **MiT**, which produce heterogeneous feature dimensions.
+Unlike **UNETR**, in **UNETR++** implementation uses element-wise addition (+) instead of concatenation (concat) for skip connections. Additive fusion requires strict channel and spatial alignment between encoder and decoder features, which tightly couples the decoder to a specific encoder design. This makes it difficult to support arbitrary backbones such as **ConvNeXt** or **MiT**, which produce heterogeneous feature dimensions.
 
 
