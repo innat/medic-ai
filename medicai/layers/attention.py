@@ -339,7 +339,7 @@ class EfficientPairedAttention(keras.layers.Layer):
 
         # Compute Spatial Attention
         x_SA_raw = self.spatial_attention(q_norm, k_norm, v_SA_t, training)
-        x_SA = ops.transpose(x_SA_raw, (0, 2, 1, 3))
+        x_SA = ops.transpose(x_SA_raw, (0, 3, 1, 2))
         x_SA = ops.reshape(x_SA, (B, N, C))
 
         # 4. Combine results
