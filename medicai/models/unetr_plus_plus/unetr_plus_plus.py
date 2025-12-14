@@ -140,7 +140,6 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 filters=feature_size,
                 kernel_size=3,
                 upsample_kernel_size=final_upsampling_kernel,
-                sequence_length=target_sequence_length[3],
                 norm_name=norm_name,
                 conv_decoder=True,
                 name="unetr_plus_decoder_block_out",
@@ -172,7 +171,6 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
                 feat = encoder.pyramid_outputs[k]
                 spatial = feat.shape[1:-1]
                 seq.append(int(np.prod(spatial)))
-            seq.append(seq[-1] * 4)
             return seq
 
         raise ValueError(
@@ -189,9 +187,26 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
         if hasattr(encoder, "pyramid_outputs"):
             input_spatial = encoder.input.shape[1:-1]
             p1_spatial = encoder.pyramid_outputs["P1"].shape[1:-1]
+
+            if any(d is None for d in input_spatial) or any(d is None for d in p1_spatial):
+                raise ValueError(
+                    "Cannot infer final upsampling kernel with dynamic spatial dims. "
+                    f"input={input_spatial}, P1={p1_spatial}. "
+                    "Please pass a fully-specified input_shape."
+                )
+
             upsample = tuple(
-                int(in_dim // p1_dim) for in_dim, p1_dim in zip(input_spatial, p1_spatial)
+                int(in_dim // p1_dim)
+                for in_dim, p1_dim in zip(input_spatial, p1_spatial, strict=True)
             )
+
+            if any(
+                in_dim != p1_dim * u
+                for in_dim, p1_dim, u in zip(input_spatial, p1_spatial, upsample, strict=True)
+            ):
+                raise ValueError(
+                    f"Input spatial dims must be divisible by P1 dims. input={input_spatial}, P1={p1_spatial}."
+                )
             return upsample
 
         raise ValueError(

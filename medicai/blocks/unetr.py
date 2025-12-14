@@ -154,7 +154,8 @@ class UNETRUpsamplingBlock(layers.Layer):
 
         self.up.build(x_shape)
         concat_channels = self.filters + skip_shape[-1]
-        block_input_shape = (*x_shape[:-1], concat_channels)
+        up_output_shape = self.up.compute_output_shape(x_shape)
+        block_input_shape = (*up_output_shape[:-1], concat_channels)
         self.block.build(block_input_shape)
         self.built = True
 
@@ -283,27 +284,26 @@ class UNETRPreUpsamplingBlock(layers.Layer):
                 self.blocks.append((up_layer, None))
 
         # Initial transpose conv
-        self.transp_conv_init.build(input_shape)
-        input_shape = list(input_shape)
-        input_shape[-1] = self.filters
-
-        # Build each block layer by layer
-        for up_layer, conv_layer in self.blocks:
-            up_layer.build(tuple(input_shape))
-            input_shape[-1] = self.filters
-            if conv_layer is not None:
-                conv_layer.build(tuple(input_shape))
-
-        # # Initial transpose conv
         # self.transp_conv_init.build(input_shape)
-        # current_shape = self.transp_conv_init.compute_output_shape(input_shape)
+        # input_shape = list(input_shape)
+        # input_shape[-1] = self.filters
         # # Build each block layer by layer
         # for up_layer, conv_layer in self.blocks:
-        #     up_layer.build(current_shape)
-        #     current_shape = up_layer.compute_output_shape(current_shape)
+        #     up_layer.build(tuple(input_shape))
+        #     input_shape[-1] = self.filters
         #     if conv_layer is not None:
-        #         conv_layer.build(current_shape)
-        #         current_shape = conv_layer.compute_output_shape(current_shape)
+        #         conv_layer.build(tuple(input_shape))
+
+        # Initial transpose conv
+        self.transp_conv_init.build(input_shape)
+        current_shape = self.transp_conv_init.compute_output_shape(input_shape)
+        # Build each block layer by layer
+        for up_layer, conv_layer in self.blocks:
+            up_layer.build(current_shape)
+            current_shape = up_layer.compute_output_shape(current_shape)
+            if conv_layer is not None:
+                conv_layer.build(current_shape)
+                current_shape = conv_layer.compute_output_shape(current_shape)
 
         self.built = True
 

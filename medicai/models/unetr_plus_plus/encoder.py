@@ -32,7 +32,7 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         *,
         input_shape,
         input_tensor=None,
-        patch_size=[4, 4, 4],
+        patch_size=4,
         filters=[32, 64, 128, 256],
         spatial_reduced_tokens=[64, 64, 64, 32],
         depths=[3, 3, 3, 3],
@@ -51,9 +51,6 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
                 - 2D: (H, W, C)
             input_tensor: (Optional) A Keras tensor to use as the model input.
                 If not provided, a new input tensor will be created.
-            sequence_lengths: A list of integers representing the flattened
-                spatial sequence lengths for each stage. Used by transformer
-                blocks to determine the token count.
             patch_size: Integer or tuple specifying the patch size used by
                 the convolutional stem. The stem downsamples the input
                 independently along each spatial dimension according to
@@ -97,7 +94,9 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
             use_bias=False,
             name="stem_conv",
         )(x)
-        x = utils.get_norm_layer(layer_type="group", groups=input_shape[-1], name="stem_norm")(x)
+
+        stem_groups = input_shape[-1] if filters[0] % input_shape[-1] == 0 else min(8, filters[0])
+        x = utils.get_norm_layer(layer_type="group", groups=stem_groups, name="stem_norm")(x)
 
         # stage 0 transformer blocks
         for j in range(depths[0]):
