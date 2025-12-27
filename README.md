@@ -122,6 +122,8 @@ Orientation
 RandCropByPosNegLabel
 RandFlip
 RandRotate90
+RandRotate
+RandCutOut
 RandShiftIntensity
 RandSpatialCrop
 Resize
