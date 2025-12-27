@@ -105,7 +105,7 @@ class RandRotate:
     ## Classification
     image = tf.random.uniform((128, 128, 128, 4))
     rand_rotate = RandRotate(
-        keys=["image", "label"],
+        keys=["image"],
         factor=0.3,
         prob=0.6,
         fill_mode="crop"
