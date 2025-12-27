@@ -53,7 +53,7 @@ We can also create custom more complex model. Let's build **ResNeXt** with `32` 
 ```python
 from medicai.models import ResNetBackbone
 
-# build `resnext101_64x4d`.
+# build `se-resnext101_64x4d`.
 backbone = ResNetBackbone(
     input_shape=(96, 96, 96, 4),
     num_blocks=[3, 4, 23, 3],
