@@ -7,6 +7,7 @@ from medicai.transforms.random_crop_pos_neg import RandCropByPosNegLabel
 from medicai.transforms.random_cutout import RandCutOut
 from medicai.transforms.random_flip import RandFlip
 from medicai.transforms.random_rot90 import RandRotate90
+from medicai.transforms.random_rotation import RandRotate
 from medicai.transforms.random_shift_intensity import RandShiftIntensity
 from medicai.transforms.random_spatial_crop import RandSpatialCrop
 from medicai.transforms.resize import Resize
