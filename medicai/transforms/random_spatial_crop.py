@@ -97,7 +97,7 @@ class RandSpatialCrop:
         roi_size = self._get_roi_size(spatial_shape)
 
         if self.invalid_label is None:
-            center = self._get_center(spatial_shape, roi_size)
+            center = self._get_random_center(spatial_shape, roi_size)
         else:
             center = self._get_label_aware_center(spatial_shape, roi_size, inputs["label"])
 
@@ -147,7 +147,7 @@ class RandSpatialCrop:
             roi_size = tf.minimum(roi_size, spatial_shape)
         return roi_size
 
-    def _get_center(self, spatial_shape, roi_size):
+    def _get_random_center(self, spatial_shape, roi_size):
         """Determines the center of the ROI based on random_center.
 
         Args:
