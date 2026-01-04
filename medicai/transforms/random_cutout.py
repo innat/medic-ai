@@ -73,16 +73,11 @@ class RandCutOut:
         """
 
         if isinstance(keys, (list, tuple)):
-            if len(keys) != 1:
+            if len(keys) != 2:
                 raise ValueError(
-                    "`keys` must have length 1 when provided as a sequence. "
+                    "`keys` must have length 2 when provided as a sequence. "
                     f"Got length {len(keys)}."
                 )
-            keys = keys[0]
-        elif not isinstance(keys, str):
-            raise TypeError(
-                "`keys` must be a string or a sequence of length 1. " f"Got type {type(keys)}."
-            )
 
         if not isinstance(mask_size, (list, tuple)) or len(mask_size) != 2:
             raise ValueError("`mask_size` must be a sequence of two integers: (height, width).")
