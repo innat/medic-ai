@@ -102,23 +102,26 @@ class NormalizeIntensity:
         return normalized_image
 
     def _normalize_global(self, image: tf.Tensor) -> tf.Tensor:
-        """
-        Normalize the input tensor globally.
+        mask = tf.not_equal(image, 0.0)
+        num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
 
-        Args:
-            image (tf.Tensor): The input tensor to normalize.
+        def normalize():
+            vals = tf.boolean_mask(image, mask)
+            mean = tf.reduce_mean(vals)
+            std = tf.math.reduce_std(vals)
+            std = tf.where(std == 0.0, 1.0, std)
 
-        Returns:
-            tf.Tensor: The globally normalized tensor.
-        """
-        mask = tf.not_equal(image, 0.0) if self.nonzero else tf.ones_like(image, dtype=tf.bool)
-        image_masked = tf.boolean_mask(image, mask)
-        mean = tf.reduce_mean(image_masked)
-        std = tf.math.reduce_std(image_masked)
-        sub = self.subtrahend if self.subtrahend is not None else mean
-        div = self.divisor if self.divisor is not None else std
-        div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-        return (image - sub) / div
+            sub = mean if self.subtrahend is None else tf.cast(self.subtrahend, image.dtype)
+            div = std if self.divisor is None else tf.cast(self.divisor, image.dtype)
+            div = tf.where(div == 0.0, 1.0, div)
+
+            # normalize only nonzero voxels
+            return tf.where(mask, (image - sub) / div, image)
+
+        def identity():
+            return image
+
+        return tf.cond(num_valid > 0, normalize, identity)
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
         """
