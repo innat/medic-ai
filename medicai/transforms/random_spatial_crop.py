@@ -65,7 +65,7 @@ class RandSpatialCrop:
             raise ValueError(f"min_valid_ratio must be in range [0.0, 1.0], got {min_valid_ratio}")
         if max_attempts < 1:
             raise ValueError(f"max_attempts must be a positive integer, got {max_attempts}")
-        if self.min_valid_ratio > 0.0 and invalid_label is None:
+        if min_valid_ratio > 0.0 and invalid_label is None:
             raise ValueError(
                 "If min_valid_ratio > 0, you must provide an invalid_label (e.g., 0) "
                 "to calculate the ratio of valid pixels."
