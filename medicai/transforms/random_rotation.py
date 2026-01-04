@@ -177,6 +177,7 @@ class RandRotate:
         def apply_rotate():
             rotated_data = inputs.data.copy()
             angle = tf.random.uniform([], -self.factor, self.factor)
+            safety_margin = 0.98
 
             for key in self.keys:
                 tensor = rotated_data[key]
@@ -196,9 +197,12 @@ class RandRotate:
                     H, W = shape[1], shape[2]
 
                     lrr_w, lrr_h = self._get_lrr_size(W, H, angle)
-                    crop_fraction = tf.minimum(
-                        lrr_h / tf.cast(H, tf.float32),
-                        lrr_w / tf.cast(W, tf.float32),
+                    crop_fraction = (
+                        tf.minimum(
+                            lrr_h / tf.cast(H, tf.float32),
+                            lrr_w / tf.cast(W, tf.float32),
+                        )
+                        * safety_margin
                     )
 
                     method = "bilinear" if interp == "BILINEAR" else "nearest"
