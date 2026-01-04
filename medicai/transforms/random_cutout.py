@@ -20,12 +20,11 @@ class RandCutOut:
     Example:
         >>> import tensorflow as tf
         >>> from medicai.transforms import RandCutOut
-        >>>
         >>> # Create a dummy 3D volume with channels
         >>> image = tf.random.uniform((128, 128, 128, 4))
-        >>>
+        >>> label = tf.random.randint(0, 2, (128, 128, 128, 1))
         >>> rand_cutout = RandCutOut(
-        ...     keys=["image"],
+        ...     keys=["image", "label"],
         ...     mask_size=[
         ...         image.shape[1] // 4,
         ...         image.shape[2] // 4,
@@ -37,18 +36,19 @@ class RandCutOut:
         ... )
         >>>
         >>> output = rand_cutout({"image": image})
-        >>> augmented_image = output["image"]
+        >>> augmented_image, label = output["image"], output["label"]
     """
 
     def __init__(
         self,
-        keys: Union[str, Sequence[str]],
-        mask_size: Sequence[int],
-        num_cuts: int,
-        prob: float = 0.5,
-        fill_mode: str = "constant",  # "constant" or "gaussian"
-        fill_value: float = 0.0,
-        gaussian_std: float = 0.1,
+        keys,
+        mask_size,
+        num_cuts,
+        prob=0.5,
+        fill_mode="constant",
+        fill_value=0.0,
+        gaussian_std=0.1,
+        invalid_label=None,
     ):
         """
         Args:
@@ -67,7 +67,11 @@ class RandCutOut:
                 Constant fill value used when fill_mode="constant".
             gaussian_std:
                 Standard deviation for Gaussian noise when fill_mode="gaussian".
+            invalid_label (Optional[int]): An optional label index (e.g., background
+                or ignore index) where applying a cutout is considered technically
+                meaningless or should be avoided.
         """
+
         if isinstance(keys, (list, tuple)):
             if len(keys) != 1:
                 raise ValueError(
@@ -97,109 +101,103 @@ class RandCutOut:
                 '`fill_mode` must be either "gaussian" or "constant". ' f"Got {fill_mode}."
             )
 
-        self.keys = keys
-        self.mask_size = mask_size  # (mh, mw)
+        self.image_key = keys[0]
+        self.label_key = keys[1]
+
+        self.mask_size = mask_size
         self.num_cuts = num_cuts
         self.prob = prob
         self.fill_mode = fill_mode
         self.fill_value = fill_value
         self.gaussian_std = gaussian_std
+        self.invalid_label = invalid_label
 
-    def __call__(self, inputs: Union[Dict[str, tf.Tensor], any]) -> any:
-        """
-        Apply random CutOut to the input TensorBundle or dict.
-
-        Args:
-            inputs:
-                Either a dictionary mapping keys to tensors or a TensorBundle.
-
-        Returns:
-            TensorBundle with CutOut applied probabilistically.
-        """
-
+    def __call__(self, inputs):
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)
 
-        if self.keys not in inputs.data:
-            raise KeyError(f"Key '{self.keys}' not found in input data.")
-
-        rand_val = tf.random.uniform(())
+        image = inputs.data[self.image_key]
+        label = inputs.data[self.label_key]
 
         def apply_cutout():
-            cutout_data = inputs.data.copy()
-            image = cutout_data[self.keys]
+            out = inputs.data.copy()
 
-            # Generate slice-independent mask
-            mask = self._generate_slice_independent_mask(image)
+            mask = self._generate_slice_independent_mask(image, label)
             mask_bool = tf.cast(mask, tf.bool)
 
-            # Determine fill value
             if self.fill_mode == "gaussian":
                 noise = tf.random.normal(
-                    tf.shape(image),
-                    stddev=self.gaussian_std,
-                    dtype=image.dtype,
+                    tf.shape(image), stddev=self.gaussian_std, dtype=image.dtype
                 )
 
-                image_max = tf.reduce_max(image)
-                image_min = tf.reduce_min(image)
-                noise_max = tf.reduce_max(noise)
-                noise_min = tf.reduce_min(noise)
+                im_min = tf.reduce_min(image)
+                im_max = tf.reduce_max(image)
+                nz_min = tf.reduce_min(noise)
+                nz_max = tf.reduce_max(noise)
 
-                fill_value = (image_max - image_min) * (noise - noise_min) / (
-                    noise_max - noise_min + 1e-8
-                ) + image_min
+                fill = (im_max - im_min) * (noise - nz_min) / (nz_max - nz_min + 1e-8) + im_min
             else:
-                fill_value = tf.fill(tf.shape(image), self.fill_value)
+                fill = tf.fill(tf.shape(image), self.fill_value)
 
-            # Apply mask
-            cutout_data[self.keys] = tf.where(mask_bool, image, fill_value)
-            return cutout_data
+            out[self.image_key] = tf.where(mask_bool, image, fill)
+            return out
 
-        def skip_cutout():
+        def skip():
             return inputs.data.copy()
 
-        applied_ops = tf.cond(rand_val <= self.prob, apply_cutout, skip_cutout)
-        return TensorBundle(applied_ops, inputs.meta)
+        data = tf.cond(
+            tf.random.uniform([]) <= self.prob,
+            apply_cutout,
+            skip,
+        )
 
-    def _generate_slice_independent_mask(self, volume: tf.Tensor) -> tf.Tensor:
+        return TensorBundle(data, inputs.meta)
+
+    def _generate_slice_independent_mask(self, volume, label):
         """
-        Generate a slice-wise independent CutOut mask.
-
-        Each depth slice receives cutouts at different spatial locations.
-
-        Args:
-            volume:
-                Input tensor of shape (D, H, W, C) or (D, H, W).
-
-        Returns:
-            Mask tensor of shape (D, H, W, 1) with values in {0, 1}.
+        volume: (D, H, W, C) or (D, H, W)
+        label:  (D, H, W) or (D, H, W, 1)
         """
 
+        # Remove label channel if present
+        if label.shape.rank == 4:
+            label = label[..., 0]
+
+        # Ensure channel-last volume
+        if volume.shape.rank == 3:
+            volume = volume[..., None]
+
+        return self._cutout_mask_single_volume(volume, label)
+
+    def _cutout_mask_single_volume(self, volume, label):
+        """
+        volume: (D, H, W[, C])
+        label:  (D, H, W)
+        """
         shape = tf.shape(volume)
         D, H, W = shape[0], shape[1], shape[2]
         mh, mw = self.mask_size
 
-        # Start with an all-ones mask
-        mask = tf.ones((D, H, W), dtype=tf.float32)
+        cutout_mask = tf.ones((D, H, W), tf.float32)
+
+        if self.invalid_label is None:
+            valid_mask = tf.ones((D, H, W), tf.float32)
+        else:
+            valid_mask = tf.cast(label != self.invalid_label, tf.float32)
 
         for _ in range(self.num_cuts):
-            # Random centers per slice
-            cy = tf.random.uniform([D], 0, H, dtype=tf.int32)
-            cx = tf.random.uniform([D], 0, W, dtype=tf.int32)
+            cy = tf.random.uniform([D], 0, H, tf.int32)
+            cx = tf.random.uniform([D], 0, W, tf.int32)
 
-            y_grid = tf.range(H)
-            x_grid = tf.range(W)
+            y = tf.range(H)[None, :]
+            x = tf.range(W)[None, :]
 
-            y_mask = (y_grid[None, :] >= (cy[:, None] - mh // 2)) & (
-                y_grid[None, :] < (cy[:, None] + mh // 2)
-            )
+            y_mask = (y >= cy[:, None] - mh // 2) & (y < cy[:, None] + mh // 2)
+            x_mask = (x >= cx[:, None] - mw // 2) & (x < cx[:, None] + mw // 2)
 
-            x_mask = (x_grid[None, :] >= (cx[:, None] - mw // 2)) & (
-                x_grid[None, :] < (cx[:, None] + mw // 2)
-            )
+            rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32)
+            rect = rect * valid_mask
 
-            current_cut = y_mask[:, :, None] & x_mask[:, None, :]
-            mask = mask * (1.0 - tf.cast(current_cut, tf.float32))
+            cutout_mask *= 1.0 - rect
 
-        return mask[..., None]
+        return cutout_mask[..., None]
