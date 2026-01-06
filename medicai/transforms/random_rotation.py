@@ -120,7 +120,7 @@ class RandRotate:
         factor=0.1,
         prob=0.8,
         fill_value=0.0,
-        fill_mode="crop",
+        fill_mode="constant",
     ):
         """
         Args:
@@ -133,7 +133,7 @@ class RandRotate:
             fill_value:
                 Fill value used for image rotation.
             fill_mode:
-                Currently only supports "crop" or "none".
+                Currently only supports "crop" or "constant".
         """
 
         # keys handling: must be list/tuple
@@ -143,8 +143,8 @@ class RandRotate:
         if len(keys) not in (1, 2):
             raise ValueError("`keys` must have length 1 or 2.")
 
-        if fill_mode not in ["crop", "none"]:
-            raise ValueError("Currently only fill_mode='crop' is supported. " "Or, `none`.")
+        if fill_mode not in ["crop", "constant"]:
+            raise ValueError("Currently only fill_mode='crop' is supported. " "Or, `constant`.")
 
         self.keys = keys
         self.factor = factor
