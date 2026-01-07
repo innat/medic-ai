@@ -139,7 +139,7 @@ class RandSpatialCrop:
             roi_size = tf.stack(
                 [
                     sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i])
-                    for i in range(len(spatial_shape))
+                    for i in range(3)
                 ]
             )
         else:
@@ -167,7 +167,7 @@ class RandSpatialCrop:
         random_start = tf.stack(
             [
                 tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32)
-                for i in range(len(spatial_shape))
+                for i in range(3)
             ]
         )
         center = random_start + roi_size // 2
