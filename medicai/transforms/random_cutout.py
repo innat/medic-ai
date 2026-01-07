@@ -49,6 +49,7 @@ class RandCutOut:
         fill_value=0.0,
         gaussian_std=0.1,
         invalid_label=None,
+        cutout_mode="volume",
     ):
         """
         Args:
@@ -70,6 +71,15 @@ class RandCutOut:
             invalid_label (Optional[int]): An optional label index (e.g., background
                 or ignore index) where applying a cutout is considered technically
                 meaningless or should be avoided.
+            cutout_mode (str): Controls how cutout regions are applied across the depth
+                dimension.
+                - "slice": Applies cutout independently for each slice along the depth
+                dimension. This behaves like 2D CutOut applied slice-wise and results
+                in different masked regions per slice.
+                - "volume": Applies the same cutout region across all slices, producing
+                a slice-consistent (true 3D) cutout. This preserves volumetric
+                continuity and is generally recommended for 3D segmentation tasks.
+                Default is "volume".
         """
 
         if isinstance(keys, (list, tuple)):
@@ -96,9 +106,15 @@ class RandCutOut:
                 '`fill_mode` must be either "gaussian" or "constant". ' f"Got {fill_mode}."
             )
 
+        if cutout_mode not in {"slice", "volume"}:
+            raise ValueError(
+                '`cutout_mode` must be one of {"slice", "volume"}. ' f"Got {cutout_mode}."
+            )
+
         self.image_key = keys[0]
         self.label_key = keys[1]
 
+        self.cutout_mode = cutout_mode
         self.mask_size = mask_size
         self.num_cuts = num_cuts
         self.prob = prob
@@ -117,7 +133,7 @@ class RandCutOut:
         def apply_cutout():
             out = inputs.data.copy()
 
-            mask = self._generate_slice_independent_mask(image, label)
+            mask = self._generate_cutout_mask(image, label)
             mask_bool = tf.cast(mask, tf.bool)
 
             if self.fill_mode == "gaussian":
@@ -148,7 +164,7 @@ class RandCutOut:
 
         return TensorBundle(data, inputs.meta)
 
-    def _generate_slice_independent_mask(self, volume, label):
+    def _generate_cutout_mask(self, volume, label):
         """
         volume: (D, H, W, C) or (D, H, W)
         label:  (D, H, W) or (D, H, W, 1)
@@ -162,9 +178,12 @@ class RandCutOut:
         if volume.shape.rank == 3:
             volume = volume[..., None]
 
-        return self._cutout_mask_single_volume(volume, label)
+        if self.cutout_mode == "slice":
+            return self._cutout_mask_slice_wise(volume, label)
+        else:
+            return self._cutout_mask_volume_wise(volume, label)
 
-    def _cutout_mask_single_volume(self, volume, label):
+    def _cutout_mask_slice_wise(self, volume, label):
         """
         volume: (D, H, W[, C])
         label:  (D, H, W)
@@ -193,6 +212,36 @@ class RandCutOut:
             rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32)
             rect = rect * valid_mask
 
+            cutout_mask *= 1.0 - rect
+
+        return cutout_mask[..., None]
+
+    def _cutout_mask_volume_wise(self, volume, label):
+        shape = tf.shape(volume)
+        D, H, W = shape[0], shape[1], shape[2]
+        mh, mw = self.mask_size
+
+        cutout_mask = tf.ones((D, H, W), tf.float32)
+
+        if self.invalid_label is None:
+            valid_mask = tf.ones((D, H, W), tf.float32)
+        else:
+            valid_mask = tf.cast(label != self.invalid_label, tf.float32)
+
+        for _ in range(self.num_cuts):
+            cy = tf.random.uniform([], 0, H, tf.int32)
+            cx = tf.random.uniform([], 0, W, tf.int32)
+
+            y = tf.range(H)
+            x = tf.range(W)
+
+            y_mask = (y >= cy - mh // 2) & (y < cy + mh // 2)
+            x_mask = (x >= cx - mw // 2) & (x < cx + mw // 2)
+
+            rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)
+            rect = tf.broadcast_to(rect_hw[None, ...], (D, H, W))
+
+            rect *= valid_mask
             cutout_mask *= 1.0 - rect
 
         return cutout_mask[..., None]

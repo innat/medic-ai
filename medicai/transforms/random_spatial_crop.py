@@ -137,10 +137,7 @@ class RandSpatialCrop:
                 return tf.random.uniform([], minval=min_s, maxval=max_s + 1, dtype=tf.int32)
 
             roi_size = tf.stack(
-                [
-                    sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i])
-                    for i in range(3)
-                ]
+                [sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i]) for i in range(3)]
             )
         else:
             roi_size = tf.where(roi_size > 0, roi_size, spatial_shape)
@@ -165,10 +162,7 @@ class RandSpatialCrop:
 
         # Sample each spatial center coordinate independently
         random_start = tf.stack(
-            [
-                tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32)
-                for i in range(3)
-            ]
+            [tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32) for i in range(3)]
         )
         center = random_start + roi_size // 2
 
