@@ -1,4 +1,7 @@
 from medicai.losses.base import BaseDiceLoss  # noqa: F401
+from medicai.losses.cldice import BinaryCenterlineDiceLoss  # noqa: F401
+from medicai.losses.cldice import CategoricalCenterlineDiceLoss  # noqa: F401
+from medicai.losses.cldice import SparseCenterlineDiceLoss  # noqa: F401
 from medicai.losses.dice import BinaryDiceLoss  # noqa: F401
 from medicai.losses.dice import CategoricalDiceLoss  # noqa: F401
 from medicai.losses.dice import SparseDiceLoss  # noqa: F401
@@ -14,6 +17,3 @@ from medicai.losses.iou import SparseIoULoss  # noqa: F401
 from medicai.losses.tversky import BinaryTverskyLoss  # noqa: F401
 from medicai.losses.tversky import CategoricalTverskyLoss  # noqa: F401
 from medicai.losses.tversky import SparseTverskyLoss  # noqa: F401
-from medicai.losses.cldice import CategoricalineDiceLoss # noqa: F401
-from medicai.losses.cldice import SparseCenterlineDiceLoss # noqa: F401
-from medicai.losses.cldice import BinaryCenterlineDiceLoss # noqa: F401

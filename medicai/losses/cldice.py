@@ -83,7 +83,7 @@ class SparseCenterlineDiceLoss(BaseCenterlineDiceLoss):
         return ops.stack(fg_masks, axis=-1)
 
 
-class CategoricalineDiceLoss(BaseCenterlineDiceLoss):
+class CategoricalCenterlineDiceLoss(BaseCenterlineDiceLoss):
     def __init__(
         self,
         from_logits,
