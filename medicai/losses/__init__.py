@@ -14,3 +14,6 @@ from medicai.losses.iou import SparseIoULoss  # noqa: F401
 from medicai.losses.tversky import BinaryTverskyLoss  # noqa: F401
 from medicai.losses.tversky import CategoricalTverskyLoss  # noqa: F401
 from medicai.losses.tversky import SparseTverskyLoss  # noqa: F401
+from medicai.losses.cldice import CategoricalineDiceLoss # noqa: F401
+from medicai.losses.cldice import SparseCenterlineDiceLoss # noqa: F401
+from medicai.losses.cldice import BinaryCenterlineDiceLoss # noqa: F401
