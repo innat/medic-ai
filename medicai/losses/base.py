@@ -1,7 +1,7 @@
 import keras
 from keras import ops
 
-from medicai.utils import camel_to_snake
+from medicai.utils import camel_to_snake, soft_skeletonize
 
 
 class BaseLoss(keras.losses.Loss):
@@ -367,6 +367,114 @@ class BaseGeneralizedDiceLoss(BaseLoss):
             gld_component,
         )
         return 1.0 - gld_component
+
+
+class BaseCenterlineDiceLoss(BaseLoss):
+    """Centerline Dice (clDice) loss for 2D/3D segmentation tasks.
+
+    This loss measures topological agreement between predicted and ground-truth
+    structures by comparing their soft skeletons. It is particularly well-suited
+    for thin, elongated objects such as vessels, fibers, centerlines, or tubular
+    anatomical structures.
+
+    The loss is computed per class channel and averaged across the selected
+    target classes. For each channel, clDice is defined as the harmonic mean of:
+
+    - Topology Precision (T_per): how much of the predicted skeleton lies inside
+      the ground-truth volume.
+    - Topology Sensitivity (T_sens): how much of the ground-truth skeleton is
+      recovered by the predicted volume.
+
+    Skeletons are computed using differentiable morphological operations
+    ("soft skeletonization").
+
+    from_logits : bool
+        Whether the model outputs logits. If True, subclasses are expected to
+        apply the appropriate activation function (sigmoid or softmax).
+    num_classes : int
+        Number of semantic classes in the segmentation task.
+    iters : int, default=50
+        Number of iterations used for soft skeletonization. Higher values produce
+        more complete skeletons but increase computational cost.
+    target_class_ids : int or list[int], optional
+        Class indices to include in the loss computation. If None, all classes
+        are used. This is commonly used to exclude background classes.
+    ignore_class_ids : int or list[int], optional
+        Class indices to ignore entirely when computing the loss. Voxels belonging
+        to these classes are masked out before loss computation.
+    memory_efficient_skeleton : bool, default=True
+        If True, gradients are stopped through the predicted skeleton to reduce
+        memory usage and computational cost. This trades exact gradient flow
+        through skeletonization for improved training stability and lower memory
+        consumption, which is often necessary for large 3D volumes.
+    smooth : float, default=1e-7
+        Smoothing constant added to numerators and denominators to avoid division
+        by zero.
+    reduction : str, default="mean"
+        Reduction method applied by the base Keras loss class.
+
+    Notes
+    -----
+    - Ground-truth skeletons are always computed with gradients disabled.
+    - When `memory_efficient_skeleton=True`, predicted skeletons are also
+      detached from the computation graph.
+    - This loss assumes channel-last tensors with shape:
+      (batch, [depth], height, width, channels).
+    """
+
+    def __init__(
+        self,
+        from_logits,
+        num_classes,
+        iters=50,
+        target_class_ids=None,
+        ignore_class_ids=None,
+        memory_efficient_skeleton=True,
+        smooth=1e-7,
+        reduction="mean",
+        name=None,
+        **kwargs,
+    ):
+        super().__init__(
+            from_logits=from_logits,
+            num_classes=num_classes,
+            target_class_ids=target_class_ids,
+            ignore_class_ids=ignore_class_ids,
+            smooth=smooth,
+            reduction=reduction,
+            name=name or "centerline_dice_loss",
+            **kwargs,
+        )
+        self.iters = iters
+        self.memory_efficient_skeleton = memory_efficient_skeleton
+
+    def compute_loss(self, y_true, y_pred, mask):
+        y_true = ops.convert_to_tensor(y_true)
+        y_pred = ops.convert_to_tensor(y_pred)
+        spatial_dims = list(range(1, len(y_pred.shape) - 1))
+
+        yt = y_true * mask
+        yp = y_pred * mask
+
+        skel_true = ops.stop_gradient(soft_skeletonize(yt, self.iters))
+        skel_pred = soft_skeletonize(yp, self.iters)
+
+        if self.memory_efficient_skeleton:
+            skel_pred = ops.stop_gradient(skel_pred)
+
+        # Tper (Topology Precision): Pred Skel on True Volume
+        t_per = (ops.sum(skel_pred * yt, axis=spatial_dims) + self.smooth) / (
+            ops.sum(skel_pred, axis=spatial_dims) + self.smooth
+        )
+
+        # Tsens (Topology Sensitivity): True Skel on Pred Volume
+        t_sens = (ops.sum(skel_true * yp, axis=spatial_dims) + self.smooth) / (
+            ops.sum(skel_true, axis=spatial_dims) + self.smooth
+        )
+
+        cl_dice = (2.0 * t_per * t_sens) / (t_per + t_sens + self.smooth)
+
+        return 1.0 - cl_dice
 
 
 BASE_COMMON_ARGS = """
