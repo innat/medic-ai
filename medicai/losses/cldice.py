@@ -74,13 +74,8 @@ class SparseCenterlineDiceLoss(BaseCenterlineDiceLoss):
         if y_true.shape[-1] == 1:
             y_true = ops.squeeze(y_true, axis=-1)
 
-        y = ops.cast(y_true, "int32")
-        fg_masks = []
-        for c in range(self.num_classes):
-            fg = ops.cast(ops.equal(y, c), "float32")
-            fg_masks.append(fg)
-
-        return ops.stack(fg_masks, axis=-1)
+        y_true = ops.cast(y_true, "int32")
+        return ops.one_hot(y_true, self.num_classes, dtype="float32")
 
 
 class CategoricalCenterlineDiceLoss(BaseCenterlineDiceLoss):

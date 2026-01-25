@@ -453,37 +453,28 @@ class BaseCenterlineDiceLoss(BaseLoss):
         y_pred = ops.convert_to_tensor(y_pred)
         spatial_dims = list(range(1, len(y_pred.shape) - 1))
 
-        # compute clDice per channel
-        cl_dice_sum = 0.0
-        num_channels = y_pred.shape[-1]
+        yt = y_true * mask
+        yp = y_pred * mask
 
-        for i in range(num_channels):
-            yt = y_true[..., i : i + 1] * mask[..., i : i + 1]
-            yp = y_pred[..., i : i + 1] * mask[..., i : i + 1]
+        skel_true = ops.stop_gradient(soft_skeletonize(yt, self.iters))
+        skel_pred = soft_skeletonize(yp, self.iters)
 
-            # Soft Skeletons
-            skel_true = ops.stop_gradient(soft_skeletonize(yt, self.iters))
-            skel_pred = soft_skeletonize(yp, self.iters)
+        if self.memory_efficient_skeleton:
+            skel_pred = ops.stop_gradient(skel_pred)
 
-            if self.memory_efficient_skeleton:
-                skel_pred = ops.stop_gradient(skel_pred)
+        # Tper (Topology Precision): Pred Skel on True Volume
+        t_per = (ops.sum(skel_pred * yt, axis=spatial_dims) + self.smooth) / (
+            ops.sum(skel_pred, axis=spatial_dims) + self.smooth
+        )
 
-            # Tper (Topology Precision): Pred Skel on True Volume
-            t_per_num = ops.sum(skel_pred * yt, axis=spatial_dims) + self.smooth
-            t_per_den = ops.sum(skel_pred, axis=spatial_dims) + self.smooth
-            t_per = t_per_num / t_per_den
+        # Tsens (Topology Sensitivity): True Skel on Pred Volume
+        t_sens = (ops.sum(skel_true * yp, axis=spatial_dims) + self.smooth) / (
+            ops.sum(skel_true, axis=spatial_dims) + self.smooth
+        )
 
-            # Tsens (Topology Sensitivity): True Skel on Pred Volume
-            t_sens_num = ops.sum(skel_true * yp, axis=spatial_dims) + self.smooth
-            t_sens_den = ops.sum(skel_true, axis=spatial_dims) + self.smooth
-            t_sens = t_sens_num / t_sens_den
+        cl_dice = (2.0 * t_per * t_sens) / (t_per + t_sens + self.smooth)
 
-            # Harmonic Mean
-            cl_dice = (2.0 * t_per * t_sens) / (t_per + t_sens + self.smooth)
-            cl_dice_sum += cl_dice
-
-        # Average over selected channels
-        return 1.0 - (cl_dice_sum / float(num_channels))
+        return 1.0 - cl_dice
 
 
 BASE_COMMON_ARGS = """
