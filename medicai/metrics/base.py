@@ -182,9 +182,15 @@ class BaseDiceMetric(Metric):
         # And if all pixels are ignored in a sample, we should ignore that sample entirely
         total_pixels_per_sample = ops.prod(ops.shape(y_true_processed)[1:-1])
         total_pixels_per_sample = ops.cast(total_pixels_per_sample, y_true.dtype)
-        all_ignored_mask = ops.all(
-            ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
-        )  # [B]
+
+        # # `torch` doesn't support multiple axis reduction.
+        # all_ignored_mask = ops.all(
+        #     ops.all(y_true_processed == 0, axis=-1), axis=spatial_dims
+        # )  # [B]
+        batch_size = ops.shape(y_true_processed)[0]
+        flat = ops.reshape(y_true_processed == 0, (batch_size, -1))
+        all_ignored_mask = ops.all(flat, axis=-1) 
+
         all_ignored_mask = ops.expand_dims(all_ignored_mask, -1)  # [B, 1]
         all_ignored_mask = ops.tile(all_ignored_mask, [1, gt_sum.shape[-1]])  # [B, C]
 
