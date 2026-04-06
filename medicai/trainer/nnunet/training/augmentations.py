@@ -1,8 +1,7 @@
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
 
 import keras
-import tensorflow as tf
+from keras import ops
 
 from medicai.transforms import RandCropByPosNegLabel, RandFlip, RandRotate
 
@@ -18,27 +17,29 @@ class AugmentationConfig:
     p_noise: float = 0.1
     p_mirror: float = 0.5
     rotation_angle_range: float = 0.26  # ~15 degrees in rads
-    scale_range: Tuple[float, float] = (0.85, 1.15)
+    scale_range = (0.85, 1.15)
     elastic_alpha: float = 300.0
     elastic_sigma: float = 14.0
-    gamma_range: Tuple[float, float] = (0.7, 1.5)
-    noise_variance: Tuple[float, float] = (0.0, 0.1)
-    mirror_axes: Tuple[int, ...] = (0, 1, 2)
+    gamma_range = (0.7, 1.5)
+    noise_variance = (0.0, 0.1)
+    mirror_axes = (0, 1, 2)
 
 
 class AugmentationPipeline:
     """
-    Applies a configurable chain of augmentations via `medicai.transforms`.
-    Designed to operate natively on GPU/TPU with TensorFlow.
+    Applies a configurable chain of augmentations via ``medicai.transforms``.
+    Backend-agnostic: uses ``keras.ops`` instead of raw TF calls.
     """
 
     def __init__(
         self,
-        config: AugmentationConfig,
-        patch_size: Optional[Sequence[int]] = None,
-        use_fg_oversampling: bool = True,
-        seed: Optional[int] = None,
+        config=None,
+        patch_size=None,
+        use_fg_oversampling=True,
+        seed=None,
     ):
+        if config is None:
+            config = AugmentationConfig()
         self.config = config
         self.patch_size = patch_size
 
@@ -65,18 +66,19 @@ class AugmentationPipeline:
 
     def __call__(
         self,
-        image: tf.Tensor,
-        label: Optional[tf.Tensor] = None,
-        patch_size: Optional[Sequence[int]] = None,
-    ) -> Tuple[tf.Tensor, Optional[tf.Tensor]]:
+        image,
+        label=None,
+        patch_size=None,
+    ):
 
         # Determine 2D vs 3D based on number of spatial axes.
         # image shape: [D, H, W, C] (3D) or [H, W, C] (2D)
         is_3d = len(image.shape) == 4
 
-        tensor_dict = {"image": tf.convert_to_tensor(image, dtype=tf.float32)}
+        # Convert to backend tensors
+        tensor_dict = {"image": ops.convert_to_tensor(image, dtype="float32")}
         if label is not None:
-            tensor_dict["label"] = tf.convert_to_tensor(label, dtype=tf.float32)
+            tensor_dict["label"] = ops.convert_to_tensor(label, dtype="float32")
 
         # 1. Spatial Crop
         if hasattr(self.crop, "roi_size") and patch_size is not None:
@@ -90,33 +92,25 @@ class AugmentationPipeline:
 
         tensor_dict = self.crop(tensor_dict).data
 
-        # 2. Medicai Flips
+        # 2. Random Flips
         tensor_dict = self.flip(tensor_dict).data
         tensor_dict = self.flip2(tensor_dict).data
         if is_3d:
             tensor_dict = self.flip3(tensor_dict).data
 
-        # 3. Medicai Rotation
-        # Note: RandRotate is written for 3D slicing, fallback to Keras layers for 2D
+        # 3. Random Rotation
         if is_3d:
             tensor_dict = self.rotate(tensor_dict).data
         else:
-            # Placeholder for 2D custom rotation utilizing Keras CV / core ops layer
-            rotated = keras.layers.RandomRotation(self.config.rotation_angle_range)(
-                tf.expand_dims(tensor_dict["image"], 0)
-            )
-            tensor_dict["image"] = tf.squeeze(rotated, 0)
-            if label is not None:
-                rotated_lbl = keras.layers.RandomRotation(
-                    self.config.rotation_angle_range, interpolation="nearest"
-                )(tf.expand_dims(tensor_dict["label"], 0))
-                tensor_dict["label"] = tf.squeeze(rotated_lbl, 0)
+            # 2D rotation using the same RandRotate with consistent
+            # randomness for both image and label
+            tensor_dict = self.rotate(tensor_dict).data
 
         img_out = tensor_dict["image"]
 
         if label is not None:
-            # Nearest neighbor casts backward
-            lbl_out = tf.cast(tf.math.round(tensor_dict["label"]), tf.int64)
+            # Nearest neighbor cast backward
+            lbl_out = ops.cast(ops.round(tensor_dict["label"]), "int64")
             return img_out, lbl_out
 
         return img_out, None

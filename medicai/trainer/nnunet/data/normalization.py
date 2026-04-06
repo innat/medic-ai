@@ -81,6 +81,11 @@ class MRINormalizer(BaseNormalizer):
         ----------
         image : float32 array [D, H, W] or [H, W]
         mask  : optional boolean mask; if None, non-zero pixels are used
+
+        Notes
+        -----
+        When ``nonzero_only=True`` and all foreground voxels are zero,
+        the image is returned unchanged (un-normalized).
         """
         image = image.astype(np.float32)
 

@@ -99,6 +99,15 @@ def ensure_dir(path):
 
 
 def get_case_id(path):
+    """
+    Extract case identifier from a file path by removing the extension.
+
+    Handles: .nii.gz, .nii, .npz, .png, .jpg, .jpeg, .tif, .tiff, .dcm
+
+    Note: Unlike ``normalize_case_id()`` in cross_validation.py, this does NOT
+    strip modality suffixes (e.g., ``_0000``). Use this for file identification;
+    use ``normalize_case_id`` for grouping multi-modal files by case.
+    """
     name = Path(path).name
     for suffix in (
         ".nii.gz",
@@ -240,7 +249,7 @@ def load_medical_image(path, ensure_channel_last=True):
             spacing = tuple(float(s) for s in dcm.PixelSpacing)
         if hasattr(dcm, "SliceThickness") and data.ndim >= 3:
             base = list(spacing) if spacing is not None else [1.0, 1.0]
-            spacing = (float(dcm.SliceThickness),) + tuple(base)
+            spacing = (float(dcm.SliceThickness), *base)
         return data, np.eye(4), dcm, spacing
 
     if path_str.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):

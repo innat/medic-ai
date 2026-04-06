@@ -103,7 +103,7 @@ def _collect_multilabel_class_stats(
         return counts, total_voxels
 
     class_ids = list(target_class_ids) if target_class_ids else list(range(1, len(label_paths) + 1))
-    for class_id, label_path in zip(class_ids, label_paths):
+    for class_id, label_path in zip(class_ids, label_paths, strict=True):
         label_data, _, _, label_spacing = load_medical_image(
             label_path,
             ensure_channel_last=ensure_channel_last,
@@ -289,8 +289,8 @@ def fingerprint_dataset(
     median_size = [int(np.median([sz[i] for sz in sizes])) for i in range(num_dims)]
 
     if num_dims == 2:
-        median_spacing = [1.0] + median_spacing
-        median_size = [1] + median_size
+        median_spacing = [1.0, *median_spacing]
+        median_size = [1, *median_size]
 
     anisotropy_ratio = max(median_spacing) / max(min(median_spacing), 1e-8)
     is_anisotropic = anisotropy_ratio > 3.0

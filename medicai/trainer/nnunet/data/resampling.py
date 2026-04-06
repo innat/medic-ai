@@ -33,7 +33,7 @@ def compute_zoom_factors(
     assert len(original_spacing) == len(
         target_spacing
     ), f"Spacing length mismatch: {len(original_spacing)} vs {len(target_spacing)}"
-    return tuple(float(o) / float(t) for o, t in zip(original_spacing, target_spacing))
+    return tuple(float(o) / float(t) for o, t in zip(original_spacing, target_spacing, strict=True))
 
 
 def resample_image(
@@ -42,17 +42,19 @@ def resample_image(
     target_spacing,
     order=3,
     anti_aliasing=True,
+    ensure_channel_last=True,
 ):
     """
     Resample *image* to *target_spacing*.
 
     Parameters
     ----------
-    image            : ndarray shape [D, H, W] or [C, D, H, W]
-    original_spacing : sequence of float, length 3  (z, y, x) in mm
-    target_spacing   : sequence of float, length 3  (z, y, x) in mm
-    order            : interpolation order (3 = cubic, 0 = nearest)
-    anti_aliasing    : apply Gaussian pre-filter when downsampling (order >= 1)
+    image              : ndarray shape [D, H, W], [D, H, W, C], or [C, D, H, W]
+    original_spacing   : sequence of float, length 3  (z, y, x) in mm
+    target_spacing     : sequence of float, length 3  (z, y, x) in mm
+    order              : interpolation order (3 = cubic, 0 = nearest)
+    anti_aliasing      : apply Gaussian pre-filter when downsampling (order >= 1)
+    ensure_channel_last: if True, 4D is [D,H,W,C]; if False, [C,D,H,W]
 
     Returns
     -------
@@ -64,11 +66,21 @@ def resample_image(
         # [D, H, W]
         return _zoom_3d(image, factors, order, anti_aliasing)
     elif image.ndim == 4:
-        # [C, D, H, W] — resample each channel independently
-        resampled_channels = [
-            _zoom_3d(image[c], factors, order, anti_aliasing) for c in range(image.shape[0])
-        ]
-        return np.stack(resampled_channels, axis=0)
+        # Multi-channel — resample each channel independently
+        if ensure_channel_last:
+            # [D, H, W, C]
+            resampled_channels = [
+                _zoom_3d(image[..., c], factors, order, anti_aliasing)
+                for c in range(image.shape[-1])
+            ]
+            return np.stack(resampled_channels, axis=-1)
+        else:
+            # [C, D, H, W]
+            resampled_channels = [
+                _zoom_3d(image[c], factors, order, anti_aliasing)
+                for c in range(image.shape[0])
+            ]
+            return np.stack(resampled_channels, axis=0)
     else:
         raise ValueError(f"Expected 3-D or 4-D array, got shape {image.shape}")
 
@@ -102,15 +114,17 @@ def resample_image_2d(
     original_spacing,
     target_spacing,
     order=3,
+    ensure_channel_last=True,
 ):
     """
-    Resample a 2-D image [H, W] or [C, H, W].
+    Resample a 2-D image [H, W], [H, W, C], or [C, H, W].
 
     Parameters
     ----------
-    image            : ndarray shape [H, W] or [C, H, W]
-    original_spacing : (dy, dx) in mm
-    target_spacing   : (dy, dx) in mm
+    image              : ndarray shape [H, W], [H, W, C], or [C, H, W]
+    original_spacing   : (dy, dx) in mm
+    target_spacing     : (dy, dx) in mm
+    ensure_channel_last: if True, 3D is [H,W,C]; if False, [C,H,W]
     """
     assert len(original_spacing) == 2 and len(target_spacing) == 2
     factors = compute_zoom_factors(original_spacing, target_spacing)
@@ -118,13 +132,20 @@ def resample_image_2d(
     if image.ndim == 2:
         return zoom(image.astype(np.float32), factors, order=order, mode="nearest")
     elif image.ndim == 3:
-        return np.stack(
-            [
+        if ensure_channel_last:
+            # [H, W, C]
+            resampled = [
+                zoom(image[..., c].astype(np.float32), factors, order=order, mode="nearest")
+                for c in range(image.shape[-1])
+            ]
+            return np.stack(resampled, axis=-1)
+        else:
+            # [C, H, W]
+            resampled = [
                 zoom(image[c].astype(np.float32), factors, order=order, mode="nearest")
                 for c in range(image.shape[0])
-            ],
-            axis=0,
-        )
+            ]
+            return np.stack(resampled, axis=0)
     else:
         raise ValueError(f"Expected 2-D or 3-D array for 2D resampling, got {image.shape}")
 
@@ -164,4 +185,4 @@ def compute_new_shape(
 ):
     """Return the spatial shape after resampling (rounded to int)."""
     factors = compute_zoom_factors(original_spacing, target_spacing)
-    return tuple(max(1, int(round(s * f))) for s, f in zip(original_shape, factors))
+    return tuple(max(1, round(s * f)) for s, f in zip(original_shape, factors, strict=True))

@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+
 
 import numpy as np
 from tqdm import tqdm
@@ -101,11 +103,15 @@ def crop_to_nonzero(
 
     if image.ndim == 4:
         shape = image.shape[:3] if ensure_channel_last else image.shape[1:]
+    elif image.ndim == 3:
+        # Could be 3D spatial [D,H,W] or 2D+channel [H,W,C] / [C,H,W]
+        # Use bbox dimensionality from compute_nonzero_bbox to decide
+        shape = image.shape
     else:
         shape = image.shape[:2]
 
     padded_bbox = tuple(
-        slice(max(0, s.start - pad), min(sh, s.stop + pad)) for s, sh in zip(bbox, shape)
+        slice(max(0, s.start - pad), min(sh, s.stop + pad)) for s, sh in zip(bbox, shape, strict=True)
     )
 
     if image.ndim == len(shape):
@@ -513,12 +519,10 @@ def preprocess_dataset(
     plan,
     output_dir,
     configuration="3d_fullres",
-    num_workers=1,
     max_cases=None,
     manifest_file=None,
     ensure_channel_last=True,
 ):
-    del num_workers
 
     output_dir = Path(output_dir) / configuration
     properties_dir = output_dir / plan.preprocessed_properties_dirname
