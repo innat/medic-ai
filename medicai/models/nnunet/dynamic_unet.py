@@ -1,20 +1,3 @@
-"""
-medicai/models/nnunet/dynamic_unet.py
-=====================================
-Factory that instantiates a UNet directly from an nnUNetPlan / NetworkConfig.
-
-Usage
------
-::
-
-    from medicai.trainer.nnunet.utils.config import nnUNetPlan
-    from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
-
-    plan = nnUNetPlan.from_json("nnunet_plans.json")
-    model = build_unet_from_plan(plan, configuration="3d_fullres")
-    model.summary()
-"""
-
 from .unet import UNet
 from medicai.trainer.nnunet.utils.config import NetworkConfig, nnUNetPlan
 
@@ -79,10 +62,6 @@ def build_unet_from_config(cfg):
         output_activation=cfg.output_activation,
     )
 
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
 
 def _derive_conv_kernels(
     pool_op_kernel_sizes,

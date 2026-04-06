@@ -1,18 +1,10 @@
-"""
-High-level API for the self-configuring nnU-Net workflow.
-"""
-
-from __future__ import annotations
-
-import logging
+import json
 import random
 import subprocess
 from pathlib import Path
 
 import keras
 import numpy as np
-
-logger = logging.getLogger(__name__)
 
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
 from medicai.trainer.nnunet.cross_validation import (
@@ -66,8 +58,8 @@ def _auto_detect_gpu_memory(default=8.0):
         memories = [float(x) / 1024.0 for x in result.stdout.strip().split("\n") if x.strip()]
         if memories:
             return min(memories)
-    except Exception as e:
-        logger.debug("GPU memory auto-detection failed, using default %.1fGB: %s", default, e)
+    except Exception:
+        pass
     return float(default)
 
 

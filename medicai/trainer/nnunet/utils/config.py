@@ -1,9 +1,3 @@
-"""
-Configuration classes and JSON helpers for the nnU-Net pipeline.
-"""
-
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

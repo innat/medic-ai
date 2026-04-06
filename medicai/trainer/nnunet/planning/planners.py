@@ -1,4 +1,4 @@
-from __future__ import annotations
+from collections.abc import Sequence
 
 """
 nnunet_keras/planning/patch_size_planner.py
@@ -26,7 +26,7 @@ def compute_patch_size(
     max_patch_voxels: int = 128 * 128 * 128,
     min_patch_size: int = 32,
     anisotropy_threshold: float = 3.0,
-) -> List[int]:
+) -> list[int]:
     """
     Compute the patch size for a U-Net given median image shape.
 
@@ -50,7 +50,7 @@ def compute_patch_size(
 
     Returns
     -------
-    List[int] patch size [D, H, W]
+    list[int] patch size [D, H, W]
     """
     factor = 2**n_pooling
     median_shape = list(median_shape)
@@ -89,7 +89,7 @@ def compute_patch_size(
             break
 
     # 4. Clamp to median shape (don't exceed actual image)
-    patch = [min(p, _round_to_multiple(s, factor)) for p, s in zip(patch, median_shape)]
+    patch = [min(p, _round_to_multiple(s, factor)) for p, s in zip(patch, median_shape, strict=True)]
     patch = [max(p, factor) for p in patch]
 
     return patch
@@ -119,7 +119,7 @@ def compute_pool_op_kernel_sizes(
     n_pooling: int,
     spacing: Sequence[float],
     anisotropy_threshold: float = 3.0,
-) -> List[List[int]]:
+) -> list[list[int]]:
     """
     Compute per-stage pooling kernel sizes.
 
@@ -160,7 +160,7 @@ def compute_anisotropic_kernel_sizes(
     n_pooling: int,
     spacing: Sequence[float],
     anisotropy_threshold: float = 3.0,
-) -> List[List[int]]:
+) -> list[list[int]]:
     """
     Compute convolution kernel sizes per stage, using 1×3×3 for anisotropic
     axes (thick slices) and 3×3×3 otherwise.
@@ -187,7 +187,7 @@ def _round_to_multiple(value: int, multiple: int) -> int:
     return math.ceil(value / multiple) * multiple
 
 
-def _volume(patch: List[int]) -> int:
+def _volume(patch: list[int]) -> int:
     result = 1
     for d in patch:
         result *= d
@@ -195,10 +195,10 @@ def _volume(patch: List[int]) -> int:
 
 
 def _get_shrink_order(
-    patch: List[int],
-    spacing: List[float],
-    is_anisotropic: List[bool],
-) -> List[int]:
+    patch: list[int],
+    spacing: list[float],
+    is_anisotropic: list[bool],
+) -> list[int]:
     """
     Return axis indices in the order we should try to shrink.
 
@@ -411,7 +411,7 @@ def _resolve_output_activation(task_type: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _compute_target_spacing(fingerprint: DatasetFingerprint) -> List[float]:
+def _compute_target_spacing(fingerprint: DatasetFingerprint) -> list[float]:
     """
     Compute target spacing following nnU-Net rules:
       - For isotropic data: median spacing across all cases
@@ -445,7 +445,7 @@ def _compute_target_spacing(fingerprint: DatasetFingerprint) -> List[float]:
 
 def _plan_3d(
     fingerprint: DatasetFingerprint,
-    target_spacing: List[float],
+    target_spacing: list[float],
     max_voxels: int = MAX_VOXELS_3D,
     gpu_gb: float = DEFAULT_GPU_GB,
     mixed_precision: bool = True,
@@ -518,7 +518,7 @@ def _plan_3d(
 
 def _plan_2d(
     fingerprint: DatasetFingerprint,
-    target_spacing: List[float],
+    target_spacing: list[float],
     gpu_gb: float = DEFAULT_GPU_GB,
     mixed_precision: bool = True,
 ) -> NetworkConfig:
@@ -535,7 +535,7 @@ def _plan_2d(
 
     # Recompute 2D shape at target in-plane spacing
     factors_2d = compute_zoom_factors(original_spacing_2d, target_spacing_2d)
-    median_shape_2d = [max(1, int(round(s * f))) for s, f in zip(median_shape_2d, factors_2d)]
+    median_shape_2d = [max(1, int(round(s * f))) for s, f in zip(median_shape_2d, factors_2d, strict=True)]
 
     n_pooling = compute_n_pooling(median_shape_2d)
     patch_2d = compute_patch_size(
@@ -580,7 +580,7 @@ def _plan_2d(
 # ---------------------------------------------------------------------------
 
 
-def _select_normalization_schemes(fingerprint: DatasetFingerprint) -> List[str]:
+def _select_normalization_schemes(fingerprint: DatasetFingerprint) -> list[str]:
     """
     Choose the normalization scheme per modality.
       - CT modalities → 'ct' (global clip + z-score)
@@ -624,7 +624,7 @@ class nnUNetPlanner:
         self.gpu_gb = gpu_memory_gb
         self.mixed_precision = mixed_precision
 
-    def plan(self, output_path: Optional[Union[str, Path]] = None) -> nnUNetPlan:
+    def plan(self, output_path: str | Path | None = None) -> nnUNetPlan:
         """Run the full planning pipeline."""
         fp = self.fp
 
@@ -743,11 +743,11 @@ class nnUNetPlannerResEncL(nnUNetPlanner):
 
 def _resampled_median_shape(
     fingerprint: DatasetFingerprint,
-    target_spacing: List[float],
-) -> List[int]:
+    target_spacing: list[float],
+) -> list[int]:
     """Compute the median image shape after resampling to *target_spacing*."""
     factors = compute_zoom_factors(fingerprint.median_spacing, target_spacing)
-    new_shape = [max(1, int(round(s * f))) for s, f in zip(fingerprint.median_size, factors)]
+    new_shape = [max(1, int(round(s * f))) for s, f in zip(fingerprint.median_size, factors, strict=True)]
     return new_shape
 
 
@@ -756,6 +756,6 @@ def compute_new_shape_after_resample(
     original_shape: Sequence[int],
     original_spacing: Sequence[float],
     target_spacing: Sequence[float],
-) -> List[int]:
+) -> list[int]:
     factors = compute_zoom_factors(original_spacing, target_spacing)
-    return [max(1, int(round(s * f))) for s, f in zip(original_shape, factors)]
+    return [max(1, int(round(s * f))) for s, f in zip(original_shape, factors, strict=True)]

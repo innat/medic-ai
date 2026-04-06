@@ -2,8 +2,6 @@
 I/O helpers for medical image formats and layout normalization.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import nibabel as nib
