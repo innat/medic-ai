@@ -1,26 +1,7 @@
-"""
-medicai/models/nnunet/blocks.py
-==============================
-Backend-agnostic building blocks for the U-Net architecture.
-
-All layers use keras.layers / keras.ops exclusively — no backend-specific ops.
-
-Blocks
-------
-ConvNormAct      : Conv (2D or 3D) -> InstanceNorm -> LeakyReLU
-DoubleConvBlock  : Two stacked ConvNormAct (the basic U-Net unit)
-DownBlock        : Strided conv downsampling + DoubleConvBlock
-UpBlock          : Transposed conv upsampling -> concat skip -> DoubleConvBlock
-"""
-
 import keras
 from keras import layers
 from medicai.utils.model_utils import get_conv_layer, get_norm_layer
 
-
-# ---------------------------------------------------------------------------
-# ConvNormAct
-# ---------------------------------------------------------------------------
 
 class ConvNormAct(keras.Layer):
     """
@@ -91,10 +72,6 @@ class ConvNormAct(keras.Layer):
         return config
 
 
-# ---------------------------------------------------------------------------
-# DoubleConvBlock
-# ---------------------------------------------------------------------------
-
 class DoubleConvBlock(keras.Layer):
     """Two consecutive ConvNormAct layers. Standard U-Net residual unit."""
 
@@ -133,10 +110,6 @@ class DoubleConvBlock(keras.Layer):
         )
         return cfg
 
-
-# ---------------------------------------------------------------------------
-# DownBlock
-# ---------------------------------------------------------------------------
 
 class DownBlock(keras.Layer):
     """
@@ -196,10 +169,6 @@ class DownBlock(keras.Layer):
         return cfg
 
 
-# ---------------------------------------------------------------------------
-# UpBlock
-# ---------------------------------------------------------------------------
-
 class UpBlock(keras.Layer):
     """
     Decoder stage: transposed conv (upsample) -> concat skip -> DoubleConvBlock.
@@ -258,10 +227,6 @@ class UpBlock(keras.Layer):
         )
         return cfg
 
-
-# ---------------------------------------------------------------------------
-# Segmentation Head
-# ---------------------------------------------------------------------------
 
 class SegmentationHead(keras.Layer):
     """1x1 (or 1x1x1) convolution -> softmax output."""

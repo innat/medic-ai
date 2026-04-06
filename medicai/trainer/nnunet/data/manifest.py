@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 _VALID_TASK_TYPES = {"binary", "multi-class", "multi-label"}
@@ -20,15 +19,15 @@ def _as_path_list(value):
 @dataclass
 class ManifestItem:
     case_id: str
-    images: List[str]
-    labels: Optional[Union[str, List[str]]] = None
-    spacing: Optional[List[float]] = None
-    task_type: Optional[str] = None
-    image_layout: Optional[str] = None
-    label_layout: Optional[str] = None
-    label_output: Optional[str] = None
-    regions: Optional[List[List[int]]] = None
-    meta: Dict[str, Any] = field(default_factory=dict)
+    images: list[str]
+    labels: str | list[str] | None = None
+    spacing: list[float] | None = None
+    task_type: str | None = None
+    image_layout: str | None = None
+    label_layout: str | None = None
+    label_output: str | None = None
+    regions: list[list[int]] | None = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 class DatasetManifest:
@@ -38,8 +37,8 @@ class DatasetManifest:
 
     def __init__(
         self,
-        items: List[ManifestItem],
-        global_meta: Optional[Dict[str, Any]] = None,
+        items: list[ManifestItem],
+        global_meta: dict[str, Any] | None = None,
     ):
         self.items = items
         self.global_meta = global_meta or {}
@@ -97,7 +96,7 @@ class DatasetManifest:
         return [[int(v) for v in region] for region in self.global_meta.get("regions", [])]
 
     @classmethod
-    def from_json(cls, manifest_path: Union[str, Path]):
+    def from_json(cls, manifest_path: str | Path):
         manifest_path = Path(manifest_path)
         with open(manifest_path, "r", encoding="utf-8") as f:
             data = json.load(f)

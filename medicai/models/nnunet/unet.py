@@ -1,34 +1,3 @@
-"""
-medicai/models/nnunet/unet.py
-============================
-Static 2D / 3D U-Net with deep supervision.
-
-Architecture
-------------
-                Input [B, *spatial, C]
-                  │
-            Stem conv
-                  │
-        ┌────────────────────────────┐
-        │  Encoder (n_pooling stages)│
-        │    DownBlock×n             │
-        └────────────────────────────┘
-                  │
-             Bottleneck
-                  │
-        ┌────────────────────────────┐
-        │  Decoder (n_pooling stages)│
-        │    UpBlock×n               │
-        └────────────────────────────┘
-                  │
-             SegHead (per decoder level for deep supervision)
-
-Deep supervision
-----------------
-During training  : returns list of softmax outputs [full, 1/2, 1/4, …]
-During inference : returns only the full-resolution output
-"""
-
 import keras
 from keras import layers, ops
 
@@ -39,7 +8,6 @@ from .blocks import (
     SegmentationHead,
     UpBlock,
 )
-from medicai.layers.resize import ResizingND
 
 
 class UNet(keras.Model):
@@ -147,7 +115,6 @@ class UNet(keras.Model):
 
         # ---- Segmentation heads (one per decoder level for deep supervision)
         self.seg_heads = []
-        self.resizers = []
         for stage in range(n_pooling):
             head = SegmentationHead(
                 n_classes=n_classes,
@@ -156,17 +123,6 @@ class UNet(keras.Model):
                 name=f"seg_head_{stage}",
             )
             self.seg_heads.append(head)
-
-            # Resizers for deep supervision (aux outputs → full resolution)
-            if stage > 0:
-                resizer = ResizingND(
-                    scale_factor=1.0,  # placeholder; dynamic resize in call()
-                    interpolation="bilinear" if spatial_dims == 2 else "trilinear",
-                    name=f"aux_resizer_{stage}",
-                )
-                self.resizers.append(resizer)
-            else:
-                self.resizers.append(None)
 
     # ------------------------------------------------------------------
     def call(self, x, training=False):
@@ -245,9 +201,6 @@ class UNet(keras.Model):
         return config
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _make_filter_schedule(
     base_filters,

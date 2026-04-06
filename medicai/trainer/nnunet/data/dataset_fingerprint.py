@@ -203,12 +203,19 @@ def fingerprint_dataset(
             case_spatial_dims if spatial_dims is None else max(spatial_dims, case_spatial_dims)
         )
 
+        def _subsample(img):
+            # Target ~10-15 voxels skip per dim; reduces memory by ~1000x for 3D
+            if img.size > 100_000:
+                slices = tuple(slice(0, None, 10) for _ in range(img.ndim))
+                return img[slices]
+            return img
+
         first_mod = collapse_single_channel(
             data_0, case_spatial_dims, ensure_channel_last=ensure_channel_last
         )
         if first_mod.ndim > case_spatial_dims:
             first_mod = first_mod[..., 0] if ensure_channel_last else first_mod[0]
-        all_images_per_modality[0].append(first_mod)
+        all_images_per_modality[0].append(_subsample(first_mod))
 
         for mod_idx in range(1, len(modalities)):
             if mod_idx >= len(case_files):
@@ -229,7 +236,7 @@ def fingerprint_dataset(
             )
             if image.ndim > image_dims:
                 image = image[..., 0] if ensure_channel_last else image[0]
-            all_images_per_modality[mod_idx].append(image)
+            all_images_per_modality[mod_idx].append(_subsample(image))
 
         if item.labels is None:
             continue

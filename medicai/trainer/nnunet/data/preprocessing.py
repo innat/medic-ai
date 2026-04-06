@@ -1,7 +1,7 @@
-from __future__ import annotations
-
+import concurrent.futures
+from functools import partial
+import multiprocessing
 from pathlib import Path
-
 
 import numpy as np
 from tqdm import tqdm
@@ -25,7 +25,7 @@ from medicai.trainer.nnunet.utils.io import (
 )
 
 
-def compute_nonzero_bbox(image: np.ndarray, ensure_channel_last=True) -> Tuple[slice, ...]:
+def compute_nonzero_bbox(image: np.ndarray, ensure_channel_last=True) -> tuple[slice, ...]:
     if image.ndim == 4:
         mask = np.any(image != 0, axis=-1 if ensure_channel_last else 0)
     elif image.ndim == 3 and ensure_channel_last and image.shape[-1] <= 4:
@@ -42,21 +42,21 @@ def compute_nonzero_bbox(image: np.ndarray, ensure_channel_last=True) -> Tuple[s
     )
 
 
-def _bbox_to_list(bbox: Tuple[slice, ...]) -> List[List[int]]:
+def _bbox_to_list(bbox: tuple[slice, ...]) -> list[list[int]]:
     return [[int(s.start), int(s.stop)] for s in bbox]
 
 
 def _collect_class_locations(
-    label: Optional[np.ndarray],
+    label: np.ndarray | None,
     task_type="multi-class",
     target_class_ids=None,
     max_locations_per_class: int = 10_000,
-) -> Dict[str, List[List[int]]]:
+) -> dict[str, list[list[int]]]:
     if label is None:
         return {}
 
     target_class_ids = target_class_ids if target_class_ids is not None else []
-    class_locations: Dict[str, List[List[int]]] = {}
+    class_locations: dict[str, list[list[int]]] = {}
 
     if task_type == "multi-label" and label.ndim >= 3:
         n_channels = label.shape[-1]
@@ -95,10 +95,10 @@ def _collect_class_locations(
 
 def crop_to_nonzero(
     image: np.ndarray,
-    label: Optional[np.ndarray] = None,
+    label: np.ndarray | None = None,
     pad: int = 0,
     ensure_channel_last=True,
-) -> Tuple[np.ndarray, Optional[np.ndarray], Tuple[slice, ...]]:
+) -> tuple[np.ndarray, np.ndarray | None, tuple[slice, ...]]:
     bbox = compute_nonzero_bbox(image, ensure_channel_last=ensure_channel_last)
 
     if image.ndim == 4:
@@ -514,6 +514,50 @@ def preprocess_case(
     }
 
 
+def _process_item_helper(
+    item,
+    output_dir,
+    properties_dir,
+    manifest,
+    target_spacing,
+    plan,
+    fingerprint,
+    configuration,
+    ensure_channel_last,
+):
+    output_path = output_dir / f"{item.case_id}.npz"
+    properties_output_path = properties_dir / f"{item.case_id}.json"
+
+    if output_path.exists() and properties_output_path.exists():
+        return None
+
+    image_layout = item.image_layout or manifest.image_layout
+    label_layout = item.label_layout or manifest.label_layout
+    label_output = item.label_output or manifest.label_output
+    preprocess_case(
+        image_paths=[Path(p) for p in item.images],
+        label_paths=item.labels,
+        target_spacing=target_spacing,
+        normalization_schemes=plan.normalization_schemes,
+        intensity_stats=fingerprint.intensity_stats,
+        modalities=fingerprint.modalities,
+        output_path=output_path,
+        configuration=configuration,
+        do_crop=True,
+        properties_output_path=properties_output_path,
+        ignore_class_ids=manifest.ignore_class_ids,
+        target_class_ids=manifest.target_class_ids,
+        item_type=item.task_type or manifest.task_type,
+        ensure_channel_last=ensure_channel_last,
+        original_spacing_override=item.spacing,
+        image_layout=image_layout,
+        label_layout=label_layout,
+        label_output=label_output,
+        regions=item.regions or manifest.regions,
+    )
+    return item.case_id
+
+
 def preprocess_dataset(
     fingerprint,
     plan,
@@ -522,6 +566,7 @@ def preprocess_dataset(
     max_cases=None,
     manifest_file=None,
     ensure_channel_last=True,
+    num_workers=None,
 ):
 
     output_dir = Path(output_dir) / configuration
@@ -552,37 +597,22 @@ def preprocess_dataset(
             "Legacy MSD layout is no longer supported."
         )
 
-    manifest = DatasetManifest.from_json(manifest_file)
-    items = manifest.items[:max_cases] if max_cases is not None else manifest.items
+    worker_fn = partial(
+        _process_item_helper,
+        output_dir=output_dir,
+        properties_dir=properties_dir,
+        manifest=manifest,
+        target_spacing=target_spacing,
+        plan=plan,
+        fingerprint=fingerprint,
+        configuration=configuration,
+        ensure_channel_last=ensure_channel_last,
+    )
 
-    for item in tqdm(items, desc=f"Preprocessing ({configuration})"):
-        output_path = output_dir / f"{item.case_id}.npz"
-        properties_output_path = properties_dir / f"{item.case_id}.json"
-
-        if output_path.exists() and properties_output_path.exists():
-            continue
-
-        image_layout = item.image_layout or manifest.image_layout
-        label_layout = item.label_layout or manifest.label_layout
-        label_output = item.label_output or manifest.label_output
-        preprocess_case(
-            image_paths=[Path(p) for p in item.images],
-            label_paths=item.labels,
-            target_spacing=target_spacing,
-            normalization_schemes=plan.normalization_schemes,
-            intensity_stats=fingerprint.intensity_stats,
-            modalities=fingerprint.modalities,
-            output_path=output_path,
-            configuration=configuration,
-            do_crop=True,
-            properties_output_path=properties_output_path,
-            ignore_class_ids=manifest.ignore_class_ids,
-            target_class_ids=manifest.target_class_ids,
-            item_type=item.task_type or manifest.task_type,
-            ensure_channel_last=ensure_channel_last,
-            original_spacing_override=item.spacing,
-            image_layout=image_layout,
-            label_layout=label_layout,
-            label_output=label_output,
-            regions=item.regions or manifest.regions,
-        )
+    workers = num_workers if num_workers is not None else max(1, multiprocessing.cpu_count() - 1)
+    if workers > 1:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
+            list(tqdm(executor.map(worker_fn, items), total=len(items), desc=f"Preprocessing ({configuration})"))
+    else:
+        for item in tqdm(items, desc=f"Preprocessing ({configuration})"):
+            worker_fn(item)
