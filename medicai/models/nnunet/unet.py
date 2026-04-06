@@ -160,6 +160,7 @@ class UNet(keras.Model):
             # Resizers for deep supervision (aux outputs → full resolution)
             if stage > 0:
                 resizer = ResizingND(
+                    scale_factor=1.0,  # placeholder; dynamic resize in call()
                     interpolation="bilinear" if spatial_dims == 2 else "trilinear",
                     name=f"aux_resizer_{stage}",
                 )
@@ -213,10 +214,14 @@ class UNet(keras.Model):
             target_shape = ops.shape(seg_outputs[0])[1:-1]
             out_dict = {"final": seg_outputs[0]}
             for i in range(1, len(seg_outputs)):
-                # Dynamic resizing to match full resolution
-                resizer = self.resizers[i]
-                resizer.target_shape = target_shape
-                out_dict[f"aux_{i-1}"] = resizer(seg_outputs[i])
+                # Functional resize — avoids fragile layer mutation
+                interp = "bilinear" if self.spatial_dims == 2 else "trilinear"
+                resized = ops.image.resize(
+                    seg_outputs[i],
+                    size=target_shape,
+                    interpolation=interp,
+                )
+                out_dict[f"aux_{i-1}"] = resized
             return out_dict
         else:
             return seg_outputs[0]  # single full-resolution output
@@ -257,7 +262,7 @@ def _make_filter_schedule(
     """
     schedule = []
     f = base_filters
-    for i in range(n_pooling + 1):
+    for _ in range(n_pooling + 1):
         schedule.append(min(f, max_filters))
         f *= 2
     return schedule

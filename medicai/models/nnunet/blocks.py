@@ -7,10 +7,10 @@ All layers use keras.layers / keras.ops exclusively — no backend-specific ops.
 
 Blocks
 ------
-ConvNormAct      : Conv (2D or 3D) → InstanceNorm → LeakyReLU
+ConvNormAct      : Conv (2D or 3D) -> InstanceNorm -> LeakyReLU
 DoubleConvBlock  : Two stacked ConvNormAct (the basic U-Net unit)
 DownBlock        : Strided conv downsampling + DoubleConvBlock
-UpBlock          : Transposed conv upsampling → concat skip → DoubleConvBlock
+UpBlock          : Transposed conv upsampling -> concat skip -> DoubleConvBlock
 """
 
 import keras
@@ -24,7 +24,7 @@ from medicai.utils.model_utils import get_conv_layer, get_norm_layer
 
 class ConvNormAct(keras.Layer):
     """
-    Conv → InstanceNorm → LeakyReLU.
+    Conv -> InstanceNorm -> LeakyReLU.
 
     Parameters
     ----------
@@ -107,6 +107,10 @@ class DoubleConvBlock(keras.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.spatial_dims = spatial_dims
+        self.negative_slope = negative_slope
         self.conv1 = ConvNormAct(
             filters, kernel_size, spatial_dims, negative_slope=negative_slope
         )
@@ -121,7 +125,12 @@ class DoubleConvBlock(keras.Layer):
 
     def get_config(self):
         cfg = super().get_config()
-        cfg.update(self.conv1.get_config())
+        cfg.update(
+            filters=self.filters,
+            kernel_size=self.kernel_size,
+            spatial_dims=self.spatial_dims,
+            negative_slope=self.negative_slope,
+        )
         return cfg
 
 
@@ -131,7 +140,7 @@ class DoubleConvBlock(keras.Layer):
 
 class DownBlock(keras.Layer):
     """
-    Encoder stage: strided convolution (downsampling) → DoubleConvBlock.
+    Encoder stage: strided convolution (downsampling) -> DoubleConvBlock.
 
     Using strided conv instead of max-pool gives the network more flexibility
     and is what nnU-Net v2 uses by default.
@@ -154,6 +163,11 @@ class DownBlock(keras.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.pool_kernel = pool_kernel
+        self.spatial_dims = spatial_dims
+        self.negative_slope = negative_slope
         self.down_conv = ConvNormAct(
             filters,
             kernel_size=pool_kernel,   # pool_kernel as stride
@@ -171,7 +185,15 @@ class DownBlock(keras.Layer):
         return x
 
     def get_config(self):
-        return super().get_config()
+        cfg = super().get_config()
+        cfg.update(
+            filters=self.filters,
+            kernel_size=self.kernel_size,
+            pool_kernel=self.pool_kernel,
+            spatial_dims=self.spatial_dims,
+            negative_slope=self.negative_slope,
+        )
+        return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +202,7 @@ class DownBlock(keras.Layer):
 
 class UpBlock(keras.Layer):
     """
-    Decoder stage: transposed conv (upsample) → concat skip → DoubleConvBlock.
+    Decoder stage: transposed conv (upsample) -> concat skip -> DoubleConvBlock.
 
     Parameters
     ----------
@@ -200,6 +222,11 @@ class UpBlock(keras.Layer):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.up_kernel = up_kernel
+        self.spatial_dims = spatial_dims
+        self.negative_slope = negative_slope
         self.up_conv = get_conv_layer(
             spatial_dims=spatial_dims,
             layer_type="conv_transpose",
@@ -221,7 +248,15 @@ class UpBlock(keras.Layer):
         return x
 
     def get_config(self):
-        return super().get_config()
+        cfg = super().get_config()
+        cfg.update(
+            filters=self.filters,
+            kernel_size=self.kernel_size,
+            up_kernel=self.up_kernel,
+            spatial_dims=self.spatial_dims,
+            negative_slope=self.negative_slope,
+        )
+        return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +264,7 @@ class UpBlock(keras.Layer):
 # ---------------------------------------------------------------------------
 
 class SegmentationHead(keras.Layer):
-    """1×1 (or 1×1×1) convolution → softmax output."""
+    """1x1 (or 1x1x1) convolution -> softmax output."""
 
     def __init__(self, n_classes, spatial_dims=3, activation="softmax", **kwargs):
         super().__init__(**kwargs)

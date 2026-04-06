@@ -12,7 +12,7 @@ at validation time (not in the training graph).
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+
 
 import keras
 import numpy as np
@@ -119,7 +119,9 @@ class MeanDiceMetric(keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         # Handle deep supervision: take highest-res output
-        if isinstance(y_pred, (list, tuple)):
+        if isinstance(y_pred, dict):
+            y_pred = y_pred["final"]
+        elif isinstance(y_pred, (list, tuple)):
             y_pred = y_pred[0]
 
         score = mean_dice(y_true, y_pred, n_classes=self.n_classes)
@@ -153,7 +155,9 @@ class PerClassDiceMetric(keras.metrics.Metric):
         self.count = self.add_weight(name="count", initializer="zeros")
 
     def update_state(self, y_true, y_pred, sample_weight=None):
-        if isinstance(y_pred, (list, tuple)):
+        if isinstance(y_pred, dict):
+            y_pred = y_pred["final"]
+        elif isinstance(y_pred, (list, tuple)):
             y_pred = y_pred[0]
 
         per_class = dice_coefficient(y_true, y_pred, n_classes=self.n_classes)

@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+
 
 _VALID_TASK_TYPES = {"binary", "multi-class", "multi-label"}
 _VALID_LABEL_OUTPUTS = {"auto", "sparse", "regions", "channel_masks"}

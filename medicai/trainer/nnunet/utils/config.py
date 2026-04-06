@@ -15,15 +15,15 @@ class IntensityStats:
         self,
         mean=0.0,
         std=1.0,
-        min=0.0,
-        max=1.0,
+        min_val=0.0,
+        max_val=1.0,
         percentile_00_5=0.0,
         percentile_99_5=1.0,
     ):
         self.mean = mean
         self.std = std
-        self.min = min
-        self.max = max
+        self.min = min_val
+        self.max = max_val
         self.percentile_00_5 = percentile_00_5
         self.percentile_99_5 = percentile_99_5
 

@@ -4,12 +4,15 @@ High-level API for the self-configuring nnU-Net workflow.
 
 from __future__ import annotations
 
+import logging
 import random
 import subprocess
 from pathlib import Path
 
 import keras
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
 from medicai.trainer.nnunet.cross_validation import (
@@ -63,8 +66,8 @@ def _auto_detect_gpu_memory(default=8.0):
         memories = [float(x) / 1024.0 for x in result.stdout.strip().split("\n") if x.strip()]
         if memories:
             return min(memories)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU memory auto-detection failed, using default %.1fGB: %s", default, e)
     return float(default)
 
 
@@ -113,17 +116,20 @@ class nnUNetDataset(keras.utils.PyDataset):
             image = data["data"]
             label = data.get("seg", None)
 
+            # Preprocessed .npz files are always saved in channel-last format
+            # (D, H, W, C). When ensure_channel_last=False, convert to
+            # channel-first (C, D, H, W) for downstream consumers.
             if not self.ensure_channel_last:
-                # Transpose from [C, ...] to [..., C]
+                # Transpose from [..., C] to [C, ...]
                 image_cl = np.transpose(
                     image,
-                    list(range(1, len(image.shape))) + [0],
+                    [len(image.shape) - 1] + list(range(len(image.shape) - 1)),
                 )
                 label_cl = label
                 if label_cl is not None and label_cl.ndim == image.ndim:
                     label_cl = np.transpose(
                         label_cl,
-                        list(range(1, len(label_cl.shape))) + [0],
+                        [len(label_cl.shape) - 1] + list(range(len(label_cl.shape) - 1)),
                     )
             else:
                 image_cl = image
@@ -164,8 +170,35 @@ class nnUNetDataset(keras.utils.PyDataset):
 
         if self.train_cfg.deep_supervision and self.net_cfg and self.net_cfg.deep_supervision:
             y_dict = {"final": label_batch}
+            pool_kernels = getattr(self.net_cfg, "pool_op_kernel_sizes", None)
             for i in range(self.net_cfg.n_pooling - 1):
-                y_dict[f"aux_{i}"] = label_batch
+                # Compute cumulative downsampling factor for this auxiliary level
+                # Level i corresponds to (i+1) pooling operations from full res
+                if pool_kernels and len(pool_kernels) > i:
+                    # Use actual pool kernel sizes for per-axis factors
+                    zoom_factors = [1.0]  # batch axis
+                    for ax in range(len(self.patch_size)):
+                        factor = 1.0
+                        for level in range(i + 1):
+                            if level < len(pool_kernels):
+                                ax_idx = min(ax, len(pool_kernels[level]) - 1)
+                                factor /= pool_kernels[level][ax_idx]
+                        zoom_factors.append(factor)
+                else:
+                    # Fallback: isotropic 2x downsampling per level
+                    scale = 0.5 ** (i + 1)
+                    zoom_factors = [1.0] + [scale] * len(self.patch_size)
+
+                # Downsample the label batch using nearest-neighbor
+                from scipy.ndimage import zoom as ndimage_zoom
+
+                ds_label = ndimage_zoom(
+                    label_batch.astype(np.float32),
+                    zoom_factors,
+                    order=0,
+                    mode="nearest",
+                ).astype(label_batch.dtype)
+                y_dict[f"aux_{i}"] = ds_label
             return image_batch, y_dict
 
         return image_batch, label_batch

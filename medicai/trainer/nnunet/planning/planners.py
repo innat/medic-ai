@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 nnunet_keras/planning/patch_size_planner.py
 ============================================
@@ -14,7 +16,7 @@ hardcoding any per-dataset constants.
 """
 
 import math
-from typing import List, Sequence
+
 
 
 def compute_patch_size(
@@ -233,7 +235,7 @@ We use a conservative empirical constant calibrated to nnU-Net defaults.
 """
 
 import math
-from typing import List, Sequence
+
 
 # ---------------------------------------------------------------------------
 # Constants (tunable)
@@ -368,11 +370,7 @@ Design follows the original nnU-Net ExperimentPlanner logic without
 hardcoding per-dataset constants.
 """
 
-from __future__ import annotations
-
-import math
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -481,7 +479,9 @@ def _plan_3d(
 
     # Convolution kernel sizes (anisotropy-aware)
     conv_kernels = compute_anisotropic_kernel_sizes(n_pooling=n_pooling, spacing=target_spacing)
-    # Use first conv kernel as the representative kernel size
+    # Use first conv kernel as the representative kernel size.
+    # NOTE: This is informational only. The actual model in dynamic_unet.py
+    # derives per-stage kernels independently from pool_op_kernel_sizes.
     kernel_size = conv_kernels[0] if len(conv_kernels) > 0 else [3, 3, 3]
 
     # Batch size
@@ -720,8 +720,8 @@ class nnUNetPlannerResEncM(nnUNetPlanner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Architecture modifications for ResEncM can be overridden here
-        pass
+        # TODO: Implement ResEncM-specific architecture modifications
+        # (e.g., increased base_filters, different max_filters)
 
 
 class nnUNetPlannerResEncL(nnUNetPlanner):
@@ -732,8 +732,8 @@ class nnUNetPlannerResEncL(nnUNetPlanner):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Architecture modifications for ResEncL can be overridden here
-        pass
+        # TODO: Implement ResEncL-specific architecture modifications
+        # (e.g., larger base_filters, more decoder heads)
 
 
 # ---------------------------------------------------------------------------

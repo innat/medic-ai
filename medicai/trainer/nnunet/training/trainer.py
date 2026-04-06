@@ -109,7 +109,10 @@ class nnUNetTrainer:
     # ------------------------------------------------------------------
     def _metric_monitor_name(self):
         """Return the correct monitor name depending on deep supervision."""
-        metric_name = self.metrics[0].name if self.metrics else "loss"
+        if self.metrics and hasattr(self.metrics[0], "name"):
+            metric_name = self.metrics[0].name
+        else:
+            metric_name = "loss"
         use_ds = (
             self.cfg.deep_supervision and self.net_cfg is not None and self.net_cfg.deep_supervision
         )
@@ -278,8 +281,8 @@ class nnUNetTrainer:
                 verbose=1,
             ),
             keras.callbacks.ModelCheckpoint(
-                filepath=str(self.output_dir / "checkpoint_epoch_{epoch:04d}.weights.h5"),
-                save_freq=cfg.save_every_n_epochs * cfg.iters_per_epoch,
+                filepath=str(self.output_dir / "checkpoint_latest.weights.h5"),
+                save_freq=cfg.save_every_n_epochs,
                 save_weights_only=True,
                 verbose=0,
             ),
