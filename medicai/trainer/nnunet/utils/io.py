@@ -1,7 +1,3 @@
-"""
-I/O helpers for medical image formats and layout normalization.
-"""
-
 from pathlib import Path
 
 import nibabel as nib
@@ -10,9 +6,9 @@ from PIL import Image
 from skimage import io as skio
 
 
-def load_nifti(path, ensure_channel_last=True):
+def load_nifti(path):
     """
-    Load a NIfTI file and normalize axes to nnU-Net-friendly order.
+    Load a NIfTI file and normalize axes to channel-last order.
     """
 
     img = nib.load(str(path))
@@ -25,10 +21,7 @@ def load_nifti(path, ensure_channel_last=True):
     if data.ndim == 3:
         data = data.transpose(2, 1, 0)
     elif data.ndim == 4:
-        if ensure_channel_last:
-            data = data.transpose(2, 1, 0, 3)
-        else:
-            data = data.transpose(3, 2, 1, 0)
+        data = data.transpose(2, 1, 0, 3)
     else:
         raise ValueError(f"Unexpected NIfTI ndim={data.ndim} in {path}")
 
@@ -123,7 +116,16 @@ def get_case_id(path):
     return name
 
 
-def infer_spatial_dims(data, spacing=None):
+def infer_spatial_dims(data, spacing=None, is_3d=None):
+    """
+    Infer the number of spatial dimensions (2 or 3) from the data shape and spacing.
+
+    Warning: The heuristic data.shape[0] <= 4 may misclassify 3D volumes with very
+    small depth (e.g., shape (3, 256, 256)) as 2D with channels. Consider providing
+    is_3d=True explicitly to avoid this issue for ambiguous shapes.
+    """
+    if is_3d is not None:
+        return 3 if is_3d else 2
     if spacing is not None and len(spacing) >= 3 and data.ndim >= 3:
         return 3
     if data.ndim <= 2:
@@ -151,12 +153,10 @@ def ensure_spacing(spacing, spatial_dims):
     return spacing
 
 
-def get_spatial_shape(data, spatial_dims, ensure_channel_last=True):
+def get_spatial_shape(data, spatial_dims):
     if data.ndim == spatial_dims:
         return list(data.shape)
-    if ensure_channel_last:
-        return list(data.shape[:spatial_dims])
-    return list(data.shape[-spatial_dims:])
+    return list(data.shape[:spatial_dims])
 
 
 def _normalize_layout_name(layout):
@@ -165,11 +165,9 @@ def _normalize_layout_name(layout):
     return "".join(ch for ch in str(layout).upper() if ch.isalpha())
 
 
-def _target_layout(spatial_dims, ensure_channel_last=True):
+def _target_layout(spatial_dims):
     spatial_axes = "HW" if spatial_dims == 2 else "DHW"
-    if ensure_channel_last:
-        return spatial_axes + "C"
-    return "C" + spatial_axes
+    return spatial_axes + "C"
 
 
 def _transpose_to_layout(data, source_layout, target_layout):
@@ -177,19 +175,15 @@ def _transpose_to_layout(data, source_layout, target_layout):
     return np.transpose(data, [axis_map[axis] for axis in target_layout])
 
 
-def normalize_layout(data, spatial_dims, ensure_channel_last=True, layout=None):
+def normalize_layout(data, spatial_dims, layout=None):
     """
-    Normalize arrays to either channel-last or channel-first using light heuristics.
+    Normalize arrays to channel-last format using specific layout hints.
     """
 
     layout = _normalize_layout_name(layout)
     if layout is not None and len(layout) == data.ndim:
         spatial_target = "HW" if spatial_dims == 2 else "DHW"
-        target = (
-            spatial_target
-            if data.ndim == spatial_dims
-            else _target_layout(spatial_dims, ensure_channel_last=ensure_channel_last)
-        )
+        target = spatial_target if data.ndim == spatial_dims else _target_layout(spatial_dims)
         if layout != target:
             return _transpose_to_layout(data, layout, target)
         return data
@@ -199,30 +193,21 @@ def normalize_layout(data, spatial_dims, ensure_channel_last=True, layout=None):
     if data.ndim != spatial_dims + 1:
         return data
 
-    if ensure_channel_last:
-        if data.shape[-1] <= 4:
-            return data
-        if data.shape[0] <= 4:
-            return np.moveaxis(data, 0, -1)
-        return data
-
-    if data.shape[0] <= 4:
-        return data
     if data.shape[-1] <= 4:
-        return np.moveaxis(data, -1, 0)
+        return data
+    if data.shape[0] <= 4:
+        return np.moveaxis(data, 0, -1)
     return data
 
 
-def collapse_single_channel(data, spatial_dims, ensure_channel_last=True):
+def collapse_single_channel(data, spatial_dims):
     if data.ndim == spatial_dims + 1:
-        if ensure_channel_last and data.shape[-1] == 1:
+        if data.shape[-1] == 1:
             return np.squeeze(data, axis=-1)
-        if not ensure_channel_last and data.shape[0] == 1:
-            return np.squeeze(data, axis=0)
     return data
 
 
-def load_medical_image(path, ensure_channel_last=True):
+def load_medical_image(path):
     """
     Load an image (NIfTI, DICOM, or common raster formats).
     Returns (data, affine, header, spacing).
@@ -230,7 +215,7 @@ def load_medical_image(path, ensure_channel_last=True):
 
     path_str = str(path).lower()
     if path_str.endswith(".nii.gz") or path_str.endswith(".nii"):
-        return load_nifti(path, ensure_channel_last=ensure_channel_last)
+        return load_nifti(path)
 
     if path_str.endswith(".dcm"):
         try:

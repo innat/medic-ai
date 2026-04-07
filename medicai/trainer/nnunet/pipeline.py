@@ -1,11 +1,16 @@
-import json
+import logging
 import random
 import subprocess
 from pathlib import Path
 
-import keras
-import numpy as np
-
+from medicai.dataloader.nnunet.augmentations import (
+    AugmentationConfig,
+    AugmentationPipeline,
+)
+from medicai.dataloader.nnunet.dataset import nnUNetDataset
+from medicai.dataloader.nnunet.dataset_fingerprint import fingerprint_dataset
+from medicai.dataloader.nnunet.manifest import DatasetManifest
+from medicai.dataloader.nnunet.preprocessing import preprocess_dataset
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
 from medicai.trainer.nnunet.cross_validation import (
     generate_splits,
@@ -13,17 +18,10 @@ from medicai.trainer.nnunet.cross_validation import (
     normalize_case_id,
     save_splits,
 )
-from medicai.trainer.nnunet.data.dataset_fingerprint import fingerprint_dataset
-from medicai.trainer.nnunet.data.manifest import DatasetManifest
-from medicai.trainer.nnunet.data.preprocessing import preprocess_dataset
 from medicai.trainer.nnunet.planning.planners import (
     nnUNetPlanner,
     nnUNetPlannerResEncL,
     nnUNetPlannerResEncM,
-)
-from medicai.trainer.nnunet.training.augmentations import (
-    AugmentationConfig,
-    AugmentationPipeline,
 )
 from medicai.trainer.nnunet.training.trainer import nnUNetTrainer
 from medicai.trainer.nnunet.utils.config import (
@@ -40,6 +38,8 @@ from medicai.trainer.nnunet.utils.io import (
     save_medical_image,
 )
 from medicai.utils.inference import sliding_window_inference
+
+logger = logging.getLogger(__name__)
 
 
 def _auto_detect_gpu_memory(default=8.0):
@@ -58,142 +58,9 @@ def _auto_detect_gpu_memory(default=8.0):
         memories = [float(x) / 1024.0 for x in result.stdout.strip().split("\n") if x.strip()]
         if memories:
             return min(memories)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU memory auto-detection failed, using default %.1fGB: %s", default, e)
     return float(default)
-
-
-class nnUNetDataset(keras.utils.PyDataset):
-    """
-    Keras 3 PyDataset for loading and augmenting nnU-Net batches on the fly.
-    """
-
-    def __init__(
-        self,
-        case_files,
-        batch_size,
-        patch_size,
-        augmentor,
-        train_cfg,
-        net_cfg,
-        task_type="multi-class",
-        augment=True,
-        ensure_channel_last=True,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.case_files = case_files
-        self.batch_size = batch_size
-        self.patch_size = patch_size
-        self.augmentor = augmentor
-        self.train_cfg = train_cfg
-        self.net_cfg = net_cfg
-        self.task_type = task_type
-        self.augment = augment
-        self.ensure_channel_last = ensure_channel_last
-
-    def __len__(self):
-        # nnU-Net defines epoch length directly in config, independent of actual dataset size
-        return self.train_cfg.iters_per_epoch
-
-    def __getitem__(self, index):
-        # We sample randomly from the entire dataset for `batch_size` items
-        # nnU-Net traditionally randomly samples indefinitely per iter.
-        batch_images = []
-        batch_labels = []
-
-        while len(batch_images) < self.batch_size:
-            case_file = random.choice(self.case_files)
-            data = load_npz(case_file)
-            image = data["data"]
-            label = data.get("seg", None)
-
-            # Preprocessed .npz files are always saved in channel-last format
-            # (D, H, W, C). When ensure_channel_last=False, convert to
-            # channel-first (C, D, H, W) for downstream consumers.
-            if not self.ensure_channel_last:
-                # Transpose from [..., C] to [C, ...]
-                image_cl = np.transpose(
-                    image,
-                    [len(image.shape) - 1] + list(range(len(image.shape) - 1)),
-                )
-                label_cl = label
-                if label_cl is not None and label_cl.ndim == image.ndim:
-                    label_cl = np.transpose(
-                        label_cl,
-                        [len(label_cl.shape) - 1] + list(range(len(label_cl.shape) - 1)),
-                    )
-            else:
-                image_cl = image
-                label_cl = label
-
-            if self.augment:
-                if (
-                    label_cl is not None
-                    and self.task_type != "multi-label"
-                    and label_cl.ndim == len(image_cl.shape) - 1
-                ):
-                    label_cl = label_cl[..., np.newaxis]
-
-                image_cl, label_cl = self.augmentor(
-                    image_cl,
-                    label_cl,
-                    patch_size=self.patch_size,
-                )
-
-                if (
-                    label_cl is not None
-                    and self.task_type != "multi-label"
-                    and label_cl.ndim == image_cl.ndim
-                ):
-                    label_cl = np.squeeze(label_cl, axis=-1)
-
-            batch_images.append(np.asarray(image_cl, dtype=np.float32))
-
-            if label_cl is None:
-                shape = batch_images[-1].shape[:-1] if hasattr(batch_images[-1], "shape") else []
-                batch_labels.append(np.zeros(shape, dtype=np.int64))
-            else:
-                label_dtype = np.float32 if self.task_type == "multi-label" else np.int64
-                batch_labels.append(np.asarray(label_cl, dtype=label_dtype))
-
-        image_batch = np.stack(batch_images, axis=0)
-        label_batch = np.stack(batch_labels, axis=0)
-
-        if self.train_cfg.deep_supervision and self.net_cfg and self.net_cfg.deep_supervision:
-            y_dict = {"final": label_batch}
-            pool_kernels = getattr(self.net_cfg, "pool_op_kernel_sizes", None)
-            for i in range(self.net_cfg.n_pooling - 1):
-                # Compute cumulative downsampling factor for this auxiliary level
-                # Level i corresponds to (i+1) pooling operations from full res
-                if pool_kernels and len(pool_kernels) > i:
-                    # Use actual pool kernel sizes for per-axis factors
-                    zoom_factors = [1.0]  # batch axis
-                    for ax in range(len(self.patch_size)):
-                        factor = 1.0
-                        for level in range(i + 1):
-                            if level < len(pool_kernels):
-                                ax_idx = min(ax, len(pool_kernels[level]) - 1)
-                                factor /= pool_kernels[level][ax_idx]
-                        zoom_factors.append(factor)
-                else:
-                    # Fallback: isotropic 2x downsampling per level
-                    scale = 0.5 ** (i + 1)
-                    zoom_factors = [1.0] + [scale] * len(self.patch_size)
-
-                # Downsample the label batch using nearest-neighbor
-                from scipy.ndimage import zoom as ndimage_zoom
-
-                ds_label = ndimage_zoom(
-                    label_batch.astype(np.float32),
-                    zoom_factors,
-                    order=0,
-                    mode="nearest",
-                ).astype(label_batch.dtype)
-                y_dict[f"aux_{i}"] = ds_label
-            return image_batch, y_dict
-
-        return image_batch, label_batch
 
 
 class nnUNetPipeline:
@@ -206,7 +73,6 @@ class nnUNetPipeline:
         dataset_dir,
         output_dir=None,
         manifest_file=None,
-        ensure_channel_last=True,
     ):
         self.dataset_dir = Path(dataset_dir)
         self.output_dir = Path(output_dir) if output_dir else self.dataset_dir / "outputs"
@@ -214,7 +80,6 @@ class nnUNetPipeline:
         self.manifest_file = (
             Path(manifest_file) if manifest_file else self.dataset_dir / "manifest.json"
         )
-        self.ensure_channel_last = ensure_channel_last
         self.configuration = "3d_fullres"
         self.custom_splits = None
 
@@ -251,7 +116,6 @@ class nnUNetPipeline:
         return fingerprint_dataset(
             manifest=manifest,
             output_file=self.fingerprint_path,
-            ensure_channel_last=self.ensure_channel_last,
         )
 
     def plan(self, gpu_memory_gb="auto", planner_name="nnUNetPlanner"):
@@ -299,7 +163,6 @@ class nnUNetPipeline:
             plan=plan,
             output_dir=self.preprocessed_dir,
             configuration=self.configuration,
-            ensure_channel_last=self.ensure_channel_last,
         )
 
     def _build_datasets(self, plan, train_cfg, n_folds):
@@ -331,7 +194,6 @@ class nnUNetPipeline:
         augmentor = AugmentationPipeline(
             AugmentationConfig(),
             patch_size=patch_size,
-            use_fg_oversampling=train_cfg.use_fg_oversampling,
         )
 
         def _create_pydataset(file_list, augment=True):
@@ -344,7 +206,6 @@ class nnUNetPipeline:
                 net_cfg=net_cfg,
                 task_type=plan.task_type,
                 augment=augment,
-                ensure_channel_last=self.ensure_channel_last,
             )
 
         return case_files, splits, _create_pydataset
@@ -461,19 +322,16 @@ class nnUNetPipeline:
 
         image, affine, header, spacing = load_medical_image(
             input_path,
-            ensure_channel_last=self.ensure_channel_last,
         )
         spatial_dims = infer_spatial_dims(image, spacing=spacing)
         image = normalize_layout(
             image,
             spatial_dims=spatial_dims,
-            ensure_channel_last=self.ensure_channel_last,
             layout=image_layout,
         )
         image = collapse_single_channel(
             image,
             spatial_dims=spatial_dims,
-            ensure_channel_last=self.ensure_channel_last,
         )
         if image.ndim == spatial_dims:
             image = image[..., np.newaxis]

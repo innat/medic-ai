@@ -1,14 +1,14 @@
 import concurrent.futures
-from functools import partial
 import multiprocessing
+from functools import partial
 from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
 
-from medicai.trainer.nnunet.data.manifest import DatasetManifest
-from medicai.trainer.nnunet.data.normalization import get_normalizer
-from medicai.trainer.nnunet.data.resampling import (
+from medicai.dataloader.nnunet.manifest import DatasetManifest
+from medicai.dataloader.nnunet.normalization import get_normalizer
+from medicai.dataloader.nnunet.resampling import (
     resample_image,
     resample_image_2d,
     resample_label,
@@ -25,12 +25,18 @@ from medicai.trainer.nnunet.utils.io import (
 )
 
 
-def compute_nonzero_bbox(image: np.ndarray, ensure_channel_last=True) -> tuple[slice, ...]:
+def compute_nonzero_bbox(image: np.ndarray) -> tuple[slice, ...]:
+    """Compute a bounding box around the nonzero region of an image.
+
+    Handles channel-last arrays: if ndim > 3, the last axis is treated as
+    channels and collapsed via ``any``.  Pure spatial arrays (2D or 3D) are
+    used directly.
+    """
     if image.ndim == 4:
-        mask = np.any(image != 0, axis=-1 if ensure_channel_last else 0)
-    elif image.ndim == 3 and ensure_channel_last and image.shape[-1] <= 4:
+        # (D, H, W, C) — collapse channels
         mask = np.any(image != 0, axis=-1)
     else:
+        # 2D (H, W) or 3D (D, H, W) — purely spatial
         mask = image != 0
 
     nonzero = np.nonzero(mask)
@@ -97,38 +103,32 @@ def crop_to_nonzero(
     image: np.ndarray,
     label: np.ndarray | None = None,
     pad: int = 0,
-    ensure_channel_last=True,
 ) -> tuple[np.ndarray, np.ndarray | None, tuple[slice, ...]]:
-    bbox = compute_nonzero_bbox(image, ensure_channel_last=ensure_channel_last)
+    bbox = compute_nonzero_bbox(image)
 
     if image.ndim == 4:
-        shape = image.shape[:3] if ensure_channel_last else image.shape[1:]
+        shape = image.shape[:3]
     elif image.ndim == 3:
-        # Could be 3D spatial [D,H,W] or 2D+channel [H,W,C] / [C,H,W]
-        # Use bbox dimensionality from compute_nonzero_bbox to decide
         shape = image.shape
     else:
         shape = image.shape[:2]
 
     padded_bbox = tuple(
-        slice(max(0, s.start - pad), min(sh, s.stop + pad)) for s, sh in zip(bbox, shape, strict=True)
+        slice(max(0, s.start - pad), min(sh, s.stop + pad))
+        for s, sh in zip(bbox, shape, strict=True)
     )
 
     if image.ndim == len(shape):
         cropped_image = image[padded_bbox]
-    elif ensure_channel_last:
-        cropped_image = image[padded_bbox + (slice(None),)]
     else:
-        cropped_image = image[(slice(None),) + padded_bbox]
+        cropped_image = image[padded_bbox + (slice(None),)]
 
     if label is None:
         cropped_label = None
     elif label.ndim == len(shape):
         cropped_label = label[padded_bbox]
-    elif ensure_channel_last:
-        cropped_label = label[padded_bbox + (slice(None),)]
     else:
-        cropped_label = label[(slice(None),) + padded_bbox]
+        cropped_label = label[padded_bbox + (slice(None),)]
 
     return cropped_image, cropped_label, padded_bbox
 
@@ -158,7 +158,6 @@ def _resample_label_map(label, original_spacing, target_spacing, configuration):
 
 def _load_image_channels(
     image_paths,
-    ensure_channel_last,
     expected_spatial_dims=None,
     original_spacing_override=None,
     image_layout=None,
@@ -171,7 +170,6 @@ def _load_image_channels(
     for img_path in image_paths:
         img, _, _, loaded_spacing = load_medical_image(
             img_path,
-            ensure_channel_last=ensure_channel_last,
         )
         candidate_spacing = (
             original_spacing_override if original_spacing_override is not None else loaded_spacing
@@ -182,22 +180,18 @@ def _load_image_channels(
         img = normalize_layout(
             img,
             spatial_dims,
-            ensure_channel_last=ensure_channel_last,
             layout=image_layout,
         )
-        img = collapse_single_channel(img, spatial_dims, ensure_channel_last=ensure_channel_last)
+        img = collapse_single_channel(img, spatial_dims)
 
         if original_spacing is None:
             original_spacing = ensure_spacing(candidate_spacing, spatial_dims)
-            original_shape = get_spatial_shape(
-                img, spatial_dims, ensure_channel_last=ensure_channel_last
-            )
+            original_shape = get_spatial_shape(img, spatial_dims)
 
         if img.ndim > spatial_dims:
-            channel_index = -1 if ensure_channel_last else 0
-            n_channels = img.shape[channel_index]
+            n_channels = img.shape[-1]
             for chan_idx in range(n_channels):
-                images.append(img[..., chan_idx] if ensure_channel_last else img[chan_idx])
+                images.append(img[..., chan_idx])
         else:
             images.append(img.astype(np.float32))
 
@@ -210,7 +204,6 @@ def _load_labels(
     task_type,
     ignore_class_ids,
     target_class_ids,
-    ensure_channel_last,
     original_spacing_override=None,
     label_layout=None,
     label_output="auto",
@@ -226,7 +219,6 @@ def _load_labels(
         if label_output == "regions":
             label_data, _, _, label_spacing = load_medical_image(
                 label_list[0],
-                ensure_channel_last=ensure_channel_last,
             )
             candidate_spacing = (
                 original_spacing_override
@@ -238,27 +230,24 @@ def _load_labels(
             label_data = normalize_layout(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
                 layout=label_layout,
             )
             label_data = collapse_single_channel(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
             )
             if label_data.ndim > label_dims:
-                label_data = label_data[..., 0] if ensure_channel_last else label_data[0]
+                label_data = label_data[..., 0]
             region_channels = []
             for class_group in regions or []:
                 region_channels.append(
                     np.isin(label_data.astype(np.int64), class_group).astype(np.int64)
                 )
-            return np.stack(region_channels, axis=-1 if ensure_channel_last else 0)
+            return np.stack(region_channels, axis=-1)
 
         if len(label_list) == 1:
             label_data, _, _, label_spacing = load_medical_image(
                 label_list[0],
-                ensure_channel_last=ensure_channel_last,
             )
             candidate_spacing = (
                 original_spacing_override
@@ -270,27 +259,24 @@ def _load_labels(
             label_data = normalize_layout(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
                 layout=label_layout,
             )
             label_data = collapse_single_channel(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
             )
             if label_data.ndim > label_dims:
-                label_data = label_data[..., 0] if ensure_channel_last else label_data[0]
+                label_data = label_data[..., 0]
             class_ids = (
                 target_class_ids if target_class_ids else list(range(1, int(label_data.max()) + 1))
             )
             label_channels = [(label_data == class_id).astype(np.int64) for class_id in class_ids]
-            return np.stack(label_channels, axis=-1 if ensure_channel_last else 0)
+            return np.stack(label_channels, axis=-1)
 
         label_channels = []
         for label_path in label_list:
             label_data, _, _, label_spacing = load_medical_image(
                 label_path,
-                ensure_channel_last=ensure_channel_last,
             )
             candidate_spacing = (
                 original_spacing_override
@@ -302,23 +288,20 @@ def _load_labels(
             label_data = normalize_layout(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
                 layout=label_layout,
             )
             label_data = collapse_single_channel(
                 label_data,
                 label_dims,
-                ensure_channel_last=ensure_channel_last,
             )
             if label_data.ndim > label_dims:
-                label_data = label_data[..., 0] if ensure_channel_last else label_data[0]
+                label_data = label_data[..., 0]
             label_channels.append((label_data > 0).astype(np.int64))
-        return np.stack(label_channels, axis=-1 if ensure_channel_last else 0)
+        return np.stack(label_channels, axis=-1)
 
     label_path = label_paths[0] if isinstance(label_paths, list) else label_paths
     label_data, _, _, label_spacing = load_medical_image(
         label_path,
-        ensure_channel_last=ensure_channel_last,
     )
     candidate_spacing = (
         original_spacing_override if original_spacing_override is not None else label_spacing
@@ -328,15 +311,12 @@ def _load_labels(
     label_data = normalize_layout(
         label_data,
         label_dims,
-        ensure_channel_last=ensure_channel_last,
         layout=label_layout,
     )
-    label_data = collapse_single_channel(
-        label_data, label_dims, ensure_channel_last=ensure_channel_last
-    )
+    label_data = collapse_single_channel(label_data, label_dims)
 
     if label_data.ndim > label_dims:
-        label_data = label_data[..., 0] if ensure_channel_last else label_data[0]
+        label_data = label_data[..., 0]
 
     label_data = label_data.astype(np.int64)
     for ignored_id in ignore_class_ids:
@@ -367,12 +347,12 @@ def preprocess_case(
     ignore_class_ids=None,
     target_class_ids=None,
     item_type="multi-class",
-    ensure_channel_last=True,
     original_spacing_override=None,
     image_layout=None,
     label_layout=None,
-    label_output="auto",
+    label_output=None,
     regions=None,
+    use_mask_for_norm=None,
 ):
     output_path = Path(output_path)
     properties_output_path = (
@@ -383,7 +363,6 @@ def preprocess_case(
 
     images, original_spacing, original_shape, spatial_dims = _load_image_channels(
         image_paths=image_paths,
-        ensure_channel_last=ensure_channel_last,
         original_spacing_override=original_spacing_override,
         image_layout=image_layout,
     )
@@ -397,15 +376,60 @@ def preprocess_case(
         task_type=item_type,
         ignore_class_ids=ignore_class_ids,
         target_class_ids=target_class_ids,
-        ensure_channel_last=ensure_channel_last,
         original_spacing_override=original_spacing_override,
         label_layout=label_layout,
         label_output=label_output,
         regions=regions,
     )
+    # Official nnU-Net order: crop → normalize → resample
+    # "normalization MUST happen before resampling or we get huge problems
+    #  with resampled nonzero masks no longer fitting the images perfectly!"
 
+    # 1. Stack channels
+    image_stack = np.stack(images, axis=-1)
+    shape_before_cropping = get_spatial_shape(image_stack, spatial_dims)
+
+    # 2. Crop to nonzero region
+    if do_crop and configuration != "2d":
+        image_stack, label, bbox = crop_to_nonzero(
+            image_stack,
+            label,
+        )
+        bbox_list = _bbox_to_list(bbox)
+    else:
+        bbox_list = [[0, int(s)] for s in shape_before_cropping]
+
+    shape_after_cropping = get_spatial_shape(image_stack, spatial_dims)
+
+    # 3. Normalize (before resampling)
+    normalized_channels = []
+
+    # Compute nonzero mask for GAP-1 (if any modality needs it)
+    global_mask = None
+    if use_mask_for_norm and any(use_mask_for_norm.values()):
+        global_mask = np.any(image_stack != 0, axis=-1)
+
+    for mod_idx, mod_name in enumerate(modalities):
+        mod_data = image_stack[..., mod_idx]
+        scheme = (
+            normalization_schemes[mod_idx] if mod_idx < len(normalization_schemes) else "z_score"
+        )
+        mod_use_mask = use_mask_for_norm.get(mod_name, False) if use_mask_for_norm else False
+
+        normalizer = get_normalizer(
+            scheme, stats=intensity_stats.get(mod_name), use_mask_for_norm=mod_use_mask
+        )
+
+        # Pass the mask specifically if requested
+        kwargs = {}
+        if mod_use_mask:
+            kwargs["mask"] = global_mask
+
+        normalized_channels.append(normalizer(mod_data, **kwargs))
+
+    # 4. Resample to target spacing
     resampled_images = _resample_channels(
-        images=images,
+        images=normalized_channels,
         original_spacing=original_spacing,
         target_spacing=target_spacing,
         configuration=configuration,
@@ -413,18 +437,18 @@ def preprocess_case(
 
     if label is not None:
         if item_type == "multi-label" and label.ndim > spatial_dims:
-            n_channels = label.shape[-1] if ensure_channel_last else label.shape[0]
+            n_channels = label.shape[-1]
             label_channels = []
             for chan_idx in range(n_channels):
                 label_channels.append(
                     _resample_label_map(
-                        label[..., chan_idx] if ensure_channel_last else label[chan_idx],
+                        label[..., chan_idx],
                         original_spacing,
                         target_spacing,
                         configuration,
                     )
                 )
-            label = np.stack(label_channels, axis=-1 if ensure_channel_last else 0)
+            label = np.stack(label_channels, axis=-1)
         else:
             label = _resample_label_map(
                 label,
@@ -433,39 +457,8 @@ def preprocess_case(
                 configuration,
             )
 
-    image_stack = np.stack(resampled_images, axis=-1 if ensure_channel_last else 0)
-    shape_after_resampling = get_spatial_shape(
-        image_stack,
-        spatial_dims,
-        ensure_channel_last=ensure_channel_last,
-    )
-
-    if do_crop and configuration != "2d":
-        image_stack, label, bbox = crop_to_nonzero(
-            image_stack,
-            label,
-            ensure_channel_last=ensure_channel_last,
-        )
-        bbox_list = _bbox_to_list(bbox)
-    else:
-        bbox_list = [[0, int(s)] for s in shape_after_resampling]
-
-    normalized_channels = []
-    for mod_idx, mod_name in enumerate(modalities):
-        if ensure_channel_last:
-            mod_data = image_stack[..., mod_idx]
-        else:
-            mod_data = image_stack[mod_idx]
-        scheme = (
-            normalization_schemes[mod_idx] if mod_idx < len(normalization_schemes) else "z_score"
-        )
-        normalizer = get_normalizer(scheme, stats=intensity_stats.get(mod_name))
-        normalized_channels.append(normalizer(mod_data))
-
-    image_stack = np.stack(
-        normalized_channels,
-        axis=-1 if ensure_channel_last else 0,
-    ).astype(np.float32)
+    image_stack = np.stack(resampled_images, axis=-1).astype(np.float32)
+    shape_after_resampling = get_spatial_shape(image_stack, spatial_dims)
 
     save_dict = {"data": image_stack, "spacing": np.asarray(target_spacing, dtype=np.float32)}
     if label is not None:
@@ -481,7 +474,6 @@ def preprocess_case(
         shape_after_cropping=get_spatial_shape(
             image_stack,
             spatial_dims,
-            ensure_channel_last=ensure_channel_last,
         ),
         bbox=bbox_list,
         modalities=list(modalities),
@@ -523,7 +515,6 @@ def _process_item_helper(
     plan,
     fingerprint,
     configuration,
-    ensure_channel_last,
 ):
     output_path = output_dir / f"{item.case_id}.npz"
     properties_output_path = properties_dir / f"{item.case_id}.json"
@@ -548,12 +539,12 @@ def _process_item_helper(
         ignore_class_ids=manifest.ignore_class_ids,
         target_class_ids=manifest.target_class_ids,
         item_type=item.task_type or manifest.task_type,
-        ensure_channel_last=ensure_channel_last,
         original_spacing_override=item.spacing,
         image_layout=image_layout,
         label_layout=label_layout,
         label_output=label_output,
         regions=item.regions or manifest.regions,
+        use_mask_for_norm=fingerprint.use_mask_for_norm,
     )
     return item.case_id
 
@@ -565,7 +556,6 @@ def preprocess_dataset(
     configuration="3d_fullres",
     max_cases=None,
     manifest_file=None,
-    ensure_channel_last=True,
     num_workers=None,
 ):
 
@@ -597,6 +587,9 @@ def preprocess_dataset(
             "Legacy MSD layout is no longer supported."
         )
 
+    manifest = DatasetManifest.from_json(manifest_file)
+    items = manifest.items[:max_cases] if max_cases else manifest.items
+
     worker_fn = partial(
         _process_item_helper,
         output_dir=output_dir,
@@ -606,13 +599,18 @@ def preprocess_dataset(
         plan=plan,
         fingerprint=fingerprint,
         configuration=configuration,
-        ensure_channel_last=ensure_channel_last,
     )
 
     workers = num_workers if num_workers is not None else max(1, multiprocessing.cpu_count() - 1)
     if workers > 1:
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
-            list(tqdm(executor.map(worker_fn, items), total=len(items), desc=f"Preprocessing ({configuration})"))
+            list(
+                tqdm(
+                    executor.map(worker_fn, items),
+                    total=len(items),
+                    desc=f"Preprocessing ({configuration})",
+                )
+            )
     else:
         for item in tqdm(items, desc=f"Preprocessing ({configuration})"):
             worker_fn(item)

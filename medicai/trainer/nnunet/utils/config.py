@@ -51,6 +51,7 @@ class DatasetFingerprint:
         target_class_ids=None,
         output_channels=None,
         spatial_dims=3,
+        use_mask_for_norm=None,
     ):
         self.dataset_name = dataset_name
         self.n_cases = n_cases
@@ -84,6 +85,11 @@ class DatasetFingerprint:
             output_channels if output_channels is not None else self._default_output_channels()
         )
         self.spatial_dims = spatial_dims
+        self.use_mask_for_norm = (
+            use_mask_for_norm
+            if use_mask_for_norm is not None
+            else {m: False for m in self.modalities}
+        )
 
     def _default_output_channels(self):
         if self.task_type == "binary":

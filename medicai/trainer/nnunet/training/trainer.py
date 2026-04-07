@@ -1,30 +1,3 @@
-"""
-medicai/trainer/nnunet/training/trainer.py
-==================================
-Full nnU-Net training pipeline.
-
-Features
---------
-  - Iteration-based training (1000 epochs × 250 iter/epoch) defaults
-  - Easy integration with standard Keras 3 optimizers and losses
-  - Deep supervision with decaying weights
-  - 5-fold cross-validation compatible (fold index parameter)
-
-Usage
------
-::
-
-    trainer = nnUNetTrainer(
-        model=model,
-        train_dataset=train_ds,
-        val_dataset=val_ds,
-        plan=plan,
-        train_config=config,
-        fold=0,
-    )
-    trainer.run(callbacks=[...])
-"""
-
 import json
 from pathlib import Path
 
@@ -33,9 +6,7 @@ import keras
 from medicai.losses import BinaryDiceCELoss, SparseDiceCELoss
 from medicai.metrics.dice import BinaryDiceMetric, SparseDiceMetric
 
-# ---------------------------------------------------------------------------
 # Trainer
-# ---------------------------------------------------------------------------
 
 
 class nnUNetTrainer:
@@ -106,7 +77,6 @@ class nnUNetTrainer:
         self.best_val_dice = -1.0
         self.epochs_no_improve = 0
 
-    # ------------------------------------------------------------------
     def _metric_monitor_name(self):
         """Return the correct monitor name depending on deep supervision."""
         if self.metrics and hasattr(self.metrics[0], "name"):
@@ -120,8 +90,6 @@ class nnUNetTrainer:
             return f"val_final_{metric_name}"
         return f"val_{metric_name}"
 
-    # ------------------------------------------------------------------
-    # ------------------------------------------------------------------
     def _build_optimizer(self):
         """Resolve and returns the Keras optimizer."""
         cfg = self.cfg
@@ -156,7 +124,6 @@ class nnUNetTrainer:
                 )
         return cfg.optimizer
 
-    # ------------------------------------------------------------------
     def _build_loss(self):
         """Resolve and returns the loss and optional loss_weights."""
         cfg = self.cfg
@@ -205,7 +172,6 @@ class nnUNetTrainer:
 
         return base_loss, None
 
-    # ------------------------------------------------------------------
     def _build_metrics(self):
         """Resolve and returns the list of metrics."""
         if self.custom_metrics is not None:
@@ -233,7 +199,6 @@ class nnUNetTrainer:
             )
         ]
 
-    # ------------------------------------------------------------------
     def _compile_model(self):
         """Compile the Keras model using resolved components."""
         self.optimizer = self._build_optimizer()
@@ -247,7 +212,6 @@ class nnUNetTrainer:
             metrics=self.metrics,
         )
 
-    # ------------------------------------------------------------------
     def run(self, callbacks=None):
         """
         Execute the full training loop using model.fit().
@@ -308,7 +272,6 @@ class nnUNetTrainer:
         self._save_checkpoint("final_model.weights.h5")
         return self.history
 
-    # ------------------------------------------------------------------
     def _save_checkpoint(self, filename):
         path = self.output_dir / filename
         self.model.save_weights(str(path))
