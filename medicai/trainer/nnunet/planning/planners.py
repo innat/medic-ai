@@ -1,22 +1,5 @@
-from collections.abc import Sequence
-
-"""
-nnunet_keras/planning/patch_size_planner.py
-============================================
-Heuristic patch size computation following nnU-Net rules:
-
-Given the median image shape (after resampling to target spacing), find the
-largest patch that:
-  - Keeps total voxel count ≤ ``max_patch_voxels``
-  - Has each dimension divisible by 2^n_pooling (needed for U-Net)
-  - Handles anisotropy: the lowest resolution axis is compressed first
-
-This mirrors the original nnU-Net ``ExperimentPlanner`` behaviour without
-hardcoding any per-dataset constants.
-"""
-
 import math
-
+from collections.abc import Sequence
 
 
 def compute_patch_size(
@@ -89,7 +72,9 @@ def compute_patch_size(
             break
 
     # 4. Clamp to median shape (don't exceed actual image)
-    patch = [min(p, _round_to_multiple(s, factor)) for p, s in zip(patch, median_shape, strict=True)]
+    patch = [
+        min(p, _round_to_multiple(s, factor)) for p, s in zip(patch, median_shape, strict=True)
+    ]
     patch = [max(p, factor) for p in patch]
 
     return patch
@@ -177,9 +162,7 @@ def compute_anisotropic_kernel_sizes(
     return kernels
 
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _round_to_multiple(value: int, multiple: int) -> int:
@@ -213,33 +196,9 @@ def _get_shrink_order(
     return [item[2] for item in scored]
 
 
-"""
-nnunet_keras/planning/batch_size_estimator.py
-==============================================
-GPU-aware batch size estimation.
-
-Instead of hardcoding batch sizes, this module estimates the maximum batch
-size that fits in a given GPU memory budget, based on the number of voxels
-per patch and a rough per-voxel memory cost model.
-
-Memory model
-------------
-bytes_per_sample ≈ n_voxels × n_feature_maps_avg × bytes_per_fp
-                   × activation_memory_factor
-
-For a U-Net with base_filters=32, max_filters=320, depth=5:
-  average feature maps ≈ ~96  (rough average across all levels)
-Memory for a full forward+backward pass is typically ~6–8× the parameter count.
-
-We use a conservative empirical constant calibrated to nnU-Net defaults.
-"""
-
 import math
 
-
-# ---------------------------------------------------------------------------
 # Constants (tunable)
-# ---------------------------------------------------------------------------
 
 # Bytes per float32 element
 BYTES_PER_FP32 = 4
@@ -255,9 +214,7 @@ _MEMORY_FACTOR = 8.0
 _AVG_FEATURE_MAPS = 100
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 
 def estimate_batch_size(
@@ -352,34 +309,14 @@ def estimate_2d_batch_size(
     return bs
 
 
-"""
-nnunet_keras/planning/experiment_planner.py
-============================================
-Automatic experiment planning following nnU-Net heuristics.
-
-Given a DatasetFingerprint, produces a NNUNetPlan with:
-  - Target spacing (median of all cases, anisotropy-aware)
-  - 2D plan  (median slice shape)
-  - 3D full-res plan  (median volume at target spacing)
-  - 3D low-res plan  (if cascade is triggered)
-  - Cascade decision (volume too large → low-res + full-res)
-  - Patch sizes, batch sizes, pooling depths
-  - Normalization schemes per modality
-
-Design follows the original nnU-Net ExperimentPlanner logic without
-hardcoding per-dataset constants.
-"""
-
 from pathlib import Path
 
 import numpy as np
 
-from medicai.trainer.nnunet.data.resampling import compute_zoom_factors
+from medicai.dataloader.nnunet.resampling import compute_zoom_factors
 from medicai.trainer.nnunet.utils.config import DatasetFingerprint, NetworkConfig, nnUNetPlan
 
-# ---------------------------------------------------------------------------
 # nnU-Net heuristic constants
-# ---------------------------------------------------------------------------
 
 # Maximum number of voxels per 3D patch (≈ GPU memory governor)
 MAX_VOXELS_3D = 128 * 128 * 128  # 2 097 152
@@ -406,9 +343,7 @@ def _resolve_output_activation(task_type: str) -> str:
     return "softmax"
 
 
-# ---------------------------------------------------------------------------
 # Target spacing heuristics
-# ---------------------------------------------------------------------------
 
 
 def _compute_target_spacing(fingerprint: DatasetFingerprint) -> list[float]:
@@ -438,9 +373,7 @@ def _compute_target_spacing(fingerprint: DatasetFingerprint) -> list[float]:
     return target
 
 
-# ---------------------------------------------------------------------------
 # 3D network planning
-# ---------------------------------------------------------------------------
 
 
 def _plan_3d(
@@ -511,9 +444,7 @@ def _plan_3d(
     )
 
 
-# ---------------------------------------------------------------------------
 # 2D network planning
-# ---------------------------------------------------------------------------
 
 
 def _plan_2d(
@@ -535,7 +466,9 @@ def _plan_2d(
 
     # Recompute 2D shape at target in-plane spacing
     factors_2d = compute_zoom_factors(original_spacing_2d, target_spacing_2d)
-    median_shape_2d = [max(1, int(round(s * f))) for s, f in zip(median_shape_2d, factors_2d, strict=True)]
+    median_shape_2d = [
+        max(1, int(round(s * f))) for s, f in zip(median_shape_2d, factors_2d, strict=True)
+    ]
 
     n_pooling = compute_n_pooling(median_shape_2d)
     patch_2d = compute_patch_size(
@@ -575,9 +508,7 @@ def _plan_2d(
     )
 
 
-# ---------------------------------------------------------------------------
 # Normalization scheme selection
-# ---------------------------------------------------------------------------
 
 
 def _select_normalization_schemes(fingerprint: DatasetFingerprint) -> list[str]:
@@ -595,9 +526,7 @@ def _select_normalization_schemes(fingerprint: DatasetFingerprint) -> list[str]:
     return schemes
 
 
-# ---------------------------------------------------------------------------
 # Main planner
-# ---------------------------------------------------------------------------
 
 
 class nnUNetPlanner:
@@ -636,7 +565,7 @@ class nnUNetPlanner:
         plan_2d = None
         use_cascade = False
 
-        # ---- Cascade decision
+        # Cascade decision
         if fp.spatial_dims == 2:
             plan_2d = _plan_2d(
                 fp,
@@ -658,7 +587,7 @@ class nnUNetPlanner:
             resampled_volume = int(np.prod(median_shape_3d))
             use_cascade = resampled_volume > CASCADE_VOLUME_THRESHOLD
 
-        # ---- 3D low-res plan  (only if cascade)
+        # 3D low-res plan  (only if cascade)
         plan_3d_lowres = None
         if fp.spatial_dims != 2 and use_cascade:
             lowres_spacing = [s * 2.0 for s in target_spacing]  # 2× coarser
@@ -671,7 +600,7 @@ class nnUNetPlanner:
                 configuration="3d_lowres",
             )
 
-        # ---- 2D plan
+        # 2D plan
         if fp.spatial_dims != 2:
             plan_2d = _plan_2d(
                 fp,
@@ -680,10 +609,10 @@ class nnUNetPlanner:
                 mixed_precision=self.mixed_precision,
             )
 
-        # ---- Normalization schemes
+        # Normalization schemes
         norm_schemes = _select_normalization_schemes(fp)
 
-        # ---- Determine default network type
+        # Determine default network type
         if fp.spatial_dims == 2:
             network_type = "2d"
         elif use_cascade:
@@ -736,9 +665,7 @@ class nnUNetPlannerResEncL(nnUNetPlanner):
         # (e.g., larger base_filters, more decoder heads)
 
 
-# ---------------------------------------------------------------------------
 # Internal utility
-# ---------------------------------------------------------------------------
 
 
 def _resampled_median_shape(
@@ -747,7 +674,9 @@ def _resampled_median_shape(
 ) -> list[int]:
     """Compute the median image shape after resampling to *target_spacing*."""
     factors = compute_zoom_factors(fingerprint.median_spacing, target_spacing)
-    new_shape = [max(1, int(round(s * f))) for s, f in zip(fingerprint.median_size, factors, strict=True)]
+    new_shape = [
+        max(1, int(round(s * f))) for s, f in zip(fingerprint.median_size, factors, strict=True)
+    ]
     return new_shape
 
 

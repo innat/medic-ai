@@ -1,5 +1,6 @@
-from .unet import UNet
 from medicai.trainer.nnunet.utils.config import NetworkConfig, nnUNetPlan
+
+from .unet import UNet
 
 
 def build_unet_from_plan(

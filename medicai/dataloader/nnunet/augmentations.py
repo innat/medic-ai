@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import keras
 from keras import ops
 
-from medicai.transforms import RandCropByPosNegLabel, RandFlip, RandRotate
+from medicai.transforms import RandFlip, RandRotate
 
 
 @dataclass
@@ -35,7 +35,6 @@ class AugmentationPipeline:
         self,
         config=None,
         patch_size=None,
-        use_fg_oversampling=True,
         seed=None,
     ):
         if config is None:
@@ -45,16 +44,6 @@ class AugmentationPipeline:
 
         c = self.config
         keys = ["image", "label"]
-
-        if use_fg_oversampling and patch_size is not None:
-            # 1:2 ratio means 1/3 foreground patches
-            self.crop = RandCropByPosNegLabel(
-                keys=keys, spatial_size=tuple(patch_size), pos=1, neg=2
-            )
-        else:
-            from medicai.transforms import RandSpatialCrop
-
-            self.crop = RandSpatialCrop(keys=keys, roi_size=patch_size)
 
         self.flip = RandFlip(keys=keys, prob=c.p_mirror, spatial_axis=[0])
         self.flip2 = RandFlip(keys=keys, prob=c.p_mirror, spatial_axis=[1])
@@ -79,18 +68,6 @@ class AugmentationPipeline:
         tensor_dict = {"image": ops.convert_to_tensor(image, dtype="float32")}
         if label is not None:
             tensor_dict["label"] = ops.convert_to_tensor(label, dtype="float32")
-
-        # 1. Spatial Crop
-        if hasattr(self.crop, "roi_size") and patch_size is not None:
-            roi_size = list(patch_size)
-            if is_3d:
-                self.crop.roi_size = roi_size
-            else:
-                self.crop.roi_size = roi_size[-2:]
-        elif hasattr(self.crop, "spatial_size") and patch_size is not None:
-            self.crop.spatial_size = tuple(patch_size)
-
-        tensor_dict = self.crop(tensor_dict).data
 
         # 2. Random Flips
         tensor_dict = self.flip(tensor_dict).data

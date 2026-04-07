@@ -69,11 +69,11 @@ class UNet(keras.Model):
         self.pool_op_kernel_sizes = pool_op_kernel_sizes
         self.conv_kernel_sizes = conv_kernel_sizes
 
-        # ---- Build encoder feature map schedule
+        # Build encoder feature map schedule
         filter_schedule = _make_filter_schedule(base_filters, max_filters, n_pooling)
         self._filter_schedule = filter_schedule  # [f0, f1, …, f_n_pooling]
 
-        # ---- Stem (first conv before any downsampling)
+        # Stem (first conv before any downsampling)
         self.stem = DoubleConvBlock(
             filters=filter_schedule[0],
             kernel_size=conv_kernel_sizes[0],
@@ -82,7 +82,7 @@ class UNet(keras.Model):
             name="stem",
         )
 
-        # ---- Encoder
+        # Encoder
         self.encoder_blocks = []
         for stage in range(n_pooling):
             block = DownBlock(
@@ -95,7 +95,7 @@ class UNet(keras.Model):
             )
             self.encoder_blocks.append(block)
 
-        # ---- Decoder
+        # Decoder
         self.decoder_blocks = []
         for stage in range(n_pooling):
             dec_stage = n_pooling - 1 - stage  # mirror of encoder
@@ -113,7 +113,7 @@ class UNet(keras.Model):
             )
             self.decoder_blocks.append(block)
 
-        # ---- Segmentation heads (one per decoder level for deep supervision)
+        # Segmentation heads (one per decoder level for deep supervision)
         self.seg_heads = []
         for stage in range(n_pooling):
             head = SegmentationHead(
@@ -124,7 +124,6 @@ class UNet(keras.Model):
             )
             self.seg_heads.append(head)
 
-    # ------------------------------------------------------------------
     def call(self, x, training=False):
         """
         Forward pass.
@@ -182,7 +181,6 @@ class UNet(keras.Model):
         else:
             return seg_outputs[0]  # single full-resolution output
 
-    # ------------------------------------------------------------------
     def get_config(self):
         config = super().get_config()
         config.update(
@@ -199,7 +197,6 @@ class UNet(keras.Model):
             output_activation=self.output_activation,
         )
         return config
-
 
 
 def _make_filter_schedule(

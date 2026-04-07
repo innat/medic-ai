@@ -3,7 +3,8 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from medicai.trainer.nnunet.data.normalization import compute_intensity_stats
+from medicai.dataloader.nnunet.normalization import compute_intensity_stats
+from medicai.dataloader.nnunet.preprocessing import compute_nonzero_bbox
 from medicai.trainer.nnunet.utils.config import DatasetFingerprint
 from medicai.trainer.nnunet.utils.io import (
     collapse_single_channel,
@@ -42,9 +43,7 @@ def _resolve_multilabel_output_channels(item, manifest):
     return max(1, len(manifest.class_names) - 1)
 
 
-def _collect_multilabel_class_stats(
-    item, manifest, spatial_dims, ensure_channel_last, target_class_ids
-):
+def _collect_multilabel_class_stats(item, manifest, spatial_dims, target_class_ids):
     if item.labels is None:
         return {}, 0
 
@@ -57,41 +56,37 @@ def _collect_multilabel_class_stats(
     if item_label_output == "regions":
         label_data, _, _, label_spacing = load_medical_image(
             label_paths[0],
-            ensure_channel_last=ensure_channel_last,
         )
-        label_dims = infer_spatial_dims(label_data, spacing=item.spacing or label_spacing)
+        label_dims = infer_spatial_dims(
+            label_data, spacing=item.spacing or label_spacing, is_3d=(manifest.spatial_dims == 3)
+        )
         label_data = normalize_layout(
             label_data,
             label_dims,
-            ensure_channel_last=ensure_channel_last,
             layout=label_layout,
         )
-        label_data = collapse_single_channel(
-            label_data, label_dims, ensure_channel_last=ensure_channel_last
-        )
+        label_data = collapse_single_channel(label_data, label_dims)
         regions = _resolve_multilabel_regions(item, manifest)
         for region_idx, class_ids in enumerate(regions, start=1):
             region_mask = np.isin(label_data.astype(np.int64), class_ids)
             counts[region_idx] = int(region_mask.sum())
-        total_voxels = int(np.prod(get_spatial_shape(label_data, label_dims, ensure_channel_last)))
+        total_voxels = int(np.prod(get_spatial_shape(label_data, label_dims)))
         return counts, total_voxels
 
     if len(label_paths) == 1:
         label_data, _, _, label_spacing = load_medical_image(
             label_paths[0],
-            ensure_channel_last=ensure_channel_last,
         )
-        label_dims = infer_spatial_dims(label_data, spacing=item.spacing or label_spacing)
+        label_dims = infer_spatial_dims(
+            label_data, spacing=item.spacing or label_spacing, is_3d=(manifest.spatial_dims == 3)
+        )
         label_dims = max(label_dims, spatial_dims)
         label_data = normalize_layout(
             label_data,
             label_dims,
-            ensure_channel_last=ensure_channel_last,
             layout=label_layout,
         )
-        label_data = collapse_single_channel(
-            label_data, label_dims, ensure_channel_last=ensure_channel_last
-        )
+        label_data = collapse_single_channel(label_data, label_dims)
         class_ids = (
             list(target_class_ids)
             if target_class_ids
@@ -99,31 +94,27 @@ def _collect_multilabel_class_stats(
         )
         for class_id in class_ids:
             counts[class_id] = int((label_data == class_id).sum())
-        total_voxels = int(np.prod(get_spatial_shape(label_data, label_dims, ensure_channel_last)))
+        total_voxels = int(np.prod(get_spatial_shape(label_data, label_dims)))
         return counts, total_voxels
 
     class_ids = list(target_class_ids) if target_class_ids else list(range(1, len(label_paths) + 1))
     for class_id, label_path in zip(class_ids, label_paths, strict=True):
         label_data, _, _, label_spacing = load_medical_image(
             label_path,
-            ensure_channel_last=ensure_channel_last,
         )
-        label_dims = infer_spatial_dims(label_data, spacing=label_spacing)
+        label_dims = infer_spatial_dims(
+            label_data, spacing=label_spacing, is_3d=(manifest.spatial_dims == 3)
+        )
         label_dims = max(label_dims, spatial_dims)
         label_data = normalize_layout(
             label_data,
             label_dims,
-            ensure_channel_last=ensure_channel_last,
             layout=label_layout,
         )
-        label_data = collapse_single_channel(
-            label_data, label_dims, ensure_channel_last=ensure_channel_last
-        )
+        label_data = collapse_single_channel(label_data, label_dims)
         counts[class_id] = counts.get(class_id, 0) + int((label_data > 0).sum())
         if total_voxels == 0:
-            total_voxels = int(
-                np.prod(get_spatial_shape(label_data, label_dims, ensure_channel_last))
-            )
+            total_voxels = int(np.prod(get_spatial_shape(label_data, label_dims)))
 
     return counts, total_voxels
 
@@ -132,7 +123,6 @@ def fingerprint_dataset(
     manifest,
     output_file=None,
     dataset_name=None,
-    ensure_channel_last=True,
     max_cases=None,
 ):
     """
@@ -162,10 +152,7 @@ def fingerprint_dataset(
 
     spacings = []
     sizes = []
-    all_images_per_modality = {i: [] for i in range(len(modalities))}
-    class_voxel_counts = {c: 0 for c in range(n_classes)}
-    total_voxels = 0
-    spatial_dims = None
+    median_relative_sizes = []
 
     for item in tqdm(items, desc="Fingerprinting"):
         case_files = [Path(p) for p in item.images]
@@ -173,119 +160,143 @@ def fingerprint_dataset(
             continue
         image_layout = item.image_layout or manifest.image_layout
 
+        # 1. Load first mod to get spatial dims and spacing
         data_0, _, _, loaded_spacing = load_medical_image(
             case_files[0],
-            ensure_channel_last=ensure_channel_last,
         )
         case_spatial_dims = infer_spatial_dims(
             data_0,
             spacing=item.spacing if item.spacing is not None else loaded_spacing,
+            is_3d=(manifest.spatial_dims == 3),
         )
         data_0 = normalize_layout(
             data_0,
             case_spatial_dims,
-            ensure_channel_last=ensure_channel_last,
             layout=image_layout,
         )
         spacing = ensure_spacing(
             item.spacing if item.spacing is not None else loaded_spacing,
             case_spatial_dims,
         )
-        shape = get_spatial_shape(
-            data_0,
-            case_spatial_dims,
-            ensure_channel_last=ensure_channel_last,
-        )
+        first_mod = collapse_single_channel(data_0, case_spatial_dims)
+        if first_mod.ndim > case_spatial_dims:
+            first_mod = first_mod[..., 0]
+
+        # 2. Compute bbox and relative size for GAP-1
+        bbox = compute_nonzero_bbox(first_mod)
+        full_shape = first_mod.shape
+        cropped_first_mod = first_mod[bbox]
+        cropped_shape = cropped_first_mod.shape
+
+        rel_size = np.prod(cropped_shape) / max(np.prod(full_shape), 1)
+        median_relative_sizes.append(float(rel_size))
 
         spacings.append([float(s) for s in spacing])
-        sizes.append([int(d) for d in shape])
+        sizes.append([int(d) for d in cropped_shape])
         spatial_dims = (
             case_spatial_dims if spatial_dims is None else max(spatial_dims, case_spatial_dims)
         )
 
-        def _subsample(img):
-            # Target ~10-15 voxels skip per dim; reduces memory by ~1000x for 3D
-            if img.size > 100_000:
-                slices = tuple(slice(0, None, 10) for _ in range(img.ndim))
-                return img[slices]
-            return img
+        # 3. Load labels early to get foreground mask
+        foreground_mask = None
+        if item.labels is not None:
+            if task_type == "multi-label":
+                # For intensity stats, we just need ANY foreground
+                # (This part is simplified vs _collect_multilabel_class_stats to avoid double-loading)
+                label_paths = item.labels if isinstance(item.labels, list) else [item.labels]
+                combined_mask = None
+                for lp in label_paths:
+                    ld, _, _, ls = load_medical_image(lp)
+                    ld_dims = infer_spatial_dims(ld, spacing=ls, is_3d=(manifest.spatial_dims == 3))
+                    ld = normalize_layout(
+                        ld, ld_dims, layout=item.label_layout or manifest.label_layout
+                    )
+                    ld = collapse_single_channel(ld, ld_dims)
+                    m = ld[bbox] > 0
+                    combined_mask = m if combined_mask is None else (combined_mask | m)
+                foreground_mask = combined_mask
 
-        first_mod = collapse_single_channel(
-            data_0, case_spatial_dims, ensure_channel_last=ensure_channel_last
+                # Still need counts for JSON
+                multilabel_counts, case_total = _collect_multilabel_class_stats(
+                    item, manifest, case_spatial_dims, target_class_ids
+                )
+                for class_id, count in multilabel_counts.items():
+                    if class_id < len(class_names):
+                        class_voxel_counts[class_id] += count
+                total_voxels += case_total
+            else:
+                label_path = item.labels[0] if isinstance(item.labels, list) else item.labels
+                label_data, _, _, label_spacing = load_medical_image(label_path)
+                label_dims = infer_spatial_dims(
+                    label_data,
+                    spacing=item.spacing or label_spacing,
+                    is_3d=(manifest.spatial_dims == 3),
+                )
+                label_data = normalize_layout(
+                    label_data, label_dims, layout=item.label_layout or manifest.label_layout
+                )
+                label_data = collapse_single_channel(label_data, label_dims)
+
+                cropped_label = label_data[bbox]
+                foreground_mask = cropped_label > 0
+
+                unique, counts = np.unique(cropped_label.astype(np.int64), return_counts=True)
+                for val, count in zip(unique, counts):
+                    if int(val) in class_voxel_counts:
+                        class_voxel_counts[int(val)] += int(count)
+                total_voxels += int(np.prod(cropped_shape))
+
+        # 4. Collect intensity samples (random foreground or subsampled nonzero)
+        def _sample_intensities(img, mask=None, nonzero_only=True):
+            if mask is not None and np.any(mask):
+                pixels = img[mask]
+            elif nonzero_only:
+                pixels = img[img != 0]
+            else:
+                pixels = img.ravel()
+
+            if pixels.size > 10_000:
+                return np.random.choice(pixels, 10_000, replace=False)
+            return pixels
+
+        is_ct_modality = [_is_ct_modality(name) for name in modalities]
+
+        # Modality 0
+        all_images_per_modality[0].append(
+            _sample_intensities(
+                cropped_first_mod, foreground_mask, nonzero_only=not is_ct_modality[0]
+            )
         )
-        if first_mod.ndim > case_spatial_dims:
-            first_mod = first_mod[..., 0] if ensure_channel_last else first_mod[0]
-        all_images_per_modality[0].append(_subsample(first_mod))
 
+        # Other modalities
         for mod_idx in range(1, len(modalities)):
             if mod_idx >= len(case_files):
                 continue
-            image, _, _, image_spacing = load_medical_image(
-                case_files[mod_idx],
-                ensure_channel_last=ensure_channel_last,
+            image, _, _, image_spacing = load_medical_image(case_files[mod_idx])
+            image_dims = infer_spatial_dims(
+                image, spacing=image_spacing, is_3d=(manifest.spatial_dims == 3)
             )
-            image_dims = infer_spatial_dims(image, spacing=image_spacing)
-            image = normalize_layout(
-                image,
-                image_dims,
-                ensure_channel_last=ensure_channel_last,
-                layout=image_layout,
-            )
-            image = collapse_single_channel(
-                image, image_dims, ensure_channel_last=ensure_channel_last
-            )
+            image = normalize_layout(image, image_dims, layout=image_layout)
+            image = collapse_single_channel(image, image_dims)
             if image.ndim > image_dims:
-                image = image[..., 0] if ensure_channel_last else image[0]
-            all_images_per_modality[mod_idx].append(_subsample(image))
+                image = image[..., 0]
 
-        if item.labels is None:
-            continue
-
-        if task_type == "multi-label":
-            multilabel_counts, case_total = _collect_multilabel_class_stats(
-                item,
-                manifest,
-                case_spatial_dims,
-                ensure_channel_last,
-                target_class_ids,
-            )
-            for class_id, count in multilabel_counts.items():
-                if class_id < len(class_names):
-                    class_voxel_counts[class_id] += count
-            total_voxels += case_total
-        else:
-            label_path = item.labels[0] if isinstance(item.labels, list) else item.labels
-            label_data, _, _, label_spacing = load_medical_image(
-                label_path,
-                ensure_channel_last=ensure_channel_last,
-            )
-            label_dims = infer_spatial_dims(label_data, spacing=item.spacing or label_spacing)
-            label_data = normalize_layout(
-                label_data,
-                label_dims,
-                ensure_channel_last=ensure_channel_last,
-                layout=item.label_layout or manifest.label_layout,
-            )
-            label_data = collapse_single_channel(
-                label_data, label_dims, ensure_channel_last=ensure_channel_last
-            )
-            unique, counts = np.unique(label_data.astype(np.int64), return_counts=True)
-            for val, count in zip(unique, counts):
-                if int(val) in class_voxel_counts:
-                    class_voxel_counts[int(val)] += int(count)
-            total_voxels += int(
-                np.prod(get_spatial_shape(label_data, label_dims, ensure_channel_last))
+            cropped_image = image[bbox]
+            all_images_per_modality[mod_idx].append(
+                _sample_intensities(
+                    cropped_image, foreground_mask, nonzero_only=not is_ct_modality[mod_idx]
+                )
             )
 
     intensity_stats = {}
-    is_ct_modality = [_is_ct_modality(name) for name in modalities]
     for mod_idx, mod_name in enumerate(modalities):
         imgs = all_images_per_modality.get(mod_idx, [])
         if not imgs:
             continue
+        # compute_intensity_stats already pools the provided pixel arrays
         intensity_stats[mod_name] = compute_intensity_stats(
             imgs,
-            nonzero_only=not is_ct_modality[mod_idx],
+            nonzero_only=False,  # already handled by sampling
         )
 
     if not spacings:
@@ -309,6 +320,12 @@ def fingerprint_dataset(
 
     image_type = "CT" if any(is_ct_modality) else "MRI"
 
+    # GAP-1: Determine use_mask_for_norm
+    # True if cropping removed > 75% of the volume on average
+    median_rel_size = float(np.median(median_relative_sizes)) if median_relative_sizes else 1.0
+    use_mask_for_norm_flag = median_rel_size < 0.25
+    use_mask_for_norm = {m: (use_mask_for_norm_flag and not _is_ct_modality(m)) for m in modalities}
+
     fp = DatasetFingerprint(
         dataset_name=dataset_name,
         n_cases=len(items),
@@ -329,6 +346,7 @@ def fingerprint_dataset(
         target_class_ids=target_class_ids,
         output_channels=output_channels,
         spatial_dims=spatial_dims if spatial_dims is not None else 3,
+        use_mask_for_norm=use_mask_for_norm,
     )
 
     if output_file is not None:

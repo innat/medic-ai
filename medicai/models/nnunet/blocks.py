@@ -1,5 +1,6 @@
 import keras
 from keras import layers
+
 from medicai.utils.model_utils import get_conv_layer, get_norm_layer
 
 
@@ -88,12 +89,8 @@ class DoubleConvBlock(keras.Layer):
         self.kernel_size = kernel_size
         self.spatial_dims = spatial_dims
         self.negative_slope = negative_slope
-        self.conv1 = ConvNormAct(
-            filters, kernel_size, spatial_dims, negative_slope=negative_slope
-        )
-        self.conv2 = ConvNormAct(
-            filters, kernel_size, spatial_dims, negative_slope=negative_slope
-        )
+        self.conv1 = ConvNormAct(filters, kernel_size, spatial_dims, negative_slope=negative_slope)
+        self.conv2 = ConvNormAct(filters, kernel_size, spatial_dims, negative_slope=negative_slope)
 
     def call(self, x, training=None):
         x = self.conv1(x, training=training)
@@ -143,14 +140,12 @@ class DownBlock(keras.Layer):
         self.negative_slope = negative_slope
         self.down_conv = ConvNormAct(
             filters,
-            kernel_size=pool_kernel,   # pool_kernel as stride
+            kernel_size=pool_kernel,  # pool_kernel as stride
             spatial_dims=spatial_dims,
             stride=pool_kernel,
             negative_slope=negative_slope,
         )
-        self.double_conv = DoubleConvBlock(
-            filters, kernel_size, spatial_dims, negative_slope
-        )
+        self.double_conv = DoubleConvBlock(filters, kernel_size, spatial_dims, negative_slope)
 
     def call(self, x, training=None):
         x = self.down_conv(x, training=training)
@@ -206,9 +201,7 @@ class UpBlock(keras.Layer):
             kernel_initializer="he_normal",
         )
         self.concat = layers.Concatenate(axis=-1)
-        self.double_conv = DoubleConvBlock(
-            filters, kernel_size, spatial_dims, negative_slope
-        )
+        self.double_conv = DoubleConvBlock(filters, kernel_size, spatial_dims, negative_slope)
 
     def call(self, x, skip, training=None):
         x = self.up_conv(x)
