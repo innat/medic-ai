@@ -4,6 +4,7 @@ import tensorflow as tf
 from medicai.models import (
     UNETR,
     ConvNeXtV2Atto,
+    DeepLabV3Plus,
     DenseNet121,
     EfficientNetB0,
     SegFormer,
@@ -210,6 +211,34 @@ def test_vit():
     x3d = tf.random.normal((batch_size, D, H, W, C))
     y3d = vit3d(x3d)
     assert y3d.shape == (batch_size, num_classes)
+
+
+def test_deeplabv3plus():
+    num_classes = 3
+
+    # test for 3D
+    input_shape = (64, 64, 64, 1)
+    model = DeepLabV3Plus(
+        input_shape=input_shape,
+        num_classes=num_classes,
+        encoder_name="efficientnet_v2_s",
+        encoder_depth=3,
+    )
+    dummy_input = tf.random.normal((1, 64, 64, 64, 1))
+    output = model(dummy_input)
+    assert output.shape == (1, 64, 64, 64, num_classes)
+
+    # test for 2D
+    input_shape = (64, 64, 3)
+    model = DeepLabV3Plus(
+        input_shape=input_shape,
+        num_classes=num_classes,
+        encoder_name="efficientnet_v2_s",
+        encoder_depth=3,
+    )
+    dummy_input = tf.random.normal((1, 64, 64, 3))
+    output = model(dummy_input)
+    assert output.shape == (1, 64, 64, num_classes)
 
 
 def test_segformer():
