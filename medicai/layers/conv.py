@@ -550,6 +550,18 @@ class AtrousSpatialPyramidPooling(layers.Layer):
         projection.build(input_shape[:-1] + (projection_input_channels,))
         self.projection = projection
         self.spatial_dims = spatial_dims
+
+        pool_target = tuple(input_shape[i] for i in range(1, 1 + spatial_dims))
+        self._pool_resize = ResizingND(
+            target_shape=pool_target,
+            interpolation="bilinear" if spatial_dims == 2 else "trilinear",
+            name="pool_resize",
+        )
+        pool_resize_input = (
+            input_shape[:1] + (1,) * spatial_dims + (self.num_channels,)
+        )
+        self._pool_resize.build(pool_resize_input)
+
         self.built = True
 
     def call(self, inputs):
@@ -558,12 +570,7 @@ class AtrousSpatialPyramidPooling(layers.Layer):
             temp = ops.cast(channel(inputs), inputs.dtype)
             result.append(temp)
 
-        input_shape = ops.shape(inputs)
-        target_size = tuple(input_shape[i] for i in range(1, 1 + self.spatial_dims))
-
-        result[-1] = ResizingND(
-            target_size, interpolation="bilinear" if self.spatial_dims == 2 else "trilinear"
-        )(result[-1])
+        result[-1] = self._pool_resize(result[-1])
 
         result = ops.concatenate(result, axis=-1)
         return self.projection(result)
