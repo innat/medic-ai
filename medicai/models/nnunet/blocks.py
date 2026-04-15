@@ -110,7 +110,7 @@ class DoubleConvBlock(keras.Layer):
 
 class DownBlock(keras.Layer):
     """
-    Encoder stage: strided convolution (downsampling) -> DoubleConvBlock.
+    Encoder stage: strided convolution (downsampling) -> ConvNormAct.
 
     Using strided conv instead of max-pool gives the network more flexibility
     and is what nnU-Net v2 uses by default.
@@ -138,18 +138,24 @@ class DownBlock(keras.Layer):
         self.pool_kernel = pool_kernel
         self.spatial_dims = spatial_dims
         self.negative_slope = negative_slope
-        self.down_conv = ConvNormAct(
+        self.conv1 = ConvNormAct(
             filters,
-            kernel_size=pool_kernel,  # pool_kernel as stride
+            kernel_size=kernel_size,
             spatial_dims=spatial_dims,
             stride=pool_kernel,
             negative_slope=negative_slope,
         )
-        self.double_conv = DoubleConvBlock(filters, kernel_size, spatial_dims, negative_slope)
+        self.conv2 = ConvNormAct(
+            filters,
+            kernel_size=kernel_size,
+            spatial_dims=spatial_dims,
+            stride=1,
+            negative_slope=negative_slope,
+        )
 
     def call(self, x, training=None):
-        x = self.down_conv(x, training=training)
-        x = self.double_conv(x, training=training)
+        x = self.conv1(x, training=training)
+        x = self.conv2(x, training=training)
         return x
 
     def get_config(self):

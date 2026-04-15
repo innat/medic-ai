@@ -162,24 +162,22 @@ class UNet(keras.Model):
             out = head(decoder_outputs[i], training=training)
             seg_outputs.append(out)
 
-        # Full resolution is first decoder output (index 0)
+        # Full resolution is LAST decoder output (index -1)
         if training and self.deep_supervision:
-            # Return a dictionary of outputs for Keras 3 multi-output training
-            # All outputs are resized to match segment_outputs[0] shape
-            target_shape = ops.shape(seg_outputs[0])[1:-1]
-            out_dict = {"final": seg_outputs[0]}
-            for i in range(1, len(seg_outputs)):
-                # Functional resize — avoids fragile layer mutation
-                interp = "bilinear" if self.spatial_dims == 2 else "trilinear"
-                resized = ops.image.resize(
-                    seg_outputs[i],
-                    size=target_shape,
-                    interpolation=interp,
-                )
-                out_dict[f"aux_{i-1}"] = resized
+            # Return a dictionary of outputs for Keras 3 multi-output training.
+            # Official nnU-Net evaluates deep supervision at native downsampled shapes
+            # to save computation and prevent interpolation artifacts on logits.
+            out_dict = {"final": seg_outputs[-1]}
+            
+            # The remaining outputs are sorted from lowest to 2nd highest.
+            # We reverse them so aux_0 is the 2nd highest, aux_1 is 3rd highest, etc.
+            remaining = seg_outputs[:-1][::-1]
+            for i, out in enumerate(remaining):
+                out_dict[f"aux_{i}"] = out
+                
             return out_dict
         else:
-            return seg_outputs[0]  # single full-resolution output
+            return seg_outputs[-1]  # single full-resolution output
 
     def get_config(self):
         config = super().get_config()
