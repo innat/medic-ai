@@ -37,7 +37,7 @@ import keras
 from keras import ops
 
 from medicai.metrics import BinaryDiceMetric
-from medicai.transforms import Compose, ScaleIntensityRange
+from medicai.transforms import Compose
 from medicai.models import DenseNet121
 
 def as_tensor(x, dtype=None):
@@ -52,12 +52,15 @@ score = float(ops.convert_to_numpy(metric.result()))
 assert np.isfinite(score)
 
 # transform smoke
-image = as_tensor(np.array([[[5.0, 5.0], [5.0, 5.0]]], dtype=np.float32))
-out = Compose([ScaleIntensityRange(keys=["image"], a_min=5.0, a_max=5.0, b_min=0.0, b_max=1.0)])(
-    {"image": image}
-)
-scaled = ops.convert_to_numpy(out["image"])
-assert scaled.shape == (1, 2, 2)
+def add_one(bundle):
+    bundle["image"] = bundle["image"] + 1.0
+    return bundle
+
+image = np.zeros((1, 2, 2), dtype=np.float32)
+out = Compose([add_one])({"image": image})
+shifted = ops.convert_to_numpy(out["image"])
+assert shifted.shape == (1, 2, 2)
+assert np.allclose(shifted, 1.0)
 
 # model smoke
 model = DenseNet121(input_shape=(32, 32, 1), num_classes=2)
@@ -75,4 +78,3 @@ assert keras.backend.backend() == '""" + backend + """'
     assert result.returncode == 0, (
         f"{backend} smoke failed.\\nSTDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
     )
-

@@ -44,6 +44,7 @@ from medicai.metrics import SparseDiceMetric
 y_true_sparse = ops.convert_to_tensor(
     np.array([[[[0], [1]], [[1], [2]]]], dtype=np.int32), dtype="int32"
 )
+y_true_sparse_metric = ops.cast(y_true_sparse, "float32")
 y_pred_probs = ops.convert_to_tensor(
     np.array(
         [[
@@ -66,7 +67,7 @@ loss_sparse = SparseDiceCELoss(from_logits=False, num_classes=3)(y_true_sparse, 
 loss_binary = BinaryDiceLoss(from_logits=False, num_classes=1)(y_true_binary, y_pred_binary)
 
 metric = SparseDiceMetric(from_logits=False, num_classes=3, ignore_empty=False)
-metric.update_state(y_true_sparse, y_pred_probs)
+metric.update_state(y_true_sparse_metric, y_pred_probs)
 score = metric.result()
 
 for value in [loss_sparse, loss_binary, score]:
@@ -83,4 +84,3 @@ assert keras.backend.backend() == '""" + backend + """'
     assert result.returncode == 0, (
         f"{backend} backend smoke failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
-
