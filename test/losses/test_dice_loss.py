@@ -1,158 +1,81 @@
-import keras
+import numpy as np
+import pytest
 from keras import ops
 
-from medicai.losses.dice import BinaryDiceLoss  # noqa: F401
-from medicai.losses.dice import CategoricalDiceLoss  # noqa: F401
-from medicai.losses.dice import SparseDiceLoss  # noqa: F401
+from medicai.losses.dice import BinaryDiceLoss, CategoricalDiceLoss, SparseDiceLoss
 
 
-def generate_data(
-    method="normal",
-    shape=(1, 3, 64, 64, 64),
-    minval=0.0,
-    maxval=1.0,
-    dtype="float32",
-    mean=0.0,
-    stddev=1.0,
-    low=0,
-    high=3,
-):
-    """Generates Keras tensors with specified methods and parameters.
-
-    Args:
-        method (str): The method to use for data generation.
-            Supported methods: "normal", "uniform", "randint", "ones", "zeros".
-        shape (tuple): The shape of the tensor to generate.
-        minval (float): Minimum value for uniform and randint.
-        maxval (float): Maximum value for uniform.
-        dtype (str): The data type of the tensor.
-        mean (float): Mean for normal distribution.
-        stddev (float): Standard deviation for normal distribution.
-        low (int): Lower bound (inclusive) for randint.
-        high (int): Upper bound (exclusive) for randint.
-
-    Returns:
-        keras.KerasTensor: The generated tensor.
-    """
-    method = method.lower()
-    if method == "normal":
-        return keras.random.normal(shape=shape, mean=mean, stddev=stddev, dtype=dtype)
-    elif method == "uniform":
-        return keras.random.uniform(shape=shape, minval=minval, maxval=maxval, dtype=dtype)
-    elif method == "randint":
-        return keras.random.randint(shape=shape, minval=low, maxval=high, dtype="int32")
-    elif method == "ones":
-        return ops.ones(shape=shape, dtype=dtype)
-    elif method == "zeros":
-        return ops.zeros(shape=shape, dtype=dtype)
-    else:
-        raise ValueError(f"Unsupported data generation method: {method}")
+def as_tensor(array, dtype=None):
+    return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
-def test_categorical_dice_loss():
+@pytest.mark.unit
+def test_categorical_dice_loss_perfect_prediction_is_near_zero():
+    y_true_idx = np.array([[[[0], [1]], [[1], [2]]]], dtype=np.int32)
+    y_true = ops.one_hot(as_tensor(np.squeeze(y_true_idx, axis=-1), dtype="int32"), num_classes=3)
+    y_pred = as_tensor(ops.convert_to_numpy(y_true), dtype="float32")
 
-    batch_size, num_classes, depth, height, width = 1, 3, 64, 64, 64
+    loss_fn = CategoricalDiceLoss(from_logits=False, num_classes=3)
+    loss = loss_fn(y_true, y_pred)
+    assert float(ops.convert_to_numpy(loss)) < 1e-5
 
-    # Generate random uniform logits
-    pred = generate_data(
-        method="uniform",
-        shape=(batch_size, depth, height, width, num_classes),
-        minval=0.0,
-        maxval=1.0,
-        dtype="float32",
-    )
-    # Generate random integer class indices
-    target = generate_data(
-        method="randint",
-        shape=(batch_size, depth, height, width, 1),
-        low=0,
-        high=num_classes,
-        dtype="int32",
+
+@pytest.mark.unit
+def test_sparse_dice_loss_perfect_prediction_is_near_zero():
+    y_true = as_tensor(np.array([[[[0], [1]], [[1], [2]]]], dtype=np.int32), dtype="int32")
+    y_pred = as_tensor(
+        np.array(
+            [
+                [
+                    [[0.98, 0.01, 0.01], [0.01, 0.98, 0.01]],
+                    [[0.01, 0.98, 0.01], [0.01, 0.01, 0.98]],
+                ]
+            ],
+            dtype=np.float32,
+        )
     )
 
-    target_one_hot = ops.one_hot(ops.squeeze(target, axis=-1), ops.shape(pred)[-1])
+    loss_fn = SparseDiceLoss(from_logits=False, num_classes=3)
+    loss = loss_fn(y_true, y_pred)
+    assert float(ops.convert_to_numpy(loss)) < 0.05
 
-    dice_loss = CategoricalDiceLoss(
-        from_logits=True,
-        num_classes=pred.shape[-1],
+
+@pytest.mark.unit
+def test_binary_dice_loss_returns_expected_shape_with_none_reduction():
+    y_true = as_tensor(
+        np.array(
+            [[[[[1], [0]], [[1], [0]]]], [[[[0], [1]], [[0], [1]]]]],
+            dtype=np.float32,
+        )
     )
-    loss = dice_loss(target_one_hot, pred)
-    assert loss.shape == (), "Categorical Dice Loss should be a scalar."
-
-
-def test_sparse_categorical_dice_loss():
-
-    batch_size, num_classes, depth, height, width = 1, 3, 64, 64, 64
-
-    # Generate random uniform logits
-    pred = generate_data(
-        method="uniform",
-        shape=(batch_size, depth, height, width, num_classes),
-        minval=0.0,
-        maxval=1.0,
-        dtype="float32",
-    )
-    # Generate random integer class indices
-    target = generate_data(
-        method="randint",
-        shape=(batch_size, depth, height, width, 1),
-        low=0,
-        high=num_classes,
-        dtype="int32",
-    )
-    dice_loss = SparseDiceLoss(
-        from_logits=True,
-        num_classes=pred.shape[-1],
-    )
-    loss = dice_loss(target, pred)
-    assert loss.shape == (), "Sparse Dice Loss should be a scalar."
-
-
-def test_binary_dice_loss():
-
-    batch_size, depth, height, width, channel = 2, 4, 8, 8, 1
-
-    # Generate random integer binary targets
-    bin_target = generate_data(
-        method="randint",
-        shape=(batch_size, depth, height, width, channel),
-        low=0,
-        high=2,
-        dtype="int32",
-    )
-    # Generate random normal logits
-    bin_logit = generate_data(
-        method="normal", shape=(batch_size, depth, height, width, 1), dtype="float32"
+    y_pred = as_tensor(
+        np.array(
+            [[[[[0.9], [0.1]], [[0.8], [0.2]]]], [[[[0.2], [0.8]], [[0.1], [0.9]]]]],
+            dtype=np.float32,
+        )
     )
 
-    dice_loss = BinaryDiceLoss(
-        from_logits=True,
-        num_classes=bin_logit.shape[-1],
+    loss_fn = BinaryDiceLoss(from_logits=False, num_classes=1, reduction="none")
+    loss = loss_fn(y_true, y_pred)
+    assert tuple(ops.shape(loss)) == (2, 1)
+
+
+@pytest.mark.unit
+def test_binary_dice_loss_multilabel_logits_is_finite():
+    y_true = as_tensor(
+        np.array(
+            [[[[[1, 0], [0, 1]], [[1, 1], [0, 0]]]]],
+            dtype=np.float32,
+        )
     )
-    loss = dice_loss(bin_target, bin_logit)
-    assert loss.shape == (), "Binary Dice Loss should be a scalar."
-
-
-def test_multilabel_binary_dice_loss():
-
-    batch_size, depth, height, width, num_labels = 2, 4, 8, 8, 3
-
-    # Generate random integer multi-label binary targets
-    multi_label_target = generate_data(
-        method="randint",
-        shape=(batch_size, depth, height, width, num_labels),
-        low=0,
-        high=2,
-        dtype="int32",
-    )
-    # Logit predictions (random normal)
-    multi_label_logit = generate_data(
-        method="normal", shape=(batch_size, depth, height, width, num_labels), dtype="float32"
+    y_logit = as_tensor(
+        np.array(
+            [[[[[3.0, -3.0], [-3.0, 3.0]], [[2.0, 2.0], [-2.0, -2.0]]]]],
+            dtype=np.float32,
+        )
     )
 
-    dice_loss = BinaryDiceLoss(
-        from_logits=True,
-        num_classes=multi_label_target.shape[-1],
-    )
-    loss = dice_loss(multi_label_target, multi_label_logit)
-    assert loss.shape == (), "Binary Dice Loss should be a scalar."
+    loss_fn = BinaryDiceLoss(from_logits=True, num_classes=2)
+    loss = loss_fn(y_true, y_logit)
+    assert np.isfinite(float(ops.convert_to_numpy(loss)))
+
