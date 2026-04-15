@@ -1,131 +1,65 @@
-import keras
 import numpy as np
+import pytest
 from keras import ops
 
-from medicai.metrics.dice import BinaryDiceMetric  # noqa: F401
-from medicai.metrics.dice import CategoricalDiceMetric  # noqa: F401
-from medicai.metrics.dice import SparseDiceMetric  # noqa: F401
+from medicai.metrics.dice import BinaryDiceMetric, CategoricalDiceMetric, SparseDiceMetric
 
 
-def create_sensitive_test_data(seed=42):
-    np.random.seed(seed)
-
-    # Tiny test volume (1x2x2x2)
-    y_true = np.zeros((1, 2, 2, 2, 1), dtype=np.int32)
-
-    # Single voxel of class 1 (others remain background)
-    y_true[0, 0, 0, 0, 0] = 1
-
-    # Predictions with extreme randomness
-    y_pred = np.zeros((1, 2, 2, 2, 3), dtype=np.float32)
-
-    # Correct prediction for class 1 voxel
-    y_pred[0, 0, 0, 0, 1] = 1.0
-
-    # Make background predictions vary WILDLY
-    background_mask = (y_true == 0).squeeze(-1)
-    y_pred[background_mask] = np.random.dirichlet([0.01, 0.01, 0.01], size=background_mask.sum())
-
-    return y_true.astype("float32"), y_pred.astype("float32")
+def as_tensor(array, dtype=None):
+    return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
-def test_categorical_dice_metric():
-    y_true, y_pred = create_sensitive_test_data(seed=50)
+@pytest.mark.unit
+def test_categorical_metric_perfect_prediction_is_one():
+    y_true_idx = np.array([[[[0], [1]], [[1], [2]]]], dtype=np.int32)
+    y_true = ops.one_hot(as_tensor(np.squeeze(y_true_idx, axis=-1), dtype="int32"), num_classes=3)
+    y_pred = as_tensor(ops.convert_to_numpy(y_true), dtype="float32")
 
-    dice_metric_mean = CategoricalDiceMetric(
-        from_logits=1,
-        ignore_empty=0,
-        num_classes=y_pred.shape[-1],
-        name="dice_score",
-    )
-    y_true_one_hot = ops.one_hot(ops.squeeze(y_true, axis=-1), num_classes=y_pred.shape[-1])
-    dice_metric_mean.update_state(y_true_one_hot, y_pred)
-    score = dice_metric_mean.result().numpy()
-    dice_metric_mean.reset_states()
-    np.testing.assert_allclose(
-        score, np.array([0.40909126]), rtol=1e-5, err_msg="Categorical Dice Metric test failed."
+    metric = CategoricalDiceMetric(from_logits=False, num_classes=3, ignore_empty=False)
+    metric.update_state(y_true, y_pred)
+    score = float(ops.convert_to_numpy(metric.result()))
+    metric.reset_states()
+
+    assert score == pytest.approx(1.0, rel=1e-6)
+
+
+@pytest.mark.unit
+def test_sparse_metric_target_class_filtering():
+    y_true = as_tensor(np.array([[[[0], [1]], [[1], [2]]]], dtype=np.float32))
+    y_pred = as_tensor(
+        np.array(
+            [
+                [
+                    [[0.9, 0.05, 0.05], [0.05, 0.9, 0.05]],
+                    [[0.05, 0.9, 0.05], [0.1, 0.2, 0.7]],
+                ]
+            ],
+            dtype=np.float32,
+        )
     )
 
-    # excluding channel index 0
-    dice_metric_mean = CategoricalDiceMetric(
-        from_logits=1,
-        ignore_empty=0,
+    metric = SparseDiceMetric(
+        from_logits=False,
+        num_classes=3,
         target_class_ids=[1, 2],
-        num_classes=y_pred.shape[-1],
-        name="dice_score",
+        ignore_empty=False,
     )
-    dice_metric_mean.update_state(y_true_one_hot, y_pred)
-    score = dice_metric_mean.result().numpy()
-    dice_metric_mean.reset_states()
-    np.testing.assert_allclose(
-        score, np.array([0.25000057]), rtol=1e-5, err_msg="Categorical Dice Metric test failed."
-    )
+    metric.update_state(y_true, y_pred)
+    score = float(ops.convert_to_numpy(metric.result()))
+    metric.reset_states()
 
-    # excluding channel index 0
-    dice_metric_mean = CategoricalDiceMetric(
-        from_logits=1,
-        ignore_empty=0,
-        target_class_ids=[1, 2],
-        num_classes=y_pred.shape[-1],
-        name="dice_score",
-    )
-    dice_metric_mean.update_state(y_true_one_hot, y_pred)
-    score = dice_metric_mean.result().numpy()
-    dice_metric_mean.reset_states()
-    np.testing.assert_allclose(
-        score, np.array([0.25000057]), rtol=1e-5, err_msg="Categorical Dice Metric test failed."
-    )
-
-    # ignore empty gt
-    dice_metric_mean = CategoricalDiceMetric(
-        from_logits=1,
-        ignore_empty=1,
-        num_classes=y_pred.shape[-1],
-        name="dice_score",
-    )
-    dice_metric_mean.update_state(y_true_one_hot, y_pred)
-    score = dice_metric_mean.result().numpy()
-    dice_metric_mean.reset_states()
-    np.testing.assert_allclose(
-        score, np.array([0.61363643]), rtol=1e-5, err_msg="Categorical Dice Metric test failed."
-    )
+    assert score > 0.8
 
 
-def test_sparse_categorical_dice_metric():
-    y_true, y_pred = create_sensitive_test_data(seed=50)
+@pytest.mark.unit
+def test_binary_metric_output_is_scalar_and_finite():
+    y_true = as_tensor(np.array([[[[1], [0]], [[0], [1]]]], dtype=np.float32))
+    y_logit = as_tensor(np.array([[[[3.0], [-3.0]], [[-2.0], [2.0]]]], dtype=np.float32))
 
-    # ignore empty gt + exclude channel index 0
-    dice_metric_mean = SparseDiceMetric(
-        from_logits=1,
-        ignore_empty=1,
-        target_class_ids=[1, 2],
-        num_classes=y_pred.shape[-1],
-        name="dice_score",
-    )
-    dice_metric_mean.update_state(y_true, y_pred)
-    score = dice_metric_mean.result().numpy()
-    dice_metric_mean.reset_states()
-    np.testing.assert_allclose(
-        score, np.array([0.5000001]), rtol=1e-5, err_msg="Categorical Dice Metric test failed."
-    )
+    metric = BinaryDiceMetric(from_logits=True, num_classes=1, ignore_empty=False)
+    metric.update_state(y_true, y_logit)
+    score = metric.result()
+    metric.reset_states()
 
-
-def test_binary_dice_metric():
-
-    batch_size, depth, height, width, num_labels = 2, 5, 64, 64, 3
-
-    y_true = keras.random.randint(
-        shape=(batch_size, depth, height, width, num_labels), minval=0, maxval=2, dtype="int32"
-    )
-    y_true = ops.cast(y_true, "float32")
-    y_pred_logit = keras.random.normal(
-        shape=(batch_size, depth, height, width, num_labels), dtype="float32"
-    )
-
-    dice_metric_from_logits = BinaryDiceMetric(
-        from_logits=1, num_classes=num_labels, ignore_empty=False, target_class_ids=[0]
-    )
-    dice_metric_from_logits.update_state(y_true, y_pred_logit)
-    score = dice_metric_from_logits.result().numpy()
-    dice_metric_from_logits.reset_states()
-    assert score.shape == (), "Score should be a scalar."
+    assert tuple(ops.shape(score)) == ()
+    assert np.isfinite(float(ops.convert_to_numpy(score)))

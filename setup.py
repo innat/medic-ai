@@ -57,5 +57,4 @@ setup(
         "Operating System :: OS Independent",
         "License :: OSI Approved :: Apache Software License",
     ],
-    entry_points={"console_scripts": ["medicai = src.medicai.cli:cli"]},
 )

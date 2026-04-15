@@ -1,58 +1,44 @@
-import tensorflow as tf
+import numpy as np
+import pytest
+from keras import ops
 
 from medicai.transforms import TensorBundle
 
 
-def test_tensorbundle_creation():
+def as_tensor(array, dtype=None):
+    return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
+
+
+@pytest.mark.unit
+def test_tensorbundle_creation_and_meta_access():
     data = {
-        "image": tf.random.normal((10, 10, 10, 1)),
-        "label": tf.random.uniform((10, 10, 10, 1), maxval=5, dtype=tf.int32),
+        "image": as_tensor(np.zeros((4, 4, 1), dtype=np.float32)),
+        "label": as_tensor(np.ones((4, 4, 1), dtype=np.int32)),
     }
-    meta = {
-        "affine": tf.constant(
-            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=tf.float32
-        ),
-        "pixdim": [1.0, 1.0, 1.0],
-    }
-    mt = TensorBundle(data, meta)
+    meta = {"pixdim": [1.0, 1.0, 1.0], "id": "case-a"}
+    bundle = TensorBundle(data, meta)
 
-    assert mt.data == data
-    assert mt.meta == meta
-    assert all(k in mt.meta for k in meta.keys())
+    assert bundle.data["image"] is data["image"]
+    assert bundle.meta["id"] == "case-a"
+    assert bundle["pixdim"] == [1.0, 1.0, 1.0]
 
 
-def test_tensorbundle_getitem_data():
-    data = {"image": tf.random.normal((10, 10, 10, 1))}
-    mt = TensorBundle(data)
-    assert tf.reduce_all(tf.equal(mt["image"], data["image"]))
+@pytest.mark.unit
+def test_tensorbundle_setitem_routes_to_data_or_meta():
+    bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
+    new_image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    bundle["image"] = new_image
+    bundle["affine"] = np.eye(4, dtype=np.float32).tolist()
 
-
-def test_tensorbundle_getitem_meta():
-    meta = {
-        "affine": tf.constant(
-            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=tf.float32
-        )
-    }
-    mt = TensorBundle({}, meta)
-    assert tf.reduce_all(tf.equal(mt["affine"], meta["affine"]))
-
-
-def test_tensorbundle_setitem_data():
-    data = {"image": tf.random.normal((10, 10, 10, 1))}
-    mt = TensorBundle(data)
-    new_image = tf.random.normal((5, 5, 5, 1))
-    mt["image"] = new_image
-    assert tf.reduce_all(tf.equal(mt["image"], new_image))
-
-
-def test_tensorbundle_setitem_meta():
-    mt = TensorBundle({})
-    mt["affine"] = tf.constant(
-        [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=tf.float32
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(bundle["image"]),
+        ops.convert_to_numpy(new_image),
     )
-    assert tf.reduce_all(
-        tf.equal(
-            mt["affine"],
-            tf.constant([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=tf.float32),
-        )
-    )
+    assert "affine" in bundle.meta
+
+
+@pytest.mark.unit
+def test_tensorbundle_missing_key_raises_keyerror():
+    bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
+    with pytest.raises(KeyError):
+        _ = bundle["unknown"]
