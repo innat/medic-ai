@@ -133,7 +133,6 @@ class CategoricalDiceCELoss(CategoricalDiceLoss, DescribeMixin):
             from_logits=from_logits,
             num_classes=num_classes,
             target_class_ids=target_class_ids,
-            ignore_class_ids=None,
             smooth=smooth,
             reduction="none",
             name=name or "categorical_dice_crossentropy",

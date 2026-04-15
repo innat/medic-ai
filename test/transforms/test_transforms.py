@@ -26,7 +26,11 @@ def test_resize_transform_for_2d_and_3d():
             "label": as_tensor(np.random.randint(0, 2, (1, 32, 32, 1)).astype(np.float32)),
         }
     )
-    out_2d = Resize(keys=["image", "label"], spatial_shape=(24, 20))(inputs_2d)
+    out_2d = Resize(
+        keys=["image", "label"],
+        mode=("bilinear", "nearest"),
+        spatial_shape=(24, 20),
+    )(inputs_2d)
     assert tuple(ops.shape(out_2d["image"])) == (1, 24, 20, 1)
     assert tuple(ops.shape(out_2d["label"])) == (1, 24, 20, 1)
 
@@ -84,4 +88,3 @@ def test_compose_spacing_orientation_pipeline():
 
     assert tuple(ops.shape(output["image"])) == (16, 16, 16, 1)
     assert tuple(ops.shape(output["label"])) == (16, 16, 16, 1)
-

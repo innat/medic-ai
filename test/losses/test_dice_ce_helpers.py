@@ -45,7 +45,7 @@ def test_cross_entropy_with_mask_only_counts_valid_positions():
 @pytest.mark.unit
 def test_binary_cross_entropy_is_finite_and_mask_aware():
     y_true = ops.convert_to_tensor(np.array([[[[1.0], [0.0]]]], dtype=np.float32))
-    y_pred = ops.convert_to_tensor(np.array([[[[0.8], [0.2]]]], dtype=np.float32))
+    y_pred = ops.convert_to_tensor(np.array([[[[0.8], [0.8]]]], dtype=np.float32))
     mask = ops.convert_to_tensor(np.array([[[[1.0], [0.0]]]], dtype=np.float32))
 
     masked = binary_cross_entropy(y_true, y_pred, mask=mask)
