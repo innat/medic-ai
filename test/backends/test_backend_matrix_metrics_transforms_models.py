@@ -80,4 +80,4 @@ assert keras.backend.backend() == '"""
 
     assert (
         result.returncode == 0
-    ), f"{backend} smoke failed.\\nSTDOUT:\\n{result.stdout}\\nSTDERR:\\n{result.stderr}"
+    ), f"{backend} smoke failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
