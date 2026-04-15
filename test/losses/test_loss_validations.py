@@ -1,6 +1,11 @@
 import pytest
 
-from medicai.losses import BinaryDiceCELoss, BinaryDiceLoss, BinaryGeneralizedDiceLoss, SparseDiceLoss
+from medicai.losses import (
+    BinaryDiceCELoss,
+    BinaryDiceLoss,
+    BinaryGeneralizedDiceLoss,
+    SparseDiceLoss,
+)
 
 
 @pytest.mark.unit
@@ -40,4 +45,3 @@ def test_sparse_dice_loss_rejects_invalid_target_class_type():
             num_classes=3,
             target_class_ids="1",
         )
-

@@ -1,6 +1,6 @@
+import keras
 import numpy as np
 import pytest
-import keras
 from keras import ops
 
 from medicai.losses import SparseDiceCELoss
@@ -61,4 +61,3 @@ def test_gpu_only_segmentation_training_smoke():
     history = model.fit(x, y, epochs=1, batch_size=1, verbose=0)
     assert "loss" in history.history
     assert len(history.history["loss"]) == 1
-

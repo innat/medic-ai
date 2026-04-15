@@ -2,7 +2,15 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.models import ConvNeXtV2Atto, DeepLabV3Plus, DenseNet121, EfficientNetB0, UNet, UNetPlusPlus, ViTBase
+from medicai.models import (
+    ConvNeXtV2Atto,
+    DeepLabV3Plus,
+    DenseNet121,
+    EfficientNetB0,
+    UNet,
+    UNetPlusPlus,
+    ViTBase,
+)
 
 
 def as_tensor(array, dtype=None):
@@ -47,4 +55,3 @@ def test_segmentation_models_2d_forward_shape(builder, kwargs):
     x = as_tensor(np.random.randn(1, 32, 32, 1).astype(np.float32))
     y = model(x)
     assert tuple(ops.shape(y)) == (1, 32, 32, num_classes)
-

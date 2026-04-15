@@ -42,4 +42,3 @@ def test_tensorbundle_missing_key_raises_keyerror():
     bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
     with pytest.raises(KeyError):
         _ = bundle["unknown"]
-

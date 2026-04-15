@@ -28,10 +28,12 @@ def test_sparse_metric_target_class_filtering():
     y_true = as_tensor(np.array([[[[0], [1]], [[1], [2]]]], dtype=np.float32))
     y_pred = as_tensor(
         np.array(
-            [[
-                [[0.9, 0.05, 0.05], [0.05, 0.9, 0.05]],
-                [[0.05, 0.9, 0.05], [0.1, 0.2, 0.7]],
-            ]],
+            [
+                [
+                    [[0.9, 0.05, 0.05], [0.05, 0.9, 0.05]],
+                    [[0.05, 0.9, 0.05], [0.1, 0.2, 0.7]],
+                ]
+            ],
             dtype=np.float32,
         )
     )
@@ -61,4 +63,3 @@ def test_binary_metric_output_is_scalar_and_finite():
 
     assert tuple(ops.shape(score)) == ()
     assert np.isfinite(float(ops.convert_to_numpy(score)))
-

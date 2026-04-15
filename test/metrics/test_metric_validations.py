@@ -31,4 +31,3 @@ def test_sparse_metric_rejects_invalid_target_class_type():
             num_classes=2,
             target_class_ids={"id": 1},
         )
-

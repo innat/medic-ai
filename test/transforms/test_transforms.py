@@ -57,7 +57,9 @@ def test_scale_intensity_range_handles_flat_input():
 @pytest.mark.unit
 def test_rand_shift_intensity_preserves_shape_and_range():
     image = as_tensor(np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32))
-    out = RandShiftIntensity(keys=["image"], offsets=(-0.2, 0.8), prob=1.0)(TensorBundle({"image": image}))
+    out = RandShiftIntensity(keys=["image"], offsets=(-0.2, 0.8), prob=1.0)(
+        TensorBundle({"image": image})
+    )
     shifted = ops.convert_to_numpy(out["image"])
     original = ops.convert_to_numpy(image)
 

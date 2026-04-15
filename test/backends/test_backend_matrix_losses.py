@@ -4,7 +4,6 @@ import sys
 
 import pytest
 
-
 BACKENDS = ("tensorflow", "torch", "jax")
 
 
@@ -34,7 +33,8 @@ def _is_missing_backend(result: subprocess.CompletedProcess) -> bool:
 @pytest.mark.integration
 @pytest.mark.parametrize("backend", BACKENDS)
 def test_losses_and_metrics_smoke_on_each_backend(backend):
-    smoke_script = """
+    smoke_script = (
+        """
 import numpy as np
 import keras
 from keras import ops
@@ -74,13 +74,16 @@ for value in [loss_sparse, loss_binary, score]:
     val = float(ops.convert_to_numpy(value))
     assert np.isfinite(val)
 
-assert keras.backend.backend() == '""" + backend + """'
+assert keras.backend.backend() == '"""
+        + backend
+        + """'
 """
+    )
 
     result = _run_backend_snippet(backend, smoke_script)
     if result.returncode != 0 and _is_missing_backend(result):
         pytest.skip(f"{backend} backend runtime not installed in this environment.")
 
-    assert result.returncode == 0, (
-        f"{backend} backend smoke failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
+    assert (
+        result.returncode == 0
+    ), f"{backend} backend smoke failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

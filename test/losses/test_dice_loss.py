@@ -78,4 +78,3 @@ def test_binary_dice_loss_multilabel_logits_is_finite():
     loss_fn = BinaryDiceLoss(from_logits=True, num_classes=2)
     loss = loss_fn(y_true, y_logit)
     assert np.isfinite(float(ops.convert_to_numpy(loss)))
-

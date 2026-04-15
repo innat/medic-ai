@@ -26,4 +26,3 @@ def test_camel_to_snake(value, expected):
 def test_base_enum_helpers():
     assert DummyEnum.to_dict() == {"FOO": "foo", "BAR": "bar"}
     assert DummyEnum.values() == ["foo", "bar"]
-

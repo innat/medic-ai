@@ -70,4 +70,3 @@ def test_registry_list_and_tabular_output_repr():
     assert isinstance(output, TabularOutput)
     assert output.__repr__() == ""
     assert isinstance(output._repr_html_(), str)
-

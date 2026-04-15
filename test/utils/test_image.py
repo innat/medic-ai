@@ -27,4 +27,3 @@ def test_resize_volumes_unsupported_method_raises():
     volumes = tf.ones((1, 2, 2, 2, 1), dtype=tf.float32)
     with pytest.raises(ValueError, match="Unsupported resize method"):
         resize_volumes(volumes, depth=2, height=2, width=2, method="bicubic")
-

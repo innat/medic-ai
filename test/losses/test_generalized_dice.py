@@ -50,4 +50,3 @@ def test_binary_generalized_dice_multilabel_reduction_none_shape():
     loss_fn = BinaryGeneralizedDiceLoss(from_logits=False, num_classes=2, reduction="none")
     loss = loss_fn(y_true, y_pred)
     assert tuple(ops.shape(loss)) == (1,)
-
