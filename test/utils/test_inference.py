@@ -21,7 +21,7 @@ class MockModel:
         # x shape: (batch_size, d, h, w, c)
         output_shape = list(x.shape)
         output_shape[-1] = self.output_classes
-        
+
         # We can just return x projected to output_classes to ensure deterministic test
         # Let's say we just add 1 and broadcast to output_classes
         res = np.ones(output_shape, dtype=np.float32)
@@ -36,7 +36,7 @@ def test_modular_sliding_window_inference_equivalence(overlap, mode, sigma_scale
     # Set up dummy inputs
     np.random.seed(42)
     inputs = np.random.rand(1, 32, 32, 32, 1).astype(np.float32)  # batch size 1
-    
+
     # Model and inference parameters
     model = MockModel(output_classes=2)
     roi_size = (16, 16, 16)
@@ -90,5 +90,17 @@ def test_modular_sliding_window_inference_equivalence(overlap, mode, sigma_scale
     )
 
     # Assert completely identical outputs across all three routes
-    np.testing.assert_allclose(output_case_0, output_case_1, rtol=1e-5, atol=1e-5, err_msg="Wrapper output does not match Case 0!")
-    np.testing.assert_allclose(output_case_0, output_case_2, rtol=1e-5, atol=1e-5, err_msg="Component pipeline output does not match Case 0!")
+    np.testing.assert_allclose(
+        output_case_0,
+        output_case_1,
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="Wrapper output does not match Case 0!",
+    )
+    np.testing.assert_allclose(
+        output_case_0,
+        output_case_2,
+        rtol=1e-5,
+        atol=1e-5,
+        err_msg="Component pipeline output does not match Case 0!",
+    )

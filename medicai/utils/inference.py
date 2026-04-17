@@ -262,7 +262,7 @@ def extract_patches(
         roi_weight_map (Optional[np.ndarray]): Pre-computed weight map for each ROI.
 
     Returns:
-        tuple[np.ndarray, dict]: 
+        tuple[np.ndarray, dict]:
             - patches: An array of un-merged patches extracted from the input.
             - info: A dictionary containing structural metadata for merging.
     """
@@ -300,15 +300,13 @@ def extract_patches(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
         if len(importance_map.shape) == num_spatial_dims:
-            importance_map = np.expand_dims(
-                np.expand_dims(importance_map, -1), 0
-            )
+            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)
 
     patch_list = []
     for slice_idx in slices:
         full_slice = (slice(None),) + slice_idx + (slice(None),)
         patch_list.append(inputs[full_slice])
-    
+
     patches = np.concatenate(patch_list, axis=0)
 
     info = {
@@ -318,7 +316,7 @@ def extract_patches(
         "slices": slices,
         "importance_map": importance_map,
         "batch_size": batch_size,
-        "num_spatial_dims": num_spatial_dims
+        "num_spatial_dims": num_spatial_dims,
     }
     return patches, info
 
@@ -341,7 +339,7 @@ def predict_patches(
         importance_map (np.ndarray): Importance array for blending.
 
     Returns:
-        tuple[np.ndarray, np.ndarray]: 
+        tuple[np.ndarray, np.ndarray]:
             - predictions: Array of corresponding predicted patches.
             - importance_map_resized: Resized importance map matching output spatial scale.
     """
@@ -355,8 +353,13 @@ def predict_patches(
         bs_actual = batch_patches.shape[0]
         bs_target = sw_batch_size
         if bs_actual < bs_target:
-            batch_pad_size = ((0, bs_target - bs_actual), *[(0, 0)] * (len(batch_patches.shape) - 1))
-            batch_patches = np.pad(batch_patches, batch_pad_size, mode="constant", constant_values=0)
+            batch_pad_size = (
+                (0, bs_target - bs_actual),
+                *[(0, 0)] * (len(batch_patches.shape) - 1),
+            )
+            batch_patches = np.pad(
+                batch_patches, batch_pad_size, mode="constant", constant_values=0
+            )
 
         pred = model.predict(batch_patches, verbose=0)
         pred = pred[:bs_actual]
@@ -366,7 +369,13 @@ def predict_patches(
             if pred.shape[1:-1] != tuple(roi_size):
                 _, d, h, w, _ = importance_map.shape
                 target_shape = pred.shape[1:-1]
-                scale_factors = (1, target_shape[0] / d, target_shape[1] / h, target_shape[2] / w, 1)
+                scale_factors = (
+                    1,
+                    target_shape[0] / d,
+                    target_shape[1] / h,
+                    target_shape[2] / w,
+                    1,
+                )
                 importance_map_resized = zoom(importance_map, scale_factors, order=0)
             else:
                 importance_map_resized = importance_map
@@ -388,7 +397,7 @@ def merge_patches(
         predictions (np.ndarray): Predicted patches.
         info (dict): Metadata info from extract_patches.
         importance_map_resized (np.ndarray): Resized importance blend map.
-        num_classes (Optional[int]): Number of output classes. 
+        num_classes (Optional[int]): Number of output classes.
 
     Returns:
         np.ndarray: Final reconstructed and blended volumetric array.
@@ -401,7 +410,7 @@ def merge_patches(
 
     num_classes = num_classes or predictions.shape[-1]
     output_shape = [batch_size] + list(image_size) + [num_classes]
-    
+
     output_image = np.zeros(output_shape, dtype=np.float32)
     count_map = np.zeros([1] + list(image_size) + [1], dtype=np.float32)
 
@@ -453,25 +462,25 @@ def sliding_window_inference(
         np.ndarray: Reconstructed output tensor.
     """
     patches, info = extract_patches(
-        inputs=inputs, 
-        roi_size=roi_size, 
-        overlap=overlap, 
-        mode=mode, 
-        sigma_scale=sigma_scale, 
-        padding_mode=padding_mode, 
-        cval=cval, 
-        roi_weight_map=roi_weight_map
+        inputs=inputs,
+        roi_size=roi_size,
+        overlap=overlap,
+        mode=mode,
+        sigma_scale=sigma_scale,
+        padding_mode=padding_mode,
+        cval=cval,
+        roi_weight_map=roi_weight_map,
     )
     predictions, importance_map_resized = predict_patches(
-        patches=patches, 
-        model=model, 
-        sw_batch_size=sw_batch_size, 
-        roi_size=roi_size, 
-        importance_map=info["importance_map"]
+        patches=patches,
+        model=model,
+        sw_batch_size=sw_batch_size,
+        roi_size=roi_size,
+        importance_map=info["importance_map"],
     )
     return merge_patches(
-        predictions=predictions, 
-        info=info, 
-        importance_map_resized=importance_map_resized, 
-        num_classes=num_classes
+        predictions=predictions,
+        info=info,
+        importance_map_resized=importance_map_resized,
+        num_classes=num_classes,
     )
