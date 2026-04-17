@@ -229,7 +229,7 @@ def sliding_window_inference_old(
             count_map[output_slice] += importance_map_resized
 
     # Normalize output by count map
-    output_image /= count_map
+    np.divide(output_image, count_map, out=output_image, where=count_map != 0)
 
     # Remove padding if necessary
     if any(p for pair in pad_size for p in pair):
@@ -450,11 +450,9 @@ def merge_patches(
             count_map[output_slice] += importance_map_resized
 
     if output_image is None:
-        raise ValueError(
-            "patch_generator yielded no batches; cannot reconstruct output."
-        )
+        raise ValueError("patch_generator yielded no batches; cannot reconstruct output.")
 
-    output_image /= count_map
+    np.divide(output_image, count_map, out=output_image, where=count_map != 0)
 
     if any(p for pair in pad_size for p in pair):
         output_image = crop_output(output_image, pad_size, original_image_size)
@@ -498,24 +496,47 @@ def sliding_window_inference(
     Returns:
         np.ndarray: Reconstructed output tensor.
     """
-    padded_inputs, info = extract_patches(
-        inputs=inputs,
-        roi_size=roi_size,
-        overlap=overlap,
-        mode=mode,
-        sigma_scale=sigma_scale,
-        padding_mode=padding_mode,
-        cval=cval,
-        roi_weight_map=roi_weight_map,
-    )
-    pred_gen = predict_patches(
-        padded_inputs=padded_inputs,
-        info=info,
-        model=model,
-        sw_batch_size=sw_batch_size,
-    )
-    return merge_patches(
-        patch_generator=pred_gen,
-        info=info,
-        num_classes=num_classes,
-    )
+    if len(inputs.shape) < 3:
+        raise ValueError(
+            f"Input tensor must have shape (batch, *spatial, channels), "
+            f"got rank {len(inputs.shape)}."
+        )
+
+    try:
+        padded_inputs, info = extract_patches(
+            inputs=inputs,
+            roi_size=roi_size,
+            overlap=overlap,
+            mode=mode,
+            sigma_scale=sigma_scale,
+            padding_mode=padding_mode,
+            cval=cval,
+            roi_weight_map=roi_weight_map,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Sliding window inference failed during the patch extraction phase: {e}"
+        ) from e
+
+    try:
+        pred_gen = predict_patches(
+            padded_inputs=padded_inputs,
+            info=info,
+            model=model,
+            sw_batch_size=sw_batch_size,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Sliding window inference failed during the prediction phase setup: {e}"
+        ) from e
+
+    try:
+        return merge_patches(
+            patch_generator=pred_gen,
+            info=info,
+            num_classes=num_classes,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Sliding window inference failed during the prediction/merging phase: {e}"
+        ) from e
