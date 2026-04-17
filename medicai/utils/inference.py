@@ -113,7 +113,8 @@ def sliding_window_inference_old(
     Args:
         inputs (np.ndarray): Input tensor with shape
             (batch_size, *spatial_dims, channels).
-        model: Callable that takes a patch of input and returns predictions.
+        model: Object with a ``predict(x, verbose=...)`` method. Takes a patch of
+            input and returns predictions.
         num_classes (Optional[int]): The number of output classes. If None,
             it will be inferred from the model's output shape.
         roi_size (Sequence[int]): Spatial window size for inferences.
@@ -480,7 +481,8 @@ def sliding_window_inference(
     Args:
         inputs (np.ndarray): Input tensor with shape
             ``(batch_size, *spatial_dims, channels)``.
-        model: Callable that takes a patch of input and returns predictions.
+        model: Object with a ``predict(x, verbose=...)`` method. Takes a patch of
+            input and returns predictions.
         num_classes (Optional[int]): The number of output classes.
         roi_size (Sequence[int]): Spatial window size.
         sw_batch_size (int): Batch size for sliding window inference.
