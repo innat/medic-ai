@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union
+from typing import Generator, Optional, Sequence, Union
 
 import numpy as np
 from scipy.ndimage import zoom
@@ -249,22 +249,36 @@ def extract_patches(
     roi_weight_map: Optional[np.ndarray] = None,
 ) -> tuple[np.ndarray, dict]:
     """
-    Extracts patches from the inputs for sliding window inference.
+    Prepares inputs for sliding window inference by computing padding,
+    overlap slicing coordinates, and the importance map.
+
+    This function does **not** materialise all patches into a single array.
+    Instead it returns the padded input volume together with metadata so that
+    patches can be lazily extracted in batches by ``predict_patches``.
 
     Args:
-        inputs (np.ndarray): Input tensor with shape (batch_size, *spatial_dims, channels).
+        inputs (np.ndarray): Input tensor with shape
+            ``(batch_size, *spatial_dims, channels)``.  Supports arbitrary
+            spatial dimensionality (2-D or 3-D).
         roi_size (Sequence[int]): Spatial window size for inferences.
-        overlap (Union[Sequence[float], float]): Overlap ratio between windows (default: 0.25).
-        mode (str): Blending mode for overlapping windows ("constant" or "gaussian").
-        sigma_scale (Union[Sequence[float], float]): Standard deviation coefficient for Gaussian blending.
-        padding_mode (str): Padding mode for inputs.
-        cval (float): Padding value.
-        roi_weight_map (Optional[np.ndarray]): Pre-computed weight map for each ROI.
+        overlap (Union[Sequence[float], float]): Overlap ratio between
+            windows (default: 0.25).
+        mode (str): Blending mode for overlapping windows.  Options are
+            ``"constant"`` or ``"gaussian"`` (default: ``"constant"``).
+        sigma_scale (Union[Sequence[float], float]): Standard deviation
+            coefficient for Gaussian blending (default: 0.125).
+        padding_mode (str): Padding mode for inputs when ``roi_size``
+            exceeds the input size (default: ``"constant"``).
+        cval (float): Fill value for ``"constant"`` padding (default: 0.0).
+        roi_weight_map (Optional[np.ndarray]): Pre-computed weight map
+            for each ROI.  If ``None``, computed from ``mode``.
 
     Returns:
         tuple[np.ndarray, dict]:
-            - patches: An array of un-merged patches extracted from the input.
-            - info: A dictionary containing structural metadata for merging.
+            - **padded_inputs** -- The (potentially padded) input array.
+            - **info** -- Dictionary with keys ``original_image_size``,
+              ``padded_image_size``, ``pad_size``, ``slices``, ``importance_map``,
+              ``batch_size``, ``num_spatial_dims``, ``roi_size``.
     """
     inputs = np.array(inputs) if not isinstance(inputs, np.ndarray) else inputs
     num_spatial_dims = len(inputs.shape) - 2
@@ -302,128 +316,146 @@ def extract_patches(
         if len(importance_map.shape) == num_spatial_dims:
             importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)
 
-    patch_list = []
-    for slice_idx in slices:
-        full_slice = (slice(None),) + slice_idx + (slice(None),)
-        patch_list.append(inputs[full_slice])
-
-    patches = np.concatenate(patch_list, axis=0)
-
     info = {
-        "image_size_": image_size_,
-        "image_size": image_size,
+        "original_image_size": image_size_,
+        "padded_image_size": image_size,
         "pad_size": pad_size,
         "slices": slices,
         "importance_map": importance_map,
         "batch_size": batch_size,
         "num_spatial_dims": num_spatial_dims,
+        "roi_size": roi_size,
     }
-    return patches, info
+    return inputs, info
 
 
 def predict_patches(
-    patches: np.ndarray,
+    padded_inputs: np.ndarray,
+    info: dict,
     model,
     sw_batch_size: int,
-    roi_size: Sequence[int],
-    importance_map: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> Generator[tuple[np.ndarray, list, np.ndarray], None, None]:
     """
-    Predicts on extracted patches using sliding window batch inference limit.
+    Generator that lazily extracts patches, runs inference, and yields
+    results one batch at a time.
+
+    Only one ``sw_batch_size``-worth of patches and predictions is held
+    in memory at any given time, keeping peak memory proportional to
+    ``O(sw_batch_size * patch_volume)`` rather than
+    ``O(total_patches * patch_volume)``.
 
     Args:
-        patches (np.ndarray): Extracted input patches.
-        model: Callable model or object with `predict` method.
-        sw_batch_size (int): Batch size for inference.
-        roi_size (Sequence[int]): Spatial window size.
-        importance_map (np.ndarray): Importance array for blending.
+        padded_inputs (np.ndarray): Padded input array returned by
+            ``extract_patches``.
+        info (dict): Metadata dictionary returned by ``extract_patches``.
+        model: Object with a ``predict(x, verbose=...)`` method.
+        sw_batch_size (int): Maximum number of patches per inference call.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]:
-            - predictions: Array of corresponding predicted patches.
-            - importance_map_resized: Resized importance map matching output spatial scale.
+    Yields:
+        tuple[np.ndarray, list, np.ndarray]:
+            - **pred_batch** -- Predictions for the current batch,
+              shape ``(actual_batch, *output_spatial, num_classes)``.
+            - **batch_slices** -- List of spatial slice tuples that
+              locate each patch within the padded volume.
+            - **importance_map_resized** -- Importance map matching the
+              prediction spatial dimensions.
     """
-    total_samples = patches.shape[0]
-    preds = []
+    slices = info["slices"]
+    roi_size = info["roi_size"]
+    importance_map = info["importance_map"]
     importance_map_resized = None
 
-    for i in tqdm(range(0, total_samples, sw_batch_size), desc=f"Total patch {total_samples}"):
-        batch_patches = patches[i : i + sw_batch_size]
+    for i in tqdm(range(0, len(slices), sw_batch_size), desc=f"Total patch {len(slices)}"):
+        batch_slices = slices[i : i + sw_batch_size]
 
-        bs_actual = batch_patches.shape[0]
+        # Extract patches for this batch only (lazy)
+        patch_list = []
+        for slice_idx in batch_slices:
+            full_slice = (slice(None),) + slice_idx + (slice(None),)
+            patch_list.append(padded_inputs[full_slice])
+        patches = np.concatenate(patch_list, axis=0)
+
+        # XLA padding -- dimension-agnostic
+        # GitHub: https://github.com/keras-team/keras/issues/21167
+        bs_actual = patches.shape[0]
         bs_target = sw_batch_size
         if bs_actual < bs_target:
             batch_pad_size = (
                 (0, bs_target - bs_actual),
-                *[(0, 0)] * (len(batch_patches.shape) - 1),
+                *[(0, 0)] * (len(patches.shape) - 1),
             )
-            batch_patches = np.pad(
-                batch_patches, batch_pad_size, mode="constant", constant_values=0
-            )
+            patches = np.pad(patches, batch_pad_size, mode="constant", constant_values=0)
 
-        pred = model.predict(batch_patches, verbose=0)
+        pred = model.predict(patches, verbose=0)
         pred = pred[:bs_actual]
-        preds.append(pred)
 
+        # Resize importance map if necessary -- dimension-agnostic (computed once)
         if importance_map_resized is None:
             if pred.shape[1:-1] != tuple(roi_size):
-                _, d, h, w, _ = importance_map.shape
+                src_spatial = importance_map.shape[1:-1]
                 target_shape = pred.shape[1:-1]
                 scale_factors = (
                     1,
-                    target_shape[0] / d,
-                    target_shape[1] / h,
-                    target_shape[2] / w,
+                    *(t / s for t, s in zip(target_shape, src_spatial)),
                     1,
                 )
                 importance_map_resized = zoom(importance_map, scale_factors, order=0)
             else:
                 importance_map_resized = importance_map
 
-    predictions = np.concatenate(preds, axis=0) if preds else np.array([])
-    return predictions, importance_map_resized
+        yield pred, batch_slices, importance_map_resized
 
 
 def merge_patches(
-    predictions: np.ndarray,
+    patch_generator: Generator[tuple[np.ndarray, list, np.ndarray], None, None],
     info: dict,
-    importance_map_resized: np.ndarray,
     num_classes: Optional[int] = None,
 ) -> np.ndarray:
     """
-    Merges batch predictions back into the original volume layout.
+    Consumes the generator from ``predict_patches`` and reconstructs the
+    full output volume by blending overlapping predictions.
+
+    Output and count arrays are pre-allocated once (on the first yielded
+    batch) and updated in-place, so no intermediate array of all
+    predictions is ever created.
 
     Args:
-        predictions (np.ndarray): Predicted patches.
-        info (dict): Metadata info from extract_patches.
-        importance_map_resized (np.ndarray): Resized importance blend map.
-        num_classes (Optional[int]): Number of output classes.
+        patch_generator (Generator): Generator yielding
+            ``(pred_batch, batch_slices, importance_map_resized)`` tuples,
+            as produced by ``predict_patches``.
+        info (dict): Metadata dictionary returned by ``extract_patches``.
+        num_classes (Optional[int]): Number of output classes.  If ``None``,
+            inferred from the first prediction batch.
 
     Returns:
-        np.ndarray: Final reconstructed and blended volumetric array.
+        np.ndarray: Reconstructed and blended output volume with shape
+            ``(batch_size, *original_spatial_dims, num_classes)``.
     """
     batch_size = info["batch_size"]
-    image_size = info["image_size"]
-    image_size_ = info["image_size_"]
+    padded_image_size = info["padded_image_size"]
+    original_image_size = info["original_image_size"]
     pad_size = info["pad_size"]
-    slices = info["slices"]
 
-    num_classes = num_classes or predictions.shape[-1]
-    output_shape = [batch_size] + list(image_size) + [num_classes]
+    output_image = None
+    count_map = None
 
-    output_image = np.zeros(output_shape, dtype=np.float32)
-    count_map = np.zeros([1] + list(image_size) + [1], dtype=np.float32)
+    for pred_batch, batch_slices, importance_map_resized in patch_generator:
+        # Lazy initialisation, infer num_classes from first prediction
+        if output_image is None:
+            nc = num_classes or pred_batch.shape[-1]
+            output_shape = [batch_size] + list(padded_image_size) + [nc]
+            output_image = np.zeros(output_shape, dtype=np.float32)
+            count_map = np.zeros([1] + list(padded_image_size) + [1], dtype=np.float32)
 
-    for i, slice_idx in enumerate(slices):
-        output_slice = (slice(None),) + slice_idx + (slice(None),)
-        pred_slice = predictions[i * batch_size : (i + 1) * batch_size]
-        output_image[output_slice] += pred_slice * importance_map_resized
-        count_map[output_slice] += importance_map_resized
+        for j, slice_idx in enumerate(batch_slices):
+            output_slice = (slice(None),) + slice_idx + (slice(None),)
+            output_image[output_slice] += pred_batch[j] * importance_map_resized
+            count_map[output_slice] += importance_map_resized
 
     output_image /= count_map
 
     if any(p for pair in pad_size for p in pair):
-        output_image = crop_output(output_image, pad_size, image_size_)
+        output_image = crop_output(output_image, pad_size, original_image_size)
 
     return output_image
 
@@ -446,14 +478,17 @@ def sliding_window_inference(
     This acts as a clean wrapper successively executing modular steps.
 
     Args:
-        inputs (np.ndarray): Input tensor with shape (batch_size, *spatial_dims, channels).
+        inputs (np.ndarray): Input tensor with shape
+            ``(batch_size, *spatial_dims, channels)``.
         model: Callable that takes a patch of input and returns predictions.
         num_classes (Optional[int]): The number of output classes.
         roi_size (Sequence[int]): Spatial window size.
         sw_batch_size (int): Batch size for sliding window inference.
-        overlap (Union[Sequence[float], float]): Overlap ratio between windows (default: 0.25).
-        mode (str): Blending mode ("constant" or "gaussian").
-        sigma_scale (Union[Sequence[float], float]): Std dev coefficient for Gaussian blending.
+        overlap (Union[Sequence[float], float]): Overlap ratio between
+            windows (default: 0.25).
+        mode (str): Blending mode (``"constant"`` or ``"gaussian"``).
+        sigma_scale (Union[Sequence[float], float]): Std dev coefficient
+            for Gaussian blending.
         padding_mode (str): Padding mode.
         cval (float): Padding value.
         roi_weight_map (Optional[np.ndarray]): Pre-computed weight map.
@@ -461,7 +496,7 @@ def sliding_window_inference(
     Returns:
         np.ndarray: Reconstructed output tensor.
     """
-    patches, info = extract_patches(
+    padded_inputs, info = extract_patches(
         inputs=inputs,
         roi_size=roi_size,
         overlap=overlap,
@@ -471,16 +506,14 @@ def sliding_window_inference(
         cval=cval,
         roi_weight_map=roi_weight_map,
     )
-    predictions, importance_map_resized = predict_patches(
-        patches=patches,
+    pred_gen = predict_patches(
+        padded_inputs=padded_inputs,
+        info=info,
         model=model,
         sw_batch_size=sw_batch_size,
-        roi_size=roi_size,
-        importance_map=info["importance_map"],
     )
     return merge_patches(
-        predictions=predictions,
+        patch_generator=pred_gen,
         info=info,
-        importance_map_resized=importance_map_resized,
         num_classes=num_classes,
     )
