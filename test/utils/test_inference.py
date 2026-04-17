@@ -13,11 +13,11 @@ from medicai.utils.inference import (
 class MockModel:
     """Deterministic mock model supporting arbitrary spatial dimensionality."""
 
-    def __init__(self, output_classes=2):
+    def __init__(self, output_classes=2, num_spatial_dims=3):
         self.output_classes = output_classes
-        # output_shape is only used by the old function's fallback:
-        #   num_classes = num_classes or model.output_shape[-1]
-        self.output_shape = (None, None, None, None, self.output_classes)
+        # Build output_shape dynamically to match expected input rank
+        # (batch, *spatial, channels)
+        self.output_shape = (None,) * (num_spatial_dims + 1) + (self.output_classes,)
 
     def predict(self, x, verbose=0):
         output_shape = list(x.shape)
@@ -34,7 +34,7 @@ def test_3d_sliding_window_inference_equivalence(overlap, mode, sigma_scale):
     np.random.seed(42)
     inputs = np.random.rand(1, 32, 32, 32, 1).astype(np.float32)
 
-    model = MockModel(output_classes=2)
+    model = MockModel(output_classes=2, num_spatial_dims=3)
     roi_size = (16, 16, 16)
     sw_batch_size = 4
     num_classes = 2
@@ -106,7 +106,7 @@ def test_2d_sliding_window_inference_equivalence(overlap, mode, sigma_scale):
     np.random.seed(42)
     inputs = np.random.rand(1, 64, 64, 1).astype(np.float32)
 
-    model = MockModel(output_classes=2)
+    model = MockModel(output_classes=2, num_spatial_dims=2)
     roi_size = (32, 32)
     sw_batch_size = 4
     num_classes = 2
@@ -156,3 +156,41 @@ def test_2d_sliding_window_inference_equivalence(overlap, mode, sigma_scale):
         atol=1e-5,
         err_msg="2D: Wrapper output does not match step-by-step pipeline!",
     )
+
+
+def test_num_classes_none_fallback_3d():
+    """Verify num_classes=None fallback uses model.output_shape[-1]."""
+    np.random.seed(42)
+    inputs = np.random.rand(1, 32, 32, 32, 1).astype(np.float32)
+
+    model = MockModel(output_classes=3, num_spatial_dims=3)
+    roi_size = (16, 16, 16)
+    sw_batch_size = 4
+
+    output = sliding_window_inference(
+        inputs=inputs,
+        model=model,
+        num_classes=None,
+        roi_size=roi_size,
+        sw_batch_size=sw_batch_size,
+    )
+    assert output.shape == (1, 32, 32, 32, 3)
+
+
+def test_num_classes_none_fallback_2d():
+    """Verify num_classes=None fallback uses model.output_shape[-1]."""
+    np.random.seed(42)
+    inputs = np.random.rand(1, 64, 64, 1).astype(np.float32)
+
+    model = MockModel(output_classes=4, num_spatial_dims=2)
+    roi_size = (32, 32)
+    sw_batch_size = 4
+
+    output = sliding_window_inference(
+        inputs=inputs,
+        model=model,
+        num_classes=None,
+        roi_size=roi_size,
+        sw_batch_size=sw_batch_size,
+    )
+    assert output.shape == (1, 64, 64, 4)

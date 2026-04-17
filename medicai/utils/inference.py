@@ -375,10 +375,10 @@ def predict_patches(
             patch_list.append(padded_inputs[full_slice])
         patches = np.concatenate(patch_list, axis=0)
 
-        # XLA padding -- dimension-agnostic
+        # XLA padding, dimension-agnostic
         # GitHub: https://github.com/keras-team/keras/issues/21167
         bs_actual = patches.shape[0]
-        bs_target = sw_batch_size
+        bs_target = sw_batch_size * info["batch_size"]
         if bs_actual < bs_target:
             batch_pad_size = (
                 (0, bs_target - bs_actual),
@@ -389,19 +389,15 @@ def predict_patches(
         pred = model.predict(patches, verbose=0)
         pred = pred[:bs_actual]
 
-        # Resize importance map if necessary -- dimension-agnostic (computed once)
+        # Resize importance map if necessary, dimension-agnostic (computed once)
         if importance_map_resized is None:
             if pred.shape[1:-1] != tuple(roi_size):
-                src_spatial = importance_map.shape[1:-1]
-                target_shape = pred.shape[1:-1]
-                scale_factors = (
-                    1,
-                    *(t / s for t, s in zip(target_shape, src_spatial)),
-                    1,
+                raise ValueError(
+                    f"Model output spatial shape {pred.shape[1:-1]} differs from "
+                    f"roi_size {tuple(roi_size)}. Slice-based accumulation requires "
+                    f"the model to preserve spatial dimensions."
                 )
-                importance_map_resized = zoom(importance_map, scale_factors, order=0)
-            else:
-                importance_map_resized = importance_map
+            importance_map_resized = importance_map
 
         yield pred, batch_slices, importance_map_resized
 
@@ -449,8 +445,14 @@ def merge_patches(
 
         for j, slice_idx in enumerate(batch_slices):
             output_slice = (slice(None),) + slice_idx + (slice(None),)
-            output_image[output_slice] += pred_batch[j] * importance_map_resized
+            b = batch_size
+            output_image[output_slice] += pred_batch[j * b : (j + 1) * b] * importance_map_resized
             count_map[output_slice] += importance_map_resized
+
+    if output_image is None:
+        raise ValueError(
+            "patch_generator yielded no batches; cannot reconstruct output."
+        )
 
     output_image /= count_map
 
