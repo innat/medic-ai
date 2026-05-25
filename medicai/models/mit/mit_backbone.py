@@ -9,45 +9,81 @@ from .mit_layers import HierarchicalTransformerEncoder, OverlappingPatchingAndEm
 
 @keras.utils.register_keras_serializable(package="mit.backbone")
 class MiTBackbone(keras.Model, DescribeMixin):
-    """MixVisionTransformer (MixViT) Model.
+    """
+    MiT feature-extraction backbone with multi-scale feature outputs.
 
-    This class implements the encoder backbone of the SegFormer architecture. It is a
-    hierarchical vision transformer that processes input data (2D images or 3D volumes)
-    through multiple stages. Each stage consists of an overlapping patch embedding layer,
-    followed by a series of efficient transformer encoder blocks. The use of overlapping
-    patches and spatially reduced attention makes the model efficient for high-resolution
-    inputs while capturing both local and global features.
+    This class builds only the backbone portion of a Mix Transformer (MiT)
+    model. It is intended for workflows that need reusable feature maps rather
+    than a final classification layer, such as custom classifiers, detection
+    heads, or segmentation decoders.
 
-    The model is built using the Keras Functional API, with a progressive
-    downsampling of the spatial dimensions and an increase in the feature dimensions,
-    similar to a convolutional neural network.
+    The backbone is constructed in the following stages:
 
-    ## Key Features and Strengths:
-    1.  **Efficient Self-Attention:** MiT replaces the standard vision transformer's
-        (ViT) global self-attention with a **Spatially-Reduced Attention (SRA)**
-        mechanism. SRA significantly reduces the computational cost from quadratic
-        to near-linear with respect to image size, allowing it to process high-resolution
-        inputs efficiently.
-    2.  **Multi-Scale Feature Pyramid:** It generates a multi-scale feature pyramid,
-        similar to Convolutional Neural Networks (CNNs), by using four stages with
-        gradually increasing receptive fields. This is achieved through overlapping
-        patch embedding and successive attention blocks, making it ideal as a
-        backbone for downstream tasks (like the UNet or segmentation models).
-    3.  **Lightweight and Configurable:** The architecture is highly parameterizable,
-        allowing for the creation of various models (e.g., MiT-B0 to MiT-B5) by
-        adjusting parameters like embedding dimensions, depth, and attention heads,
-        balancing performance and model size.
+    1. An input layer is created from ``input_shape``.
+    2. An optional ``Rescaling`` layer normalizes raw image intensities.
+    3. Each stage begins with overlapping patch embedding, which downsamples
+       the spatial dimensions while projecting the input into a new feature
+       space.
+    4. A stack of hierarchical transformer encoder blocks is applied at each
+       stage using spatial-reduction attention and stage-specific MLP ratios,
+       attention heads, and drop path rates.
+    5. The sequence output of each stage is layer-normalized, reshaped back
+       into a spatial feature map, and stored in ``pyramid_outputs``.
 
-    Example:
-    >>> from medicai.models import MiTBackbone
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MiTBackbone(input_shape=(224, 224, 3), project_dim=[32, 64, 160, 256], ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MiTBackbone(input_shape=(64, 64, 64, 1), project_dim=[32, 64, 160, 256], ...)
+    Args:
+        input_shape: A tuple specifying the input shape of the model, not
+            including the batch size. This can describe either 2D or 3D
+            inputs.
+        include_rescaling: A boolean indicating whether to include a
+            ``Rescaling`` layer at the beginning of the model.
+        max_drop_path_rate: A float specifying the maximum stochastic depth
+            rate distributed across the transformer blocks.
+        layer_norm_epsilon: A float specifying the epsilon value used in layer
+            normalization.
+        qkv_bias: A boolean indicating whether to apply bias terms to query,
+            key, and value projections.
+        project_dim: A list of integers specifying the embedding dimension for
+            each stage.
+        sr_ratios: A list of integers specifying the spatial-reduction ratio
+            used by attention in each stage.
+        patch_sizes: A list of integers specifying the patch embedding kernel
+            size for each stage.
+        strides: A list of integers specifying the patch embedding stride for
+            each stage.
+        num_heads: A list of integers specifying the number of attention heads
+            in each stage.
+        depths: A list of integers specifying the number of transformer blocks
+            in each stage.
+        mlp_ratios: A list of integers specifying the MLP expansion ratio in
+            each stage.
+        name: (Optional) The name of the model.
 
-    Reference:
-        https://github.com/keras-team/keras-hub
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
 
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models.mit import MiTBackbone
+
+            model = MiTBackbone(
+                input_shape=(224, 224, 3),
+                project_dim=[32, 64, 160, 256],
+                num_heads=[1, 2, 5, 8],
+                depths=[2, 2, 2, 2],
+                name='mit_backbone'
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 7, 7, 256])
+
+
+    References:
+        - SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS 2021.
+            `arXiv:2105.15203 <https://arxiv.org/abs/2105.15203>`_
     """
 
     def __init__(

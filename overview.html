@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>medicai Overview</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    :root {
+      --teal-bg: #E1F5EE;
+      --teal-text: #085041;
+      --teal-border: #5DCAA5;
+      --teal-strong: #1D9E75;
+      --blue-bg: #E6F1FB;
+      --blue-text: #0C447C;
+      --blue-border: #85B7EB;
+      --amber-bg: #FAEEDA;
+      --amber-text: #633806;
+      --amber-border: #EF9F27;
+      --purple-bg: #EEEDFE;
+      --purple-text: #3C3489;
+      --purple-border: #AFA9EC;
+      --coral-bg: #FAECE7;
+      --coral-text: #993C1D;
+      --coral-border: #F0997B;
+      --gray-bg: #F1EFE8;
+      --gray-text: #444441;
+      --gray-border: #B4B2A9;
+      --ink: #171918;
+      --muted: #666b67;
+      --line: rgba(23, 25, 24, 0.14);
+      --surface: #FFFFFF;
+      --page: #FCFCFA;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--surface);
+      border-bottom: 0.5px solid var(--line);
+    }
+
+    .nav {
+      width: min(1120px, calc(100% - 32px));
+      min-height: 64px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .wordmark {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .accent {
+      color: var(--teal-strong);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .nav-links a {
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 400;
+      padding: 7px 12px;
+    }
+
+    .nav-links a.active {
+      background: var(--teal-bg);
+      color: var(--teal-text);
+    }
+
+    .github-link {
+      width: 36px;
+      height: 36px;
+      border: 0.5px solid var(--line);
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--ink);
+    }
+
+    .github-link svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    main {
+      overflow: hidden;
+    }
+
+    .section {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 80px 0;
+    }
+
+    .hero {
+      display: grid;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .status-badge,
+    .pill,
+    .task-badge,
+    .arch-badge,
+    .chip,
+    .filter-button,
+    .tag {
+      border: 0.5px solid;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      width: fit-content;
+      background: var(--teal-bg);
+      border-color: var(--teal-border);
+      color: var(--teal-text);
+      padding: 8px 11px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--teal-strong);
+      display: inline-block;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 500;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    .tagline {
+      max-width: 780px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .pill-row,
+    .cta-row,
+    .filter-row,
+    .tag-row,
+    .footer-links {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pill,
+    .tag {
+      padding: 8px 11px;
+    }
+
+    .teal {
+      background: var(--teal-bg);
+      border-color: var(--teal-border);
+      color: var(--teal-text);
+    }
+
+    .blue {
+      background: var(--blue-bg);
+      border-color: var(--blue-border);
+      color: var(--blue-text);
+    }
+
+    .amber {
+      background: var(--amber-bg);
+      border-color: var(--amber-border);
+      color: var(--amber-text);
+    }
+
+    .purple {
+      background: var(--purple-bg);
+      border-color: var(--purple-border);
+      color: var(--purple-text);
+    }
+
+    .coral {
+      background: var(--coral-bg);
+      border-color: var(--coral-border);
+      color: var(--coral-text);
+    }
+
+    .gray {
+      background: var(--gray-bg);
+      border-color: var(--gray-border);
+      color: var(--gray-text);
+    }
+
+    .button {
+      min-height: 42px;
+      border: 0.5px solid var(--teal-border);
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 16px;
+    }
+
+    .button.primary {
+      background: var(--teal-strong);
+      border-color: var(--teal-strong);
+      color: #FFFFFF;
+    }
+
+    .button.secondary {
+      background: transparent;
+      color: var(--teal-text);
+    }
+
+    .button.github-star {
+      border-color: var(--line);
+      color: var(--ink);
+    }
+
+    .button svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .section-subtitle {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+    }
+
+    .feature-card {
+      min-height: 178px;
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .feature-icon {
+      width: 34px;
+      height: 34px;
+      border: 0.5px solid var(--teal-border);
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--teal-bg);
+      color: var(--teal-text);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .feature-card p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .model-panel {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .filter-row {
+      padding: 16px;
+      border-bottom: 0.5px solid var(--line);
+    }
+
+    .filter-button {
+      appearance: none;
+      cursor: pointer;
+      background: var(--surface);
+      border-color: var(--line);
+      color: var(--gray-text);
+      padding: 8px 12px;
+    }
+
+    .filter-button.active {
+      border-color: transparent;
+    }
+
+    .filter-button[data-filter="all"].active {
+      background: var(--gray-bg);
+      color: var(--gray-text);
+    }
+
+    .filter-button[data-filter="classification"].active {
+      background: var(--blue-bg);
+      color: var(--blue-text);
+    }
+
+    .filter-button[data-filter="segmentation"].active {
+      background: var(--amber-bg);
+      color: var(--amber-text);
+    }
+
+    .filter-button[data-filter="cnn"].active {
+      background: var(--teal-bg);
+      color: var(--teal-text);
+    }
+
+    .filter-button[data-filter="transformer"].active {
+      background: var(--purple-bg);
+      color: var(--purple-text);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    th,
+    td {
+      border-bottom: 0.5px solid var(--line);
+      padding: 14px 16px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    td:first-child {
+      font-weight: 500;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .task-badge,
+    .arch-badge {
+      padding: 7px 10px;
+    }
+
+    .transform-note {
+      max-width: 760px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .chip-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+    }
+
+    .chip {
+      min-height: 38px;
+      justify-content: center;
+      background: var(--surface);
+      border-color: var(--line);
+      color: var(--ink);
+      padding: 9px 10px;
+      text-align: center;
+    }
+
+    .compatibility {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .compat-group {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .compat-group h3 {
+      margin-bottom: 14px;
+    }
+
+    footer {
+      border-top: 0.5px solid var(--line);
+      padding: 34px 16px;
+      text-align: center;
+    }
+
+    .footer-inner {
+      display: grid;
+      gap: 10px;
+      justify-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .footer-links a {
+      color: var(--gray-text);
+    }
+
+    @media (max-width: 760px) {
+      .nav {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 0;
+      }
+
+      .nav-links {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .github-link {
+        position: absolute;
+        right: 16px;
+        top: 14px;
+      }
+
+      .section {
+        padding: 64px 0;
+      }
+
+      .section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .compatibility {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .feature-grid,
+      .chip-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .cta-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .tagline {
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary navigation">
+      <a class="wordmark" href="overview.html">medic<span class="accent">ai</span></a>
+      <div class="nav-links">
+        <a class="active" href="overview.html" aria-current="page">Overview</a>
+        <a href="installation.html">Installation</a>
+        <a href="api-reference.html">API Reference</a>
+        <a href="code-examples.html">Code Examples</a>
+        <a href="misc.html">Misc</a>
+      </div>
+      <a class="github-link" href="https://github.com/innat/medic-ai" aria-label="GitHub repository">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.67 0 8.2c0 3.62 2.29 6.7 5.47 7.79.4.08.55-.18.55-.4 0-.2-.01-.86-.01-1.56-2.01.38-2.53-.5-2.69-.96-.09-.24-.48-.96-.82-1.15-.28-.16-.68-.55-.01-.56.63-.01 1.08.59 1.23.83.72 1.24 1.87.89 2.33.68.07-.53.28-.89.51-1.1-1.78-.21-3.64-.91-3.64-4.05 0-.89.31-1.63.82-2.2-.08-.21-.36-1.04.08-2.17 0 0 .67-.22 2.2.84A7.42 7.42 0 0 1 8 3.91c.68 0 1.36.09 2 .28 1.53-1.06 2.2-.84 2.2-.84.44 1.13.16 1.96.08 2.17.51.57.82 1.3.82 2.2 0 3.15-1.87 3.84-3.65 4.05.29.26.54.75.54 1.52 0 1.1-.01 1.98-.01 2.25 0 .22.15.48.55.4A8.07 8.07 0 0 0 16 8.2C16 3.67 12.42 0 8 0Z"/>
+        </svg>
+      </a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="section hero" aria-labelledby="hero-title">
+      <div class="status-badge"><span class="dot"></span>v0.0.3 · keras-based · medical imaging</div>
+      <h1 id="hero-title">medic<span class="accent">ai</span></h1>
+      <p class="tagline">A Keras-native library for medical image analysis — backend-agnostic, GPU/TPU-ready, and built for volumetric data.</p>
+      <div class="pill-row" aria-label="Key capabilities">
+        <span class="pill amber">TensorFlow</span>
+        <span class="pill coral">PyTorch</span>
+        <span class="pill teal">JAX</span>
+        <span class="pill gray">2D + 3D</span>
+        <span class="pill gray">Multi-GPU / TPU</span>
+        <span class="pill gray">Sliding window</span>
+      </div>
+      <div class="cta-row">
+        <a class="button primary" href="installation.html">Get started</a>
+        <a class="button secondary" href="code-examples.html">View examples</a>
+        <a class="button github-star" href="https://github.com/innat/medic-ai">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 .25a.78.78 0 0 1 .7.43l1.94 3.93 4.34.63a.78.78 0 0 1 .43 1.33l-3.14 3.06.74 4.32a.78.78 0 0 1-1.13.82L8 12.73l-3.88 2.04a.78.78 0 0 1-1.13-.82l.74-4.32L.59 6.57a.78.78 0 0 1 .43-1.33l4.34-.63L7.3.68A.78.78 0 0 1 8 .25Z"/>
+          </svg>
+          GitHub star
+        </a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="strengths-title">
+      <div class="section-heading">
+        <h2 id="strengths-title">Core Strengths</h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <span class="feature-icon">↔</span>
+          <h3>Backend agnostic</h3>
+          <p>Runs on TensorFlow, PyTorch, or JAX through one environment variable.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-icon">API</span>
+          <h3>High-level API</h3>
+          <p>Provides a consistent interface for transforms and model creation.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-icon">⇧</span>
+          <h3>Scalable execution</h3>
+          <p>Supports single GPU, multi-GPU, and TPU-VM training workflows.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-icon">3D</span>
+          <h3>3D sliding window</h3>
+          <p>Enables efficient patch-based inference for volumetric data.</p>
+        </article>
+        <article class="feature-card">
+          <span class="feature-icon">∩</span>
+          <h3>Built-in metrics</h3>
+          <p>Includes Dice, IoU, and other medical segmentation metrics.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="model-zoo-title">
+      <div class="section-heading">
+        <h2 id="model-zoo-title">Model Zoo</h2>
+        <p class="section-subtitle"><span id="model-count">24</span> models, all with 2D and 3D support</p>
+      </div>
+      <div class="model-panel">
+        <div class="filter-row" aria-label="Model filters">
+          <button class="filter-button active" type="button" data-filter="all">All</button>
+          <button class="filter-button" type="button" data-filter="classification">Classification</button>
+          <button class="filter-button" type="button" data-filter="segmentation">Segmentation</button>
+          <button class="filter-button" type="button" data-filter="cnn">CNN</button>
+          <button class="filter-button" type="button" data-filter="transformer">Transformer</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Model</th>
+                <th scope="col">Modalities</th>
+                <th scope="col">Task</th>
+                <th scope="col">Architecture</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-task="classification" data-arch="cnn">
+                <td>DenseNet121</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>DenseNet169</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>DenseNet201</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>ResNet-V1/V2</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>ResNeXt</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>SE-ResNet</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>SE-ResNeXt</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>Xception</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>EfficientNet-V1/V2</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="cnn">
+                <td>ConvNeXt-V1/V2</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="transformer">
+                <td>ViT</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="transformer">
+                <td>MiT</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="classification" data-arch="transformer">
+                <td>Swin Transformer-V1/V2</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge blue">Classification</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="cnn">
+                <td>UNet</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="cnn">
+                <td>UNet++</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="cnn">
+                <td>AttentionUNet</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="cnn">
+                <td>DeepLabV3Plus</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="cnn">
+                <td>UPerNet</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge teal">CNN</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>UNETR</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>UNETR++</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>SwinUNETR</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>SwinUNETR-V2</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>TransUNet</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+              <tr data-task="segmentation" data-arch="transformer">
+                <td>SegFormer</td>
+                <td>2D + 3D</td>
+                <td><span class="task-badge amber">Segmentation</span></td>
+                <td><span class="arch-badge purple">Transformer</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="transforms-title">
+      <div class="section-heading">
+        <h2 id="transforms-title">Transformations</h2>
+      </div>
+      <p class="transform-note">All transforms are implemented with TensorFlow ops and are compatible with tf.data pipelines across all backends.</p>
+      <div class="chip-grid" aria-label="Available transformations">
+        <span class="chip">CropForeground</span>
+        <span class="chip">NormalizeIntensity</span>
+        <span class="chip">Orientation</span>
+        <span class="chip">RandCropByPosNegLabel</span>
+        <span class="chip">RandFlip</span>
+        <span class="chip">RandRotate90</span>
+        <span class="chip">RandRotate</span>
+        <span class="chip">RandCutOut</span>
+        <span class="chip">RandShiftIntensity</span>
+        <span class="chip">RandSpatialCrop</span>
+        <span class="chip">Resize</span>
+        <span class="chip">ScaleIntensityRange</span>
+        <span class="chip">Spacing</span>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="compat-title">
+      <div class="section-heading">
+        <h2 id="compat-title">Backend &amp; Hardware Compatibility</h2>
+      </div>
+      <div class="compatibility">
+        <div class="compat-group">
+          <h3>Backends</h3>
+          <div class="tag-row">
+            <span class="tag amber">TensorFlow</span>
+            <span class="tag coral">PyTorch</span>
+            <span class="tag teal">JAX</span>
+          </div>
+        </div>
+        <div class="compat-group">
+          <h3>Hardware</h3>
+          <div class="tag-row">
+            <span class="tag gray">Single GPU</span>
+            <span class="tag gray">Multi-GPU</span>
+            <span class="tag gray">TPU-VM</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <p>© 2025 medicai · Apache-2.0 License</p>
+      <div class="footer-links">
+        <a href="https://github.com/innat/medic-ai">GitHub</a>
+        <span>·</span>
+        <a href="overview.html">Documentation</a>
+        <span>·</span>
+        <a href="https://pypi.org/project/medicai/">PyPI</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const filterButtons = document.querySelectorAll(".filter-button");
+    const modelRows = document.querySelectorAll("tbody tr");
+
+    filterButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const filter = button.dataset.filter;
+
+        filterButtons.forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+
+        modelRows.forEach((row) => {
+          const isVisible = filter === "all" || row.dataset.task === filter || row.dataset.arch === filter;
+          row.style.display = isVisible ? "" : "none";
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -860,3 +860,69 @@ class SwinBaseV2(SwinVariantsBase, DescribeMixin):
             name=name,
             **kwargs,
         )
+
+
+SWIN_DOCSTRING = """
+This class provides a complete {name} model, including the hierarchical
+transformer backbone and the classification head (the "top"). The backbone
+follows the {version} design with patch embedding and stacked shifted-window
+transformer stages, and the full model can be used either for end-to-end
+classification or as a feature extractor.
+
+Args:
+    input_shape: A tuple specifying the input shape of the model,
+        not including the batch size. Can be `(height, width, channels)` for
+        2D or `(depth, height, width, channels)` for 3D.
+    include_rescaling: A boolean indicating whether to include a
+        ``Rescaling`` layer at the beginning of the model.
+    include_top: A boolean indicating whether to include the fully
+        connected classification layer at the top of the network. If
+        `False`, the model's output will be the features from the
+        backbone, without the final classifier.
+    patch_size: An integer or tuple specifying the patch size used by the
+        backbone.
+    window_size: An integer or tuple specifying the attention window size.
+    num_classes: An integer specifying the number of classes for the
+        classification layer. This is only relevant if `include_top`
+        is `True`.
+    pooling: (Optional) A string specifying the type of pooling to
+        apply to the output of the backbone. Can be `"avg"` for global
+        average pooling or `"max"` for global max pooling. This is only
+        relevant if `include_top` is `False`.
+    classifier_activation: A string specifying the activation function
+        to use for the classification layer.
+    stage_wise_conv: A boolean indicating whether to enable stage-wise
+        convolutional residual refinement before Swin stages.
+    downsampling_strategy: A string specifying the downsampling behavior used
+        between Swin stages.
+    name: (Optional) The name of the model.
+    **kwargs: Additional keyword arguments.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+
+    - If ``include_top=True``, the output is a classification tensor of shape
+      ``(batch_size, num_classes)``.
+    - If ``include_top=False`` and ``pooling`` is ``None``, the output is the
+      final backbone feature tensor.
+    - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+      the output is a pooled feature tensor.
+
+Examples:
+    .. code-block:: python
+
+        import torch
+        from medicai.models.swin import {name}
+
+        model = {name}(input_shape=(224, 224, 3), include_top=True, num_classes=2)
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # Output: torch.Size([1, 2])
+"""
+
+SwinTiny.__doc__ = SWIN_DOCSTRING.format(name="SwinTiny", version="Swin Transformer V1")
+SwinSmall.__doc__ = SWIN_DOCSTRING.format(name="SwinSmall", version="Swin Transformer V1")
+SwinBase.__doc__ = SWIN_DOCSTRING.format(name="SwinBase", version="Swin Transformer V1")
+SwinTinyV2.__doc__ = SWIN_DOCSTRING.format(name="SwinTinyV2", version="Swin Transformer V2")
+SwinSmallV2.__doc__ = SWIN_DOCSTRING.format(name="SwinSmallV2", version="Swin Transformer V2")
+SwinBaseV2.__doc__ = SWIN_DOCSTRING.format(name="SwinBaseV2", version="Swin Transformer V2")

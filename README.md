@@ -163,7 +163,7 @@ Spacing
 
 # 📚 Documentation
 
-To learn more about **model**, **transformation**, and **training**, please visit official documentation: [`medicai/docs`](https://innat.github.io/medic-ai/)
+To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
 
 # 🤝 Contributing
 

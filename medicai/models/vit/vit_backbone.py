@@ -8,14 +8,79 @@ from .vit_layers import ViTEncoderBlock, ViTPatchingAndEmbedding
 
 class ViTBackbone(keras.Model, DescribeMixin):
     """
-    Vision Transformer (ViT) backbone for feature extraction.
+    The backbone is constructed in the following stages:
 
-    This class implements the core ViT encoder, including patching, embedding,
-    transformer encoder blocks, and final layer normalization. It supports both 2D
-    (H, W, C) and 3D (D, H, W, C) inputs, adapting the patching mechanism accordingly.
+    1. An input layer is created from ``input_shape``.
+    2. An optional ``Rescaling`` layer normalizes raw image intensities.
+    3. The input is split into non-overlapping patches and projected into the
+       transformer hidden dimension. An optional class token can be prepended
+       to the token sequence.
+    4. Dropout is applied to the patch embeddings.
+    5. A stack of transformer encoder blocks is applied to the token sequence.
+       After each stage, the current token sequence is stored in
+       ``pyramid_outputs``.
+    6. A final layer normalization is applied to produce the backbone output.
 
-    The model output is the sequence of feature tokens (including the CLS token, if used)
-    after the final transformer block and Layer Normalization.
+    Args:
+        input_shape: A tuple specifying the input shape of the model, not
+            including the batch size. This can describe either 2D or 3D
+            inputs.
+        patch_size: An integer or tuple specifying the patch size used to
+            split the input before embedding.
+        num_layers: An integer specifying the number of transformer
+            encoder blocks.
+        num_heads: An integer specifying the number of attention heads in
+            each transformer block.
+        hidden_dim: An integer specifying the hidden dimension of the
+            token embeddings.
+        mlp_dim: An integer specifying the hidden dimension of the MLP
+            sublayers inside each transformer block.
+        use_class_token: A boolean indicating whether to prepend a class
+            token to the token sequence.
+        include_rescaling: A boolean indicating whether to include a
+            ``Rescaling`` layer at the beginning of the model.
+        dropout_rate: A float specifying the dropout rate applied after
+            patch embedding and inside the transformer blocks.
+        attention_dropout: A float specifying the attention dropout rate.
+        layer_norm_epsilon: A float specifying the epsilon value used in
+            layer normalization.
+        use_mha_bias: A boolean indicating whether to use bias terms in
+            multi-head attention projections.
+        use_mlp_bias: A boolean indicating whether to use bias terms in
+            the MLP layers.
+        use_patch_bias: A boolean indicating whether to use bias terms in
+            the patch embedding projection.
+        name: (Optional) The name of the model.
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models.vit import ViTBackbone
+
+            model = ViTBackbone(
+                input_shape=(224, 224, 3),
+                patch_size=16,
+                num_layers=4,
+                num_heads=8,
+                hidden_dim=256,
+                mlp_dim=512,
+                use_class_token=False
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 196, 256])
+
+
+    References:
+        - An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. ICLR 2021.
+          `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_
+
     """
 
     def __init__(

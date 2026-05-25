@@ -14,47 +14,99 @@ from medicai.utils import DescribeMixin, registration, resolve_encoder, validate
 @registration.register(name="unetr", type="segmentation")
 class UNETR(keras.Model, DescribeMixin):
     """
-    UNETR: U-Net with a Vision Transformer (ViT) backbone for 3D/2D medical image segmentation.
+    UNETR can be constructed either from a registered ViT encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary so the decoder can retrieve the
+    transformer features used as skip connections.
 
-    UNETR integrates a ViT encoder as the backbone with a UNet-style decoder, using
-    projection upsampling blocks and skip connections from intermediate transformer layers.
-    It is designed to leverage the global context-modeling power of Transformers for
-    high-resolution tasks like medical image segmentation.
+    The model combines three components:
 
-    The model supports both 2D (H, W, C) and 3D (D, H, W, C) inputs, depending on the
-    dimensional configuration of the injected Vision Transformer encoder.
+    1. A Vision Transformer encoder that produces token representations across
+       multiple transformer depths.
+    2. Projection blocks that reshape selected token sequences back into
+       spatial feature maps.
+    3. A UNet-style decoder that progressively upsamples the bottleneck while
+       fusing transformer skip features.
+
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required token features.
+        encoder_name: Optional name of a registered ViT backbone to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        feature_size: Base channel width used by the decoder.
+        norm_name: Normalization type used in the decoder.
+        conv_block: Whether token projection blocks use convolutional
+            refinement before upsampling.
+        res_block: Whether residual blocks are used inside decoder refinement
+            blocks.
+        dropout_rate: Dropout rate used in the ViT components.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models import UNETR
+
+            model = UNETR(
+                encoder_name="vit_base",
+                input_shape=(96, 96, 96, 1),
+            )
+            x = torch.randn((1, 96, 96, 96, 1))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 96, 96, 96, 1])
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with the transformer
+       features required by the decoder.
+    2. It exposes ``patch_size`` and ``hidden_dim`` so the decoder can reshape
+       token sequences into spatial feature maps.
+    3. It is built with ``pooling=None`` and without a class token in the
+       output sequence expected by the decoder.
 
     Example:
-    >>> import tensorflow as tf # Assuming Keras backend uses TensorFlow for this example
-    >>> from your_module import UNETR
-    >>> # 3D UNETR for 3-class segmentation
-    >>> model_3d = UNETR(
-    ...     input_shape=(16, 128, 128, 1),
-    ...     encoder_name="vit_base", # Automatically resolves and builds the ViT-Base encoder
-    ...     num_classes=3,
-    ...     feature_size=16,
-    ...     norm_name="instance",
-    ... )
-    >>> output_3d = model_3d(tf.random.normal((1, 16, 128, 128, 1)))
-    >>> print(output_3d.shape)
-    (1, 16, 128, 128, 3) # Example output shape for 3D
+        Build the model from a custom ViT encoder::
 
-    >>> # 2D UNETR for binary segmentation (e.g., cell/background)
-    >>> model_2d = UNETR(
-    ...     input_shape=(256, 256, 3),
-    ...     encoder_name="vit_large",
-    ...     num_classes=1,
-    ...     classifier_activation="sigmoid",
-    ...     feature_size=32,
-    ...     norm_name="batch",
-    ... )
-    >>> output_2d = model_2d(tf.random.normal((1, 256, 256, 3)))
-    >>> print(output_2d.shape)
-    (1, 256, 256, 1) # Example output shape for 2D
+            from medicai.models import UNETR, ViTBackbone
 
-    Reference:
-        'UNETR: Transformers for 3D Medical Image Segmentation'
-        - Paper: https://arxiv.org/abs/2103.10504
+            encoder = ViTBackbone(
+                input_shape=(96, 96, 96, 3),
+                patch_size=16,
+                num_layers=6,
+                num_heads=6,
+                hidden_dim=384,
+                mlp_dim=1536,
+                use_class_token=False,
+            )
+            model = UNETR(
+                encoder=encoder,
+                num_classes=3,
+                classifier_activation="sigmoid",
+            )
+            
+            x = torch.randn((1, 96, 96, 96, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 96, 96, 96, 3])
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)``.
+
+    References:
+        - UNETR: Transformers for 3D Medical Image Segmentation.
+          `arXiv:2103.10504 <https://arxiv.org/abs/2103.10504>`_
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["vit"]

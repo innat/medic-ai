@@ -17,56 +17,122 @@ from .encoder_layers import UNETRPlusPlusUpsamplingBlock
 @registration.register(name="unetr_plusplus", type="segmentation")
 class UNETRPlusPlus(keras.Model, DescribeMixin):
     """
-    Implements the UNETR++ model, a robust 3D segmentation architecture
-    that enhances the original UNETR by integrating a hierarchical,
-    convolutional-based decoder (similar to U-Net) to process the output
-    from a Vision Transformer (ViT) or standard CNN encoder.
+    UNETRPlusPlus can be constructed either from a registered encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary containing the four feature levels
+    required by the decoder: ``P1``, ``P2``, ``P3``, and ``P4``.
 
-    The model expects an encoder that provides four pyramid output stages (P1, P2, P3, P4).
-    The last feature map (P4/ViT output) is projected and then fed into the decoder.
+    The model combines three components:
+
+    1. A hierarchical encoder that produces a four-level feature pyramid.
+    2. A multi-scale decoder that progressively upsamples and refines
+       ``P4`` through ``P1``.
+    3. A shallow input projection branch that is fused at the final decoding
+       stage before the segmentation head.
 
     Args:
-        input_shape (tuple, optional): The shape of the input tensor (e.g., (128, 128, 128, 1)).
-            Must be specified if `encoder` or `encoder_name` is None.
-        encoder_name (str, optional): Name of the backbone encoder model to use
-            (e.g., 'unetr_plusplus_small').
-        encoder (keras.Model, optional): A pre-instantiated encoder model.
-            Must provide `pyramid_outputs` with keys P1, P2, P3, P4.
-        num_classes (int): The number of output classes for segmentation. (default: 1).
-        feature_size (int): Base number of filters in the decoder stages (e.g., 16, 32).
-            Decoder channels are scaled by multiples of this size. (default: 16).
-        norm_name (str): The normalization layer name used in the decoder blocks
-            ('instance', 'batch'). (default: "instance").
-        classifier_activation (str): The activation function for the final output layer
-            ('sigmoid' for binary, 'softmax' for multi-class). (default: "sigmoid").
-        name (str): The model name. (default: "UNETRPlusPlus").
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with ``P1`` to ``P4``.
+        encoder_name: Optional name of a registered encoder model to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        feature_size: Base channel width used by the decoder.
+        norm_name: Normalization type used in the decoder.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        Build a 3D UNETRPlusPlus model::
+
+            import torch
+            from medicai.models import UNETRPlusPlus
+
+            model = UNETRPlusPlus(
+                encoder_name="unetr_plusplus_encoder",
+                input_shape=(128, 128, 128, 4),
+                num_classes=3,
+            )
+            x = torch.randn((1, 128, 128, 128, 4))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 128, 128, 128, 3])
+
+        Build a 2D UNETRPlusPlus model::
+
+            import torch
+            from medicai.models import UNETRPlusPlus
+
+            model = UNETRPlusPlus(
+                encoder_name="unetr_plusplus_encoder",
+                input_shape=(224, 224, 3),
+                num_classes=3,
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 224, 224, 3])
+
+    .. rubric:: Default and anisotropic configurations
+       :class: api-subheading
+
+    By default, the built-in ``unetr_plusplus_encoder`` follows the **BraTS**-like
+    isotropic setup. For anisotropic medical inputs, we can manually instantiate a 
+    compatible encoder with a custom ``patch_size`` and pass it through ``encoder`` 
+    while keeping the decoder unchanged.
 
     Example:
-        ```python
-        from medicai.models import UNETRPlusPlus, UNETRPlusPlusEncoder
+        Use a custom ``unetr++`` encoder for anisotropic inputs::
 
-        # Case 1
-        input_shape = (128, 128, 128, 4)
-        model = UNETRPlusPlus(
-            input_shape=input_shape,
-            encoder_name="unetr_plusplus_encoder",
-            num_classes=3,
-            classifier_activation=None
-        )
+            import torch
+            from medicai.models import UNETRPlusPlus, UNETRPlusPlusEncoder
 
-        # Case 2
-        input_shape = (16, 160, 160, 1)
-        encoder = UNETRPlusPlusEncoder(
-            input_shape=(16, 160, 160, 1),
-            patch_size=(1, 4, 4)
-        )
-        model = UNETRPlusPlus(
-            encoder=encoder,
-            num_classes=3
-        )
-        ```
+            encoder = UNETRPlusPlusEncoder(
+                input_shape=(16, 160, 160, 1),
+                patch_size=(1, 4, 4), # preserve depth resolution
+            )
+            model = UNETRPlusPlus(
+                encoder=encoder,
+                num_classes=3,
+            )
+            x = torch.randn((1, 16, 160, 160, 1))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 16, 160, 160, 3])
+
+        .. code-block:: python
+
+            encoder = UNETRPlusPlusEncoder(
+                input_shape=(64, 128, 128, 1),
+                patch_size=(2, 4, 4)  # moderate depth downsampling
+            )
+            model = UNETRPlusPlus(
+                encoder=encoder,
+                num_classes=3
+            )
+            x = torch.randn((1, 64, 128, 128, 1))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 64, 128, 128, 3])
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    Unlike the original ``UNETR``, this implementation uses additive skip fusion
+    inside the decoder blocks. Because additive fusion requires aligned
+    channel dimensions and compatible feature hierarchies, the decoder is
+    tightly coupled to encoders that follow the expected ``UNETR++`` pyramid
+    structure.
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)``.
+
+    References:
+        - UNETR++: Delving into Efficient and Accurate 3D Medical Image
+          Segmentation. `arXiv:2212.04497 <https://arxiv.org/abs/2212.04497>`_
     """
-
     ALLOWED_BACKBONE_FAMILIES = ["unetr_plusplus"]
 
     def __init__(

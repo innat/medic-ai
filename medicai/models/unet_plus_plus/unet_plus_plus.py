@@ -18,14 +18,170 @@ from .decoder import UNetPlusPlusDecoder
 @registration.register(name="unet_plus_plus", type="segmentation")
 class UNetPlusPlus(keras.Model, DescribeMixin):
     """
-    UNet++ model with dense skip connections.
+    UNetPlusPlus can be constructed either from a registered encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary so the decoder can retrieve the bottleneck
+    feature and the skip features used along the nested decoding pathways.
 
-    Reference: https://arxiv.org/abs/1807.10165
+    The model combines three components:
+
+    1. An encoder that extracts a multi-scale feature pyramid.
+    2. A nested decoder with dense skip connections across multiple scales.
+    3. A final segmentation head applied after multi-stage feature fusion.
+
+    Compared with standard UNet, UNet++ does not fuse encoder and decoder
+    features only once at each scale. Instead, it progressively refines
+    intermediate decoder nodes before producing the final segmentation output.
+
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required feature levels.
+        encoder_name: Optional name of a registered backbone model to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        encoder_depth: Number of encoder pyramid levels to use. Valid values
+            are ``3``, ``4``, and ``5``.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        decoder_filters: Sequence of channel widths used by the decoder
+            refinement path.
+        decoder_normalization: Normalization behavior used in decoder blocks.
+        decoder_activation: Activation function used in decoder blocks.
+        decoder_block_type: Decoder upsampling strategy. Supported values are
+            ``"upsampling"`` and ``"transpose"``.
+        head_upsample: Final upsampling factor applied before prediction. Can
+            be an integer, float, tuple, or list.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import UNetPlusPlus
+
+            model = UNetPlusPlus(
+                encoder_name="resnet18",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Encoder depth
+       :class: api-subheading
+
+    The ``encoder_depth`` argument controls which encoder feature is used as
+    the bottleneck and how large the nested decoder grid becomes:
+
+    - ``encoder_depth=5`` uses ``P5`` as the bottleneck and ``P4`` through
+      ``P1`` in a ``4 x 4`` nested decoder grid.
+    - ``encoder_depth=4`` uses ``P4`` as the bottleneck and ``P3`` through
+      ``P1`` in a ``3 x 3`` nested decoder grid.
+    - ``encoder_depth=3`` uses ``P3`` as the bottleneck and ``P2`` through
+      ``P1`` in a ``2 x 2`` nested decoder grid.
 
     Example:
-    >>> from medicai.models import UNetPlusPlus
-    >>> model = UNetPlusPlus(input_shape=(96, 96, 1), encoder_name="densenet121")
-    >>> model = UNetPlusPlus(input_shape=(96, 96, 96, 1), encoder_name="efficientnet_b0")
+        Reduce encoder depth::
+
+            import tensorflow as tf
+            from medicai.models import UNetPlusPlus
+
+            model = UNetPlusPlus(
+                encoder_name="efficientnet_v2_m",
+                input_shape=(96, 96, 96, 1),
+                encoder_depth=3,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Dense skip connections
+       :class: api-subheading
+
+    Each node in the decoder receives information from the lower-resolution
+    node below it and from previous nodes at the same spatial level. This
+    dense skip design improves feature alignment across scales while keeping
+    the final prediction path fully convolutional.
+
+    For ``encoder_depth=5``, the nested decoder layout can be viewed as a
+    ``4 x 4`` grid of intermediate decoder nodes built on top of encoder
+    features ``P1`` through ``P5``.
+
+    .. rubric:: Decoder strategy
+       :class: api-subheading
+
+    The decoder can be built with one of two upsampling strategies:
+
+    - ``decoder_block_type="upsampling"`` uses interpolation-based upsampling.
+    - ``decoder_block_type="transpose"`` uses trainable transposed
+      convolutions.
+
+    Some encoders reduce the spatial resolution more aggressively than the
+    default decoder assumes. In these cases, ``head_upsample`` can be used to
+    restore the final segmentation output to the desired resolution.
+
+    Example:
+        Use transposed convolution in the decoder::
+
+            import tensorflow as tf
+            from medicai.models import UNetPlusPlus
+
+            model = UNetPlusPlus(
+                encoder_name="resnet18",
+                input_shape=(96, 96, 96, 1),
+                decoder_block_type="transpose",
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with the required feature
+       levels.
+    2. The selected ``encoder_depth`` matches the available pyramid levels.
+    3. The feature hierarchy is compatible with the UNet++ decoder.
+    4. The final ``head_upsample`` factor is adjusted if the encoder uses a
+       non-standard downsampling pattern.
+
+    Example:
+        Build the model from a custom encoder::
+
+            import tensorflow as tf
+            from medicai.models import UNetPlusPlus, DenseNetBackbone
+
+            encoder = DenseNetBackbone(
+                blocks=[6, 12, 64, 48],
+                input_shape=(96, 96, 96, 4),
+            )
+
+            model = UNetPlusPlus(
+                encoder=encoder,
+                encoder_depth=4,
+                num_classes=3,
+                classifier_activation="softmax",
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)``.
     """
 
     ALLOWED_BACKBONE_FAMILIES = [

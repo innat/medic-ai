@@ -435,3 +435,126 @@ def resolve_input_params(input_shape, patch_size, window_size, downsampling_stra
         )
 
     return input_shape, patch_size, window_size, downsampling_strategy
+
+SWIN_BACKBONE_DOCSTRING = """
+{version} supporting both 2D and 3D inputs.
+
+This class builds the hierarchical Swin Transformer backbone used for
+classification, segmentation, and other dense prediction tasks. The model
+exposes intermediate multi-scale feature maps through ``pyramid_outputs``.
+
+The backbone is constructed in the following stages:
+
+1. An input layer is created from ``input_shape`` or ``input_tensor``.
+2. An optional ``Rescaling`` layer normalizes raw image intensities.
+3. Patch embedding converts the input into non-overlapping patch tokens and a
+   dropout layer is applied.
+4. A sequence of hierarchical Swin stages is applied. Each stage uses
+   shifted-window attention, MLP blocks, and optional patch merging between
+   stages.
+5. If ``stage_wise_conv=True``, residual convolutional blocks are inserted
+   before Swin stages to strengthen local feature extraction. This is inspired
+   by the **SwinUNETR-V2** design and can be beneficial for segmentation
+   tasks.
+6. Intermediate stage outputs are stored in ``pyramid_outputs``.
+
+Args:
+    input_shape (tuple):
+        Shape of the input tensor excluding batch size. This can describe
+        either 2D inputs ``(H, W, C)`` or 3D inputs ``(D, H, W, C)``.
+    input_tensor (keras.Tensor, optional):
+        Optional Keras tensor to use as model input.
+    include_rescaling (bool, default=False):
+        If ``True``, applies input rescaling by ``1/255``.
+    embed_dim (int, default=96):
+        Number of channels produced by the patch embedding layer.
+    patch_size (int or tuple, default=4):
+        Patch size used by the embedding layer.
+    window_size (int or tuple, default=7):
+        Local attention window size used by Swin blocks.
+    mlp_ratio (float, default=4.0):
+        Expansion ratio of the MLP hidden dimension relative to the embedding
+        dimension.
+    patch_norm (bool, default=False):
+        Whether to apply normalization immediately after patch embedding.
+    drop_rate (float, default=0.0):
+        Dropout rate applied after patch embedding and inside Swin blocks.
+    attn_drop_rate (float, default=0.0):
+        Dropout rate applied to attention weights.
+    drop_path_rate (float, default=0.2):
+        Stochastic depth rate used across Swin blocks.
+    depths (list, default=[2, 2, 6, 2]):
+        Number of Swin blocks in each stage.
+    num_heads (list, default=[3, 6, 12, 24]):
+        Number of attention heads in each stage.
+    qkv_bias (bool, default=True):
+        Whether to use learnable bias terms in query, key, and value
+        projections.
+{extra_args}\
+    stage_wise_conv (bool, default=False):
+        If ``True``, inserts a residual convolutional block before each Swin
+        stage following the SwinUNETR-V2 style.
+    downsampling_strategy (str, default="swin_transformer_like"):
+        Strategy for stage-to-stage downsampling.
+
+        - ``"swin_transformer_like"`` keeps the standard Swin Transformer
+          patch-merging behavior and is commonly used for classification.
+        - ``"swin_unetr_like"`` keeps patch merging at every stage and is
+          commonly used for segmentation-style backbones.
+    **kwargs:
+        Additional keyword arguments passed to ``keras.Model``.
+
+.. rubric:: Feature pyramid
+   :class: api-subheading
+
+The ``pyramid_outputs`` dictionary stores feature tensors from the patch
+embedding stage and each Swin stage. These tensors can be reused to build
+decoder-style models such as segmentation or detection networks.
+
+Example:
+    Build the backbone and inspect the feature pyramid::
+
+        import torch
+        from medicai.models import {class_name}
+
+        model = {class_name}(
+            input_shape=(224, 224, 3),
+            embed_dim=96,
+            patch_size=4,
+            window_size=7,
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # torch.Size([1, 7, 7, 768])
+
+Returns:
+    A ``keras.Model`` whose forward pass returns the final backbone feature
+    tensor. Intermediate multi-scale features are available in the
+    ``pyramid_outputs`` attribute.
+
+References:
+    - {reference_title}.
+      `arXiv:{reference_id} <https://arxiv.org/abs/{reference_id}>`_
+"""
+
+SwinBackbone.__doc__ = SWIN_BACKBONE_DOCSTRING.format(
+    class_name="SwinBackbone",
+    version="Swin Transformer V1 backbone",
+    reference_title="Swin Transformer: Hierarchical Vision Transformer using Shifted Windows",
+    reference_id="2103.14030",
+    extra_args=(
+        "    qk_scale (float, optional):\n"
+        "        Optional scaling factor applied to query-key dot products.\n"
+    ),
+)
+SwinBackboneV2.__doc__ = SWIN_BACKBONE_DOCSTRING.format(
+    class_name="SwinBackboneV2",
+    version="Swin Transformer V2 backbone",
+    reference_title="Swin Transformer V2: Scaling Up Capacity and Resolution",
+    reference_id="2111.09883",
+    extra_args=(
+        "    pretrained_window_size (int or tuple or None, default=None):\n"
+        "        Optional pretrained window size used for relative position bias\n"
+        "        interpolation in Swin V2 blocks.\n"
+    ),
+)

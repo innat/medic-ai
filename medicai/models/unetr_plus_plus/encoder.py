@@ -18,13 +18,67 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
     both 2D and 3D inputs. The encoder begins with a convolutional stem,
     followed by four hierarchical stages that progressively downsample the
     feature maps and apply transformer blocks. Each transformer block uses
-    Efficient Paired Attention (EPA), which reduces the spatial token
+    ``EfficientPairedAttention`` (EPA), which reduces the spatial token
     dimension before attention, enabling efficient computation on high-resolution
     volumes.
 
     The encoder produces multi-scale features, stored as pyramid outputs
-    (P1-P4), which can be used by a decoder for segmentation or other dense
+    (from ``P1`` to ``P4``), which can be used by a decoder for segmentation or other dense
     prediction tasks.
+
+    Args:
+        input_shape: A tuple specifying the input shape of the model,
+            not including the batch dimension. Supports both 2D and 3D.
+            Examples:
+            - 3D: (D, H, W, C)
+            - 2D: (H, W, C)
+        input_tensor: (Optional) A Keras tensor to use as the model input.
+            If not provided, a new input tensor will be created.
+        patch_size: Integer or tuple specifying the patch size used by
+            the convolutional stem. The stem downsamples the input
+            independently along each spatial dimension according to
+            this value. Anisotropic patching is supported.
+            Examples:
+            - (4, 4, 4): isotropic 3D patching
+            - (1, 4, 4): anisotropic patching (no downsampling in depth)
+        filters: List of integers specifying the number of feature
+            channels produced at each encoder stage. The length of
+            this list determines the number of hierarchical stages.
+        spatial_reduced_tokens: List of integers specifying the number
+            of spatial tokens retained after spatial reduction inside
+            the Efficient Paired Attention (EPA) module for each stage.
+            This controls the attention computation cost.
+        depths: A list of integers specifying the number of transformer
+            blocks at each encoder stage.
+        num_heads: Number of attention heads used in the transformer
+            blocks.
+        transformer_dropout_rate: Dropout rate applied inside transformer
+            blocks.
+        **kwargs: Additional keyword arguments.
+
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.    
+    
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models import UNETRPlusPlusEncoder
+
+            model = UNETRPlusPlusEncoder(
+                input_shape=(16, 160, 160, 1),
+                patch_size=(1, 4, 4),
+            )
+            x = torch.randn((1, 16, 160, 160, 1))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 2, 5, 5, 256])
+
+    References:
+        - UNETR++: Delving into Efficient and Accurate 3D Medical Image
+          Segmentation. `arXiv:2212.04497 <https://arxiv.org/abs/2212.04497>`_
     """
 
     def __init__(
@@ -40,40 +94,6 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
         transformer_dropout_rate=0.1,
         **kwargs,
     ):
-        """
-        Initializes the UNETRPlusPlusEncoder.
-
-        Args:
-            input_shape: A tuple specifying the input shape of the model,
-                not including the batch dimension. Supports both 2D and 3D.
-                Examples:
-                - 3D: (D, H, W, C)
-                - 2D: (H, W, C)
-            input_tensor: (Optional) A Keras tensor to use as the model input.
-                If not provided, a new input tensor will be created.
-            patch_size: Integer or tuple specifying the patch size used by
-                the convolutional stem. The stem downsamples the input
-                independently along each spatial dimension according to
-                this value. Anisotropic patching is supported.
-                Examples:
-                - (4, 4, 4): isotropic 3D patching
-                - (1, 4, 4): anisotropic patching (no downsampling in depth)
-            filters: List of integers specifying the number of feature
-                channels produced at each encoder stage. The length of
-                this list determines the number of hierarchical stages.
-            spatial_reduced_tokens: List of integers specifying the number
-                of spatial tokens retained after spatial reduction inside
-                the Efficient Paired Attention (EPA) module for each stage.
-                This controls the attention computation cost.
-            depths: A list of integers specifying the number of transformer
-                blocks at each encoder stage.
-            num_heads: Number of attention heads used in the transformer
-                blocks.
-            transformer_dropout_rate: Dropout rate applied inside transformer
-                blocks.
-            **kwargs: Additional keyword arguments.
-
-        """
         spatial_dims = len(input_shape) - 1
         pyramid_outputs = {}
 

@@ -18,23 +18,157 @@ from .decoder import UNetDecoder
 @registration.register(name="unet", type="segmentation")
 class UNet(keras.Model, DescribeMixin):
     """
-    The UNet model for semantic segmentation.
+    UNet can be constructed either from a registered encoder name or from a
+    pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary so the decoder can retrieve the bottleneck
+    feature and the skip features used during upsampling.
 
-    UNet is a convolutional neural network architecture developed for biomedical
-    image segmentation. It consists of a symmetric encoder-decoder structure
-    where the encoder (downsampling path) captures context and the decoder
-    (upsampling path) enables precise localization. The key feature of UNet is
-    the use of "skip connections," which concatenate feature maps from the
-    encoder directly to the corresponding layers in the decoder. This allows
-    the decoder to leverage high-resolution features lost during downsampling,
-    leading to more accurate segmentations.
+    The model combines three components:
+
+    1. An encoder that extracts a multi-scale feature pyramid.
+    2. A decoder that progressively upsamples the deepest selected feature.
+    3. Skip connections that fuse shallower encoder features to recover
+       spatial detail before the final segmentation head.
+
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required feature levels.
+        encoder_name: Optional name of a registered backbone model to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        encoder_depth: Number of encoder pyramid levels to use. Valid values
+            are ``3``, ``4``, and ``5``.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        decoder_block_type: Decoder upsampling strategy. Supported values are
+            ``"upsampling"`` and ``"transpose"``.
+        decoder_filters: Sequence of channel widths used by the decoder
+            refinement path.
+        decoder_normalization: Normalization behavior used in decoder blocks.
+        decoder_activation: Activation function used in decoder blocks.
+        head_upsample: Final upsampling factor applied before prediction. Can
+            be an integer, float, tuple, or list.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import UNet
+
+            model = UNet(
+                encoder_name="efficientnet_b1",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+
+    .. rubric:: Encoder depth
+       :class: api-subheading
+
+    The ``encoder_depth`` argument controls which encoder feature is used as
+    the bottleneck and which shallower features are used as skip connections:
+
+    - ``encoder_depth=5`` uses ``P5`` as the bottleneck and ``P4`` through
+      ``P1`` as skip connections.
+    - ``encoder_depth=4`` uses ``P4`` as the bottleneck and ``P3`` through
+      ``P1`` as skip connections.
+    - ``encoder_depth=3`` uses ``P3`` as the bottleneck and ``P2`` through
+      ``P1`` as skip connections.
 
     Example:
-    >>> from medicai.models import UNet
-    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121")
-    >>> model = UNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
-    >>> model = UNet(input_shape=(96, 96, 1), encoder_name="densenet121", encoder_depth=3)
+        Reduce encoder depth::
 
+            import tensorflow as tf
+            from medicai.models import UNet
+
+            model = UNet(
+                encoder_name="efficientnet_b1",
+                encoder_depth=3,
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Decoder strategy
+       :class: api-subheading
+
+    The decoder can be built with one of two upsampling strategies:
+
+    - ``decoder_block_type="upsampling"`` uses interpolation-based upsampling.
+    - ``decoder_block_type="transpose"`` uses trainable transposed
+      convolutions.
+
+    Some encoders reduce the spatial resolution more aggressively than the
+    default UNet decoder assumes. In these cases, ``head_upsample`` can be
+    used to restore the final segmentation output to the desired resolution.
+
+    Example:
+        Use transposed convolution in the decoder::
+
+            import tensorflow as tf
+            from medicai.models import UNet
+
+            model = UNet(
+                encoder_name="efficientnet_b1",
+                decoder_block_type="transpose",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with the required feature
+       levels.
+    2. The selected ``encoder_depth`` matches the available pyramid levels.
+    3. The feature hierarchy is compatible with the UNet decoder.
+    4. The final ``head_upsample`` factor is adjusted if the encoder uses a
+       non-standard downsampling pattern.
+
+    Example:
+        Build the model from a custom encoder::
+
+            import tensorflow as tf
+            from medicai.models import UNet, DenseNetBackbone
+
+            encoder = DenseNetBackbone(
+                blocks=[6, 12, 64, 48],
+                input_shape=(96, 96, 96, 4),
+            )
+            model = UNet(
+                encoder=encoder,
+                encoder_depth=4,
+                num_classes=3,
+                classifier_activation="softmax",
+                name='densenet_unet'
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)``.
     """
 
     ALLOWED_BACKBONE_FAMILIES = [

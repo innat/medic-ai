@@ -9,13 +9,14 @@ from .vit_backbone import ViTBackbone
 @keras.saving.register_keras_serializable(package="vit")
 class ViTVariantsBase(keras.Model, DescribeMixin):
     """
-    Vision Transformer (ViT) Model for classification.
+    Vision Transformer (ViT) model for classification.
 
-    This class implements a Keras-based Vision Transformer (ViT) model,
-    supporting both 2D and 3D inputs. It combines the ViT backbone with
-    optional components like an intermediate pre-logits layer, dropout, and
-    a classification head. Subclasses (like ViTVariantsBase) define the specific
-    hyperparameters (patch size, num layers, hidden dim, etc.).
+    This base class combines the ``ViTBackbone`` with an optional
+    classification head, optional pre-logits projection, and configurable
+    output pooling. It supports both 2D and 3D inputs.
+
+    Subclasses such as ``ViTBase``, ``ViTLarge``, and ``ViTHuge`` define the
+    concrete backbone hyperparameters.
     """
 
     def __init__(
@@ -38,35 +39,6 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
         name="vit",
         **kwargs,
     ):
-        """
-        Initializes the ViTVariantsBase model.
-
-        Args:
-            input_shape (tuple): Shape of the input tensor excluding batch size.
-                For example, (height, width, channels) for 2D
-                or (depth, height, width, channels) for 3D.
-            patch_size (int or tuple): Size of the patches extracted from the input.
-            num_layers (int): Number of transformer encoder layers.
-            num_heads (int): Number of attention heads in each transformer layer.
-            hidden_dim (int): Hidden dimension size of the transformer encoder (C).
-            mlp_dim (int): Hidden dimension size of the MLP in transformer blocks.
-            use_class_token (bool): Whether to prepend a class (CLS) token to the sequence.
-            include_rescaling (bool): Whether to include a Rescaling layer at the
-                start to normalize inputs. Default: False.
-            include_top (bool): Whether to include the final classification layer.
-                Default: True.
-            pooling (str): Pooling strategy for the output if `include_top` is False.
-                'token' for the CLS token (default for ViT).
-                'gap' for global average pooling over sequence dimension.
-            num_classes (int): Number of output classes for classification. Default: 1000.
-            intermediate_dim (int, optional): Dimension of optional pre-logits dense layer.
-                 If None, no intermediate layer is used.
-            classifier_activation (str, optional): Activation function for the final output layer.
-                Typically 'softmax' or 'sigmoid'. Default: None.
-            dropout (float): Dropout rate applied before the output layer. Default: 0.0.
-            name (str): Name of the model. Default: 'vit'.
-            **kwargs: Additional keyword arguments passed to keras.Model.
-        """
         spatial_dims = len(input_shape) - 1
         if name is None and self.__class__ is not ViTVariantsBase:
             name = f"{self.__class__.__name__}{spatial_dims}D"
@@ -176,29 +148,6 @@ class ViTVariantsBase(keras.Model, DescribeMixin):
 @keras.saving.register_keras_serializable(package="vit")
 @registration.register(name="vit_base", family="vit")
 class ViTBase(ViTVariantsBase):
-    """
-    Vision Transformer Base (ViT-B/16) model.
-
-    ViT-B/16 is the standard base-sized model from the **Vision Transformer**
-    (ViT) family. It is parameterized with the configuration specified for the
-    Base variant with a 16x16 patch size in the original paper.
-
-    This class inherits from `ViTVariantsBase` and sets the hyper-parameters
-    for patch size, number of layers, heads, and hidden dimensions specific
-    to the ViT-Base architecture.
-
-    Example:
-        >>> from medicai.models import ViTBase
-        >>> # Load ViT-Base for ImageNet (2D input: H, W, C)
-        >>> model = ViTBase(input_shape=(224, 224, 3))
-        >>> # Load ViT-Base backbone (for 3D input: D, H, W, C)
-        >>> backbone = ViTBase(input_shape=(32, 128, 128, 1), include_top=False)
-
-    Reference:
-        'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale'
-        - Paper: https://arxiv.org/abs/2010.11929
-    """
-
     def __init__(
         self,
         *,
@@ -289,29 +238,6 @@ class ViTBase(ViTVariantsBase):
 @keras.saving.register_keras_serializable(package="vit")
 @registration.register(name="vit_large", family="vit")
 class ViTLarge(ViTVariantsBase):
-    """
-    Vision Transformer Large (ViT-L/16) model.
-
-    ViT-L/16 is the large-sized model from the **Vision Transformer** (ViT) family,
-    offering greater capacity and often achieving higher accuracy than ViT-Base,
-    at the cost of increased computational resources.
-
-    This class inherits from `ViTVariantsBase` and sets the hyper-parameters
-    for patch size, number of layers, heads, and hidden dimensions specific
-    to the ViT-Large architecture (L/16 variant).
-
-    Example:
-        >>> from medicai.models import ViTLarge
-        >>> # Load ViT-Large for ImageNet (2D input: H, W, C)
-        >>> model = ViTLarge(input_shape=(224, 224, 3))
-        >>> # Load ViT-Large backbone (for 3D input: D, H, W, C)
-        >>> backbone = ViTLarge(input_shape=(32, 128, 128, 1), include_top=False)
-
-    Reference:
-        'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale'
-        - Paper: https://arxiv.org/abs/2010.11929
-    """
-
     def __init__(
         self,
         *,
@@ -394,30 +320,6 @@ class ViTLarge(ViTVariantsBase):
 @keras.saving.register_keras_serializable(package="vit")
 @registration.register(name="vit_huge", family="vit")
 class ViTHuge(ViTVariantsBase):
-    """
-    Vision Transformer Huge (ViT-H/14) model.
-
-    ViT-H/14 is the largest model from the original **Vision Transformer** (ViT)
-    family. It boasts the highest capacity, often achieving state-of-the-art
-    accuracy, but requires substantial computational resources and memory.
-
-    This class inherits from `ViTVariantsBase` and sets the hyper-parameters
-    for patch size, number of layers, heads, and hidden dimensions specific
-    to the ViT-Huge architecture (H/14 variant). Note the common use of a smaller
-    patch size (14) relative to the input resolution, increasing the sequence length.
-
-    Example:
-        >>> from medicai.models import ViTHuge
-        >>> # Load ViT-Huge for large image classification (2D input: H, W, C)
-        >>> model = ViTHuge(input_shape=(448, 448, 3))
-        >>> # Load ViT-Huge backbone (for 3D input: D, H, W, C)
-        >>> backbone = ViTHuge(input_shape=(64, 256, 256, 1), include_top=False)
-
-    Reference:
-        'An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale'
-        - Paper: https://arxiv.org/abs/2010.11929
-    """
-
     def __init__(
         self,
         *,
@@ -495,3 +397,66 @@ class ViTHuge(ViTVariantsBase):
             name=name,
             **kwargs,
         )
+
+
+VIT_DOCSTRING = """
+This class provides a complete {name} model, including the transformer
+backbone and the classification head (the "top"). The backbone follows the
+Vision Transformer (ViT) design with patch embedding and stacked transformer
+encoder blocks, and the full model can be used either for end-to-end
+classification or as a feature extractor.
+
+Args:
+    input_shape: A tuple specifying the input shape of the model,
+        not including the batch size. Can be `(height, width, channels)` for
+        2D or `(depth, height, width, channels)` for 3D.
+    include_rescaling: A boolean indicating whether to include a
+        ``Rescaling`` layer at the beginning of the model.
+    include_top: A boolean indicating whether to include the fully
+        connected classification layer at the top of the network. If
+        `False`, the model's output will be the features from the
+        backbone, without the final classifier.
+    num_classes: An integer specifying the number of classes for the
+        classification layer. This is only relevant if `include_top`
+        is `True`.
+    pooling: (Optional) A string specifying the output strategy when
+        ``include_top`` is ``False``. Supported values are ``"token"`` and
+        ``"gap"``.
+    use_class_token: A boolean indicating whether to prepend a class token to
+        the token sequence.
+    classifier_activation: A string specifying the activation function
+        to use for the classification layer.
+    name: (Optional) The name of the model.
+    **kwargs: Additional keyword arguments.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+
+    - If ``include_top=True``, the output is a classification tensor of shape
+      ``(batch_size, num_classes)``.
+    - If ``include_top=False`` and ``pooling`` is ``"token"``, the output is
+      the class-token representation or first token representation.
+    - If ``include_top=False`` and ``pooling`` is ``"gap"``, the output is a
+      pooled token representation with last dimension ``{hidden_dim}``.
+
+Examples:
+    .. code-block:: python
+
+        import torch
+        from medicai.models.vit import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), include_top=True, num_classes=2
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # torch.Size([1, 2])
+
+References:
+    - An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. ICLR 2021.
+        `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_
+"""
+
+ViTBase.__doc__ = VIT_DOCSTRING.format(name="ViTBase", hidden_dim=768)
+ViTLarge.__doc__ = VIT_DOCSTRING.format(name="ViTLarge", hidden_dim=1024)
+ViTHuge.__doc__ = VIT_DOCSTRING.format(name="ViTHuge", hidden_dim=1280)

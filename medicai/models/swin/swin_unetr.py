@@ -7,12 +7,151 @@ from medicai.utils import DescribeMixin, registration, resolve_encoder, validate
 @keras.saving.register_keras_serializable(package="swin.unetr")
 @registration.register(name="swin_unetr", type="segmentation")
 class SwinUNETR(keras.Model, DescribeMixin):
-    """Swin-UNETR: A hybrid transformer-CNN for 3D or 2D medical image segmentation.
+    """
+    SwinUNETR is a semantic segmentation model built from a Swin Transformer
+    encoder and a UNETR-style decoder.
 
-    This model combines the strengths of the Swin Transformer for feature extraction
-    and a U-Net-like architecture for segmentation. It uses a Swin Transformer
-    backbone to encode the input and a decoder with upsampling and skip connections
-    to generate segmentation maps.
+    This implementation supports both 2D and 3D input shapes. The encoder
+    provides a hierarchical feature pyramid, and the decoder refines these
+    features with convolutional blocks, progressive upsampling, and skip
+    connections to produce a dense segmentation map.
+
+    The model can be constructed either from a registered Swin encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary containing ``P1`` through ``P5``.
+
+    The decoder uses the feature hierarchy as follows:
+
+    1. The raw input is processed by a shallow convolution block to form the
+       highest-resolution skip branch.
+    2. ``P1``, ``P2``, and ``P3`` are refined and used as intermediate skip
+       connections.
+    3. ``P5`` is used as the bottleneck feature.
+    4. ``P4`` is fused during the first decoder upsampling stage, and the
+       remaining refined features are fused in later decoding stages until the
+       final segmentation output is produced.
+
+    By default, this model resolves named encoders with the
+    ``swin_unetr_like`` downsampling strategy, which omits the final
+    patch-merging step used in standard Swin classification backbones. This
+    matches the feature hierarchy expected by SwinUNETR.
+
+    When ``stage_wise_conv=True``, the encoder inserts an additional residual
+    convolution block at the start of each Swin stage. This follows the
+    SwinUNETR-V2 style of stage-wise convolutional refinement and can be used
+    with either Swin V1 or Swin V2 encoders.
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with keys ``P1`` through
+       ``P5``.
+    2. Its feature hierarchy matches the SwinUNETR decoder expectations.
+    3. It is built with a compatible downsampling pattern, typically
+       ``downsampling_strategy="swin_unetr_like"`` for Swin-based encoders.
+
+    Args:
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        encoder_name: Optional name of a registered Swin backbone to build and
+            use as the encoder.
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required feature levels.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        patch_size: Patch size used when building a named Swin encoder.
+        window_size: Window size used by shifted-window self-attention when
+            building a named Swin encoder.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        feature_size: Base channel width used by the decoder blocks.
+        res_block: Whether residual blocks are used inside decoder refinement
+            blocks.
+        norm_name: Normalization type used in decoder blocks.
+        stage_wise_conv: Whether to enable stage-wise convolutional refinement
+            in the encoder, following the SwinUNETR-V2 style.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)`` at the model output
+        resolution.
+
+    Examples:
+        Build ``SwinUNETR`` from a registered Swin V1 encoder::
+
+            import tensorflow as tf
+            from medicai.models import SwinUNETR
+
+            model = SwinUNETR(
+                encoder_name="swin_tiny",
+                input_shape=(96, 96, 96, 4),
+                num_classes=3,
+                classifier_activation="sigmoid",
+            )
+
+            x = tf.random.uniform(shape=[1,96,96,96,4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+        Build ``SwinUNETR`` from a registered Swin V2 encoder::
+
+            import tensorflow as tf
+            from medicai.models import SwinUNETR
+
+            model = SwinUNETR(
+                encoder_name="swin_tiny_v2",
+                input_shape=(96, 96, 96, 4),
+                num_classes=3,
+                classifier_activation="sigmoid",
+            )
+
+            x = tf.random.uniform(shape=[1,96,96,96,4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+        Build ``SwinUNETR-V2`` with stage-wise convolutional refinement::
+
+            import tensorflow as tf
+            from medicai.models import SwinUNETR
+
+            model = SwinUNETR(
+                encoder_name="swin_tiny",
+                input_shape=(96, 96, 96, 4),
+                num_classes=1,
+                stage_wise_conv=True,
+                classifier_activation="sigmoid",
+            )
+
+            x = tf.random.uniform(shape=[1,96,96,96,4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+        Build ``SwinUNETR`` from a custom encoder::
+
+            import tensorflow as tf
+            from medicai.models import SwinBackboneV2, SwinUNETR
+
+            custom_encoder = SwinBackboneV2(
+                input_shape=(64, 128, 128, 1),
+                embed_dim=48,
+                window_size=8,
+                patch_size=2,
+                downsampling_strategy="swin_unetr_like",
+            )
+            model = SwinUNETR(encoder=custom_encoder)
+
+            x = tf.random.uniform(shape=[1, 64, 128, 128, 1])
+            y = model(x)
+            print(y.shape) # (1, 64, 128, 128, 1)
+
+    References:
+        - Swin UNETR: Swin Transformers for Semantic Segmentation of Brain
+          Tumors in MRI Images. https://arxiv.org/abs/2201.01266
+        - SwinUNETR-V2: Stronger Swin Transformers with Stagewise Convolutions
+          for 3D Medical Image Segmentation.
+          https://link.springer.com/chapter/10.1007/978-3-031-43901-8_40
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["swin"]

@@ -15,25 +15,132 @@ from medicai.utils import (
 @keras.saving.register_keras_serializable(package="segformer")
 @registration.register(name="segformer", type="segmentation")
 class SegFormer(keras.Model, DescribeMixin):
-    """SegFormer model for 2D or 3D semantic segmentation.
+    """
+    SegFormer can be constructed either from a registered encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary containing four feature levels:
+    ``P1``, ``P2``, ``P3``, and ``P4``.
 
-    This class implements the full SegFormer architecture, which combines a
-    hierarchical MixVisionTransformer (MiT) encoder with a lightweight MLP decoder
-    head. This design is highly efficient for semantic segmentation tasks on
-    high-resolution images or volumes.
+    The decoder uses all four encoder feature maps:
 
-    The encoder (MiT) progressively downsamples the spatial dimensions and increases the
-    feature dimensions across four stages, producing multi-scale feature maps (P1, P2, P3, P4).
-    The decoder then takes these features, processes them through a linear layer and upsampling
-    to a common resolution (P1's resolution), fuses them via concatenation and a convolution,
-    and finally generates a high-resolution segmentation mask matching the input size.
+    1. Each feature level is projected to a shared embedding dimension.
+    2. The projected features are resized to the spatial resolution of ``P1``.
+    3. The resized features are concatenated and fused with a convolution
+       block before producing segmentation logits.
+    4. The final prediction is resized back to the input spatial resolution.
+
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required four feature levels.
+        encoder_name: Optional name of a registered MiT backbone to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        decoder_head_embedding_dim: Embedding dimension used to project each
+            encoder feature map inside the decoder head.
+        dropout: Dropout rate applied in the decoder fusion block.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.models import SegFormer
+
+            model = SegFormer(
+                encoder_name="mit_b0",
+                input_shape=(224, 224, 3),
+                num_classes=2,
+                classifier_activation="softmax",
+            )
+
+            key = jax.random.PRNGKey(0) 
+            x = jax.random.normal(key, (1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # (1, 224, 224, 2)
+
+    .. rubric:: Encoder stages
+       :class: api-subheading
+
+    **SegFormer** always uses all ``4`` encoder stages according to the official literature. There is no
+    ``encoder_depth`` argument in this implementation.
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with ``P1`` through ``P4``.
+    2. These features follow the expected multi-scale hierarchy.
+    3. The input spatial dimensions are equal across all axes, since this
+       implementation currently expects **square** 2D inputs or **cubic** 3D inputs.
 
     Example:
-    >>> from medicai.models import SegFormer, MixViTB0
-    >>> # 1. Initialize with an encoder class (e.g., MiT-B0)
-    >>> model = SegFormer(encoder=MixViTB0(input_shape=(256, 256, 3), include_top=False), num_classes=2)
-    >>> # 2. Initialize using a registered name
-    >>> model = SegFormer(encoder_name='mit_b2', input_shape=(128, 128, 1), num_classes=5)
+        Build the model from a custom encoder with convnext which already gives ``4`` encoder stages::
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.models import SegFormer
+
+            backbone = ConvNeXtV2Large(
+                input_shape=(96, 96, 96, 3),
+                include_top=False,
+            )
+
+            model = SegFormer(
+                encoder=backbone,
+                num_classes=3,
+            )
+
+            key = jax.random.PRNGKey(0) 
+            x = jax.random.normal(key, (1, 96, 96, 96, 3))
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+        Build the model from a custom resnet encoder with ``5`` encoder
+        stages. In this case, **SegFormer** uses only ``P1`` through ``P4``::
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.models import ResNetBackbone, SegFormer
+
+            backbone = ResNetBackbone(
+                input_shape=(224, 224, 3),
+                conv_filters=[32],
+                conv_kernel_sizes=[7],
+                num_filters=[64, 128, 256, 512],
+                num_blocks=[3, 4, 6, 3],
+                num_strides=[1, 2, 2, 2],
+                block_type="bottleneck_block",
+            )
+
+            model = SegFormer(
+                encoder=backbone,
+                num_classes=5,
+            )
+
+            key = jax.random.PRNGKey(0) 
+            x = jax.random.normal(key, (1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # (1, 224, 224, 5)
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)`` at the input spatial
+        resolution.
+
+    References:
+        - SegFormer: Simple and Efficient Design for Semantic Segmentation with
+          Transformers. NeurIPS 2021. `arXiv:2105.15203 <https://arxiv.org/abs/2105.15203>`_
+        - SegFormer3D: an Efficient Transformer for 3D Medical Image
+          Segmentation. `arXiv:2404.10156 <https://arxiv.org/abs/2404.10156>`_
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["mit"]
