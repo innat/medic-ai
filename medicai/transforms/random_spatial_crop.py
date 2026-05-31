@@ -6,11 +6,100 @@ from .tensor_bundle import TensorBundle
 
 
 class RandSpatialCrop:
-    """Randomly crops a region of interest (ROI) with a specified size from the input tensors.
+    """
+    Randomly crop a spatial region of interest from selected tensors.
 
-    This transform extracts a 3D spatial ROI from the tensors specified by `keys`.
-    The size and center of the ROI can be either fixed or randomly determined
-    within the bounds of the input tensor.
+    This transform extracts a crop of size ``roi_size`` from the selected
+    tensors. The crop center can be random or fixed, and the crop size can be
+    fixed or sampled up to ``max_roi_size``. When ``invalid_label`` is used,
+    the current implementation expects a ``"label"`` tensor in the input so it
+    can select label-aware crop centers.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to apply the spatial crop to.
+        roi_size (Union[Tuple[int, int, int], tf.Tensor]): The desired spatial size
+            (depth, height, width) of the cropped ROI. If `random_size` is True, this
+            will be the minimum ROI size. Can be a tuple or a tf.Tensor.
+        max_roi_size (Optional[Union[Tuple[int, int, int], tf.Tensor]]): The maximum
+            spatial size (depth, height, width) of the cropped ROI when `random_size`
+            is True. If None, it defaults to the input tensor's spatial dimensions.
+            Can be a tuple or a tf.Tensor.
+        random_center (bool): If True, the center of the ROI is randomly selected
+            within the valid bounds of the input tensor. If False, the center
+            is at the center of the input tensor. Default is True.
+        random_size (bool): If True, the size of the ROI is randomly sampled
+            between `roi_size` (as minimum) and `max_roi_size` (as maximum) for each
+            spatial dimension. If False, the ROI size is fixed to `roi_size`.
+            Default is False.
+        invalid_label (Optional[int]): The pixel value considered "background" or
+            "invalid" (e.g., 0 for air in CT). If provided, the transform will
+            attempt to find a crop where the ratio of valid pixels is at least
+            `min_valid_ratio`.
+        min_valid_ratio (float): Minimum required fraction of pixels not equal to
+            `invalid_label` for a crop to be accepted. Range [0.0, 1.0].
+            Default is 0.0 (accepts any crop).
+        max_attempts (int): Maximum number of times to attempt finding a valid
+            crop before settling for the last sampled region. Prevents infinite
+            loops on small or sparse anatomical structures. Default is 1
+
+    Example:
+        Randomly crop an image-label pair to a fixed ROI size::
+
+            import tensorflow as tf
+            from medicai.transforms import RandSpatialCrop
+
+            cropper = RandSpatialCrop(
+                keys=["image", "label"],
+                roi_size=(32, 32, 32),
+                random_center=True,
+                random_size=False,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            label = tf.random.uniform((64, 64, 64, 1), maxval=2, dtype=tf.int32)
+
+            result = cropper({"image": image, "label": label})
+            cropped_image = result["image"]
+            cropped_label = result["label"]
+
+            print(cropped_image.shape) # (32, 32, 32, 1)
+            print(cropped_label.shape) # (32, 32, 32, 1)
+
+        Crop with label-aware center selection and minimum valid pixel ratio::
+
+            import tensorflow as tf
+            from medicai.transforms import RandSpatialCrop
+
+            cropper = RandSpatialCrop(
+                keys=["image", "label"],
+                roi_size=(32, 32, 32),
+                invalid_label=2,
+                min_valid_ratio=0.8,
+                max_attempts=5,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            label = tf.random.uniform((64, 64, 64, 1), maxval=5, dtype=tf.int32)
+
+            result = cropper({"image": image, "label": label})
+            cropped_image = result["image"]
+            cropped_label = result["label"]
+
+            print(cropped_image.shape) # (32, 32, 32, 1)
+            print(cropped_label.shape) # (32, 32, 32, 1)
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the cropped
+        tensors using the same keys as the input.
+
+    Raises:
+        KeyError: If the first key in ``keys`` is missing from the input.
+        KeyError: If ``invalid_label`` is used and the input does not contain
+            a ``"label"`` tensor.
+        ValueError: If ``min_valid_ratio`` is outside ``[0.0, 1.0]``.
+        ValueError: If ``max_attempts`` is less than ``1``.
+        ValueError: If ``min_valid_ratio > 0.0`` and ``invalid_label`` is not
+            provided.
     """
 
     def __init__(
@@ -24,35 +113,6 @@ class RandSpatialCrop:
         min_valid_ratio=0.0,
         max_attempts=1,
     ):
-        """Initializes the RandSpatialCrop transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to apply the spatial crop to.
-            roi_size (Union[Tuple[int, int, int], tf.Tensor]): The desired spatial size
-                (depth, height, width) of the cropped ROI. If `random_size` is True, this
-                will be the minimum ROI size. Can be a tuple or a tf.Tensor.
-            max_roi_size (Optional[Union[Tuple[int, int, int], tf.Tensor]]): The maximum
-                spatial size (depth, height, width) of the cropped ROI when `random_size`
-                is True. If None, it defaults to the input tensor's spatial dimensions.
-                Can be a tuple or a tf.Tensor.
-            random_center (bool): If True, the center of the ROI is randomly selected
-                within the valid bounds of the input tensor. If False, the center
-                is at the center of the input tensor. Default is True.
-            random_size (bool): If True, the size of the ROI is randomly sampled
-                between `roi_size` (as minimum) and `max_roi_size` (as maximum) for each
-                spatial dimension. If False, the ROI size is fixed to `roi_size`.
-                Default is False.
-            invalid_label (Optional[int]): The pixel value considered "background" or
-                "invalid" (e.g., 0 for air in CT). If provided, the transform will
-                attempt to find a crop where the ratio of valid pixels is at least
-                `min_valid_ratio`.
-            min_valid_ratio (float): Minimum required fraction of pixels not equal to
-                `invalid_label` for a crop to be accepted. Range [0.0, 1.0].
-                Default is 0.0 (accepts any crop).
-            max_attempts (int): Maximum number of times to attempt finding a valid
-                crop before settling for the last sampled region. Prevents infinite
-                loops on small or sparse anatomical structures. Default is 1
-        """
         self.keys = keys
         self.roi_size = tf.convert_to_tensor(roi_size, dtype=tf.int32)
         self.max_roi_size = (
@@ -79,11 +139,17 @@ class RandSpatialCrop:
         """Apply the random spatial crop to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata. The tensors
-                specified by `self.keys` will have a spatial ROI cropped.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to crop.
 
         Returns:
-            TensorBundle: A dictionary with the spatially cropped tensors and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the cropped
+            tensors using the same keys as the input.
+
+        Raises:
+            KeyError: If the first key in ``self.keys`` is missing from the input.
+            KeyError: If ``self.invalid_label`` is used and the input does not
+                contain a ``"label"`` tensor.
         """
 
         if isinstance(inputs, dict):

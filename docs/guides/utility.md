@@ -6,22 +6,19 @@ Utility classes and functions exported by `medicai.utils`.
 
 ```{eval-rst}
 .. autoclass:: medicai.utils.GradCAM
-   :members: __init__
+   :members: compute_heatmap
 ```
 
-## DescribeMixin
+<!-- ## DescribeMixin
 
 ```{eval-rst}
 .. autoclass:: medicai.utils.DescribeMixin
-   :members: __init__
-```
+``` -->
 
 ## Sliding Window Inference
 
 ```{eval-rst}
 .. autoclass:: medicai.utils.SlidingWindowInference
-   :members: __init__
-
 .. autofunction:: medicai.utils.sliding_window_inference
 ```
 
@@ -40,8 +37,6 @@ Utility classes and functions exported by `medicai.utils`.
 ## Model Utilities
 
 ```{eval-rst}
-.. autofunction:: medicai.utils.camel_to_snake
-
 .. autofunction:: medicai.utils.get_act_layer
 
 .. autofunction:: medicai.utils.get_conv_layer
@@ -53,10 +48,4 @@ Utility classes and functions exported by `medicai.utils`.
 .. autofunction:: medicai.utils.get_pooling_layer
 
 .. autofunction:: medicai.utils.get_reshaping_layer
-
-.. autofunction:: medicai.utils.parse_model_inputs
-
-.. autofunction:: medicai.utils.resolve_encoder
-
-.. autofunction:: medicai.utils.validate_activation
 ```

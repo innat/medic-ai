@@ -76,42 +76,54 @@ class RandRotate:
     """
     Random rotation transform for 3D volumes (slice-wise 2D rotation).
 
-    Applies the same random rotation angle to all specified keys.
-    Intended for:
-        - Classification: keys=["image"]
-        - Segmentation: keys=["image", "label"]
-    Expected volume shape: (D, H, W, C)
+    This transform applies the same random in-plane rotation angle to all
+    selected tensors. Rotation is performed slice-wise over the height-width
+    plane of a channel-last volume with shape ``(D, H, W, C)``.
 
-    Rotation is applied slice-wise with optional Largest Rectangle Rotation (LRR)
-    cropping to remove black borders.
+    The first key is treated as image-like data and uses bilinear
+    interpolation with ``fill_value``. If a second key is provided, it is
+    treated as label-like data and uses nearest-neighbor interpolation with a
+    fill value of ``0.0``.
+
+    When ``fill_mode="crop"``, the transform applies a Largest Rectangle
+    Rotation style center crop after rotation to reduce border artifacts.
+
+    Args:
+        keys: Either ``["image"]`` or ``["image", "label"]``.
+        factor: Maximum absolute rotation angle in radians. The sampled angle
+            is drawn uniformly from ``[-factor, factor]``.
+        prob: Probability of applying the rotation.
+        fill_value: Fill value used for the first tensor in ``keys``.
+        fill_mode: Border handling strategy. Supported values are
+            ``"constant"`` and ``"crop"``.
 
     Example:
+        Apply random rotation for segmentation::
 
-    import tensorflow as tf
-    from medicai.transforms import RandRotate
+            import tensorflow as tf
+            from medicai.transforms import RandRotate
 
-    ## Segmentation
-    image = tf.random.uniform((128, 128, 128, 4))
-    label = tf.random.uniform((128, 128, 128, 3))
-    rand_rotate = RandRotate(
-        keys=["image", "label"],
-        factor=0.3,
-        prob=0.6,
-        fill_mode="crop"
-    )
-    output = rand_cutout({"image": image, "label": label})
-    augmented_image, augmented_label = output["image"], output["label"]
+            image = tf.random.uniform((128, 128, 128, 4))
+            label = tf.random.uniform((128, 128, 128, 1), maxval=2, dtype=tf.int32)
 
-    ## Classification
-    image = tf.random.uniform((128, 128, 128, 4))
-    rand_rotate = RandRotate(
-        keys=["image"],
-        factor=0.3,
-        prob=0.6,
-        fill_mode="crop"
-    )
-    output = rand_cutout({"image": image})
-    augmented_image = output["image"]
+            rand_rotate = RandRotate(
+                keys=["image", "label"],
+                factor=0.3,
+                prob=0.6,
+                fill_mode="crop",
+            )
+            output = rand_rotate({"image": image, "label": label})
+            augmented_image = output["image"]
+            augmented_label = output["label"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the rotated
+        tensors using the same keys as the input.
+
+    Raises:
+        TypeError: If ``keys`` is not a list or tuple.
+        ValueError: If ``keys`` does not have length ``1`` or ``2``.
+        ValueError: If ``fill_mode`` is not one of ``{"crop", "constant"}``.
     """
 
     def __init__(
@@ -122,20 +134,6 @@ class RandRotate:
         fill_value=0.0,
         fill_mode="constant",
     ):
-        """
-        Args:
-            keys:
-                Either ["image"] or ["image", "label"].
-            factor:
-                Maximum absolute rotation angle (in radians).
-            prob:
-                Probability of applying rotation.
-            fill_value:
-                Fill value used for image rotation.
-            fill_mode:
-                Currently only supports "crop" or "constant".
-        """
-
         # keys handling: must be list/tuple
         if not isinstance(keys, (list, tuple)):
             raise TypeError("`keys` must be a list or tuple.")
@@ -168,6 +166,19 @@ class RandRotate:
         return lrr_w, lrr_h
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
+        """Apply the random rotation to the selected tensors.
+
+        Args:
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to rotate.
+
+        Returns:
+            TensorBundle: The transformed output. We can retrieve the rotated
+            tensors using the same keys as the input.
+
+        Raises:
+            KeyError: If a required key from ``self.keys`` is missing in the input.
+        """
 
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)

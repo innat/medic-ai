@@ -358,13 +358,26 @@ class BaseCAM(ABC):
 
 class GradCAM(BaseCAM):
     """
-    Implements the standard Grad-CAM algorithm (Gradient-weighted Class Activation Mapping).
+    Gradient-weighted Class Activation Mapping (Grad-CAM). Grad-CAM generates coarse 
+    localization heatmaps highlighting the spatial regions that most strongly influence 
+    a model’s prediction for a target class. The method works by:
 
-    This implementation supports 2D and 3D inputs for both **Classification** and
-    **Segmentation** tasks across multiple Keras backends (TensorFlow, PyTorch, JAX).
+    1. Computing gradients of the target prediction with respect to feature maps
+       from a selected convolutional layer.
+    2. Global-average-pooling the gradients to obtain channel importance weights.
+    3. Computing a weighted combination of feature maps.
+    4. Applying ReLU to retain only positive contributions.
 
-    Grad-CAM uses the gradients of the target class score w.r.t. the feature maps
-    of a final convolutional layer to generate a coarse localization map.
+    This implementation supports:
+
+    - 2D image inputs
+    - 3D volumetric inputs
+    - Classification models
+    - Segmentation models
+    - TensorFlow, JAX, and PyTorch Keras backends
+
+    For segmentation models, different masking strategies are supported to
+    control how target regions contribute to gradient computation.
     """
 
     def compute_heatmap(
@@ -376,37 +389,116 @@ class GradCAM(BaseCAM):
         resize_heatmap=True,
     ):
         """
-        Computes the Grad-CAM heatmap.
+        Computes the Grad-CAM heatmap for a target class. The heatmap represents spatial 
+        importance scores indicating which regions of the input most strongly contributed 
+        to the target prediction. Computation steps:
 
-        The process involves:
-        1. Calculating gradients of the target score w.r.t. feature maps.
-        2. Global Average Pooling (GAP) of the gradients to get feature weights (alphas).
-        3. Weighted summation of the feature maps using the weights.
-        4. Applying ReLU to the result (only positive contributions matter).
-        5. Normalizing the heatmap between 0 and 1.
-        6. Resizing the heatmap to the input image's spatial dimensions.
+        1. Compute gradients of the target score with respect to feature maps.
+        2. Perform global average pooling over gradients to obtain channel weights.
+        3. Compute weighted feature map combination.
+        4. Apply ReLU to retain only positive contributions.
+        5. Optionally normalize the heatmap between ``0`` and ``1``.
+        6. Optionally resize the heatmap to match the input spatial dimensions.
 
         Args:
-            input_tensor: The input tensor (image or volume).
-            target_class_index: The index of the class for which to compute the heatmap.
+            input_tensor: The input tensor (image or volume). Supported shapes ``(B, H, W, C)``
+                for 2D and ``(B, D, H, W, C)`` for 3D.
+            target_class_index (int or None, optional): Index of the target class for heatmap generation.
+                If ``None``, the predicted class may be selected automatically depending on 
+                the parent implementation.
             mask_type: Type of mask to apply during segmentation target calculation
-                object: Focuses the gradient calculation only on the
+
+                - ``object``: Focuses the gradient calculation only on the
                     **predicted pixels/voxels** belonging to the `target_class_index`.
                     This is the standard approach to highlight the detected object.
-                all: Calculates the gradient based on the **sum of all
+                - ``all``: Calculates the gradient based on the **sum of all
                     predicted scores** for the `target_class_index` across the entire
                     spatial domain. This provides a global importance map for the class.
-                single: Calculates the gradient based only on the score of the
+                - ``single``: Calculates the gradient based only on the score of the
                     **single pixel/voxel** that has the maximum prediction value
                     for the `target_class_index`.
-            normalize_heatmap: If True, scales the heatmap values between 0 and 1 after ReLU.
-                Default: True.
+            normalize_heatmap: If ``True``, scales the heatmap values between ``0`` and ``1`` after ``ReLU``.
+                Default: ``True``.
             resize_heatmap: If True, upsamples the heatmap to the input_tensor's spatial
-                dimensions ([D], H, W). Default: True.
+                dimensions ``([D], H, W)``. Default: ``True``.
+
+        Examples:
+            .. code-block:: python
+
+                import numpy as np
+                from medicai.models import EfficientNetB0
+                from medicai.utils import GradCAM
+
+                model = EfficientNetB0(
+                    input_shape=(224, 224, 3),
+                )
+                x = np.random.randn(1, 224, 224, 3)
+
+                cam = GradCAM(
+                    model=model,
+                    target_layer="top_conv"
+                )
+                heatmap = cam.compute_heatmap(
+                    input_tensor=x,
+                    target_class_index=207
+                )
+                print(heatmap.shape) # (1, 224, 224, 1)
+
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.models import EfficientNetB0
+            from medicai.utils import GradCAM
+
+            model = EfficientNetB0(
+                input_shape=(16, 128, 128, 1),
+            )
+            x = np.random.randn(1, 16, 128, 128, 1)
+
+            cam = GradCAM(
+                model=model,
+                target_layer="top_conv"
+            )
+            heatmap = cam.compute_heatmap(
+                input_tensor=x,
+                target_class_index=207
+            )
+            print(heatmap.shape)
+
+
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.models import UNet
+            from medicai.utils import GradCAM
+
+            model = UNet(
+                encoder_name='densenet121',
+                input_shape=(64, 128, 128, 1),
+                num_classes=5,
+                classifier_activation="softmax",
+            )
+            x = np.random.randn(1, 64, 128, 128, 1)
+
+            cam = GradCAM(
+                model=model,
+                target_layer="decoder_stage1_conv_2_activation"
+            )
+            heatmap = cam.compute_heatmap(
+                input_tensor=x,
+                target_class_index=3
+            )
+            print(heatmap.shape) # (1, 64, 128, 128, 1)
 
         Returns:
             The final normalized heatmap as a NumPy array
-            (Batch, H, W, 1) or (Batch, [D,] H, W, 1).
+            ``(Batch, H, W, 1)`` or ``(Batch, [D,] H, W, 1)``.
+        
+        References:
+            - Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization.
+              `arXiv:1610.02391 <https://arxiv.org/abs/1610.02391>`_
+            - Towards Interpretable Semantic Segmentation via Gradient-weighted Class Activation Mapping.
+              `arXiv:2002.11434 <https://arxiv.org/abs/2002.11434>`_
         """
         # Ensure mask_type is valid before processing
         mask_type = mask_type.value if isinstance(mask_type, MaskType) else str(mask_type)

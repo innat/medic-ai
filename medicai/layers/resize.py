@@ -5,6 +5,139 @@ from medicai.utils import resize_volumes
 
 
 class ResizingND(layers.Layer):
+    """
+    ``N``-dimensional resizing layer supporting both ``2D`` and ``3D`` inputs. This layer resizes spatial 
+    dimensions of an input tensor using either:
+
+    - A fixed ``target_shape``, or
+    - A relative ``scale_factor``
+
+    It automatically detects whether the input is ``2D`` or ``3D`` based on the
+    tensor shape and applies the appropriate interpolation strategy.
+
+    Args:
+        target_shape (tuple[int] or None):
+            Desired spatial output size.
+            
+            - For 2D: ``(H, W)``
+            - For 3D: ``(D, H, W)``
+
+            Mutually exclusive with ``scale_factor``.
+        scale_factor (float or tuple[float] or None):
+            Scaling factor applied to each spatial dimension.
+            Example:
+
+            - 2D: ``2.0`` → doubles height and width
+            - 3D: ``(1, 2, 2)`` → keeps depth, doubles H and W
+        interpolation (str, optional):
+            Interpolation method:
+
+            - 2D: ``nearest`` or ``bilinear``
+            - 3D: ``nearest`` or ``trilinear``
+
+            Defaults to ``nearest``.
+        align_corners (bool, optional):
+            Whether to align corners during interpolation.
+            Not supported for 2D or nearest interpolation.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ResizingND
+
+            x = np.random.randn(1, 128, 128, 3).astype(np.float32)
+            y = ResizingND(
+                target_shape=(64, 64),
+                interpolation="bilinear"
+            )(x)
+            print(y.shape) # (1, 64, 64, 3)
+
+    .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ResizingND
+
+            x = np.random.randn(1, 128, 128, 3).astype(np.float32)
+            y = ResizingND(
+                scale_factor=0.5,
+                interpolation="nearest"
+            )(x)
+            print(y.shape) # (1, 64, 64, 3)
+
+    .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ResizingND
+
+            x = np.random.randn(1, 16, 128, 128, 3).astype(np.float32)
+            y = ResizingND(
+                target_shape=(8, 64, 64),
+                interpolation="trilinear"
+            )(x)
+            print(y.shape) # (1, 8, 64, 64, 3)
+
+    .. code-block:: python
+            
+            import numpy as np
+            from medicai.layers import ResizingND
+
+            x = np.random.randn(1, 16, 128, 128, 3).astype(np.float32)
+            y = ResizingND(
+                scale_factor=0.5,
+                interpolation="trilinear"
+            )(x)
+            print(y.shape) # (1, 8, 64, 64, 3)
+
+    .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ResizingND
+
+            x = np.random.randn(1, 16, 128, 128, 3).astype(np.float32)
+            y = ResizingND(
+                scale_factor=(1, 0.5, 0.5),
+                interpolation="trilinear"
+            )(x)
+            print(y.shape) # (1, 8, 64, 64, 3)
+
+    .. code-block:: python
+
+            import keras
+            from medicai.layers import ResizingND
+
+            inp = keras.Input((None, None, None, 3))
+            out = ResizingND(target_shape=(16, 64, 64))(inp)
+            model = keras.Model(inp, out)
+
+    Returns:
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, *target_spatial, channels)``, where ``target_spatial``
+        is determined by ``target_shape`` directly or computed as
+        ``floor(input_spatial[i] * scale_factor[i])`` for each spatial
+        axis. The batch and channel dimensions are always preserved.
+
+    Raises:
+        ValueError: If neither ``target_shape`` nor ``scale_factor`` is
+            provided, or if both are provided simultaneously.
+        ValueError: If ``interpolation`` is not one of ``"nearest"``,
+            ``"bilinear"``, or ``"trilinear"``.
+        ValueError: If ``scale_factor`` is not a positive ``int``,
+            ``float``, list, or tuple; or if any element in a
+            list/tuple ``scale_factor`` is non-positive or non-numeric.
+        ValueError: If the input spatial dimensionality is neither
+            ``2`` nor ``3`` (i.e., input rank is not ``4`` or ``5``).
+        ValueError: If ``interpolation="bilinear"`` is used with a ``3D``
+            input, or ``interpolation="trilinear"`` is used with a ``2D``
+            input.
+        ValueError: If ``align_corners=True`` is used with ``2D`` inputs
+            or with ``interpolation="nearest"``.
+        ValueError: If ``scale_factor`` length does not match the input
+            spatial dimensionality.
+        ValueError: If ``target_shape`` length does not match the input
+            spatial dimensionality, or if any element is not a positive
+            integer (non-``None`` values only).
+    """
     def __init__(
         self,
         target_shape=None,

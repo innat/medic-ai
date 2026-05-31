@@ -252,28 +252,254 @@ class AdaptivePooling3D(layers.Layer):
 
 
 class AdaptiveAveragePooling2D(AdaptivePooling2D):
-    """Adaptive Average Pooling 2D layer using the vectorized Two-Pool Gather method."""
+    """
+    Adaptive Average Pooling 2D layer using the Two-Pool Gather method.
+
+    This layer is a specialized version of ``AdaptivePooling2D`` that uses
+    average pooling as its reduction function. It dynamically resizes the
+    spatial dimensions (height, width) of a 4D input tensor to a fixed
+    ``output_size`` using a precomputed adaptive pooling strategy.
+
+    Unlike standard fixed-kernel pooling, adaptive pooling adjusts pooling
+    behavior based on the input resolution so that the output always matches
+    the desired spatial size. This makes it especially useful in CNNs where
+    variable input sizes must be mapped to a consistent feature map size.
+
+    Internally, the layer uses the Two-Pool Gather method:
+
+    1. Applies two adaptive pooling operations with different kernel scales
+    2. Combines their outputs
+    3. Uses precomputed gather indices to reconstruct the final target shape
+
+    This implementation ensures:
+
+    1. Deterministic output size
+    2. Efficient pooling without explicit interpolation
+    3. Compatibility with dynamic input resolutions (if statically known at build time)
+
+    Args:
+        output_size (int or tuple of int): Target spatial output size ``(height, width)``.
+            If a single integer is provided, it is replicated for both dimensions.
+        **kwargs: Additional keyword arguments passed to ``AdaptivePooling2D``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AdaptiveAveragePooling2D
+
+            x = np.random.randn(1, 128, 128, 64).astype(np.float32)
+            pool = AdaptiveAveragePooling2D(output_size=(7, 7))
+            y = pool(x)
+            print(y.shape) # (1, 7, 7, 64)
+
+        .. code-block:: python
+
+            import torch
+            from medicai.layers import AdaptiveAveragePooling2D
+
+            x = torch.randn(1, 8, 9, 64)
+            pool = AdaptiveAveragePooling2D(output_size=(5, 7))
+            y = pool(x)
+            print(y.shape) # torch.Size([1, 5, 7, 64])
+
+    Returns:
+        Pooled feature map with shape ``(batch_size, output_size[0], output_size[1], channels)``.
+
+    Raises:
+        NotImplementedError: If input spatial dimensions are dynamic (None) at build time,
+            preventing precomputation of pooling parameters.
+    """
 
     def __init__(self, output_size, **kwargs):
         super().__init__(ops.average_pool, output_size, **kwargs)
 
 
 class AdaptiveMaxPooling2D(AdaptivePooling2D):
-    """Adaptive Max Pooling 2D layer using the vectorized Two-Pool Gather method."""
+    """
+    Adaptive Max Pooling 2D layer using the Two-Pool Gather method.
+
+    This layer is a specialized variant of ``AdaptivePooling2D`` that uses
+    max pooling as the reduction operation. It dynamically resizes the
+    spatial dimensions (height, width) of a 4D input tensor to a fixed
+    ``output_size``.
+
+    Unlike standard fixed-kernel max pooling, this layer adapts its pooling
+    behavior based on the input resolution so that the output spatial size
+    always matches the target shape. This makes it suitable for models that
+    require fixed-size feature maps regardless of input resolution.
+
+    The layer follows the same Two-Pool Gather strategy as the base class:
+
+    1. Applies adaptive pooling with multiple kernel scales
+    2. Combines pooled outputs
+    3. Uses precomputed gather indices to reconstruct the final output
+
+    This design enables:
+
+    1. Deterministic output shape
+    2. Efficient max-based feature selection
+    3. Support for variable input resolutions (when statically known)
+
+    Args:
+        output_size (int or tuple of int): Target output spatial resolution ``(height, width)``.
+            If a single integer is provided, it is used for both dimensions.
+        **kwargs: Additional keyword arguments passed to ``AdaptivePooling2D``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AdaptiveMaxPooling2D
+
+            x = np.random.randn(1, 128, 128, 64).astype(np.float32)
+            pool = AdaptiveMaxPooling2D(output_size=(7, 7))
+            y = pool(x)
+            print(y.shape) # (1, 7, 7, 64)
+
+        .. code-block:: python
+
+            import torch
+            from medicai.layers import AdaptiveMaxPooling2D
+
+            x = torch.randn(1, 8, 9, 64)
+            pool = AdaptiveMaxPooling2D(output_size=(5, 7))
+            y = pool(x)
+            print(y.shape) # torch.Size([1, 5, 7, 64])
+
+    Returns:
+        Tensor of shape: ``(batch_size, output_size[0], output_size[1], channels)``.
+
+    Raises:
+        NotImplementedError: If input spatial dimensions are dynamic (None) during build time,
+            preventing precomputation of pooling parameters.
+    """
 
     def __init__(self, output_size, **kwargs):
         super().__init__(ops.max_pool, output_size, **kwargs)
 
 
 class AdaptiveAveragePooling3D(AdaptivePooling3D):
-    """Adaptive Average Pooling 3D layer using the vectorized Two-Pool Gather method."""
+    """
+    Adaptive Average Pooling 3D layer using the Two-Pool Gather method. This layer is a 3D extension of adaptive pooling that applies average
+    pooling to volumetric inputs and resizes the spatial dimensions ``(depth, height, width)`` to a fixed ``output_size``.
+
+    Unlike standard fixed-kernel pooling, this layer dynamically adapts its
+    pooling computation so that the output tensor always matches the target
+    spatial resolution, regardless of the input volume size (when statically
+    known at build time).
+
+    The layer uses a vectorized Two-Pool Gather strategy:
+
+    1. Applies adaptive average pooling along each spatial axis
+    2. Combines multiple pooled representations
+    3. Uses precomputed gather indices to reconstruct the final output at the desired resolution
+
+    This design provides:
+
+    1. Deterministic output shape for volumetric data
+    2. Efficient global-to-local feature aggregation
+    3. Compatibility with both medical imaging and 3D vision tasks
+
+    Args:
+        output_size (int or tuple of int): Target 3D output size ``(depth, height, width)``.
+            If a single integer is provided, it is applied to all three
+            spatial dimensions.
+        **kwargs: Additional keyword arguments passed to ``AdaptivePooling3D``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AdaptiveAveragePooling3D
+
+            x = np.random.randn(1, 16, 64, 64, 32).astype(np.float32)
+            pool = AdaptiveAveragePooling3D(output_size=(4, 7, 7))
+            y = pool(x)
+            print(y.shape) # (1, 4, 7, 7, 32)
+
+        .. code-block:: python
+
+            import torch
+            from medicai.layers import AdaptiveAveragePooling3D
+
+            x = torch.randn(1, 8, 9, 10, 64)
+            pool = AdaptiveAveragePooling3D(output_size=(5, 7, 9))
+            y = pool(x)
+            print(y.shape) # torch.Size([1, 5, 7, 9, 64])
+
+    Returns:
+        Pooled tensor with shape: ``(batch_size, depth, height, width, channels)``.
+
+    Raises:
+        NotImplementedError: If input spatial dimensions are dynamic (None) at build time,
+            preventing precomputation of pooling parameters.
+    """
 
     def __init__(self, output_size, **kwargs):
         super().__init__(ops.average_pool, output_size, **kwargs)
 
 
 class AdaptiveMaxPooling3D(AdaptivePooling3D):
-    """Adaptive Max Pooling 3D layer using the vectorized Two-Pool Gather method."""
+    """
+    Adaptive Max Pooling 3D layer using the Two-Pool Gather method.
+
+    This layer is a 3D extension of adaptive pooling that applies max
+    pooling to volumetric inputs and resizes the spatial dimensions
+    (depth, height, width) to a fixed ``output_size``.
+
+    Unlike standard fixed-kernel max pooling, this layer adapts its pooling
+    computation so that the output tensor always matches the target spatial
+    resolution, regardless of the input volume size (when statically known
+    at build time).
+
+    The layer uses a vectorized Two-Pool Gather strategy:
+
+    1. Applies adaptive max pooling independently along each spatial axis
+    2. Combines multiple pooled representations
+    3. Uses precomputed gather indices to reconstruct the final output
+
+    This design enables:
+
+    1. Deterministic output shapes for 3D data
+    2. Strong feature selection via max-based aggregation
+    3. Efficient processing of volumetric inputs such as medical scans or
+      video clips
+
+    Args:
+        output_size (int or tuple of int): Target 3D output size ``(depth, height, width)``.
+            If a single integer is provided, it is applied to all spatial
+            dimensions.
+        **kwargs: Additional keyword arguments passed to ``AdaptivePooling3D``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AdaptiveMaxPooling3D
+
+            x = np.random.randn(1, 16, 64, 64, 32).astype(np.float32)
+            pool = AdaptiveMaxPooling3D(output_size=(4, 7, 7))
+            y = pool(x)
+            print(y.shape) # (1, 4, 7, 7, 32)
+
+        .. code-block:: python
+
+            import torch
+            from medicai.layers import AdaptiveMaxPooling3D
+
+            x = torch.randn(1, 8, 9, 10, 64)
+            pool = AdaptiveMaxPooling3D(output_size=(5, 7, 9))
+            y = pool(x)
+            print(y.shape) # torch.Size([1, 5, 7, 9, 64])
+
+    Returns:
+        Tensor with shape: ``(batch_size, depth, height, width, channels)``.
+
+    Raises:
+        NotImplementedError: If input spatial dimensions are dynamic (None) at build time,
+            preventing precomputation of pooling parameters.
+    """
 
     def __init__(self, output_size, **kwargs):
         super().__init__(ops.max_pool, output_size, **kwargs)

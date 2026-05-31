@@ -6,12 +6,66 @@ from .tensor_bundle import TensorBundle
 
 
 class Resize:
-    """Resizes the spatial dimensions of tensors to a specified shape.
+    """
+    Resize selected tensors to a target spatial shape.
 
-    This transform resizes the spatial dimensions (height, width for 2D;
-    depth, height, width for 3D) of the tensors specified by `keys` to the
-    given `spatial_shape` using a specified interpolation `mode`. Different
-    interpolation modes can be specified for different keys.
+    This transform applies 2D or 3D resizing to the tensors referenced by
+    ``keys`` and returns them in the same ``TensorBundle`` structure. Keys
+    that are not present in the input are skipped.
+
+    Args:
+        keys: Keys of the tensors to resize.
+        mode: Interpolation mode used for resizing. If a single string is provided, 
+            the same mode is used for all keys. If a tuple or list is provided, it 
+            must have the same length as ``keys`` and each mode is applied to the 
+            corresponding key. If a dictionary is provided, each key is mapped to 
+            its own interpolation mode.
+
+            Supported modes are:
+
+            - 2D resizing: ``"bilinear"`` and ``"nearest"``
+            - 3D resizing: ``"trilinear"`` and ``"nearest"``
+        spatial_shape: Desired spatial shape after resizing. Use
+            ``(height, width)`` for 2D resizing or
+            ``(depth, height, width)`` for 3D resizing.
+
+    Example:
+        Resize both an image tensor and a label tensor::
+
+            import numpy as np
+            from medicai.transforms import Resize
+
+            resizer = Resize(
+                keys=["input", "target"],
+                mode=["trilinear", "nearest"],
+                spatial_shape=(96, 96, 96),
+            )
+
+            image = np.random.randn(128, 128, 128, 1).astype(np.float32)
+            label = np.random.randint(0, 2, (128, 128, 128, 1)).astype(np.float32)
+
+            data = {
+                "input": image,
+                "target": label,
+            }
+            results = resizer(data)
+
+            resized_image, resized_label = results["input"], results["target"]
+            resized_image.shape, resized_label.shape
+            # (TensorShape([96, 96, 96, 1]), TensorShape([96, 96, 96, 1]))
+
+    Returns:
+        ``TensorBundle``: The transformed output. We can retrieve the resized
+        tensors using the same keys as the input, for example
+        ``results["input"]`` and ``results["target"]``.
+
+    Raises:
+        ValueError: If ``mode`` is a tuple or list and its length does not
+            match the length of ``keys``.
+        ValueError: If ``spatial_shape`` is neither 2D nor 3D.
+        ValueError: If a provided interpolation mode is not valid for the
+            selected spatial dimensionality.
+        TypeError: If ``mode`` is not a string, tuple, list, or dict.
     """
 
     def __init__(
@@ -20,26 +74,6 @@ class Resize:
         mode: Tuple[str, str] = ("trilinear", "nearest"),
         spatial_shape: Tuple[int, ...] = (96, 96, 96),
     ):
-        """Initializes the Resize transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to resize.
-            mode (Union[str, Tuple[str, ...]]): The interpolation mode to use for resizing.
-                - If a single string is provided, the same mode is used for all keys.
-                - If a tuple of strings is provided, it must have the same length as `keys`,
-                  and the mode at each index will be used for the tensor with the
-                  corresponding key. Supported modes include 'nearest', 'bilinear', 'trilinear'.
-                  for 2D resizing (using `tf.image.resize`) supports 'bilinear' and 'nearest'.
-                  for 3D resizing (using a custom volume resizer) supports 'trilinear' and 'nearest'.
-            spatial_shape (Tuple[int, ...]): The desired spatial shape after resizing.
-                It should be a tuple of two integers (height, width) for 2D resizing
-                or a tuple of three integers (depth, height, width) for 3D resizing.
-                Default is (96, 96, 96) for 3D.
-
-        Raises:
-            ValueError: If `mode` is a tuple and its length does not match the length of `keys`.
-            ValueError: If `spatial_shape` is neither 2D nor 3D.
-        """
         self.keys = keys
         self.spatial_shape = spatial_shape
 
@@ -71,15 +105,16 @@ class Resize:
                 )
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
-        """Apply the resizing transformation to the input TensorBundle.
+        """Apply the resizing transformation.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata. The tensors
-                specified by `self.keys` will be resized according to `self.spatial_shape`
-                and `self.mode`.
+            inputs: Either a ``TensorBundle`` or a dictionary of tensors. The
+            tensors referenced by ``self.keys`` are resized according to
+            ``self.spatial_shape`` and ``self.mode``.
 
         Returns:
-            TensorBundle: A dictionary with the resized tensors and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the resized
+            tensors using the same keys as the input.
         """
 
         if isinstance(inputs, dict):

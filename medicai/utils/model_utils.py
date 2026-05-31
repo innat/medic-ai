@@ -9,18 +9,156 @@ from .registry import registration
 
 def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
     """
-    Returns a convolutional layer (2D or 3D) based on the given type.
+    Creates and returns a convolutional layer for ``2D`` or ``3D`` inputs.
+
+    This utility provides a unified interface for constructing standard,
+    transposed, separable, and depthwise convolution layers across both
+    ``2D`` and ``3D`` data. The appropriate Keras layer implementation is selected
+    automatically based on ``spatial_dims`` and ``layer_type``.
 
     Args:
-        spatial_dims (int): Number of spatial dimensions. Must be 2 or 3.
-        layer_type (str): One of {'conv', 'conv_transpose', 'separable_conv', 'depthwise_conv'}.
-        **kwargs: Additional keyword arguments for the layer (filters, kernel_size, strides, etc.).
+        spatial_dims (int):
+            Number of spatial dimensions. Supported values are:
+
+            - ``2`` for images with shape
+              ``(batch, height, width, channels)``
+            - ``3`` for volumetric data with shape
+              ``(batch, depth, height, width, channels)``
+
+        layer_type (str):
+            Type of convolution layer to create. Supported values are:
+
+            - ``"conv"``
+            - ``"conv_transpose"``
+            - ``"separable_conv"``
+            - ``"depthwise_conv"``
+
+        **kwargs:
+            Additional keyword arguments passed directly to the underlying
+            Keras layer constructor.
+
+            Common arguments include:
+
+            - ``filters``
+            - ``kernel_size``
+            - ``strides``
+            - ``padding``
+            - ``activation``
+            - ``use_bias``
+
+            For ``depthwise_conv``, ``filters`` must **not** be provided.
 
     Returns:
-        keras.layers.Layer: A Keras convolutional layer.
+        ``keras.layers.Layer``:
+            Instantiated convolution layer corresponding to the requested
+            configuration.
 
     Raises:
-        ValueError: If spatial_dims is not in {2, 3} or if an unsupported layer_type is requested.
+        ValueError:
+            If ``spatial_dims`` is not ``2`` or ``3``.
+
+        ValueError:
+            If ``layer_type`` is not one of the supported layer types.
+
+        ValueError:
+            If ``filters`` is missing for layer types that require it
+            (``conv``, ``conv_transpose``, ``separable_conv``).
+
+        ValueError:
+            If ``filters`` is provided for ``depthwise_conv``.
+
+    Example:
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=2,
+                layer_type="conv",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(layer, keras.layers.Conv2D) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=3,
+                layer_type="conv",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(layer, keras.layers.Conv3D) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=2,
+                layer_type="conv_transpose",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(
+                layer, keras.layers.Conv2DTranspose
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=3,
+                layer_type="conv_transpose",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(
+                layer, keras.layers.Conv3DTranspose
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=2,
+                layer_type="separable_conv",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(
+                layer, keras.layers.SeparableConv2D
+            ) # True
+
+        .. code-block:: python
+
+            import medicai
+            from medicai.utils import get_conv_layer
+
+            layer = get_conv_layer(
+                spatial_dims=3,
+                layer_type="separable_conv",
+                filters=64,
+                kernel_size=3,
+                padding="same"
+            )
+            isinstance(
+                layer, medicai.layers.SeparableConv3D
+            ) # True
     """
     SUPPORTED_TYPES = {"conv", "conv_transpose", "separable_conv", "depthwise_conv"}
 
@@ -70,13 +208,100 @@ def get_conv_layer(spatial_dims: int, layer_type: str, **kwargs):
 
 
 def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
-    """Returns a reshaping layer (UpSampling or ZeroPadding)
-    for 2D or 3D inputs.
+    """
+    Creates and returns a reshaping layer for ``2D`` or ``3D`` inputs.
+
+    This utility provides a unified interface for constructing common
+    spatial reshaping layers across both ``2D`` and ``3D`` data. Depending on
+    the requested ``layer_type``, it returns an upsampling, padding,
+    or cropping layer.
 
     Args:
-        spatial_dims (int): 2 or 3, determines if 2D or 3D layer is used.
-        layer_type (str): "upsampling" or "padding".
-        **kwargs: Additional arguments passed to the selected layer.
+        spatial_dims (int):
+            Number of spatial dimensions. Supported values are:
+
+            - ``2`` for images with shape
+              ``(batch, height, width, channels)``
+            - ``3`` for volumetric data with shape
+              ``(batch, depth, height, width, channels)``
+
+        layer_type (str):
+            Type of reshaping layer to create. Supported values are:
+
+            - ``"upsampling"``
+            - ``"padding"``
+            - ``"cropping"``
+
+        **kwargs:
+            Additional keyword arguments passed directly to the
+            underlying Keras layer constructor.
+
+            Common arguments include:
+
+            - ``size`` for upsampling layers
+            - ``padding`` for padding layers
+            - ``cropping`` for cropping layers
+
+    Returns:
+        ``keras.layers.Layer``:
+            Instantiated reshaping layer corresponding to the requested
+            configuration.
+
+    Raises:
+        ValueError:
+            If ``spatial_dims`` is not ``2`` or ``3``.
+
+        ValueError:
+            If ``layer_type`` is not one of:
+
+            - ``"upsampling"``
+            - ``"padding"``
+            - ``"cropping"``
+
+    Example:
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_reshaping_layer
+
+            layer = get_reshaping_layer(
+                spatial_dims=2,
+                layer_type="upsampling",
+                size=(2, 2)
+            )
+            isinstance(
+                layer, keras.layers.UpSampling2D
+            ) # True
+
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_reshaping_layer
+
+            layer = get_reshaping_layer(
+                spatial_dims=3,
+                layer_type="padding",
+                padding=((1, 1), (2, 2), (2, 2))
+            )
+            isinstance(
+                layer, keras.layers.ZeroPadding3D
+            ) # True
+
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_reshaping_layer
+
+            layer = get_reshaping_layer(
+                spatial_dims=3,
+                layer_type="cropping",
+                cropping=((2, 2), (10, 10), (10, 10))
+            )
+            isinstance(
+                layer, keras.layers.Cropping3D
+            ) # True
     """
     if spatial_dims not in (2, 3):
         raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
@@ -101,6 +326,82 @@ def get_reshaping_layer(spatial_dims, layer_type, **kwargs):
 
 
 def get_dropout_layer(spatial_dims, layer_type, **kwargs):
+    """
+    Creates and returns a dropout layer for ``2D`` or ``3D`` feature maps.
+
+    This utility provides a unified interface for constructing spatial
+    dropout layers across both ``2D`` and ``3D`` inputs. Unlike standard dropout,
+    spatial dropout randomly drops entire feature maps (channels) rather
+    than individual elements, which is often more effective for convolutional
+    neural networks.
+
+    
+    Args:
+        spatial_dims (int):
+            Number of spatial dimensions. Supported values are:
+
+            - ``2`` for images with shape
+              ``(batch, height, width, channels)``
+            - ``3`` for volumetric data with shape
+              ``(batch, depth, height, width, channels)``
+
+        layer_type (str):
+            Type of dropout layer to create.
+
+            Supported values:
+
+            - ``"spatial_dropout"``
+
+        **kwargs:
+            Additional keyword arguments passed directly to the
+            underlying Keras layer constructor.
+
+            Common arguments include:
+
+            - ``rate``: Fraction of channels to drop.
+            - ``name``: Layer name.
+
+    Returns:
+        ``keras.layers.Layer``:
+            Instantiated dropout layer corresponding to the requested
+            configuration.
+
+    Raises:
+        ValueError:
+            If ``spatial_dims`` is not ``2`` or ``3``.
+
+        ValueError:
+            If ``layer_type`` is not ``"spatial_dropout"``.
+
+    Example:
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_dropout_layer
+
+            layer = get_dropout_layer(
+                spatial_dims=2,
+                layer_type="spatial_dropout",
+                rate=0.2
+            )
+            isinstance(
+                layer, keras.layers.SpatialDropout2D
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_dropout_layer
+
+            layer = get_dropout_layer(
+                spatial_dims=3,
+                layer_type="spatial_dropout",
+                rate=0.2
+            )
+            isinstance(
+                layer, keras.layers.SpatialDropout3D
+            ) # True
+    """
     if spatial_dims not in (2, 3):
         raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
 
@@ -116,25 +417,113 @@ def get_dropout_layer(spatial_dims, layer_type, **kwargs):
 
 def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
     """
-    Returns a pooling layer (Max or Average) for 1D, 2D, or 3D inputs, including global pooling.
+    Creates and returns a pooling layer for ``2D`` or ``3D`` inputs.
+
+    This utility provides a unified interface for constructing standard,
+    global, and adaptive pooling layers across ``2D`` and ``3D`` feature maps.
 
     Args:
-        spatial_dims (int): Number of spatial dimensions. Must be 1, 2, or 3.
-        layer_type (str): Type of pooling. Must be "max" or "avg".
-        global_pool (bool): If True, returns a Global pooling layer (GlobalMaxPooling or GlobalAveragePooling).
-                            If False, returns regular pooling (MaxPooling or AveragePooling).
-        **kwargs: Additional keyword arguments passed to the layer constructor
-                  (e.g., pool_size, strides, padding).
+        spatial_dims (int):
+            Number of spatial dimensions. Supported values are:
+
+            - ``2`` for images: ``(batch, height, width, channels)``
+            - ``3`` for volumes: ``(batch, depth, height, width, channels)``
+
+        layer_type (str):
+            Type of pooling operation. Supported values:
+
+            - ``"max"``
+            - ``"avg"``
+            - ``"adaptive_max"``
+            - ``"adaptive_avg"``
+
+        global_pool (bool, optional):
+            If ``True``, returns global pooling layers that reduce spatial
+            dimensions entirely. Default is ``False``.
+
+            Only applies to ``"max"`` and ``"avg"``.
+
+        **kwargs:
+            Additional keyword arguments passed to the underlying Keras
+            pooling layer.
+
+            Common arguments include:
+
+            - ``pool_size``
+            - ``strides``
+            - ``padding``
+
+            Adaptive pooling layers ignore most of these arguments.
 
     Returns:
-        keras.layers.Layer: The corresponding Keras pooling layer.
+        ``keras.layers.Layer``:
+            Instantiated pooling layer corresponding to the requested configuration.
+
+    Raises:
+        ValueError:
+            If ``spatial_dims`` is not ``2`` or ``3``.
+
+        ValueError:
+            If ``layer_type`` is not one of the supported pooling types.
 
     Example:
-        # 2D max pooling
-        pool2d = get_pooling_layer(2, "max", pool_size=(2, 2), strides=(2, 2))
+        .. code-block:: python
 
-        # Global average pooling 3D
-        gap3d = get_pooling_layer(3, "avg", global_pool=True)
+            import keras
+            from medicai.utils import get_pooling_layer
+
+            layer = get_pooling_layer(
+                spatial_dims=2,
+                layer_type="max",
+                pool_size=(2, 2),
+                strides=(2, 2)
+            )
+            isinstance(
+                layer, keras.layers.MaxPooling2D
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_pooling_layer
+
+            layer = get_pooling_layer(
+                spatial_dims=3,
+                layer_type="avg",
+                pool_size=(2, 2, 2),
+                strides=(2, 2, 2)
+            )
+            isinstance(
+                layer, keras.layers.AveragePooling3D
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_pooling_layer
+
+            layer = get_pooling_layer(
+                spatial_dims=2,
+                layer_type="avg",
+                global_pool=True
+            )
+            isinstance(
+                layer, keras.layers.GlobalAveragePooling2D
+            ) # True
+
+        .. code-block:: python
+
+            import medicai
+            from medicai.utils import get_pooling_layer
+
+            layer = get_pooling_layer(
+                spatial_dims=2,
+                layer_type="adaptive_avg",
+                output_size=(1, 1)
+            )
+            isinstance(
+                layer, medicai.layers.AdaptiveAveragePooling2D
+            ) # True
     """
     if spatial_dims not in (2, 3):
         raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}")
@@ -179,16 +568,49 @@ def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
 
 def get_act_layer(layer_type, **kwargs):
     """
-    Returns a Keras activation layer based on the provided layer_type and keyword arguments
-    using the official keras.activations.get() function.
+    Creates and returns a Keras activation layer.
+
+    This utility provides a unified interface for constructing both
+    standard activation functions (via ``keras.activations.get``) and
+    parameterized activation layers (e.g., LeakyReLU, PReLU, ELU).
 
     Args:
-        layer_type (str): The name of the activation function (e.g., 'relu', 'sigmoid', 'leaky_relu').
-            Can also be a callable activation function.
-        **kwargs: Keyword arguments to be passed to the activation function (if applicable).
+        layer_type (str or callable):
+            Name of the activation function or callable activation.
+
+            - Standard activations (e.g., ``relu``, ``sigmoid``) are
+              resolved using ``keras.activations.get``.
+            - Special activations (``leaky_relu``, ``prelu``, ``elu``,
+              ``relu``) use dedicated Keras layer implementations.
+
+        **kwargs:
+            Additional keyword arguments passed to the activation layer
+            constructor when applicable.
+
+            Examples:
+            - ``negative_slope`` for ``leaky_relu``
+            - ``alpha`` for ``elu``
+            - ``alpha_initializer`` for ``prelu``
 
     Returns:
-        A Keras Activation layer.
+        ``keras.layers.Layer``:
+            A Keras activation layer instance.
+
+    Raises:
+        ValueError:
+            If the provided activation type is not supported by
+            ``keras.activations.get`` and not in the special layer map.
+
+    Example:
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_act_layer
+
+            layer = get_act_layer("relu")
+            isinstance(
+                layer, keras.layers.ReLU
+            ) # True
     """
     # Normalize name
     layer_type = layer_type.lower()
@@ -211,32 +633,79 @@ def get_act_layer(layer_type, **kwargs):
 
 def get_norm_layer(layer_type, **kwargs):
     """
-    Returns a Keras normalization layer based on the provided name and keyword arguments.
+    Creates and returns a normalization layer for neural networks.
+
+    This utility provides a unified interface for constructing different
+    normalization strategies commonly used in deep learning architectures,
+    including batch, layer, group, and instance normalization variants.
 
     Args:
-        layer_type (str): The name of the normalization layer to create.
-            Supported names are: "instance", "batch", "layer", "unit", "group".
-        **kwargs: Keyword arguments to be passed to the constructor of the
-            chosen normalization layer.
+        layer_type (str):
+            Type of normalization layer to create. Supported values are:
+
+            - ``"batch"``
+            - ``"layer"``
+            - ``"unit"``
+            - ``"group"``
+            - ``"instance"``
+            - ``"sync_batch"``
+
+        **kwargs:
+            Additional keyword arguments passed directly to the
+            normalization layer constructor.
+
+            Common arguments include:
+
+            - ``epsilon``: Small constant for numerical stability
+            - ``momentum``: Momentum for batch statistics (BatchNorm)
+            - ``axis``: Axis for normalization (LayerNorm, BatchNorm)
+            - ``groups``: Number of groups (GroupNorm)
+
+            Note:
+                The ``instance`` normalization mode internally uses
+                ``GroupNormalization`` with ``groups=-1`` and disables
+                affine parameters (``scale=False, center=False``).
 
     Returns:
-        A Keras normalization layer instance.
+        ``keras.layers.Layer``:
+            Instantiated normalization layer.
 
     Raises:
-        ValueError: If an unsupported `layer_type` is provided.
+        ValueError:
+            If ``layer_type`` is not one of the supported normalization types.
 
     Examples:
-        >>> batch_norm = get_norm_layer("batch", momentum=0.9)
-        >>> isinstance(batch_norm, layers.BatchNormalization)
-        True
-        >>> instance_norm = get_norm_layer("instance")
-        >>> isinstance(instance_norm, layers.GroupNormalization)
-        True
-        >>> try:
-        ...     unknown_norm = get_norm_layer("unknown")
-        ... except ValueError as e:
-        ...     print(e)
-        Unsupported normalization: unknown
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_norm_layer
+
+            layer = get_norm_layer("batch", momentum=0.9)
+            isinstance(
+                layer, keras.layers.BatchNormalization
+            ) # True
+
+        .. code-block:: python
+
+            import keras
+            from medicai.utils import get_norm_layer
+
+            layer = get_norm_layer("layer", epsilon=1e-5)
+            isinstance(
+                layer, keras.layers.LayerNormalization
+            ) # True
+
+        .. code-block:: python
+
+            norm = get_norm_layer("instance")
+
+        .. code-block:: python
+
+            norm = get_norm_layer("group", groups=8)
+
+        .. code-block:: python
+
+            norm = get_norm_layer("sync_batch")
     """
     layer_type = layer_type.lower()
 

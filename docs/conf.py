@@ -157,8 +157,7 @@ autodoc_default_options = {
     "show-inheritance": True,
 }
 autodoc_member_order = "bysource"
-autodoc_typehints = "description"
-autodoc_typehints_description_target = "all"
+autodoc_typehints = "signature"
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_use_param = True

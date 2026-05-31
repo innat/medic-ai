@@ -6,39 +6,52 @@ from .tensor_bundle import TensorBundle
 
 
 class SignalFillEmpty:
-    """Fills NaN, positive infinity, and negative infinity values in specified tensors with a
-    given replacement.
+    """Fill NaN, positive infinity, and negative infinity values in selected tensors.
 
-    This transform iterates through the tensors associated with the provided keys in the
-    input TensorBundle. For each such tensor, it replaces any occurrences of NaN (Not a Number),
-    positive infinity, and negative infinity with a user-defined replacement value.
+    This transform iterates through the tensors associated with the provided keys
+    and replaces invalid numeric values with a user-defined replacement. Keys
+    that are not present in the input are skipped. Internally, the replacement
+    helper converts tensors through ``float32`` before applying the fill.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to process.
+        replacement (float): Value used to replace NaN, positive infinity, and
+            negative infinity entries. Default is ``0.0``.
+
+    Example:
+        Replace invalid numeric values in an image tensor::
+
+            import tensorflow as tf
+            from medicai.transforms import SignalFillEmpty
+
+            filler = SignalFillEmpty(
+                keys=["image"],
+                replacement=0.0,
+            )
+
+            image = tf.constant([[[[float("nan")], [float("inf")]]]], dtype=tf.float32)
+            result = filler({"image": image})
+            filled_image = result["image"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the filled tensors
+        using the same keys as the input.
     """
 
     def __init__(self, keys, replacement: float = 0.0):
-        """Initializes the SignalFillEmpty transform.
-
-        Args:
-            keys (Sequence[str]): A sequence of keys identifying the tensors within the
-                TensorBundle to process.
-            replacement (float): The value to use for replacing NaN, positive infinity,
-                and negative infinity values. Default is 0.0.
-        """
         self.keys = keys
         self.replacement = replacement
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
-        """Applies the signal filling operation to the specified tensors in the input
-        TensorBundle.
+        """Apply the signal filling operation to the specified tensors.
 
         Args:
-            inputs (TensorBundle): A dictionary-like object containing tensors and metadata.
-                The tensors associated with the keys specified during initialization will
-                be processed.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to process.
 
         Returns:
-            TensorBundle: A new TensorBundle with the NaN, positive infinity, and negative
-                infinity values in the specified tensors replaced by the `self.replacement` value.
-                The metadata of the input TensorBundle is preserved.
+            TensorBundle: The transformed output. We can retrieve the filled tensors
+            using the same keys as the input.
         """
 
         if isinstance(inputs, dict):

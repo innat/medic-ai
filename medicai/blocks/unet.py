@@ -5,20 +5,79 @@ from medicai.utils import get_act_layer, get_conv_layer, get_norm_layer
 
 class UNetBasicBlock(layers.Layer):
     """
-    A basic building block for a UNet, consisting of two convolutional layers
-    with normalization and LeakyReLU activation, and optional dropout.
+    Basic convolutional block used in UNet-style architectures. This block consists of two sequential convolution layers, where each
+    convolution is followed by:
+
+    1. Normalization
+    2. LeakyReLU activation
+
+    An optional ``dropout`` layer can be inserted between the two convolution
+    stages for regularization. The block automatically supports both ``2D`` and ``3D`` inputs
+    by inferring the number of spatial dimensions from the input tensor shape. Operation order:
+
+    1. Convolution
+    2. Normalization
+    3. LeakyReLU
+    4. Optional Dropout
+    5. Convolution
+    6. Normalization
+    7. LeakyReLU
 
     Args:
-        filters (int): The number of output channels for both convolutional layers.
-        kernel_size (int): The size of the convolutional kernel in all spatial dimensions (default: 3).
-        stride (int): The stride of the first convolutional layer in all spatial dimensions (default: 1).
-        norm_name (Optional[str]): The name of the normalization layer to use.
-            Options are "instance" (requires tensorflow-addons), "batch", or None for no normalization (default: "instance").
-        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no dropout is applied (default: None).
+        filters (int): Number of output channels for both convolution layers.
+        kernel_size (int or tuple, optional): Size of the convolution kernel.
+            Defaults to ``3``.
+        stride (int or tuple, optional): Stride applied in the first convolution layer.
+            The second convolution always uses stride ``1``.
+            Defaults to ``1``.
+        norm_name (str or None, optional):
+            Type of normalization layer applied after convolutions.
+
+            Common options include:
+
+            - ``"batch"``
+            - ``"instance"``
+            - ``"layer"``
+            - ``None`` (disable normalization)
+
+            Defaults to ``"instance"``.
+
+        dropout_rate (float or None, optional): Dropout probability applied between the
+            two convolution blocks. If ``None``, dropout is disabled.
+            Defaults to ``None``.
+        name (str, optional): Name prefix used for internal layers.
+            Defaults to ``"unet_basic_block"``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNetBasicBlock
+
+            x = np.random.randn(1, 128, 128, 32).astype(np.float32)
+            block = UNetBasicBlock(
+                filters=64,
+                kernel_size=3,
+                stride=1,
+                norm_name="batch",
+                dropout_rate=0.1,
+            )
+            y = block(x)
+            print(y.shape) # (1, 124, 124, 64)
 
     Returns:
-        Callable: A function that takes an input tensor and returns the output
-            tensor after applying the basic block.
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, H_out, W_out, filters)`` for 2D inputs or
+        ``(batch, D_out, H_out, W_out, filters)`` for 3D inputs,
+        where the spatial dimensions depend on ``kernel_size``,
+        ``stride``, and ``padding`` of the two convolution layers.
+
+    Raises:
+        ValueError: If ``norm_name`` is not a recognized normalization
+            type supported by ``get_norm_layer`` (e.g., an unregistered
+            string other than ``"batch"``, ``"instance"``, ``"layer"``,
+            or ``None``).
     """
 
     def __init__(
@@ -116,24 +175,72 @@ class UNetBasicBlock(layers.Layer):
 
 
 class UNetOutBlock(layers.Layer):
-    """The output block of a UNet, consisting of a 1x1x1 convolutional layer
-    to map the features to the desired number of classes, with optional dropout
-    and a final activation function.
+    """
+    Output projection block used in UNet-style segmentation architectures. This block
+    applies a final ``1×1`` (or ``1×1×1`` for ``3D``) convolution to project feature maps
+    into the desired number of output classes. The layer optionally supports:
+
+    1. Dropout for regularization before prediction
+    2. Final activation function such as ``softmax`` or ``sigmoid``
+
+    The block automatically supports both ``2D`` and ``3D`` inputs by detecting
+    the number of spatial dimensions from the input tensor shape. Operation order:
+
+    1. Optional Dropout
+    2. ``1×1`` / ``1×1×1`` Convolution
+    3. Optional Activation
 
     Args:
-        num_classes (int): The number of output classes for the segmentation task.
-            This determines the number of output channels of the convolutional layer.
-        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None,
-            no dropout is applied (default: None).
-        activation (Optional[Union[str, layers.Activation]]): The activation function
-            to apply to the output of the convolutional layer. This can be a string
-            (e.g., 'softmax', 'sigmoid') or a Keras activation layer instance.
-            If None, no activation is applied (default: None).
+        num_classes (int):
+            Number of output classes or prediction channels. Examples:
+
+            - Binary segmentation → ``1``
+            - Multi-class segmentation → ``N`` classes
+
+        dropout_rate (float or None, optional):
+            Dropout probability applied before the output projection.
+            If ``None``, dropout is disabled.
+            Defaults to ``None``.
+        activation (str or callable or None, optional):
+            Activation function applied after the output convolution.
+            Common choices:
+
+            - ``"sigmoid"`` for binary segmentation
+            - ``"softmax"`` for multi-class segmentation
+            - ``None`` for raw logits
+            Defaults to ``None``.
+
+        name (str, optional):
+            Name prefix used for internal layers.
+            Defaults to ``"unet_out_block"``.
+        **kwargs:
+            Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNetOutBlock
+
+            x = np.random.randn(1, 128, 128, 64).astype(np.float32)
+            out_block = UNetOutBlock(
+                num_classes=5,
+                activation="sigmoid"
+            )
+            y = out_block(x)
+            print(y.shape)  # (1, 128, 128, 5)
 
     Returns:
-        Callable: A function that takes an input tensor and returns the output
-            tensor after applying the 1x1x1 convolution and optional dropout
-            and activation.
+        keras.KerasTensor: Output prediction tensor of shape
+        ``(batch, H, W, num_classes)`` for 2D inputs or
+        ``(batch, D, H, W, num_classes)`` for 3D inputs,
+        where all spatial dimensions are fully preserved by the
+        ``1×1`` / ``1×1×1`` convolution.
+
+    Raises:
+        ValueError: If ``activation`` is not a valid Keras activation
+            identifier or callable, raised internally by ``get_conv_layer``
+            when building the output convolution.
     """
 
     def __init__(
@@ -193,24 +300,79 @@ class UNetOutBlock(layers.Layer):
 
 class UNetResBlock(layers.Layer):
     """
-    A residual building block for a UNet, consisting of two convolutional layers
-    with normalization, LeakyReLU activation, optional dropout, and a skip connection.
+    Residual convolutional block used in UNet-style architectures. This block extends
+    the standard UNet convolution block by introducing a residual skip connection
+    between the input and output features, similar to residual learning used in ResNet
+    architectures. The block consists of:
+
+    1. Convolution
+    2. Normalization
+    3. LeakyReLU activation
+    4. Optional Dropout
+    5. Convolution
+    6. Normalization
+    7. Residual addition
+    8. Final LeakyReLU activation
+
+    If the input and output feature dimensions do not match, or if
+    spatial downsampling is applied via ``stride > 1``, a ``1×1``
+    projection convolution is automatically applied to the residual path
+    to align tensor shapes before addition. The block automatically supports
+    both ``2D`` and ``3D`` inputs by inferring the number of spatial dimensions from
+    the input tensor shape.
 
     Args:
-        filters (int): The number of output channels for the convolutional layers.
-        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
-            (default: 3).
-        stride (int): The stride of the first convolutional layer in all spatial dimensions
-            (default: 1).
-        norm_name (Optional[str]): The name of the normalization layer to use.
-            Options are "instance" (requires tensorflow-addons), "batch", or None for no
-            normalization (default: "instance").
-        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
-            dropout is applied (default: None).
+        filters (int): Number of output feature channels.
+        kernel_size (int or tuple, optional): Size of the convolution kernel.
+            Defaults to ``3``.
+        stride (int or tuple, optional): Stride applied in the first convolution layer.
+            If ``stride > 1``, spatial downsampling is performed and the
+            residual branch is projected accordingly. Defaults to ``1``.
+        norm_name (str or None, optional): Type of normalization layer applied after
+            convolutions. Common options include:
+
+            - ``"batch"``
+            - ``"instance"``
+            - ``"layer"``
+            - ``None`` (disable normalization)
+            Defaults to ``"instance"``.
+
+        dropout_rate (float or None, optional): Dropout probability applied between
+            convolution layers. If ``None``, dropout is disabled. Defaults to ``None``.
+        name (str, optional): Name prefix used for internal layers.
+            Defaults to ``"unet_residual_block"``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNetResBlock
+
+            x = np.random.randn(1, 128, 128, 32).astype(np.float32)
+            block = UNetResBlock(
+                filters=64,
+                stride=2,
+                norm_name="batch",
+                dropout_rate=0.1,
+            )
+            y = block(x)
+            print(y.shape) # (1, 64, 64, 64)
 
     Returns:
-        Callable: A function that takes an input tensor and returns the output
-            tensor after applying the residual block.
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, H_out, W_out, filters)`` for 2D inputs or
+        ``(batch, D_out, H_out, W_out, filters)`` for 3D inputs.
+        Spatial dimensions are reduced when ``stride > 1``. If input
+        channels differ from ``filters`` or ``stride > 1``, a ``1×1``
+        projection convolution is automatically applied to the residual
+        path to align shapes before addition.
+
+    Raises:
+        ValueError: If ``norm_name`` is not a recognized normalization
+            type supported by ``get_norm_layer`` (e.g., an unregistered
+            string other than ``"batch"``, ``"instance"``, ``"layer"``,
+            or ``None``).
     """
 
     def __init__(

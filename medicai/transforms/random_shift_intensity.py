@@ -9,10 +9,43 @@ class RandShiftIntensity:
     """Randomly shifts the intensity values of specified tensors.
 
     This transform applies a random offset to the intensity of the tensors
-    specified by `keys`. The offset is sampled from a uniform distribution
-    defined by the `offsets` parameter. The shift is applied with a given
-    probability. It can be applied globally to the entire tensor or independently
-    for each channel.
+    specified by ``keys``. The shift is applied with probability ``prob``. A
+    single offset can be applied to the whole tensor, or separate offsets can
+    be sampled for each channel when ``channel_wise=True`` and the tensor is
+    4D. Keys that are not present in the input are skipped.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to shift.
+        offsets (Union[float, Tuple[float, float]]): Range from which the
+            intensity offset is sampled.
+            - If a single float is provided, the sampled range becomes ``(-abs(offsets), abs(offsets))``.
+            - If a tuple is provided, the sampled range becomes ``(min(offsets), max(offsets))``.
+        prob (float): Probability of applying the shift. Default is ``0.1``.
+        channel_wise (bool): If ``True`` and the tensor has shape
+            ``(D, H, W, C)``, a separate random offset is sampled for each
+            channel. Otherwise, one scalar offset is sampled for the whole
+            tensor.
+
+    Example:
+        Randomly shift the intensity of an image tensor::
+
+            import tensorflow as tf
+            from medicai.transforms import RandShiftIntensity
+
+            shifter = RandShiftIntensity(
+                keys=["image"],
+                offsets=0.1,
+                prob=0.5,
+                channel_wise=False,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            result = shifter({"image": image})
+            shifted_image = result["image"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the shifted
+        tensors using the same keys as the input.
     """
 
     def __init__(
@@ -22,24 +55,6 @@ class RandShiftIntensity:
         prob: float = 0.1,
         channel_wise: bool = False,
     ):
-        """
-        Initializes the RandShiftIntensity transform.
-
-        Args:
-            keys (Sequence[str]): List of keys in the input TensorBundle to apply the transform to.
-            offsets (Union[float, Tuple[float, float]]): The range from which the intensity
-                shift will be sampled.
-                - If a single float is provided, the offset will be uniformly sampled
-                  from `(-abs(offsets), abs(offsets))`.
-                - If a tuple `(min_offset, max_offset)` is provided, the offset will be
-                  uniformly sampled from this range.
-            prob (float): The probability (between 0 and 1) of applying the intensity shift.
-                Default is 0.1.
-            channel_wise (bool): If True and the input tensor has a channel dimension (e.g., shape [D, H, W, C]),
-                a different random offset will be applied to each channel. If False, a single
-                random offset is applied to all channels (or to the entire tensor if it has no
-                channel dimension). Default is False.
-        """
         self.keys = keys
         if isinstance(offsets, (int, float)):
             self.offsets = (-abs(offsets), abs(offsets))
@@ -53,13 +68,12 @@ class RandShiftIntensity:
         """Apply the random intensity shift to the specified tensors in the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata. The tensors
-                specified by `self.keys` will have a random intensity shift applied with
-                probability `self.prob`.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to shift.
 
         Returns:
-            TensorBundle: A dictionary with the intensity-shifted tensors (if the random
-            condition is met) and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the shifted
+            tensors using the same keys as the input.
         """
 
         if isinstance(inputs, dict):
