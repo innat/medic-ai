@@ -26,6 +26,7 @@ class SlidingWindowInference:
     where the full input cannot be processed at once due to memory constraints.
 
     The inference pipeline works as follows:
+
     1. Input is divided into overlapping sliding windows (patches).
     2. Each patch is processed independently by the model.
     3. Predictions are aggregated back into the full spatial volume.
@@ -77,7 +78,7 @@ class SlidingWindowInference:
             print(output.shape) # (1, 128, 128, 128, 3)
 
     Returns:
-        ``np.ndarray``: The output tensor with the same batch size and
+        np.ndarray: The output tensor with the same batch size and
             spatial dimensions as the input, and the number of channels
             equal to ``num_classes``.
     """

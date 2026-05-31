@@ -479,49 +479,52 @@ class BaseCenterlineDiceLoss(BaseLoss):
 
 BASE_COMMON_ARGS = """
 Args:
-    from_logits (bool): Whether `y_pred` is expected to be logits. If True,
-        the predictions will be passed through the appropriate activation 
+    from_logits (bool): Whether ``y_pred`` is expected to be logits. If ``True``,
+        the predictions will be passed through the appropriate activation
         (sigmoid/softmax).
     num_classes (int): The total number of classes in the segmentation task.
 {specific_args}
-    target_class_ids (int, list of int, or None): If an integer or a list of 
+    target_class_ids (int, list of int, or None): If an integer or a list of
         integers, the loss will be calculated only for the specified class(es).
-        If None, the loss will be calculated for all classes and averaged.
-        Default: None.
-    ignore_class_ids (int, list of int, or None): The ID of a class to be ignored 
+        If ``None``, the loss will be calculated for all classes and averaged.
+        Default: ``None``.
+    ignore_class_ids (int, list of int, or None): The ID of a class to be ignored
         during computation. This is useful, for example, in segmentation
-        problems featuring a "void" or un-label class (usually -1 or 255) in
-        segmentation maps. If None, the loss will be calculated for all classes 
-        and averaged. Default: None.
+        problems featuring a ``void`` or un-labeled class (usually ``-1`` or ``255``) in
+        segmentation maps. If ``None``, the loss will be calculated for all classes
+        and averaged. Default: ``None``.
     smooth (float, optional): A small smoothing factor to prevent division by zero.
-        Defaults to 1e-7.
-    reduction (str, optional): Type of reduction to apply to the loss. 
-        The output of `call()` is the loss value per batch element/class, 
+        Defaults to ``1e-7``.
+    reduction (str, optional): Type of reduction to apply to the loss.
+        The output of ``call()`` is the loss value per batch element/class,
         and this parameter controls how it is aggregated.
-        
-        * **'sum'**: Sum the loss tensor over all batch elements and classes.
-        * **'mean'**: Compute the **mean of the loss tensor over all elements** 
-            (Batch Size x Number of Classes).
-        * **'sum_over_batch_size'**: Compute the **sum of the loss tensor over 
-            all elements, then divide by the Batch Size**.
-        * **'none'**: Return the loss tensor without aggregation, preserving the 
-            shape `(Batch Size, Num Classes)`.
+
+        - ``"sum"``: Sum the loss tensor over all batch elements and classes.
+        - ``"mean"``: Compute the mean of the loss tensor over all elements
+          ``(batch_size × num_classes)``.
+        - ``"sum_over_batch_size"``: Sum the loss tensor over all elements,
+          then divide by the batch size.
+        - ``"none"``: Return the loss tensor without aggregation, preserving
+          shape ``(batch_size, num_classes)``.
 
         Example:
+
+        .. code-block:: python
+
             # After spatial reduction (output of `compute_loss`):
             per_sample_per_class_loss = [
-                [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2 losses (3 classes)
-                [0.3, 0.7, 0.5]   # Sample 2: class0, class1, class2 losses (2 samples)
+                [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2
+                [0.3, 0.7, 0.5],  # Sample 2: class0, class1, class2
             ]
 
-            # reduction="sum": 2.9
-            # reduction="mean": 2.9 / 6 = 0.483
-            # reduction="sum_over_batch_size": 2.9 / 2 = 1.45  
-            # reduction=None: returns the original [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
-        
-        Defaults to 'mean'.
-    name (str, optional): Name of the loss function. Defaults to "{default_name}".
-    **kwargs: Additional keyword arguments passed to `keras.losses.Loss`.
+            # reduction="sum"               → 2.9
+            # reduction="mean"              → 2.9 / 6 = 0.483
+            # reduction="sum_over_batch_size"→ 2.9 / 2 = 1.45
+            # reduction="none"              → [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
+
+        Defaults to ``"mean"``.
+    name (str, optional): Name of the loss function. Defaults to ``"{default_name}"``.
+    **kwargs: Additional keyword arguments passed to ``keras.losses.Loss``.
 
 """
 

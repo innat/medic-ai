@@ -59,9 +59,7 @@ def soft_skeletonize(inputs, iters):
 
     Args:
         inputs (Tensor):
-            Input segmentation mask or probability map.
-
-            Supported shapes:
+            Input segmentation mask or probability map. Supported shapes:
 
             - 2D: ``(batch_size, height, width, channels)``
             - 3D: ``(batch_size, depth, height, width, channels)``
@@ -75,9 +73,8 @@ def soft_skeletonize(inputs, iters):
     Returns:
         Tensor:
             Soft skeleton representation with the same shape and dtype as
-            the input tensor.
+            the input tensor. Output shape:
 
-            Output shape:
             - 2D: ``(batch_size, height, width, channels)``
             - 3D: ``(batch_size, depth, height, width, channels)``
 

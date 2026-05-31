@@ -439,9 +439,7 @@ def get_pooling_layer(spatial_dims, layer_type, global_pool=False, **kwargs):
 
         global_pool (bool, optional):
             If ``True``, returns global pooling layers that reduce spatial
-            dimensions entirely. Default is ``False``.
-
-            Only applies to ``"max"`` and ``"avg"``.
+            dimensions entirely. Default is ``False``. Only applies to ``"max"`` and ``"avg"``.
 
         **kwargs:
             Additional keyword arguments passed to the underlying Keras
@@ -572,7 +570,7 @@ def get_act_layer(layer_type, **kwargs):
 
     This utility provides a unified interface for constructing both
     standard activation functions (via ``keras.activations.get``) and
-    parameterized activation layers (e.g., LeakyReLU, PReLU, ELU).
+    parameterized activation layers (e.g., ``LeakyReLU``, ``PReLU``, ``ELU``).
 
     Args:
         layer_type (str or callable):
