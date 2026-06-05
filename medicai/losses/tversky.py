@@ -129,33 +129,186 @@ TWERSKY_DOCSTRING = """
 
 SPARSE_LOSS_DOCSTRING = """Tversky loss for sparse categorical segmentation labels.
 
-This loss function adapts the Tversky loss to work with sparse labels
-(integer class indices) by one-hot encoding them before calculating
-the Tversky coefficient. It uses a **Softmax** activation on logits.
+This loss adapts Tversky loss to sparse class-index targets by one-hot
+encoding them internally. When ``from_logits=True``, the predictions are
+passed through softmax before the Tversky score is computed.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=TWERSKY_DOCSTRING, default_name="sparse_tversky_loss"
+    specific_args=TWERSKY_DOCSTRING,
+    example="""    Compute sparse Tversky loss with ``alpha=beta=0.5`` and three
+    common reductions::
+
+        import keras
+        from medicai.losses import SparseTverskyLoss
+
+        y_true = keras.ops.array(
+            [
+                [[1], [0]],
+                [[1], [0]],
+            ],
+            dtype="int32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = SparseTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="none",
+        )
+        loss_sum = SparseTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="sum",
+        )
+        loss_mean = SparseTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.2], [0.4]]
+        # reduction="sum"  -> 0.6
+        # reduction="mean" -> 0.3""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="sparse_tversky_loss",
 )
 
-CATEGORICAL_LOSS_DOCSTRING = """Tversky loss for categorical (one-hot encoded) 
-segmentation labels.
+CATEGORICAL_LOSS_DOCSTRING = """Tversky loss for categorical one-hot encoded segmentation labels.
 
-This loss function calculates the Tversky loss directly using the provided
-one-hot encoded labels and prediction probabilities. 
-It uses a **Softmax** activation on logits.
+This loss computes ``1 - Tversky`` directly from one-hot encoded targets and
+prediction probabilities. When ``from_logits=True``, the predictions are
+passed through softmax before the Tversky score is computed.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=TWERSKY_DOCSTRING, default_name="categorical_tversky_loss"
+    specific_args=TWERSKY_DOCSTRING,
+    example="""    Compute categorical Tversky loss with ``alpha=beta=0.5`` and
+    three common reductions::
+
+        import keras
+        from medicai.losses import CategoricalTverskyLoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0, 0.0], [0.0, 1.0]],
+                [[1.0, 0.0], [0.0, 1.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = CategoricalTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="none",
+        )
+        loss_sum = CategoricalTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="sum",
+        )
+        loss_mean = CategoricalTverskyLoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.2], [0.4]]
+        # reduction="sum"  -> 0.6
+        # reduction="mean" -> 0.3""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="categorical_tversky_loss",
 )
 
 BINARY_LOSS_DOCSTRING = """Tversky loss for binary segmentation tasks.
 
-This loss function is specifically designed for binary segmentation where
-the labels typically have a single channel (representing the foreground).
-It uses a **Sigmoid** activation on logits.
+This loss computes ``1 - Tversky`` for binary targets. When
+``from_logits=True``, the predictions are passed through a sigmoid activation
+before the Tversky score is computed.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=TWERSKY_DOCSTRING, default_name="binary_tversky_loss"
+    specific_args=TWERSKY_DOCSTRING,
+    example="""    Compute binary Tversky loss with ``alpha=beta=0.5`` and three
+    common reductions::
+
+        import keras
+        from medicai.losses import BinaryTverskyLoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0], [0.0]],
+                [[1.0], [0.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.8], [0.2]],
+                [[0.6], [0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = BinaryTverskyLoss(
+            from_logits=False,
+            num_classes=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="none",
+        )
+        loss_sum = BinaryTverskyLoss(
+            from_logits=False,
+            num_classes=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="sum",
+        )
+        loss_mean = BinaryTverskyLoss(
+            from_logits=False,
+            num_classes=1,
+            alpha=0.5,
+            beta=0.5,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.2], [0.4]]
+        # reduction="sum"  -> 0.6
+        # reduction="mean" -> 0.3""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``ignore_class_ids`` is used while ``num_classes > 1``.""",
+    default_name="binary_tversky_loss",
 )
 
 SparseTverskyLoss.__doc__ = SPARSE_LOSS_DOCSTRING

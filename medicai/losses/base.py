@@ -480,52 +480,33 @@ class BaseCenterlineDiceLoss(BaseLoss):
 BASE_COMMON_ARGS = """
 Args:
     from_logits (bool): Whether ``y_pred`` is expected to be logits. If ``True``,
-        the predictions will be passed through the appropriate activation
-        (sigmoid/softmax).
-    num_classes (int): The total number of classes in the segmentation task.
+        the predictions are passed through the appropriate activation function
+        for the loss variant.
+    num_classes (int): Total number of classes in the segmentation task.
 {specific_args}
-    target_class_ids (int, list of int, or None): If an integer or a list of
-        integers, the loss will be calculated only for the specified class(es).
-        If ``None``, the loss will be calculated for all classes and averaged.
-        Default: ``None``.
-    ignore_class_ids (int, list of int, or None): The ID of a class to be ignored
-        during computation. This is useful, for example, in segmentation
-        problems featuring a ``void`` or un-labeled class (usually ``-1`` or ``255``) in
-        segmentation maps. If ``None``, the loss will be calculated for all classes
-        and averaged. Default: ``None``.
-    smooth (float, optional): A small smoothing factor to prevent division by zero.
-        Defaults to ``1e-7``.
-    reduction (str, optional): Type of reduction to apply to the loss.
-        The output of ``call()`` is the loss value per batch element/class,
-        and this parameter controls how it is aggregated.
-
-        - ``"sum"``: Sum the loss tensor over all batch elements and classes.
-        - ``"mean"``: Compute the mean of the loss tensor over all elements
-          ``(batch_size × num_classes)``.
-        - ``"sum_over_batch_size"``: Sum the loss tensor over all elements,
-          then divide by the batch size.
-        - ``"none"``: Return the loss tensor without aggregation, preserving
-          shape ``(batch_size, num_classes)``.
-
-        Example:
-
-        .. code-block:: python
-
-            # After spatial reduction (output of `compute_loss`):
-            per_sample_per_class_loss = [
-                [0.2, 0.8, 0.4],  # Sample 1: class0, class1, class2
-                [0.3, 0.7, 0.5],  # Sample 2: class0, class1, class2
-            ]
-
-            # reduction="sum"               → 2.9
-            # reduction="mean"              → 2.9 / 6 = 0.483
-            # reduction="sum_over_batch_size"→ 2.9 / 2 = 1.45
-            # reduction="none"              → [[0.2, 0.8, 0.4], [0.3, 0.7, 0.5]]
-
+    target_class_ids (int, list of int, or None): Class ID or class IDs to
+        include in the loss. If ``None``, all classes are used.
+    ignore_class_ids (int, list of int, or None): Class ID or class IDs to
+        ignore during loss computation. If ``None``, no class is ignored.
+    smooth (float, optional): Smoothing constant added to avoid division by
+        zero. Defaults to ``1e-7``.
+    reduction (str, optional): Reduction applied to the final loss output.
+        Common options are ``"none"``, ``"sum"``, and ``"mean"``.
         Defaults to ``"mean"``.
-    name (str, optional): Name of the loss function. Defaults to ``"{default_name}"``.
+    name (str, optional): Name of the loss function. Defaults to
+        ``"{default_name}"``.
     **kwargs: Additional keyword arguments passed to ``keras.losses.Loss``.
 
+Example:
+{example}
+
+Returns:
+    A tensor containing the computed loss. With ``reduction="none"``, the loss
+    is returned without final aggregation. With ``reduction="sum"`` or
+    ``reduction="mean"``, a reduced scalar loss is returned.
+
+Raises:
+{raises}
 """
 
 BASE_LOSS_DOCSTRING = """Base class for segmentation loss functions.
@@ -534,22 +515,44 @@ This class provides a foundation for calculating overlap-based losses (Dice, IoU
 It handles class ID selection, smoothing, and prediction processing before computing 
 the core metric in `compute_loss`.
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="base_loss"
+    specific_args="",
+    example="""    Compute a loss value from ground-truth and prediction tensors::
+
+        import keras
+        from medicai.losses.base import BaseLoss
+
+        y_true = keras.ops.array([[[0], [1]]], dtype="int32")
+        y_pred = keras.ops.array([[[0.2, 0.8], [0.8, 0.2]]], dtype="float32")
+""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    NotImplementedError: If ``compute_loss`` is not implemented in a subclass.""",
+    default_name="base_loss",
 )
 
 
 DICE_LOSS_DOCSTRING = """Base class for Dice-based loss functions.
 
-This class implements the core `1.0 - Dice Score` logic.
+This class implements the core ``1.0 - Dice Score`` logic.
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="dice_loss"
+    specific_args="",
+    example="""    This base class is intended to be used through a concrete Dice loss
+    variant such as ``BinaryDiceLoss`` or ``SparseDiceLoss``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="dice_loss",
 )
 
 IOU_LOSS_DOCSTRING = """Base class for IoU/Jaccard-based loss functions.
 
-This class implements the core `1.0 - IoU/Jaccard Score` logic.
+This class implements the core ``1.0 - IoU/Jaccard Score`` logic.
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="iou_loss"
+    specific_args="",
+    example="""    This base class is intended to be used through a concrete IoU loss
+    variant such as ``BinaryIoULoss`` or ``SparseIoULoss``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="iou_loss",
 )
 
 TVERSKY_SPECIFIC_ARGS = """    alpha (float, optional): Weight for **False Positives (FP)**. 
@@ -561,9 +564,14 @@ TVERSKY_SPECIFIC_ARGS = """    alpha (float, optional): Weight for **False Posit
 """
 TVERSKY_LOSS_DOCSTRING = """Base class for Tversky-based loss functions.
 
-This class implements the core `1.0 - Tversky Index` logic, generalizing Dice and Jaccard.
+This class implements the core ``1.0 - Tversky Index`` logic, generalizing Dice and Jaccard.
 """ + BASE_COMMON_ARGS.format(
-    specific_args=TVERSKY_SPECIFIC_ARGS, default_name="tversky_loss"
+    specific_args=TVERSKY_SPECIFIC_ARGS,
+    example="""    This base class is intended to be used through a concrete Tversky
+    loss variant such as ``BinaryTverskyLoss`` or ``SparseTverskyLoss``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="tversky_loss",
 )
 
 GDL_SPECIFIC_ARGS = """    weight_type (str, optional): The weighting scheme to balance 
@@ -573,15 +581,23 @@ GDL_SPECIFIC_ARGS = """    weight_type (str, optional): The weighting scheme to 
 """
 GDL_LOSS_DOCSTRING = """Base class for Generalized Dice Loss (GDL) functions.
 
-This class implements the core 1.0 - GDL logic, designed to address class imbalance.
+This class implements the core ``1.0 - GDL`` logic, designed to address class imbalance.
 
 Note:
     Unlike other losses, Generalized Dice Loss aggregates across all classes before
-    applying reduction. Therefore, with `reduction='none'`, it returns shape `[batch]`
-    instead of `[batch, num_classes]`.
+    applying reduction. Therefore, with ``reduction='none'``, it returns shape ``[batch]``
+    instead of ``[batch, num_classes]``.
+
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=GDL_SPECIFIC_ARGS, default_name="generalized_dice_loss"
+    specific_args=GDL_SPECIFIC_ARGS,
+    example="""    This base class is intended to be used through a concrete
+    generalized Dice loss variant such as ``BinaryGeneralizedDiceLoss``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``weight_type`` is not one of ``"square"``, ``"simple"``,
+        or ``"uniform"``.""",
+    default_name="generalized_dice_loss",
 )
 
 
