@@ -1,3 +1,0 @@
-# Placeholder
-
-Classification example placeholder.

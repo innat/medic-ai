@@ -79,10 +79,10 @@ transforms = Compose(
 
 Inspect the registered model zoo:
 
-```python
+```sh
 medicai.models.list_models()
 ```
-```python
+```bash
                      Model Registry Catalog                      
 ┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Segmentor        ┃ Backbone Family ┃ Variants                 ┃
@@ -188,7 +188,7 @@ discover which encoders can be reused across multiple segmentation heads. We can
 ```python
 medicai.models.list_models(family="vit")
 ```
-```python
+```bash
               Model Registry Catalog               
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Segmentor       ┃ Backbone Family ┃ Variants    ┃

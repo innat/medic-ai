@@ -9,7 +9,7 @@
 self
 getting_started/index
 guides/index
-guides/notebooks
+guides/example
 misc/contribution
 misc/faq
 ```

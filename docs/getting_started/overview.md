@@ -13,7 +13,7 @@
     </div>
     <div class="medicai-btn-row">
       <a class="medicai-btn primary" href="getting_started/quickstart.html" data-doc-path="getting_started/quickstart.html">Get started</a>
-      <a class="medicai-btn" href="guides/notebooks.html" data-doc-path="guides/notebooks.html">View examples</a>
+      <a class="medicai-btn" href="guides/example.html" data-doc-path="guides/example.html">View examples</a>
       <a class="medicai-btn" href="https://github.com/innat/medic-ai">GitHub</a>
     </div>
   </section>

@@ -9,12 +9,6 @@ Utility classes and functions exported by `medicai.utils`.
    :members: compute_heatmap
 ```
 
-<!-- ## DescribeMixin
-
-```{eval-rst}
-.. autoclass:: medicai.utils.DescribeMixin
-``` -->
-
 ## Sliding Window Inference
 
 ```{eval-rst}
