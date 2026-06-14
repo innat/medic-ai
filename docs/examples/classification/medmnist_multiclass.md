@@ -1,20 +1,21 @@
-# MedMNIST: Blood Cell Microscope Multiclass Classification
+# Blood Cell Multiclass Classification
 
 In this tutorial, we are going to cover:
 
-- Load the Blood Cell Microscope dataset from **MedMNIST**, an ``8``-class classification dataset.
+- Load the Blood Cell Microscope dataset from **MedMNIST**, an ``8`` class ``2D`` classification dataset.
 - Build a data loader using the ``tf.data`` API.
-- Construct a model with **MedicAI**.
-- Train the model using the Keras 3 training API.
-- Compute **GradCAM** visualizations using MedicAI.
+- Build a multiclass classification model.
+- Train the model using the Keras training API.
+- Compute **GradCAM** visualizations.
 
-**About MedMNIST**: [MedMNIST](https://medmnist.com/), a large-scale MNIST-like collection of standardized biomedical images, including 12 datasets for 2D and 6 datasets for 3D. It has larger sizes: ``64x64``, ``128x128``, and ``224x224`` for 2D, and ``64x64x64`` for 3D.
+
+[MedMNIST](https://medmnist.com/), a large-scale MNIST-like collection of standardized biomedical images, including ``12`` datasets for 2D and ``6`` datasets for 3D. It has larger sizes: ``64x64``, ``128x128``, and ``224x224`` for 2D, and ``64x64x64`` for 3D.
 
 ## Setup 
 
 ```bash
-!pip install git+https://github.com/innat/MedMNIST.git -q
-!pip install git+https://github.com/innat/medic-ai.git -q
+pip install git+https://github.com/innat/MedMNIST.git -q
+pip install git+https://github.com/innat/medic-ai.git -q
 ```
 
 ## Imports
@@ -41,7 +42,9 @@ from matplotlib import pyplot as plt
 keras.utils.set_random_seed(101)
 ```
 
-## Get Data 
+## Data Acquisition
+
+We use the ``bloodmnist`` subset from MedMNIST, which is packaged as a NumPy archive containing predefined training, validation, and test splits. In this step, we download the dataset metadata, resolve the dataset class dynamically from MedMNIST's registry, and store the data locally at the requested image resolution.
 
 ```python
 input_size = 224
@@ -72,7 +75,11 @@ _ = DataClass(
 ```
 
 ```python
-npz_file = np.load(os.path.join(output_root, "{}_{}.npz".format(data_flag,input_size)))
+npz_file = np.load(
+    os.path.join(
+        output_root, "{}_{}.npz".format(data_flag,input_size)
+    )
+)
 x_train = npz_file['train_images']
 y_train = npz_file['train_labels']
 x_val = npz_file['val_images']
@@ -87,8 +94,9 @@ print('Test set ', x_test.shape, y_test.shape)
 
 ## Data Loader
 
-- Augmentation
-- Loader Pipeline
+Before training, we convert the raw NumPy arrays into performant ``tf.data`` pipelines. We apply lightweight image augmentation to the training split only, keep validation and test preprocessing deterministic, and use batching plus prefetching to make GPU training smoother.
+
+The augmentation pipeline below applies simple geometric perturbations to improve robustness. Because ``RandomCrop`` changes the spatial size, we resize the image back to ``input_size`` before feeding it to the classifier. We also cast labels into a tensor format that works cleanly with Keras sparse classification losses.
 
 ```python
 # Define augmentation layers
@@ -132,6 +140,8 @@ def get_tf_dataset(x, y, batch_size=32, shuffle=True, augment=False):
     return ds
 ```
 
+This helper wraps the NumPy arrays into a reusable ``tf.data`` input pipeline. During augmented training, ``drop_remainder=True`` keeps batch shapes consistent, while validation and test loaders keep all remaining samples for evaluation.
+
 ```python
 train_ds = get_tf_dataset(
     x_train, y_train, shuffle=True, augment=True
@@ -145,6 +155,8 @@ test_ds = get_tf_dataset(
     x_test, y_test, shuffle=False
 )
 ```
+
+To sanity-check the pipeline, the next helper draws a few samples from a dataset batch. Note that ``class_ids`` is used only for the plot title lookup here; it does not filter the dataset to that specific class.
 
 ```python
 def plot_dataset_samples(dataset, class_ids=None, n=9):
@@ -170,11 +182,21 @@ def plot_dataset_samples(dataset, class_ids=None, n=9):
 ```
 
 ```python
-plot_dataset_samples(train_ds, class_ids=1, n=9)
-plot_dataset_samples(val_ds, class_ids=1, n=9)
+plot_dataset_samples(train_ds, class_ids=1, n=3)
 ```
 
+![](../../assets/examples/medmnist_multiclass/bloodmnist_sample1.png)
+
+
+```python
+plot_dataset_samples(val_ds, class_ids=4, n=3)
+```
+
+![](../../assets/examples/medmnist_multiclass/bloodmnist_sample2.png)
+
 ## Model
+
+For this task, we use ``EfficientNetV2B0`` as a multiclass image classifier with a ``softmax`` prediction head. After creating the network, we configure the optimizer, classification loss, and accuracy metric using the standard Keras training workflow.
 
 ```python
 model = EfficientNetV2B0(
@@ -210,7 +232,11 @@ model.compile(
 )
 ```
 
+Because the MedMNIST labels are stored as integer class indices rather than one-hot vectors, ``SparseCategoricalCrossentropy`` is the appropriate loss for this setup.
+
 ## Training
+
+The model is trained on the augmented training dataset while monitoring validation performance after each epoch. We also save the best weights using a checkpoint callback so that later evaluation uses the strongest validation checkpoint instead of the final epoch by default.
 
 ```python
 model_ckpt_callback = keras.callbacks.ModelCheckpoint(
@@ -233,6 +259,8 @@ model.fit(
 
 ## Evaluation
 
+Once training is complete, we reload the best saved weights and measure performance on the held-out test split. This gives us a cleaner estimate of how well the classifier generalizes to unseen blood cell images.
+
 ```python
 model.load_weights('model.weights.h5')
 results = model.evaluate(test_ds)
@@ -241,14 +269,26 @@ print("test loss, test acc:", results)
 
 ## Visualization
 
+To make the predictions easier to interpret, we generate ``GradCAM`` heatmaps on test images. These visualizations highlight the image regions that most strongly influenced the model's decision for a selected target class, which is especially useful for sanity-checking model attention in medical imaging workflows.
+
 - Pick target layers. Inspect `model.layers` to get target layer's name.
 - Pick target class index. Inspect `label_map` to select target class.
 
+The visualization helper below shuffles one batch from the test dataset, filters it to the requested target class, and then generates ``GradCAM`` heatmaps for a few matching samples. Because it operates on a single shuffled batch, it is normal to occasionally see no matches for a rare class in that batch.
+
 ```python
-def plot_gradcam_results(model, grad_cam, test_ds, label_map, target_index=0, n=3):
-    # Temporarily shuffle dataset
+def plot_gradcam_results(
+    model,
+    grad_cam,
+    test_ds,
+    label_map,
+    target_index=0,
+    n=3,
+):
+    # Temporarily shuffle dataset to get variation in output
     ds_vis = test_ds.shuffle(buffer_size=2048)
     test_x, test_y = next(iter(ds_vis))
+
     test_y = test_y.numpy().squeeze()
     test_x = test_x.numpy()
 
@@ -258,62 +298,96 @@ def plot_gradcam_results(model, grad_cam, test_ds, label_map, target_index=0, n=
     test_y = test_y[mask]
 
     if len(test_x) == 0:
-        print(f"No samples with target_index={target_index} in this batch.")
+        print(
+            f"No samples with target_index={target_index} in this batch."
+        )
         return
 
+    # Number of samples to visualize
+    n = min(n, len(test_x))
+
     # Model predictions
-    preds = model.predict(test_x, verbose=0)
+    preds = model.predict(test_x[:n], verbose=0)
     pred_classes = preds.argmax(-1)
 
     # Compute Grad-CAM heatmaps
-    heatmaps = grad_cam.compute_heatmap(test_x, target_class_index=target_index)
+    heatmaps = grad_cam.compute_heatmap(
+        test_x[:n],
+        target_class_index=target_index,
+    )
 
-    # Plot
-    n = min(n, len(test_x))
-    fig, axes = plt.subplots(n, 3, figsize=(15, 4 * n))
-    if n == 1:
-        axes = np.expand_dims(axes, 0)
+    # Create figure
+    fig, axes = plt.subplots(
+        n,
+        3,
+        figsize=(15, 4 * n),
+        squeeze=False,
+    )
 
     for i in range(n):
         img = test_x[i]
         heat = heatmaps[i]
-        
+
         gt_label = label_map.get(
-            str(int(test_y[i])), str(int(test_y[i]))
+            str(int(test_y[i])),
+            str(int(test_y[i])),
         )
+
         pred_label = label_map.get(
-            str(int(pred_classes[i])), str(int(pred_classes[i]))
+            str(int(pred_classes[i])),
+            str(int(pred_classes[i])),
         )
 
         # Normalize image for visualization
-        img = np.clip(img, 0, 1) if img.max() <= 1 else img.astype(np.uint8)
+        if img.max() <= 1:
+            img_vis = np.clip(img, 0, 1)
+        else:
+            img_vis = img.astype(np.uint8)
 
-        # Original
+        # Original image
         ax1 = axes[i, 0]
-        ax1.imshow(img)
-        ax1.set_title(f"GT: {gt_label}\nPred: {pred_label}", fontsize=11, weight='bold')
+        ax1.imshow(img_vis)
+        ax1.set_title(
+            f"GT: {gt_label}\nPred: {pred_label}",
+            fontsize=11,
+            weight="bold",
+        )
         ax1.axis("off")
 
         # Grad-CAM heatmap
         ax2 = axes[i, 1]
-        ax2.imshow(heat, cmap='jet')
-        ax2.set_title("Grad-CAM", fontsize=11, weight='bold')
+        ax2.imshow(heat, cmap="jet")
+        ax2.set_title(
+            "Grad-CAM",
+            fontsize=11,
+            weight="bold",
+        )
         ax2.axis("off")
 
         # Overlay
         ax3 = axes[i, 2]
-        ax3.imshow(img)
-        ax3.imshow(heat, cmap='jet', alpha=0.45)
-        ax3.set_title("Overlay", fontsize=11, weight='bold')
+        ax3.imshow(img_vis)
+        ax3.imshow(heat, cmap="jet", alpha=0.45)
+        ax3.set_title(
+            "Overlay",
+            fontsize=11,
+            weight="bold",
+        )
         ax3.axis("off")
 
     plt.tight_layout()
     plt.show()
 ```
+
+We can inspect the target layer from the model.
+
 ```python
 # for layer in model.layers[::-1]:
 #     print(layer.name, layer.output.shape)
 ```
+
+**Instantiate the ``GradCAM``**: Here we use ``top_activation`` as the target layer because it is a strong high-level feature map near the classifier head for this architecture. If you switch to a different backbone, inspect ``model.layers`` again and choose a semantically similar late convolutional or activation layer.
+
 ```python
 grad_cam = GradCAM(
     model,
@@ -325,17 +399,27 @@ grad_cam = GradCAM(
 label_map
 ```
 ```bash
-{'0': 'basophil',
- '1': 'eosinophil',
- '2': 'erythroblast',
- '3': 'immature granulocytes(myelocytes, metamyelocytes and promyelocytes)',
- '4': 'lymphocyte',
- '5': 'monocyte',
- '6': 'neutrophil',
- '7': 'platelet'}
+{
+    '0': 'basophil',
+    '1': 'eosinophil',
+    '2': 'erythroblast',
+    '3': 'immature granulocytes(myelocytes, metamyelocytes and promyelocytes)',
+    '4': 'lymphocyte',
+    '5': 'monocyte',
+    '6': 'neutrophil',
+    '7': 'platelet
+ }
 ```
 ```python
 plot_gradcam_results(
-    model, grad_cam, test_ds, label_map, target_index=0, n=3
+    model, grad_cam, test_ds, label_map, target_index=1, n=3
 )
 ```
+![](../../assets/examples/medmnist_multiclass/blood_mnist_gradcam1.png)
+
+```python
+plot_gradcam_results(
+    model, grad_cam, test_ds, label_map, target_index=4, n=3
+)
+```
+![](../../assets/examples/medmnist_multiclass/blood_mnist_gradcam2.png)

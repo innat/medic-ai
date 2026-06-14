@@ -6,6 +6,7 @@ Available segmentation code examples:
 - [ISIC 2017 Melanoma Binary Segmentation](isic_2017.md)
 
 ```{toctree}
+:hidden:
 :maxdepth: 1
 
 brain_tumor

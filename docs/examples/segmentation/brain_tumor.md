@@ -1,9 +1,9 @@
 # Multimodal Brain Tumor Segmentation
 
-Brain tumor segmentation is a core task in medical image analysis, where the goal is to automatically identify and label different tumor sub-regions from 3D MRI scans. Accurate segmentation helps clinicians with diagnosis, treatment planning, and disease monitoring. In this tutorial, we focus on multimodal MRI-based brain tumor segmentation using the widely adopted **BraTS** (**Brain Tumor Segmentation**) dataset.
+Brain tumor segmentation is a core task in medical image analysis, where the goal is to automatically identify and label different tumor sub-regions from ``3D`` MRI scans. Accurate segmentation helps clinicians with diagnosis, treatment planning, and disease monitoring. In this tutorial, we focus on multimodal MRI-based brain tumor segmentation using the widely adopted **BraTS** (**Brain Tumor Segmentation**) dataset.
 
 ---
-## The BraTS Dataset
+## BraTS Dataset
 
 The **BraTS** dataset provides multimodal 3D brain MRI scans, released as NIfTI files (``.nii.gz``). For each patient, four MRI modalities are available:
 
@@ -14,10 +14,7 @@ The **BraTS** dataset provides multimodal 3D brain MRI scans, released as NIfTI 
 
 These scans are collected using different scanners and clinical protocols from 19 institutions, making the dataset diverse and realistic. More details about the dataset can be found in the official [BraTS documentation](https://www.med.upenn.edu/cbica/brats2020/data.html).
 
----
-## Segmentation Labels
-
-Each scan is manually annotated by **one to four expert raters**, following a standardized annotation protocol and reviewed by experienced neuroradiologists. The segmentation masks contain the following tumor sub-regions:
+**Segmentation Labels**: Each scan is manually annotated by **one to four expert raters**, following a standardized annotation protocol and reviewed by experienced neuroradiologists. The segmentation masks contain the following tumor sub-regions:
 
 - **NCR / NET (label 1)** – Necrotic and non-enhancing tumor core
 - **ED (label 2)** – Peritumoral edema
@@ -30,10 +27,8 @@ The data are released after preprocessing:
 - Resampled to ``1 mm³`` isotropic resolution
 - **Skull-stripped** for consistency
 
----
-## Dataset Format and TFRecord Conversion
 
-The original BraTS scans are provided in ``.nii`` format and can be accessed from Kaggle [here](https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation/). To enable **efficient training pipelines**, we convert the NIfTI files into **TFRecord** format:
+**Dataset Format and TFRecord Conversion**: The original BraTS scans are provided in ``.nii`` format and can be accessed from Kaggle [here](https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation/). To enable **efficient training pipelines**, we convert the NIfTI files into **TFRecord** format:
 
 - The conversion process is documented [here](https://www.kaggle.com/code/ipythonx/brats-nii-to-tfrecord)
 - The preprocessed TFRecord dataset is available [here](https://www.kaggle.com/datasets/ipythonx/brats2020)
@@ -41,10 +36,9 @@ The original BraTS scans are provided in ``.nii`` format and can be accessed fro
 
 Since BraTS does not provide publicly available ground-truth labels for validation or test sets, we will **hold out a subset of TFRecord files** from training for validation purposes.
 
+---
 
-# What This Tutorial Covers
-
-In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor segmentation using [medicai](https://github.com/innat/medic-ai), a Keras-based medical imaging library with multi-backend support. We will walk through:
+In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor segmentation. We will walk through:
 
 1. **Loading the Dataset**
     - Read TFRecord files that contain ``image``, ``label``, and ``affine`` matrix information.
@@ -52,66 +46,22 @@ In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor
 2. **Medical Image Preprocessing**
     - Apply image transformations provided by ``medicai`` to prepare the data for model input.
 3. **Model Building**
-    - Construct a 3D segmentation model with [`SwinUNETR`](https://arxiv.org/abs/2201.01266) You can also experiment with other available 3D architectures, including [`UNETR`](https://arxiv.org/abs/2103.10504), [`SegFormer`](https://arxiv.org/abs/2404.10156), and [`UNETR++`](https://ieeexplore.ieee.org/document/10526382)..
+    - Construct a 3D segmentation model with [`SwinUNETR`](https://arxiv.org/abs/2201.01266) You can also experiment with other available 3D architectures, including [`UNETR`](https://arxiv.org/abs/2103.10504), [`SegFormer`](https://arxiv.org/abs/2404.10156), and [`UNETR++`](https://ieeexplore.ieee.org/document/10526382).
 4. **Loss and Metrics Definition**
     - Using Dice-based loss functions and segmentation metrics tailored for medical imaging
 5. **Model Evaluation**
-    - Performing inference on large 3D volumes using **sliding window inference**
+    - Performing inference on large ``3D`` volumes using **sliding window inference**
     - Computing per-class evaluation metrics
 6. **Visualization of Results**
     - Visualizing predicted segmentation masks for qualitative analysis
 
-By the end of this tutorial, you will have a complete brain tumor segmentation pipeline, from data loading and preprocessing to model training, evaluation, and visualization using modern 3D deep learning techniques and the ``medicai`` framework.
-
----
-## Installation
-
-We will install the following packages: [`kagglehub`](https://github.com/Kaggle/kagglehub) for downloading the dataset from
-Kaggle, and [`medicai`](https://github.com/innat/medic-ai) for accessing specialized methods for medical imaging, including 3D transformations, model architectures, loss functions, metrics, and other essential components.
-
-```shell
-!pip install kagglehub -qU
-!pip install git+https://github.com/innat/medic-ai.git -qU
-```
-
-
-```python
-import os
-import warnings
-
-warnings.filterwarnings("ignore")
-
-import shutil
-import kagglehub
-from IPython.display import clear_output
-
-if "KAGGLE_USERNAME" not in os.environ or "KAGGLE_KEY" not in os.environ:
-    kagglehub.login()
-```
-
-Download the dataset from kaggle.
-
-
-```python
-dataset_id = "ipythonx/brats2020"
-destination_path = "brats2020_subset"
-os.makedirs(destination_path, exist_ok=True)
-
-# Download the 3 shards: 0 and 1st for training set, 36th for validation set.
-for i in [0, 1, 36]:
-    filename = f"training_shard_{i}.tfrec"
-    print(f"Downloading {filename}...")
-    path = kagglehub.dataset_download(dataset_id, path=filename)
-    shutil.move(path, destination_path)
-
-# Comment this line to keep the logs visible
-clear_output()
-```
 
 ## Imports
 
 ```python
-os.environ["KERAS_BACKEND"] = "jax"  # tensorflow, torch, jax
+import os, warnings
+os.environ["KERAS_BACKEND"] = "jax" # 'tensorflow', 'torch', 'jax'
+warnings.filterwarnings('ignore')
 
 import numpy as np
 import pandas as pd
@@ -151,8 +101,22 @@ print(
     f"tensorflow version: {tf.__version__}\n"
 )
 ```
+```bash
+keras backend: jax
+keras version: 3.13.2
+tensorflow version: 2.19.0
+```
 
-# Create Multi-label Brain Tumor Labels
+### Distributed Settings
+
+```python
+devices = keras.distribution.list_devices()
+data_parallel = keras.distribution.DataParallel(devices=devices)
+keras.distribution.set_distribution(data_parallel)
+total_device = len(devices)
+```
+
+## Create Multi-label Brain Tumor Labels
 
 The BraTS segmentation task involves multiple tumor sub-regions, and it is formulated as a multi-label segmentation problem. The label combinations are used to define the following clinical regions of interest:
 
@@ -164,24 +128,7 @@ The BraTS segmentation task involves multiple tumor sub-regions, and it is formu
 
 These region-wise groupings allow for evaluation across different tumor structures relevant for clinical assessment and treatment planning. A sample view is shown below, figure taken from [BraTS-benchmark](https://arxiv.org/abs/2107.02314) paper.
 
-![](https://i.imgur.com/Agnwpxm.png)
-
----
-## Managing Multi-Label Outputs with ``TensorBundle``
-
-To organize and manage these multi-label segmentation targets, we will implement a custom transformation using ```TensorBundle`` from ``medicai``. The ``TensorBundle`` is a lightweight container class designed to hold:
-
-- A dictionary of tensors (e.g., images, labels)
-- Optional metadata associated with those tensors (e.g., affine matrices, spacing, original shapes)
-
-This design allows data and metadata to be passed together through the transformation pipeline in a structured and consistent way. Each ``medicai`` transformation expects inputs to be organized as ``key:value`` pairs, for example:
-
-```shell
-meta = {"affine": affine}
-data = {"image": image, "label": label}
-```
-
-Using ``TensorBundle`` makes it easier to apply complex medical imaging transformations while preserving spatial and anatomical information throughout preprocessing and model inference.
+![](../../assets/examples/brain_tumor/brats_labels.png)
 
 
 ```python
@@ -258,7 +205,7 @@ def rearrange_shape(sample):
     return sample
 ```
 
-Each transformation class of ``medicai`` expects input as either a dictionary or a ``TensorBundle`` object, as discussed earlier. When a dictionary of input data (along with metadata) is passed, it is automatically wrapped into a ``TensorBundle`` instance. The examples below demonstrate how transformations are used in this way.
+Each transformation class of ``medicai`` expects input as either a dictionary or a ``TensorBundle`` object. When a dictionary of input data (along with metadata) is passed, it is automatically wrapped into a ``TensorBundle`` instance. The examples below demonstrate how transformations are used in this way.
 
 
 ```python
@@ -316,7 +263,7 @@ def val_transformation(sample):
     return result["image"], result["label"]
 ```
 
-## The `tfrecord` parser
+## Dataloader
 
 ```python
 def parse_tfrecord_fn(example_proto):
@@ -391,8 +338,6 @@ def parse_tfrecord_fn(example_proto):
 
 ```
 
-## Dataloader
-
 ```python
 def train_dataloader(
     tfrecord_datalist,
@@ -448,7 +393,7 @@ The training batch size can be set to more than 1 depending on the environment a
 
 
 ```python
-tfrecord_pattern = "brats2020_subset/training_shard_*.tfrec"
+tfrecord_pattern = "/kaggle/input/brats2020/training_shard_*.tfrec"
 datalist = sorted(
     tf.io.gfile.glob(tfrecord_pattern),
     key=lambda x: int(x.split("_")[-1].split(".")[0]),
@@ -456,9 +401,9 @@ datalist = sorted(
 
 train_datalist = datalist[:-1]
 val_datalist = datalist[-1:]
-print(len(train_datalist), len(val_datalist))
+train_batch = 1 * total_device
 
-train_ds = train_dataloader(train_datalist, batch_size=1)
+train_ds = train_dataloader(train_datalist, batch_size=train_batch)
 val_ds = val_dataloader(val_datalist, batch_size=1)
 ```
 
@@ -470,6 +415,10 @@ test_image = val_x.numpy().squeeze()
 test_mask = val_y.numpy().squeeze()
 print(test_image.shape, test_mask.shape, np.unique(test_mask))
 print(test_image.min(), test_image.max())
+```
+```bash
+(155, 240, 240, 4) (155, 240, 240, 3) [0. 1.]
+-3.8107734 12.865826
 ```
 
 **sanity check**: Visualize the middle slice of the image and its corresponding label.
@@ -485,9 +434,7 @@ ax2.set_title(f"Label shape: {test_mask.shape}")
 plt.show()
 ```
 
-Clipping input data to the valid range for imshow with RGB data ([0..1] for floats or [0..255] for integers). Got range [-3.8107734..10.728726].
-
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_25_1.png)
+![](../../assets/examples/brain_tumor/brats_sample1.png)
     
 **sanity check**: Visualize sample image and label channels at middle slice index.
 
@@ -512,11 +459,11 @@ plt.show()
 
 image shape: (155, 240, 240, 4)
 
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_27_1.png)
+![](../../assets/examples/brain_tumor/brats_sample2.png)
     
 label shape: (155, 240, 240, 3)
 
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_27_3.png)
+![](../../assets/examples/brain_tumor/brats_sample3.png)
     
 
 ## Model
@@ -524,8 +471,6 @@ label shape: (155, 240, 240, 3)
 We will be using the 3D model architecture Swin UNEt TRansformers, i.e., [`SwinUNETR`](https://arxiv.org/abs/2201.01266). It was used in the BraTS 2021 segmentation challenge by NVIDIA. The model was among the top-performing methods. It uses a Swin Transformer encoder to extract features at five different resolutions. A CNN-based decoder is connected to each resolution using skip connections.
 
 The BraTS dataset provides four input modalities: ``flair``, ``t1``, ``t1ce``, and ``t2`` and three multi-label outputs: ``tumor-core``, ``whole-tumor``, and ``enhancing-tumor``. Accordingly, we will initiate the model with ``4`` input channels and ``3`` output channels.
-
-![](https://i.imgur.com/OInMRGp.png)
 
 
 ```python
@@ -575,12 +520,9 @@ model.compile(
         ),
     ],
 )
-
-# ALERT: This `instance_describe` attributes available in medicai.
-try:
-    print(model.instance_describe())
-except AttributeError:
-    pass
+```
+```python
+print(model.instance_describe())
 ```
 ```bash
 Instance of SwinUNETR
@@ -636,11 +578,12 @@ swi_callback = SlidingWindowInferenceCallback(
 Set more epoch for better optimization.
 
 ```python
-history = model.fit(train_ds, epochs=epochs, callbacks=[swi_callback])
+history = model.fit(
+    train_ds, epochs=epochs, callbacks=[swi_callback]
+)
 ```
 
 Let’s take a quick look at how our model performed during training. We will first print the available metrics recorded in the training history, save them to a CSV file for future reference, and then visualize them to better understand the model’s learning progress over epochs.
-
 
 ```python
 def plot_training_history(history_df):
@@ -675,13 +618,22 @@ plot_training_history(his_csv)
 dict_keys(['dice', 'dice_et', 'dice_tc', 'dice_wt', 'loss'])
 ```
 
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_36_1.png)
+![](../../assets/examples/brain_tumor/brats_sample4.png)
     
 
 ## Evaluation
 
 In this [Kaggle notebook](https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/) (version 5), we trained the model on the entire dataset for approximately ``30`` epochs. The resulting weights will be used for further evaluation. Note that the validation set used in both here and Kaggle notebook are the same: ``training_shard_36.tfrec``, which contains ``8`` samples.
 
+```bash
+pip install kagglehub -qU
+```
+```python
+import kagglehub
+
+if "KAGGLE_USERNAME" not in os.environ or "KAGGLE_KEY" not in os.environ:
+    kagglehub.login()
+```
 
 ```python
 model_weight = kagglehub.model_download(
@@ -832,15 +784,15 @@ for i in range(3):
 plt.show()
 ```
     
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_54_0.png)
-    
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_54_1.png)
+![](../../assets/examples/brain_tumor/brats_sample5.png)
+
+![](../../assets/examples/brain_tumor/brats_sample6.png)
     
 
 The predicted output is a multi-channel binary map, where each channel corresponds to a specific tumor region. To visualize it against the original ground truth, we convert it into a single-channel label map. Here we assign:
-    - Label 1 for Tumor Core (TC)
-    - Label 2 for Whole Tumor (WT)
-    - Label 4 for Enhancing Tumor (ET)
+    - Label ``1`` for Tumor Core (TC)
+    - Label ``2`` for Whole Tumor (WT)
+    - Label ``4`` for Enhancing Tumor (ET)
 The label values are chosen to match typical conventions used in medical segmentation benchmarks like BraTS.
 
 ```python
@@ -880,11 +832,9 @@ for i in range(orig_image.shape[-1]):
 plt.tight_layout()
 plt.show()
 ```
+![](../../assets/examples/brain_tumor/brats_sample7.png)
 
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_58_0.png)
-    
 Next, we compare this input with the ground truth label and the predicted segmentation on the same slice. This provides visual insight into how well the model has localized and segmented the tumor regions.
-
 
 ```python
 num_channels = orig_image.shape[-1]
@@ -907,8 +857,8 @@ plt.tight_layout()
 plt.show()
 ```
     
-![png](/img/examples/vision/brain_tumor_segmentation/brain_tumor_segmentation_60_0.png)
-    
+![](../../assets/examples/brain_tumor/brats_sample8.png)
+
 
 Finally, create a clean GIF visualizer showing the input image, ground-truth label, and model prediction.
 
@@ -988,7 +938,3 @@ ani.save(
 )
 plt.close(fig)
 ```
-
-When you open the saved GIF, you should see a visualization similar to this.
-
-![Animation of the brain tumor segmentation results](https://i.imgur.com/CbaQGf2.gif)
