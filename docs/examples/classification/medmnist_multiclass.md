@@ -34,6 +34,7 @@ from medmnist import INFO
 from medicai.utils import GradCAM
 from medicai.models import EfficientNetV2B0
 
+import textwrap
 import numpy as np 
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -159,13 +160,15 @@ test_ds = get_tf_dataset(
 To sanity-check the pipeline, the next helper draws a few samples from a dataset batch. Note that ``class_ids`` is used only for the plot title lookup here; it does not filter the dataset to that specific class.
 
 ```python
-def plot_dataset_samples(dataset, class_ids=None, n=9):
+def plot_dataset_samples(dataset, n=9):
     plt.figure(figsize=(10, 10))
+    cols = int(np.ceil(np.sqrt(n)))
+    rows = int(np.ceil(n / cols))
     
     for i, (images, labels) in enumerate(dataset.unbatch().take(n)):
-        ax = plt.subplot(int(n ** 0.5 + 0.5), int(n ** 0.5 + 0.5), i + 1)
+        ax = plt.subplot(rows, cols, i + 1)
         img = images.numpy()
-        lbl = labels.numpy()
+        lbl = np.squeeze(labels.numpy())
 
         # handle grayscale or float images
         if img.ndim == 2:
@@ -173,7 +176,10 @@ def plot_dataset_samples(dataset, class_ids=None, n=9):
         else:
             plt.imshow(img.astype("uint8"))
 
-        plt.title(label_map[str(class_ids)])
+        class_name = label_map[str(int(lbl))]
+        plt.title(
+            "\n".join(textwrap.wrap(class_name, width=12))
+        )
         plt.axis("off")
     plt.tight_layout()
     plt.show()
@@ -182,14 +188,14 @@ def plot_dataset_samples(dataset, class_ids=None, n=9):
 ```
 
 ```python
-plot_dataset_samples(train_ds, class_ids=1, n=3)
+plot_dataset_samples(train_ds, n=6)
 ```
 
 ![](../../assets/examples/medmnist_multiclass/bloodmnist_sample1.png)
 
 
 ```python
-plot_dataset_samples(val_ds, class_ids=4, n=3)
+plot_dataset_samples(val_ds,  n=6)
 ```
 
 ![](../../assets/examples/medmnist_multiclass/bloodmnist_sample2.png)
