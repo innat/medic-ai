@@ -4,54 +4,72 @@ import tensorflow as tf
 
 
 class TensorBundle:
-    """A container for holding a dictionary of TensorFlow tensors and associated metadata.
+    """Container for transform tensors and their associated metadata.
 
-    This class is designed to bundle together the actual data (tensors) and any
-    relevant metadata (e.g., affine transformations, original shapes, spacing)
-    related to that data. It provides convenient access and modification methods
-    for both the data and the metadata.
+    ``TensorBundle`` stores the tensor mapping in ``data`` and any auxiliary
+    information in ``meta``. Transforms in ``medicai.transforms`` read from and
+    write back to this shared container so tensors and metadata stay aligned
+    through the pipeline.
+
+    Args:
+        data (Dict[str, tf.Tensor]): Mapping from keys such as ``"image"`` or
+            ``"label"`` to TensorFlow tensors.
+        meta (Dict[str, Any], optional): Mapping of metadata values associated
+            with the tensors. If ``None``, an empty metadata dictionary is
+            created.
+
+    Example:
+        Create a bundle with image data and affine metadata::
+
+            import tensorflow as tf
+            from medicai.transforms import TensorBundle
+
+            bundle = TensorBundle(
+                data={"image": tf.random.normal((64, 64, 64, 1))},
+                meta={"affine": tf.eye(4)},
+            )
+
+            image = bundle["image"]
+            affine = bundle["affine"]
+
+            print(image.shape) # (64, 64, 64, 1)
+            print(affine.shape) # (4, 4)
+
+    Returns:
+        TensorBundle: A container that stores tensors in ``data`` and metadata
+        in ``meta``.
     """
 
     def __init__(self, data: Dict[str, tf.Tensor], meta: Dict[str, Any] = None):
-        """Initializes a TensorBundle.
-
-        Args:
-            data (Dict[str, tf.Tensor]): A dictionary where keys are strings identifying
-                the tensors (e.g., 'image', 'label') and values are the corresponding
-                TensorFlow tensors.
-            meta (Dict[str, Any], optional): A dictionary to store metadata associated
-                with the data. Keys are strings and values can be of any type.
-                Defaults to an empty dictionary if None is provided.
-        """
         self.data = data
         self.meta = meta or {}
 
     def __getitem__(self, key: str) -> Any:
-        """Allows accessing data or metadata using dictionary-like key access.
+        """Access tensor data or metadata using dictionary-like key access.
 
         Args:
-            key (str): The key to retrieve. If the key exists in the data dictionary,
-                the corresponding tensor is returned. Otherwise, if the key exists
-                in the metadata dictionary, the corresponding metadata value is returned.
+            key (str): Key to retrieve. If the key exists in ``data``, the
+                corresponding tensor is returned. Otherwise, the lookup falls
+                back to ``meta``.
 
         Returns:
-            Any: The tensor or metadata value associated with the given key.
+            Any: The tensor or metadata value associated with ``key``.
 
         Raises:
-            KeyError: If the key is not found in either the data or metadata dictionaries.
+            KeyError: If ``key`` is not found in either ``data`` or ``meta``.
         """
         if key in self.data:
             return self.data[key]
         return self.meta[key]
 
     def __setitem__(self, key: str, value: Any):
-        """Allows setting data or metadata using dictionary-like key assignment.
+        """Set tensor data or metadata using dictionary-like assignment.
 
         Args:
-            key (str): The key to set. If the key already exists in the data dictionary,
-                the corresponding value is updated. Otherwise, the key-value pair is
-                added to the metadata dictionary.
-            value (Any): The TensorFlow tensor or metadata value to set.
+            key (str): Key to update. If the key already exists in ``data``,
+                the tensor value is replaced there. Otherwise, the key is
+                stored in ``meta``.
+            value (Any): Tensor or metadata value to store.
         """
         if key in self.data:
             self.data[key] = value
@@ -59,31 +77,31 @@ class TensorBundle:
             self.meta[key] = value
 
     def get_data(self, key: str) -> Optional[tf.Tensor]:
-        """Retrieves a tensor from the data dictionary.
+        """Retrieve a tensor from the data mapping.
 
         Args:
             key (str): The key of the tensor to retrieve.
 
         Returns:
-            Optional[tf.Tensor]: The TensorFlow tensor associated with the key,
-            or None if the key is not found in the data dictionary.
+            Optional[tf.Tensor]: The tensor associated with ``key``, or
+            ``None`` if the key is not present in ``data``.
         """
         return self.data.get(key)
 
     def get_meta(self, key: str) -> Optional[Any]:
-        """Retrieves a metadata value from the metadata dictionary.
+        """Retrieve a metadata value from the metadata mapping.
 
         Args:
             key (str): The key of the metadata to retrieve.
 
         Returns:
-            Optional[Any]: The metadata value associated with the key,
-            or None if the key is not found in the metadata dictionary.
+            Optional[Any]: The metadata value associated with ``key``, or
+            ``None`` if the key is not present in ``meta``.
         """
         return self.meta.get(key)
 
     def set_data(self, key: str, value: tf.Tensor):
-        """Sets a tensor in the data dictionary.
+        """Store a tensor in the data mapping.
 
         Args:
             key (str): The key to associate with the tensor.
@@ -92,7 +110,7 @@ class TensorBundle:
         self.data[key] = value
 
     def set_meta(self, key: str, value: Any):
-        """Sets a metadata value in the metadata dictionary.
+        """Store a metadata value in the metadata mapping.
 
         Args:
             key (str): The key to associate with the metadata value.

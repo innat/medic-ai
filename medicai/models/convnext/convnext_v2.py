@@ -430,64 +430,127 @@ class ConvNeXtV2Huge(ConvNeXtVariantsBaseV2, DescribeMixin):
 
 
 CONVNEXTV2_DOCSTRING = """
-{name} model with a ConvNeXt V2 backbone, supporting both 2D and 3D inputs.
+**{name}** classification model built on a ConvNeXt V2 backbone.
 
-This class implements the full ConvNeXt V2 architecture, including the feature
-extraction backbone and the classification head (optional). **ConvNeXt V2**
-distinguishes itself from V1 by introducing the **Global Response Normalization (GRN)**
-layer in each block and removing the Layer Scale. This model is generally optimized
-for training regimes that use masked autoencoders (MAE).
+This variant combines a :class:`ConvNeXtBackboneV2` with an optional
+classification head. It can be used for end-to-end classification or as a
+feature extractor for downstream workflows that need pooled or unpooled
+backbone outputs.
 
-It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
-(e.g., volumetric data of shape `(D, H, W, C)`).
+The model is built in three steps:
 
-References:
-    - "ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders".
-      CVPR 2023. [arXiv:2301.00808](https://arxiv.org/abs/2301.00808)
-
-Example:
-    # TensorFlow / Keras - 2D cases.
-    >>> import tensorflow as tf
-    >>> from your_module import {name}
-    >>> # Classification model
-    >>> model = {name}(input_shape=(224, 224, 3), num_classes=1000)
-    >>> x = tf.random.normal((1, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-    (1, 1000)
-
-    >>> # Feature extractor (pooling)
-    >>> model_fe = {name}(input_shape=(224, 224, 3), include_top=False, pooling='avg')
-    >>> x = tf.random.normal((1, 224, 224, 3))
-    >>> y = model_fe(x)
-    >>> y.shape
-    (1, {projection_dim_last})
-
-Initializes the {name} model.
+1. A ConvNeXt V2 backbone produces the final stage feature tensor and stores
+   intermediate stage features in ``pyramid_outputs``.
+2. If ``include_top=True``, global average pooling, layer normalization, and a
+   dense prediction layer are applied.
+3. If ``include_top=False``, the model returns either the unpooled backbone
+   output or a pooled representation, depending on ``pooling``.
 
 Args:
     input_shape: A tuple specifying the input shape of the model,
-        not including the batch size. Can be `(height, width, channels)`
-        for 2D or `(depth, height, width, channels)` for 3D.
+        not including the batch size. This can describe either 2D or 3D
+        inputs.
     include_rescaling: A boolean indicating whether to include an
-        input preprocessing layer. If `True`, inputs are rescaled
-        from `[0, 255]` to `[0, 1]` and normalized if the input has
-        3 channels. Defaults to `False`.
+        input preprocessing layer before the backbone.
     include_top: A boolean indicating whether to include the
-        classification head (GlobalAvgPool, LayerNorm, and Dense layer).
-        If `False`, the model's output will be the features from the
-        backbone's last stage. Defaults to `True`.
+        classification head. If `False`, the model returns backbone features
+        instead of class predictions.
     num_classes: An integer specifying the number of classes for the
-        classification layer. This is only relevant if `include_top`
-        is `True`. Defaults to 1000.
+        classification layer. This is only relevant if ``include_top`` is
+        ``True``.
     pooling: (Optional) A string specifying the type of pooling to
-        apply to the output of the backbone. Can be `"avg"` for global
-        average pooling or `"max"` for global max pooling. This is only
-        relevant if `include_top` is `False`.
+        apply when ``include_top`` is ``False``. Supported values are
+        ``"avg"`` and ``"max"``.
     classifier_activation: A string specifying the activation function
-        to use for the classification layer. Defaults to `"softmax"`.
+        used by the classification layer.
     name: (Optional) The name of the model.
     **kwargs: Additional keyword arguments.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+
+    - If ``include_top=True``, the output is a classification tensor of shape
+      ``(batch_size, num_classes)``.
+    - If ``include_top=False`` and ``pooling`` is ``None``, the output is the
+      final backbone feature tensor.
+    - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+      the output is a pooled feature tensor with last dimension
+      ``{projection_dim_last}``.
+
+Examples:
+    TensorFlow 2D classification::
+
+        import tensorflow as tf
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        x = tf.random.normal((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    PyTorch backend 2D classification::
+
+        import torch
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    Jax backend 2D classification::
+
+        import jax
+        import jax.numpy as jnp
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        x = jnp.random.normal((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    TensorFlow 3D classification::
+
+        import tensorflow as tf
+        from medicai.models import {name}              
+
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        x = tf.random.normal((1, 64, 224, 224, 1))
+        y = model(x)                   
+        print(y.shape) # (1, 10)   
+
+    PyTorch backend 3D classification::
+
+        import torch
+        from medicai.models import {name}              
+
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        x = torch.randn((1, 64, 224, 224, 1 ))
+        y = model(x)            
+        print(y.shape) # (1, 10)
+
+    Jax backend 3D classification::
+
+        import jax
+        import jax.numpy as jnp     
+        from medicai.models import {name}     
+                 
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        x = jnp.random.normal((1, 64, 224, 224, 1))
+        y = model(x)    
+        print(y.shape) # (1, 10)
 """
 
 ConvNeXtV2Atto.__doc__ = CONVNEXTV2_DOCSTRING.format(

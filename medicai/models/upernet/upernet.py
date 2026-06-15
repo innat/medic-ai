@@ -18,40 +18,150 @@ from .decoder import UPerNetDecoder
 @registration.register(name="upernet", type="segmentation")
 class UPerNet(keras.Model, DescribeMixin):
     """
-    The UPerNet (Unified Perceptual Parsing) model for semantic segmentation.
+    UPerNet can be constructed either from a registered encoder name or from a
+    pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary with four or five feature levels so the
+    decoder can build the PPM and FPN pathways.
 
-    UPerNet combines two key modules to effectively utilize features from various
-    encoder resolutions:
+    The model combines three components:
 
-    1.  **Pyramid Pooling Module (PPM):** Processes the **deepest** feature map
-        (bottleneck, e.g., P5) to capture multi-scale context information.
-    2.  **Feature Pyramid Network (FPN):** Performs a **top-down fusion** across
-        intermediate feature maps (skip layers, e.g., P4, P3, P2) to produce
-        high-resolution features that retain strong semantic information.
+    1. An encoder that extracts a multi-scale feature pyramid.
+    2. A Pyramid Pooling Module (PPM) that gathers global context from the
+       deepest encoder feature.
+    3. A Feature Pyramid Network (FPN) that progressively fuses deeper
+       semantic features with higher-resolution shallower features.
 
-    The features from the PPM and the FPN are concatenated, then fused using a
-    final convolutional block to produce the segmentation output. This structure
-    makes UPerNet highly effective for accurate and detailed scene understanding.
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with four or five feature levels.
+        encoder_name: Optional name of a registered backbone model to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        decoder_filters: Channel width used throughout the PPM and FPN decoder
+            stages.
+        decoder_normalization: Normalization behavior used in decoder blocks.
+        decoder_activation: Activation function used in decoder blocks.
+        head_upsample: Final upsampling factor applied before prediction. Can
+            be an integer, float, tuple, or list.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import UPerNet
+
+            model = UPerNet(
+                encoder_name="efficientnet_v2_m",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 2)
+
+    .. rubric:: Encoder feature hierarchy
+       :class: api-subheading
+
+    The decoder uses the feature hierarchy as follows:
+
+    - For five-stage encoders, the ``PPM`` operates on ``P5`` and the FPN fuses
+      ``P4``, ``P3``, and ``P2``.
+    - For four-stage encoders, the ``PPM`` operates on ``P4`` and the FPN fuses
+      ``P3``, ``P2``, and ``P1``.
+
+    Unlike other segmentation models in this codebase, UPerNet does not
+    expose an ``encoder_depth`` argument. The number of encoder stages is
+    inferred directly from ``encoder.pyramid_outputs``.
 
     Example:
-        >>> from medicai.models import UPerNet
-        >>> model = UPerNet(
-        ...     input_shape=(256, 256, 3),
-        ...     encoder_name="resnet50"
-        ... )
-        >>> model = UPerNet(
-        ...     input_shape=(96, 96, 96, 1),
-        ...     encoder_name="convnext_tiny",
-        ...     encoder_depth=4,
-        ...     head_upsample=8
-        ... )
-        >>> model = UPerNet(
-        ...     input_shape=(96, 96, 96, 1),
-        ...     encoder_name="swin_tiny",
-        ...     encoder_depth=4,
-        ...     head_upsample=8
-        ... )
+        Build `UPerNet` with a four-stage encoder::
 
+            import tensorflow as tf
+            from medicai.models import UPerNet
+
+            model = UPerNet(
+                encoder_name="convnext_tiny",
+                input_shape=(224, 224, 3),
+                num_classes=5,
+            )
+
+            x = tf.random.uniform(shape=[1, 224, 224, 3])
+            y = model(x)
+            print(y.shape) # (1, 224, 224, 5)
+
+    .. rubric:: Output resolution
+       :class: api-subheading
+
+    Some encoders, such as Swin Transformer variants, may produce feature
+    hierarchies whose final decoder output is lower than the input resolution.
+    In these cases, ``head_upsample`` can be used to restore the final
+    segmentation output to the desired resolution.
+
+    Example:
+        Adjust the final upsampling factor for a Swin encoder::
+
+            import tensorflow as tf
+            from medicai.models import UPerNet
+
+            model = UPerNet(
+                encoder_name="swin_tiny",
+                input_shape=(96, 96, 96, 4),
+                num_classes=3,
+                head_upsample=8,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with either four or five
+       ordered feature levels.
+    2. The feature hierarchy is compatible with the PPM and FPN decoder
+       design.
+    3. The final ``head_upsample`` factor is adjusted if the encoder uses a
+       non-standard downsampling pattern.
+
+    Example:
+        Build the model from a custom encoder::
+
+            import tensorflow as tf
+            from medicai.models import UPerNet, DenseNetBackbone
+
+            encoder = DenseNetBackbone(
+                blocks=[6, 12, 64, 48],
+                input_shape=(96, 96, 96, 4),
+            )
+
+            model = UPerNet(
+                encoder=encoder,
+                num_classes=3,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)``.
+
+    References:
+        - Unified Perceptual Parsing for Scene Understanding.
+          `arXiv:1807.10221 <https://arxiv.org/abs/1807.10221>`_
     """
 
     ALLOWED_BACKBONE_FAMILIES = [

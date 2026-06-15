@@ -13,18 +13,53 @@ from medicai.utils import (
 @keras.utils.register_keras_serializable(package="xception.backbone")
 class XceptionBackbone(keras.Model, DescribeMixin):
     """
-    A full XceptionBackbone mode.
+    The backbone is constructed in the following stages:
 
-    This class provides a complete XceptionBackbone model, excluding the
-    classification head (the "top"). It is capable of handling both 2D and 3D inputs.
+    1. An input layer is created from ``input_shape``.
+    2. An optional ``Rescaling`` layer normalizes raw image intensities.
+    3. An entry flow applies initial convolutions and residual downsampling
+       blocks to progressively reduce spatial resolution.
+    4. A middle flow applies repeated separable-convolution residual blocks at
+       constant resolution.
+    5. An exit flow expands the channel dimension and produces the final
+       backbone feature tensor.
+    6. Intermediate feature maps from the main stage boundaries are stored in
+       ``pyramid_outputs``.
 
-    The model can be used for a variety of tasks, including image
-    classification on 2D images (with input shape `(height, width, channels)`)
-    and volumetric data classification on 3D images (with input shape
-    `(depth, height, width, channels)`).
+    Args:
+        input_shape: A tuple specifying the input shape of the model, not
+            including the batch size. This can describe either 2D or 3D
+            inputs.
+        include_rescaling: A boolean indicating whether to include a
+            ``Rescaling`` layer at the beginning of the model.
+        name: (Optional) The name of the model.
+        **kwargs: Additional keyword arguments.
 
-    Reference:
-        https://github.com/keras-team/keras
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Example:
+        Build the backbone and inspect the pyramid features::
+
+            import torch
+            from medicai.models import XceptionBackbone
+
+            model = XceptionBackbone(
+                input_shape=(224, 224, 3),
+                include_rescaling=True,
+                name="xception_backbone",
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape)  # torch.Size([1, 7, 7, 2048])
+
+
+    References:
+        - Xception: Deep Learning with Depthwise Separable Convolutions.
+          `arXiv:1610.02357 <https://arxiv.org/abs/1610.02357>`_
+
     """
 
     def __init__(

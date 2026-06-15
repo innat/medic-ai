@@ -183,16 +183,6 @@ class ResNetBase(keras.Model):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet18(ResNetBase, DescribeMixin):
-    """
-    ResNet-18 model for classification.
-
-    This model uses **basic blocks** with a total of **18 layers** and
-    is a popular choice for various computer vision tasks. It is lighter and
-    faster to train compared to deeper ResNet models. It uses the original
-    ResNet v1 architecture, which applies activation after the addition
-    of the shortcut.
-    """
-
     def __init__(
         self,
         *,
@@ -246,17 +236,6 @@ class ResNet18(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet34(ResNetBase, DescribeMixin):
-    """
-    ResNet-34 model for classification.
-
-    This model uses **basic blocks** with a total of **34 layers** and
-    is a popular choice for various computer vision tasks. It's a deeper
-    version of ResNet-18, offering increased representational power while
-    still being computationally efficient. It uses the original ResNet v1
-    architecture, which applies activation after the addition of the
-    shortcut.
-    """
-
     def __init__(
         self,
         *,
@@ -310,15 +289,6 @@ class ResNet34(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet50(ResNetBase, DescribeMixin):
-    """
-    ResNet-50 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **50 layers**.
-    It's a very popular and well-balanced choice, widely used for transfer
-    learning and general-purpose image classification due to its depth and
-    computational efficiency. It uses the original ResNet v1 architecture.
-    """
-
     def __init__(
         self,
         *,
@@ -372,16 +342,6 @@ class ResNet50(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet101(ResNetBase, DescribeMixin):
-    """
-    ResNet-101 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **101 layers**.
-    As a deeper variant of ResNet, it can capture more complex features
-    from the input data, often leading to higher accuracy on challenging
-    datasets, though at a higher computational cost. It uses the original
-    ResNet v1 architecture.
-    """
-
     def __init__(
         self,
         *,
@@ -435,16 +395,6 @@ class ResNet101(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNet152(ResNetBase, DescribeMixin):
-    """
-    ResNet-152 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **152 layers**.
-    As the deepest variant of the original ResNet v1 series, it is designed
-    to handle highly complex visual recognition tasks. It uses the original
-    ResNet v1 architecture, which applies activation after the addition of the
-    shortcut.
-    """
-
     def __init__(
         self,
         *,
@@ -498,16 +448,6 @@ class ResNet152(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(name="resnet50_v2", family="resnet")
 class ResNet50v2(ResNetBase, DescribeMixin):
-    """
-    ResNet-50 v2 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **50 layers**.
-    Unlike the original ResNet v1, it implements the **pre-activation**
-    design, where Batch Normalization and ReLU are applied *before* the
-    convolutional layers. This modification helps with training deep networks
-    by preventing vanishing gradients and improving information flow.
-    """
-
     def __init__(
         self,
         *,
@@ -561,15 +501,6 @@ class ResNet50v2(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(name="resnet101_v2", family="resnet")
 class ResNet101v2(ResNetBase, DescribeMixin):
-    """
-    ResNet-101 v2 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **101 layers**.
-    Similar to ResNet-50 v2, it employs the **pre-activation** design,
-    which helps to mitigate the vanishing gradient problem and enhances
-    the training of this very deep network.
-    """
-
     def __init__(
         self,
         *,
@@ -623,16 +554,6 @@ class ResNet101v2(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(name="resnet152_v2", family="resnet")
 class ResNet152v2(ResNetBase, DescribeMixin):
-    """
-    ResNet-152 v2 model for classification.
-
-    This model uses **bottleneck blocks** with a total of **152 layers**.
-    It employs the **pre-activation** design, which places Batch Normalization
-    and ReLU activations before the convolutional layers. This design helps
-    to stabilize the training of very deep networks and improves performance
-    by mitigating the vanishing gradient problem.
-    """
-
     def __init__(
         self,
         *,
@@ -686,16 +607,6 @@ class ResNet152v2(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(name="resnet50_vd", family="resnet")
 class ResNet50vd(ResNetBase, DescribeMixin):
-    """
-    ResNet-50 "very deep" (vd) model for classification.
-
-    This model uses a "very deep" convolutional stem, which replaces the
-    initial 7x7 convolutional layer with three smaller 3x3 layers. This
-    modification increases the model's capacity and has been shown to
-    improve accuracy. The model uses **bottleneck block vd** with a total
-    of **50 layers**.
-    """
-
     def __init__(
         self,
         *,
@@ -749,15 +660,6 @@ class ResNet50vd(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(name="resnet200_vd", family="resnet")
 class ResNet200vd(ResNetBase, DescribeMixin):
-    """
-    ResNet-200 "very deep" (vd) model for classification.
-
-    This model uses a "very deep" convolutional stem with three 3x3 layers,
-    and **bottleneck block vd** with a total of **200 layers**. This variant
-    is a powerful and computationally intensive model designed to achieve
-    state-of-the-art performance on large-scale classification tasks.
-    """
-
     def __init__(
         self,
         *,
@@ -811,42 +713,6 @@ class ResNet200vd(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNeXt50(ResNetBase, DescribeMixin):
-    """
-    ResNeXt-50 32x4d model for classification.
-
-    This model extends ResNet-50 with **grouped convolutions** and follows the
-    ResNeXt architecture described in "Aggregated Residual Transformations for
-    Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
-    and **width_per_group=4**, resulting in a total of **50 layers**.
-
-    ResNeXt introduces a new dimension called "cardinality" (the size of the set
-    of transformations) in addition to width and depth, which improves accuracy
-    without significantly increasing computational complexity.
-
-    References:
-        - [Aggregated Residual Transformations for Deep Neural Networks](
-          https://arxiv.org/abs/1611.05431)
-
-    Example:
-    ```python
-    from medicai.models import ResNeXt50
-
-    # Create ResNeXt-50 model for ImageNet classification
-    model = ResNeXt50(
-        input_shape=(224, 224, 3),
-        include_top=True,
-        num_classes=1000
-    )
-
-    # Create ResNeXt-50 for feature extraction
-    backbone = ResNeXt50(
-        input_shape=(224, 224, 3),
-        include_top=False,
-        pooling='avg'
-    )
-    ```
-    """
-
     def __init__(
         self,
         *,
@@ -860,6 +726,17 @@ class ResNeXt50(ResNetBase, DescribeMixin):
         **kwargs,
     ):
         """
+        ResNeXt-50 32x4d model for classification.
+
+        This model extends ResNet-50 with **grouped convolutions** and follows the
+        ResNeXt architecture described in "Aggregated Residual Transformations for
+        Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
+        and **width_per_group=4**, resulting in a total of **50 layers**.
+
+        ResNeXt introduces a new dimension called "cardinality" (the size of the set
+        of transformations) in addition to width and depth, which improves accuracy
+        without significantly increasing computational complexity.
+    
         Initializes the ResNeXt-50 32x4 model.
 
         Args:
@@ -902,46 +779,6 @@ class ResNeXt50(ResNetBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="resnet")
 @registration.register(family="resnet")
 class ResNeXt101(ResNetBase, DescribeMixin):
-    """
-    ResNeXt-101 32x8d model for classification.
-
-    This model extends ResNet-101 with **grouped convolutions** and follows the
-    ResNeXt architecture described in "Aggregated Residual Transformations for
-    Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
-    and **width_per_group=8**, resulting in a total of **101 layers**.
-
-    As a deeper variant of ResNeXt, it can capture more complex features from
-    the input data, often leading to higher accuracy on challenging datasets,
-    though at a higher computational cost compared to ResNeXt-50.
-
-    ResNeXt introduces a new dimension called "cardinality" (the size of the set
-    of transformations) in addition to width and depth, which improves accuracy
-    without significantly increasing computational complexity.
-
-    References:
-        - [Aggregated Residual Transformations for Deep Neural Networks](
-          https://arxiv.org/abs/1611.05431)
-
-    Example:
-    ```python
-    from medicai.models import ResNeXt101
-
-    # Create ResNeXt-101 model for ImageNet classification
-    model = ResNeXt101(
-        input_shape=(224, 224, 3),
-        include_top=True,
-        num_classes=1000
-    )
-
-    # Create ResNeXt-101 for feature extraction
-    backbone = ResNeXt101(
-        input_shape=(224, 224, 3),
-        include_top=False,
-        pooling='avg'
-    )
-    ```
-    """
-
     def __init__(
         self,
         *,
@@ -955,6 +792,21 @@ class ResNeXt101(ResNetBase, DescribeMixin):
         **kwargs,
     ):
         """
+        ResNeXt-101 32x8d model for classification.
+
+        This model extends ResNet-101 with **grouped convolutions** and follows the
+        ResNeXt architecture described in "Aggregated Residual Transformations for
+        Deep Neural Networks". It uses **bottleneck blocks** with **cardinality=32**
+        and **width_per_group=8**, resulting in a total of **101 layers**.
+
+        As a deeper variant of ResNeXt, it can capture more complex features from
+        the input data, often leading to higher accuracy on challenging datasets,
+        though at a higher computational cost compared to ResNeXt-50.
+
+        ResNeXt introduces a new dimension called "cardinality" (the size of the set
+        of transformations) in addition to width and depth, which improves accuracy
+        without significantly increasing computational complexity.
+
         Initializes the ResNeXt-101 32x8 model.
 
         Args:
@@ -992,3 +844,91 @@ class ResNeXt101(ResNetBase, DescribeMixin):
             use_pre_activation=False,
             **kwargs,
         )
+
+
+RESNET_DOCSTRING = """
+This class provides a complete {name} model, including the convolutional
+backbone and the classification head (the "top"). The backbone follows the
+ResNet-family design and may use standard residual blocks, pre-activation
+blocks, deep stems, or grouped convolutions depending on the variant.
+
+Args:
+    input_shape: A tuple specifying the input shape of the model,
+        not including the batch size. Can be `(height, width, channels)` for
+        2D or `(depth, height, width, channels)` for 3D.
+    include_rescaling: A boolean indicating whether to include a
+        ``Rescaling`` layer at the beginning of the model.
+    include_top: A boolean indicating whether to include the fully
+        connected classification layer at the top of the network. If
+        `False`, the model's output will be the features from the
+        backbone, without the final classifier.
+    num_classes: An integer specifying the number of classes for the
+        classification layer. This is only relevant if `include_top`
+        is `True`.
+    pooling: (Optional) A string specifying the type of pooling to
+        apply to the output of the backbone. Can be `"avg"` for global
+        average pooling or `"max"` for global max pooling. This is only
+        relevant if `include_top` is `False`.
+    classifier_activation: A string specifying the activation function
+        to use for the classification layer.
+    name: (Optional) The name of the model.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+
+        - If ``include_top=True``, the output is a classification tensor of shape
+        ``(batch_size, num_classes)``.
+        - If ``include_top=False`` and ``pooling`` is ``None``, the output is the
+        final backbone feature tensor.
+        - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+        the output is a pooled feature tensor.
+
+Examples:
+
+    PyTorch backend 2D classification::
+
+        import torch
+        from medicai.models.resnet import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), include_top=True, num_classes=2
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # torch.Size([1, 2])
+
+    Jax backend 3D classification::
+
+        import jax
+        import jax.numpy as jnp
+        from medicai.models.resnet import {name}
+
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        key = jax.random.PRNGKey(0)
+        x = jax.random.normal(key, (1, 64, 224, 224, 1))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+References:
+    - Deep Residual Learning for Image Recognition. CVPR 2016.
+        `arXiv:1512.03385 <https://arxiv.org/abs/1512.03385>`_
+    - Identity Mappings in Deep Residual Networks. ECCV 2016.
+        `arXiv:1603.05027 <https://arxiv.org/abs/1603.05027>`_
+    - Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017.
+        `arXiv:1611.05431 <https://arxiv.org/abs/1611.05431>`_
+"""
+
+ResNet18.__doc__ = RESNET_DOCSTRING.format(name="ResNet18")
+ResNet34.__doc__ = RESNET_DOCSTRING.format(name="ResNet34")
+ResNet50.__doc__ = RESNET_DOCSTRING.format(name="ResNet50")
+ResNet101.__doc__ = RESNET_DOCSTRING.format(name="ResNet101")
+ResNet152.__doc__ = RESNET_DOCSTRING.format(name="ResNet152")
+ResNet50v2.__doc__ = RESNET_DOCSTRING.format(name="ResNet50v2")
+ResNet101v2.__doc__ = RESNET_DOCSTRING.format(name="ResNet101v2")
+ResNet152v2.__doc__ = RESNET_DOCSTRING.format(name="ResNet152v2")
+ResNet50vd.__doc__ = RESNET_DOCSTRING.format(name="ResNet50vd")
+ResNet200vd.__doc__ = RESNET_DOCSTRING.format(name="ResNet200vd")
+ResNeXt50.__doc__ = RESNET_DOCSTRING.format(name="ResNeXt50")
+ResNeXt101.__doc__ = RESNET_DOCSTRING.format(name="ResNeXt101")

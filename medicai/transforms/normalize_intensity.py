@@ -6,13 +6,58 @@ from .tensor_bundle import TensorBundle
 
 
 class NormalizeIntensity:
-    """Normalize the intensity of tensors based on global or channel-wise statistics.
+    """
+    Normalize tensor intensities using global or channel-wise statistics.
 
-    This transform can perform intensity normalization by subtracting a subtrahend
-    and dividing by a divisor. These values can be pre-defined or computed
-    from the tensor data. The normalization can be applied globally across the
-    entire tensor or independently for each channel. Optionally, the normalization
-    can be computed only over non-zero pixel values.
+    This transform subtracts ``subtrahend`` and divides by ``divisor`` for the
+    selected tensors. When either value is ``None``, the transform computes it
+    from the input tensor, either globally or independently for each channel.
+    We can also choose to compute the statistics using only non-zero values.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to normalize.
+        subtrahend (Optional[Union[float, tf.Tensor]]): Value to subtract from the tensor(s).
+            If None and `channel_wise` is False, the global mean of the non-zero
+            (if `nonzero` is True) or all values is used. If None and `channel_wise`
+            is True, the mean of each channel is used. Default is None.
+        divisor (Optional[Union[float, tf.Tensor]]): Value to divide the tensor(s) by.
+            If None and `channel_wise` is False, the global standard deviation of the
+            non-zero (if `nonzero` is True) or all values is used. If None and
+            `channel_wise` is True, the standard deviation of each channel is used.
+            If the standard deviation is zero, it is replaced with one to avoid division by zero.
+            Default is None.
+        nonzero (bool): If True, normalization statistics (mean and std) are computed
+            only over non-zero values. Default is False.
+        channel_wise (bool): If True, normalization is performed independently for each channel.
+            The subtrahend and divisor will be computed per channel if they are None.
+            Default is False.
+        dtype (Optional[tf.DType]): The data type to cast the normalized tensor(s) to.
+            If None, the original data type is preserved. Default is tf.float32.
+        allow_missing_keys (bool): If True, processing will continue even if some of the specified
+            keys are not found in the input data. The missing keys will be ignored. Default is False.
+
+    Example:
+        Normalize an image tensor using automatically computed statistics::
+
+            import tensorflow as tf
+            from medicai.transforms import NormalizeIntensity
+
+            normalizer = NormalizeIntensity(
+                keys=["image"],
+                nonzero=True,
+                channel_wise=False,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            result = normalizer({"image": image})
+            normalized_image = result["image"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the normalized
+        tensors using the same keys as the input.
+
+    Raises:
+        KeyError: If a requested key is missing and ``allow_missing_keys=False``.
     """
 
     def __init__(
@@ -25,31 +70,6 @@ class NormalizeIntensity:
         dtype=tf.float32,
         allow_missing_keys=False,
     ):
-        """
-        Initializes the NormalizeIntensity transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to normalize.
-            subtrahend (Optional[Union[float, tf.Tensor]]): Value to subtract from the tensor(s).
-                If None and `channel_wise` is False, the global mean of the non-zero
-                (if `nonzero` is True) or all values is used. If None and `channel_wise`
-                is True, the mean of each channel is used. Default is None.
-            divisor (Optional[Union[float, tf.Tensor]]): Value to divide the tensor(s) by.
-                If None and `channel_wise` is False, the global standard deviation of the
-                non-zero (if `nonzero` is True) or all values is used. If None and
-                `channel_wise` is True, the standard deviation of each channel is used.
-                If the standard deviation is zero, it is replaced with one to avoid division by zero.
-                Default is None.
-            nonzero (bool): If True, normalization statistics (mean and std) are computed
-                only over non-zero values. Default is False.
-            channel_wise (bool): If True, normalization is performed independently for each channel.
-                The subtrahend and divisor will be computed per channel if they are None.
-                Default is False.
-            dtype (Optional[tf.DType]): The data type to cast the normalized tensor(s) to.
-                If None, the original data type is preserved. Default is tf.float32.
-            allow_missing_keys (bool): If True, processing will continue even if some of the specified
-                keys are not found in the input data. The missing keys will be ignored. Default is False.
-        """
         self.keys = keys
         self.subtrahend = subtrahend
         self.divisor = divisor
@@ -102,7 +122,7 @@ class NormalizeIntensity:
         return normalized_image
 
     def _normalize_global(self, image: tf.Tensor) -> tf.Tensor:
-        mask = tf.not_equal(image, 0.0)
+        mask = tf.not_equal(image, 0.0) if self.nonzero else tf.ones_like(image, dtype=tf.bool)
         num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
 
         def normalize():
@@ -115,8 +135,9 @@ class NormalizeIntensity:
             div = std if self.divisor is None else tf.cast(self.divisor, image.dtype)
             div = tf.where(div == 0.0, 1.0, div)
 
-            # normalize only nonzero voxels
-            return tf.where(mask, (image - sub) / div, image)
+            if self.nonzero:
+                return tf.where(mask, (image - sub) / div, image)
+            return (image - sub) / div
 
         def identity():
             return image
@@ -128,10 +149,15 @@ class NormalizeIntensity:
         Apply the NormalizeIntensity transform to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to normalize.
 
         Returns:
-            TensorBundle: A dictionary with normalized tensors.
+            TensorBundle: The transformed output. We can retrieve the normalized
+            tensors using the same keys as the input.
+
+        Raises:
+            KeyError: If a requested key is missing and ``allow_missing_keys=False``.
         """
 
         if isinstance(inputs, dict):

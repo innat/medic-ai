@@ -20,18 +20,278 @@ from .transunet_layers import LearnableQueries, MaskedCrossAttention
 @keras.saving.register_keras_serializable(package="transunet")
 @registration.register(name="trans_unet", type="segmentation")
 class TransUNet(keras.Model, DescribeMixin):
-    """3D or 2D TransUNet model for medical image segmentation.
+    """
+    TransUNet can be constructed either from a registered encoder name or
+    from a pre-built encoder instance. The encoder must expose a
+    ``pyramid_outputs`` dictionary so the model can retrieve the bottleneck
+    feature and the skip features used by the decoder.
 
-    This model combines a 3D or 2D CNN encoder with a Vision Transformer
-    (ViT) encoder and a hybrid decoder. The CNN extracts multi-scale local features,
-    while the ViT captures global context. The decoder upsamples the fused
-    features to produce the final segmentation map using a coarse-to-fine
-    attention mechanism and U-Net-style skip connections.
+    The model combines three components:
+
+    1. A convolutional encoder that extracts a multi-scale feature pyramid.
+    2. A Vision Transformer bottleneck that models global context over the
+       deepest selected encoder feature map.
+    3. A hybrid decoder that progressively upsamples the representation and
+       refines it with skip connections and masked cross-attention.
+
+    Args:
+        encoder: Optional pre-built Keras model to use as the encoder. It must
+            expose ``pyramid_outputs`` with the required feature levels.
+        encoder_name: Optional name of a registered backbone model to build and
+            use as the encoder.
+        input_shape: Optional input shape excluding the batch dimension.
+            Required when ``encoder_name`` is used. This can describe either
+            2D or 3D inputs.
+        encoder_depth: Number of encoder pyramid levels to use. Valid values
+            are ``3``, ``4``, and ``5``.
+        num_classes: Number of segmentation classes. Must be greater than
+            zero.
+        classifier_activation: Activation function used by the final
+            segmentation head.
+        num_vit_layers: Number of transformer encoder blocks applied to the
+            bottleneck tokens.
+        num_heads: Number of attention heads used in the transformer blocks
+            and masked cross-attention modules.
+        num_queries: Number of learnable decoder queries.
+        embed_dim: Token embedding dimension used by the transformer
+            bottleneck and hybrid decoder.
+        mlp_dim: Hidden dimension of the transformer MLP layers.
+        dropout_rate: Dropout rate used in the transformer components.
+        decoder_activation: Activation function used in decoder blocks.
+        decoder_filters: Sequence of channel widths used by the decoder
+            refinement path.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
+
+    Examples:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import TransUNet
+
+            model = TransUNet(
+                encoder_name="resnet18",
+                input_shape=(96, 96, 96, 1),
+                num_classes=3,
+                classifier_activation=None,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    .. rubric:: Encoder depth
+       :class: api-subheading
+
+    The ``encoder_depth`` argument controls which encoder feature is used as
+    the transformer bottleneck and which shallower features are used as skip
+    connections:
+
+    - ``encoder_depth=5`` uses ``P5`` as the transformer bottleneck feature
+      and ``P1`` through ``P4`` as decoder-side features.
+    - ``encoder_depth=4`` uses ``P4`` as the transformer bottleneck feature
+      and ``P1`` through ``P3`` as decoder-side features.
+    - ``encoder_depth=3`` uses ``P3`` as the transformer bottleneck feature
+      and ``P1`` through ``P2`` as decoder-side features.
 
     Example:
-    >>> from medicai.models import TransUNet
-    >>> model = TransUNet(input_shape=(96, 96, 1), encoder_name="densenet121")
-    >>> model = TransUNet(input_shape=(96, 96, 96, 1), encoder_name="densenet121")
+        Reduce encoder depth::
+
+            import tensorflow as tf
+            from medicai.models import TransUNet
+
+            model = TransUNet(
+                encoder_name="efficientnet_b2",
+                encoder_depth=4,
+                input_shape=(96, 96, 96, 1),
+                num_classes=3,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    .. rubric:: 2D and 3D formulation
+       :class: api-subheading
+
+    This codebase follows the **3D TransUNet** formulation and applies the same
+    design to 2D inputs by replacing 3D operations with their 2D counterparts.
+
+    Example:
+        Build a 2D TransUNet model::
+
+            import tensorflow as tf
+            from medicai.models import TransUNet
+
+            model = TransUNet(
+                encoder_name="efficientnet_b2",
+                input_shape=(96, 96, 1),
+                num_classes=3,
+                classifier_activation=None,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 3)
+
+    .. rubric:: Transformer bottleneck
+       :class: api-subheading
+
+    The transformer capacity can be tuned through ``num_vit_layers``,
+    ``num_heads``, ``embed_dim``, and ``mlp_dim``. These parameters control
+    the depth, attention width, token embedding size, and feed-forward
+    capacity of the transformer bottleneck.
+
+    Example:
+        Tune the transformer bottleneck::
+
+            import tensorflow as tf
+            from medicai.models import TransUNet
+
+            model = TransUNet(
+                encoder_name="densenet121",
+                input_shape=(96, 96, 96, 1),
+                num_vit_layers=12,
+                num_heads=8,
+                embed_dim=512,
+                mlp_dim=1024,
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 1])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 1)
+
+    .. rubric:: Custom encoder
+       :class: api-subheading
+
+    When providing a custom encoder through ``encoder``, ensure that:
+
+    1. It defines a ``pyramid_outputs`` dictionary with the required feature
+       levels.
+    2. The selected ``encoder_depth`` matches the available pyramid levels.
+
+    Example:
+        Build the model from a custom encoder::
+
+            import tensorflow as tf
+            from medicai.models import ResNetBackbone, TransUNet
+
+            backbone = ResNetBackbone(
+                input_shape=(96, 96, 96, 4),
+                num_blocks=[3, 4, 23, 3],
+                block_type="bottleneck_block",
+                groups=64,
+                width_per_group=4
+            )
+
+            model = TransUNet(
+                encoder=backbone,
+                encoder_depth=4,
+                num_classes=3,
+                classifier_activation="softmax",
+            )
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+        If the encoder produces non-standard feature resolutions, we may need
+        to apply a final resizing step so the segmentation output matches the
+        original input resolution::
+
+            import keras
+            import tensorflow as tf
+            from medicai.models import SwinTinyV2, TransUNet
+            from medicai.layers import ResizingND
+
+            backbone = SwinTinyV2(
+                input_shape=(96,96,96,1),
+                include_top=False
+            )
+            backbone.pyramid_outputs
+            # {
+            #     'P1': <KerasTensor shape=(None, 24, 24, 24, 40)>,
+            #     'P2': <KerasTensor shape=(None, 12, 12, 12, 96)>,
+            #     'P3': <KerasTensor shape=(None, 6, 6, 6, 192)>,
+            #     'P4': <KerasTensor shape=(None, 3, 3, 3, 384)>
+            #     'P5': <KerasTensor shape=(None, 3, 3, 3, 384)>
+            # }
+
+        In this case, the ``P5`` feature is not required, so only the first
+        four pyramid levels are used by setting ``encoder_depth=4``::
+
+            backbone = SwinTinyV2(
+                input_shape=(96, 96, 96, 4),
+                include_top=False,
+            )
+
+            segmentor = TransUNet(
+                encoder=backbone,
+                encoder_depth=4,
+                num_classes=3,
+                classifier_activation='softmax',
+            )
+
+            inputs = keras.Input(shape=(96, 96, 96, 4))
+            x = segmentor(inputs)
+
+            outputs = ResizingND(
+                target_shape=(96, 96, 96),
+                interpolation='trilinear',
+                align_corners=False,
+            )(x)
+
+            model = keras.Model(inputs=inputs, outputs=outputs)
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape)
+
+        Another example uses a ``ConvNeXt`` encoder::
+
+            import keras
+            import tensorflow as tf
+            from medicai.models import ConvNeXtTiny, TransUNet
+            from medicai.layers import ResizingND
+
+            backbone = ConvNeXtTiny(
+                input_shape=(96, 96, 96, 4),
+                include_top=False,
+            )
+
+            segmentor = TransUNet(
+                encoder=backbone,
+                encoder_depth=4,
+                num_classes=3,
+                classifier_activation='softmax',
+            )
+
+            inputs = keras.Input(shape=(96, 96, 96, 4))
+            x = segmentor(inputs)
+
+            outputs = ResizingND(
+                target_shape=(96, 96, 96),
+                interpolation='trilinear',
+                align_corners=False,
+            )(x)
+
+            model = keras.Model(inputs=inputs, outputs=outputs)
+
+            x = tf.random.uniform(shape=[1, 96, 96, 96, 4])
+            y = model(x)
+            print(y.shape) # (1, 96, 96, 96, 3)
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns a segmentation tensor of
+        shape ``(batch_size, ..., num_classes)`` at the decoder output
+        resolution.
+
+    References:
+        - TransUNet: Transformers Make Strong Encoders for Medical Image
+          Segmentation.
+          `arXiv:2102.04306 <https://arxiv.org/abs/2102.04306>`_
+        - 3D TransUNet: Advancing Medical Image Segmentation through Vision
+          Transformers.
+          `arXiv:2310.07781 <https://arxiv.org/abs/2310.07781>`_
     """
 
     ALLOWED_BACKBONE_FAMILIES = ["densenet", "resnet", "efficientnet", "senet", "xception"]

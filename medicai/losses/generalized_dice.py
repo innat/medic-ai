@@ -123,7 +123,14 @@ This loss function adapts the Generalized Dice loss to work with sparse labels
 the Generalized Dice. It uses a **Softmax** activation on logits.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="sparse_generalized_dice_loss"
+    specific_args="",
+    example="""    This loss can be instantiated and used like the other segmentation
+    losses in ``medicai.losses``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``weight_type`` is not one of ``"square"``, ``"simple"``,
+        or ``"uniform"``.""",
+    default_name="sparse_generalized_dice_loss",
 )
 
 
@@ -134,7 +141,14 @@ one-hot encoded labels and prediction probabilities, applying a softmax activati
 if predictions are logits.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="categorical_generalized_dice_loss"
+    specific_args="",
+    example="""    This loss can be instantiated and used like the other segmentation
+    losses in ``medicai.losses``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``weight_type`` is not one of ``"square"``, ``"simple"``,
+        or ``"uniform"``.""",
+    default_name="categorical_generalized_dice_loss",
 )
 
 
@@ -145,7 +159,15 @@ segmentation where the labels typically have a single or multi-label channel
 (representing the foreground). It uses a **Sigmoid** activation on logits.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="binary_generalized_dice_loss"
+    specific_args="",
+    example="""    This loss can be instantiated and used like the other segmentation
+    losses in ``medicai.losses``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``ignore_class_ids`` is used while ``num_classes > 1``.
+    ValueError: If ``weight_type`` is not one of ``"square"``, ``"simple"``,
+        or ``"uniform"``.""",
+    default_name="binary_generalized_dice_loss",
 )
 
 SparseGeneralizedDiceLoss.__doc__ = SPARSE_LOSS_DOCSTRING

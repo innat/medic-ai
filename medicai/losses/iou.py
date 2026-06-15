@@ -112,35 +112,167 @@ class BinaryIoULoss(BaseIoULoss, DescribeMixin):
 
 SPARSE_LOSS_DOCSTRING = """IoU loss for sparse categorical segmentation labels.
 
-This loss function adapts the IoU loss to work with sparse labels
-(integer class indices) by one-hot encoding them before calculating
-the IoU. It uses a **Softmax** activation on logits.
+This loss adapts IoU loss to sparse class-index targets by one-hot encoding
+them internally. When ``from_logits=True``, the predictions are passed through
+softmax before the IoU score is computed.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="sparse_iou_loss"
+    specific_args="",
+    example="""    Compute sparse IoU loss with three common reductions::
+
+        import keras
+        from medicai.losses import SparseIoULoss
+
+        y_true = keras.ops.array(
+            [
+                [[1], [0]],
+                [[1], [0]],
+            ],
+            dtype="int32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = SparseIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="none",
+        )
+        loss_sum = SparseIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="sum",
+        )
+        loss_mean = SparseIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.3333], [0.5714]]
+        # reduction="sum"  -> 0.9048
+        # reduction="mean" -> 0.4524""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="sparse_iou_loss",
 )
 
 
-CATEGORICAL_LOSS_DOCSTRING = """IoU loss for categorical (one-hot encoded) 
-segmentation labels.
+CATEGORICAL_LOSS_DOCSTRING = """IoU loss for categorical one-hot encoded segmentation labels.
 
-This loss function calculates the IoU loss directly using the provided
-one-hot encoded labels and prediction probabilities. 
-It uses a **Softmax** activation on logits.
+This loss computes ``1 - IoU`` directly from one-hot encoded targets and
+prediction probabilities. When ``from_logits=True``, the predictions are
+passed through softmax before the IoU score is computed.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="categorical_iou_loss"
+    specific_args="",
+    example="""    Compute categorical IoU loss with three common reductions::
+
+        import keras
+        from medicai.losses import CategoricalIoULoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0, 0.0], [0.0, 1.0]],
+                [[1.0, 0.0], [0.0, 1.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = CategoricalIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="none",
+        )
+        loss_sum = CategoricalIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="sum",
+        )
+        loss_mean = CategoricalIoULoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.3333], [0.5714]]
+        # reduction="sum"  -> 0.9048
+        # reduction="mean" -> 0.4524""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="categorical_iou_loss",
 )
 
 
 BINARY_LOSS_DOCSTRING = """IoU loss for binary or multi-label segmentation tasks.
 
-This loss function is specifically designed for binary or multi-label segmentation 
-where the labels typically have a single channel (representing the foreground).
-It uses a **Sigmoid** activation on logits.
+This loss computes ``1 - IoU`` for binary or multi-label targets. When
+``from_logits=True``, the predictions are passed through a sigmoid activation
+before the IoU score is computed.
                          
 """ + BASE_COMMON_ARGS.format(
-    specific_args="", default_name="binary_iou_loss"
+    specific_args="",
+    example="""    Compute binary IoU loss with three common reductions::
+
+        import keras
+        from medicai.losses import BinaryIoULoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0], [0.0]],
+                [[1.0], [0.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.8], [0.2]],
+                [[0.6], [0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = BinaryIoULoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="none",
+        )
+        loss_sum = BinaryIoULoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="sum",
+        )
+        loss_mean = BinaryIoULoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.3333], [0.5714]]
+        # reduction="sum"  -> 0.9048
+        # reduction="mean" -> 0.4524""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``ignore_class_ids`` is used while ``num_classes > 1``.""",
+    default_name="binary_iou_loss",
 )
 
 SparseIoULoss.__doc__ = SPARSE_LOSS_DOCSTRING

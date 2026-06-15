@@ -10,46 +10,71 @@ from .convnext_layers import ConvNeXtBlock, ConvNeXtV2Block, PreStem
 @keras.utils.register_keras_serializable(package="convnext.backbone")
 class ConvNeXtBackbone(keras.Model, DescribeMixin):
     """
-    ConvNeXt V1 Backbone model as a Keras Model.
+    ConvNeXt V1 feature-extraction backbone with multi-scale feature outputs.
 
-    The ConvNeXt V1 architecture is a modern, purely convolutional
-    network designed to compete with Vision Transformers (ViTs), featuring
-    macro-design inspired by ViTs (e.g., stage ratios, downsampling methods)
-    and micro-design enhancements (e.g., inverted bottleneck, large kernel
-    depth-wise convolution, LayerNorm).
+    This class builds only the backbone portion of a ConvNeXt V1 model. It is
+    intended for workflows that need reusable feature maps rather than a final
+    classification layer, such as custom classifiers, detection heads, or
+    segmentation decoders.
 
-    This model implements the feature extraction stages (Stem, Stages 1-4)
-    and outputs the feature maps at the end of each stage, commonly used
-    for downstream tasks like object detection or segmentation.
+    The backbone is constructed in the following stages:
+
+    1. An input layer is created from ``input_shape`` or ``input_tensor``.
+    2. An optional preprocessing step rescales the input. For 3-channel
+       inputs, ``PreStem`` applies image normalization; otherwise, a standard
+       ``Rescaling`` layer is used.
+    3. A patch embedding stem applies a strided ``4x4`` convolution followed
+       by layer normalization to produce the first feature map.
+    4. Four ConvNeXt stages are applied. Each stage contains a configurable
+       number of ConvNeXt blocks, and stages after the first begin with a
+       downsampling step that reduces spatial resolution and increases channel
+       capacity.
+    5. At the end of each stage, a normalized feature map is stored in
+       ``pyramid_outputs`` for multi-scale use.
 
     Args:
         depths: A list or tuple of integers specifying the number of
-            ConvNeXt blocks in each of the 4 stages. E.g., `[3, 3, 9, 3]`.
+            ConvNeXt blocks in each of the four stages.
         projection_dims: A list or tuple of integers specifying the number
-            of channels (filters) for the stem and each of the 4 stages.
-            E.g., `[96, 192, 384, 768]`. Must have a length of 4.
+            of channels for the stem and each stage. This should contain one
+            value per stage.
         input_shape: The shape of the input tensor, excluding the batch
-            dimension. E.g., `(224, 224, 3)` for 2D inputs.
+            dimension.
         input_tensor: Optional Keras tensor (e.g., `keras.Input`) to use
             as the input to the model.
-        drop_path_rate: Float, the maximum dropout rate for Stochastic
-            Depth (DropPath) regularization. The rate is applied linearly
-            across all ConvNeXt blocks. Defaults to 0.0 (no dropout).
-        layer_scale_init_value: Float, initial value for the LayerScale
-            parameter in each ConvNeXt block. A small value (e.g., 1e-6)
-            is typically used to stabilize training. Defaults to 1e-6.
-        include_rescaling: Boolean, whether to include the input rescaling
-            layer (normalizing pixel values to [0, 1] or performing
-            ImageNet mean/std normalization if input channels is 3).
-            Defaults to False.
-        name: Optional string, the name for the Keras model.
-        **kwargs: Additional keyword arguments for the Keras Model constructor.
+        drop_path_rate: Float specifying the maximum stochastic depth rate.
+            The value is distributed linearly across all ConvNeXt blocks.
+        layer_scale_init_value: Float specifying the initial LayerScale value
+            used inside each ConvNeXt block.
+        include_rescaling: Boolean indicating whether to apply input
+            preprocessing before the stem.
+        name: Optional string specifying the model name.
 
-    Attributes:
-        depths (list): The block depths used for each stage.
-        projection_dims (list): The channel dimensions for each stage.
-        pyramid_outputs (dict): Dictionary containing the output feature
-            maps for each stage, keyed as 'P1', 'P2', 'P3', 'P4'.
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models.convnext import ConvNeXtBackbone
+
+            model = ConvNeXtBackbone(
+                input_shape=(96, 96, 96, 3),
+                depths=[3, 3, 9, 3],
+                projection_dims=[96, 192, 384, 768],
+                name='convnextv1_backbone'
+            )
+            x = torch.randn((1, 96, 96, 96, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 3, 3, 3, 768])
+
+    References:
+        - A ConvNet for the 2020s. CVPR 2022.
+          `arXiv:2201.03545 <https://arxiv.org/abs/2201.03545>`_
+
     """
 
     def __init__(
@@ -167,44 +192,72 @@ class ConvNeXtBackbone(keras.Model, DescribeMixin):
 @keras.utils.register_keras_serializable(package="convnext.backbone")
 class ConvNeXtBackboneV2(keras.Model, DescribeMixin):
     """
-    ConvNeXt V2 Backbone model as a Keras Model.
+    ConvNeXt V2 feature-extraction backbone with multi-scale feature outputs.
 
-    ConvNeXt V2 (A ConvNet for the era of vision transformers) is an improved
-    version of ConvNeXt V1, primarily distinguishing itself by introducing the
-    **Global Response Normalization (GRN)** layer in each block and removing
-    the Layer Scale (which was present in V1). This design makes the model
-    more effective for masked autoencoding (MAE) pre-training, leading to
-    improved performance on various downstream tasks.
+    This class builds only the backbone portion of a ConvNeXt V2 model. It is
+    intended for workflows that need reusable feature maps rather than a final
+    classification layer, such as custom classifiers, detection heads, or
+    segmentation decoders.
 
-    This model implements the feature extraction stages (Stem, Stages 1-4)
-    and outputs the feature maps at the end of each stage.
+    The backbone is constructed in the following stages:
+
+    1. An input layer is created from ``input_shape`` or ``input_tensor``.
+    2. An optional preprocessing step rescales the input. For 3-channel
+       inputs, ``PreStem`` applies image normalization; otherwise, a standard
+       ``Rescaling`` layer is used.
+    3. A patch embedding stem applies a strided ``4x4`` convolution followed
+       by layer normalization to produce the first feature map.
+    4. Four ConvNeXt V2 stages are applied. Each stage contains a configurable
+       number of ConvNeXt V2 blocks, and stages after the first begin with a
+       downsampling step that reduces spatial resolution and increases channel
+       capacity.
+    5. At the end of each stage, a normalized feature map is stored in
+       ``pyramid_outputs`` for multi-scale use.
+
+    Compared with the V1 backbone, this version uses ConvNeXt V2 blocks,
+    which replace the V1 block design with the V2 formulation used throughout
+    the stage stack.
 
     Args:
         depths: A list or tuple of integers specifying the number of
-            ConvNeXt V2 blocks in each of the 4 stages. E.g., `[3, 3, 9, 3]`
-            for the ConvNeXt-T V2 configuration.
+            ConvNeXt V2 blocks in each of the four stages.
         projection_dims: A list or tuple of integers specifying the number
-            of channels (filters) for the stem and each of the 4 stages.
-            E.g., `[96, 192, 384, 768]`. Must have a length of 4.
+            of channels for the stem and each stage. This should contain one
+            value per stage.
         input_shape: The shape of the input tensor, excluding the batch
-            dimension. E.g., `(224, 224, 3)` for 2D inputs.
+            dimension.
         input_tensor: Optional Keras tensor (e.g., `keras.Input`) to use
             as the input to the model.
-        drop_path_rate: Float, the maximum dropout rate for Stochastic
-            Depth (DropPath) regularization. The rate is applied linearly
-            across all ConvNeXt V2 blocks. Defaults to 0.0 (no dropout).
-        include_rescaling: Boolean, whether to include the input rescaling
-            layer (normalizing pixel values to [0, 1] or performing
-            ImageNet mean/std normalization if input channels is 3).
-            Defaults to False.
-        name: Optional string, the name for the Keras model.
-        **kwargs: Additional keyword arguments for the Keras Model constructor.
+        drop_path_rate: Float specifying the maximum stochastic depth rate.
+            The value is distributed linearly across all ConvNeXt V2 blocks.
+        include_rescaling: Boolean indicating whether to apply input
+            preprocessing before the stem.
+        name: Optional string specifying the model name.
 
-    Attributes:
-        depths (list): The block depths used for each stage.
-        projection_dims (list): The channel dimensions for each stage.
-        pyramid_outputs (dict): Dictionary containing the output feature
-            maps for each stage, keyed as 'P1', 'P2', 'P3', 'P4'.
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models.convnext import ConvNeXtBackboneV2
+
+            model = ConvNeXtBackboneV2(
+                input_shape=(96, 96, 96, 3),
+                depths=[2, 2, 6, 2],
+                projection_dims=[40, 80, 160, 320],
+                name='convnextv2_backbone'
+            )
+            x = torch.randn((1, 96, 96, 96, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 3, 3, 3, 320])
+
+    References:
+        - ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders. CVPR 2023.
+          `arXiv:2301.00808 <https://arxiv.org/abs/2301.00808>`_
     """
 
     def __init__(

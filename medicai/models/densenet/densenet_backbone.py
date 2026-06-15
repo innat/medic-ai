@@ -9,22 +9,74 @@ from .densenet_layers import apply_dense_block, apply_transition_layer
 @keras.utils.register_keras_serializable(package="densenet.backbone")
 class DenseNetBackbone(keras.Model, DescribeMixin):
     """
-    A Dense Convolutional Network (DenseNet) model.
+    This class builds only the backbone portion of a DenseNet model. It is
+    intended for workflows that need reusable feature maps rather than a final
+    classification layer, such as custom classifiers, detection heads, or
+    segmentation decoders.
 
-    This class builds a DenseNet model that serves as a feature extractor or
-    'backbone' for other tasks like 2D and 3D classification, or
-    segmentation. The core idea behind DenseNets is to connect each layer to
-    every other layer in a feed-forward fashion, which is different from
-    ResNets, which use identity shortcuts.
+    The backbone is constructed in the following stages:
 
-    Each layer in a DenseNet receives feature maps from all preceding layers in
-    its 'Dense Block' and passes its own feature maps to all subsequent layers.
-    This creates a dense connectivity pattern, which helps to alleviate the
-    vanishing-gradient problem, strengthen feature propagation, encourage
-    feature reuse, and significantly reduce the number of parameters. The model
-    is composed of multiple Dense Blocks separated by 'Transition Layers'
-    that downsample the feature maps.
+    1. An input layer is created from ``input_shape`` or ``input_tensor``.
+    2. An optional ``Rescaling`` layer normalizes raw image intensities.
+    3. A convolutional stem applies a strided ``7x7`` convolution, batch
+       normalization, ReLU activation, and max pooling to produce the first
+       lower-resolution feature map.
+    4. A sequence of dense blocks is applied. After each block, the feature map
+       is stored in ``pyramid_outputs``. Between blocks, transition layers
+       compress the channel dimension and downsample the spatial resolution.
+    5. A final batch normalization and ReLU activation are applied to the last
+       feature map, which is returned as the output of the model.
 
+    Args:
+        blocks: A list of integers specifying the number of dense layers in
+            each dense block. The length of this list determines how many
+            pyramid levels are produced after the stem.
+        input_shape: A tuple specifying the input shape of the model,
+            not including the batch size.
+        input_tensor: (Optional) A Keras tensor to use as the input to the
+            model. If not provided, a new input tensor will be created.
+        growth_rate: An integer specifying how many new feature channels
+            each dense layer contributes.
+        bn_size: An integer bottleneck multiplier used to size the
+            intermediate ``1x1`` convolution inside each dense layer.
+        compression: A float between 0.0 and 1.0 representing the
+            compression factor of transition layers. Values below ``1.0``
+            reduce the number of output channels before downsampling.
+        dropout_rate: A float specifying the dropout rate applied inside
+            dense layers.
+        include_rescaling: A boolean indicating whether to include a
+            `Rescaling` layer at the beginning of the model. If `True`,
+            the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
+        name: (Optional) The name of the model.
+
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Examples:
+        .. code-block:: python
+
+            import torch
+            from medicai.models.densenet import DenseNetBackbone
+
+            model = DenseNetBackbone(
+                input_shape=(224, 224, 3),
+                blocks=[6, 12, 24, 16],
+                growth_rate=32,
+                bn_size=4,
+                compression=0.5,
+                dropout_rate=0.0,
+                name="densenet_backbone",
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape)  # torch.Size([1, 7, 7, 1024])
+
+
+    References:
+     
+     - Densely Connected Convolutional Networks. CVPR 2017. `arXiv:1608.06993 <https://arxiv.org/abs/1608.06993>`_
     """
 
     def __init__(
@@ -41,34 +93,6 @@ class DenseNetBackbone(keras.Model, DescribeMixin):
         name=None,
         **kwargs,
     ):
-        """
-        Initializes the DenseNetBackbone.
-
-        Args:
-            blocks: A list of integers specifying the number of dense layers in
-                each Dense Block. For example, `[6, 12, 24, 16]` would create
-                a DenseNet-121 architecture.
-            input_shape: A tuple specifying the input shape of the model,
-                not including the batch size.
-            input_tensor: (Optional) A Keras tensor to use as the input to the
-                model. If not provided, a new input tensor will be created.
-            growth_rate: An integer representing the 'growth rate' of the
-                network. This is the number of new feature maps added by each
-                dense layer.
-            bn_size: An integer for the bottleneck layer size. This factor
-                multiplies the growth rate to determine the number of filters
-                in the 1x1 convolution within the bottleneck.
-            compression: A float between 0.0 and 1.0 representing the
-                compression factor of the transition layers. A value less than
-                1.0 reduces the number of feature maps.
-            dropout_rate: A float for the dropout rate to be applied after
-                each dense layer.
-            include_rescaling: A boolean indicating whether to include a
-                `Rescaling` layer at the beginning of the model. If `True`,
-                the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
-            name: (Optional) The name of the model.
-            **kwargs: Additional keyword arguments.
-        """
         spatial_dims = len(input_shape) - 1
         input = parse_model_inputs(input_shape, input_tensor, name="input_spec")
 

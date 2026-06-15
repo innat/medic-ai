@@ -6,12 +6,52 @@ from .tensor_bundle import TensorBundle
 
 
 class ScaleIntensityRange:
-    """Scales the intensity values of tensors to a specified range.
+    """
+    Linearly scale selected tensor intensities to a target range.
 
-    This transform linearly scales the intensity values of the tensors specified
-    by `keys` from an original range `[a_min, a_max]` to a target range
-    `[b_min, b_max]`. Optionally, the output values can be clipped to the
-    target range.
+    This transform first normalizes values from the source range
+    ``[a_min, a_max]`` to ``[0, 1]``. If both ``b_min`` and ``b_max`` are
+    provided, it then rescales the normalized values to ``[b_min, b_max]``.
+    Optionally, the output can be clipped to that target range. Keys that are
+    not present in the input are skipped.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to scale.
+        a_min (float): The lower bound of the original intensity range.
+        a_max (float): The upper bound of the original intensity range.
+        b_min (Optional[float]): The lower bound of the target intensity range.
+            Rescaling to the target range is applied only when both ``b_min``
+            and ``b_max`` are provided. Default is ``None``.
+        b_max (Optional[float]): The upper bound of the target intensity range.
+            Rescaling to the target range is applied only when both ``b_min``
+            and ``b_max`` are provided. Default is ``None``.
+        clip (bool): If True, the output values will be clipped to the range `[b_min, b_max]`.
+            This is only effective if both `b_min` and `b_max` are not None.
+            Default is False.
+        dtype (tf.DType): The data type to cast the scaled tensor to. Default is tf.float32.
+
+    Example:
+        Scale an image tensor from Hounsfield-like values to ``[0, 1]``::
+
+            import tensorflow as tf
+            from medicai.transforms import ScaleIntensityRange
+
+            scaler = ScaleIntensityRange(
+                keys=["image"],
+                a_min=-175.0,
+                a_max=250.0,
+                b_min=0.0,
+                b_max=1.0,
+                clip=True,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            result = scaler({"image": image})
+            scaled_image = result["image"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the scaled
+        tensors using the same keys as the input.
     """
 
     def __init__(
@@ -24,23 +64,6 @@ class ScaleIntensityRange:
         clip: bool = False,
         dtype: tf.DType = tf.float32,
     ):
-        """Initializes the ScaleIntensityRange transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to scale.
-            a_min (float): The lower bound of the original intensity range.
-            a_max (float): The upper bound of the original intensity range.
-            b_min (Optional[float]): The lower bound of the target intensity range.
-                If None, the output is normalized to [0, 1] (if `b_max` is also None)
-                or shifted by `-a_min` (if `b_max` is None). Default is None.
-            b_max (Optional[float]): The upper bound of the target intensity range.
-                If None, the output is normalized to [0, 1] (if `b_min` is also None)
-                or shifted by `-a_min` (if `b_min` is None). Default is None.
-            clip (bool): If True, the output values will be clipped to the range `[b_min, b_max]`.
-                This is only effective if both `b_min` and `b_max` are not None.
-                Default is False.
-            dtype (tf.DType): The data type to cast the scaled tensor to. Default is tf.float32.
-        """
         self.keys = keys
         self.a_min = a_min
         self.a_max = a_max
@@ -53,11 +76,12 @@ class ScaleIntensityRange:
         """Apply the intensity scaling to the specified tensors in the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata. The tensors
-                specified by `self.keys` will have their intensity range scaled.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to scale.
 
         Returns:
-            TensorBundle: A dictionary with the intensity-scaled tensors and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the scaled tensors
+            using the same keys as the input.
         """
 
         if isinstance(inputs, dict):

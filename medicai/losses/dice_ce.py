@@ -237,12 +237,10 @@ class BinaryDiceCELoss(BinaryDiceLoss, DescribeMixin):
         return combined_loss
 
 
-DICE_CE_DOCSTRING = """    dice_weight (float): The trade-off weight for the Dice loss 
-    component. Must be >= 0.0. A higher value gives more importance to Dice loss.
-        Defaults to 1.0.
-    ce_weight (float): The trade-off weight for the Cross-Entropy loss component.
-        Must be >= 0.0. A higher value gives more importance to Cross-Entropy loss.
-        Defaults to 1.0.
+DICE_CE_DOCSTRING = """    dice_weight (float): Weight applied to the Dice loss component.
+        Must be greater than or equal to ``0.0``. Defaults to ``1.0``.
+    ce_weight (float): Weight applied to the cross-entropy loss component.
+        Must be greater than or equal to ``0.0``. Defaults to ``1.0``.
 """
 
 CATEGORICAL_LOSS_DOCSTRING = """Combined Categorical Dice and Categorical Cross-Entropy Loss.
@@ -252,7 +250,53 @@ Categorical Cross-Entropy loss. It is suitable for multi-class segmentation
 tasks where the ground truth labels are one-hot encoded.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=DICE_CE_DOCSTRING, default_name="categorical_dice_crossentropy"
+    specific_args=DICE_CE_DOCSTRING,
+    example="""    Compute categorical Dice-CE loss with three common reductions::
+
+        import keras
+        from medicai.losses import CategoricalDiceCELoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0, 0.0], [0.0, 1.0]],
+                [[1.0, 0.0], [0.0, 1.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = CategoricalDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="none",
+        )
+        loss_sum = CategoricalDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="sum",
+        )
+        loss_mean = CategoricalDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.3116], [0.6554]]
+        # reduction="sum"  -> 0.9670
+        # reduction="mean" -> 0.4835""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``dice_weight`` or ``ce_weight`` is negative.""",
+    default_name="categorical_dice_crossentropy",
 )
 
 
@@ -264,7 +308,53 @@ to leverage the strengths of both loss functions, encouraging both region
 overlap (Dice) and per-pixel classification accuracy (Cross-Entropy).
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=DICE_CE_DOCSTRING, default_name="sparse_dice_crossentropy"
+    specific_args=DICE_CE_DOCSTRING,
+    example="""    Compute sparse Dice-CE loss with three common reductions::
+
+        import keras
+        from medicai.losses import SparseDiceCELoss
+
+        y_true = keras.ops.array(
+            [
+                [[1], [0]],
+                [[1], [0]],
+            ],
+            dtype="int32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.2, 0.8], [0.8, 0.2]],
+                [[0.4, 0.6], [0.6, 0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = SparseDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="none",
+        )
+        loss_sum = SparseDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="sum",
+        )
+        loss_mean = SparseDiceCELoss(
+            from_logits=False,
+            num_classes=2,
+            target_class_ids=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.3116], [0.6554]]
+        # reduction="sum"  -> 0.9670
+        # reduction="mean" -> 0.4835""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``dice_weight`` or ``ce_weight`` is negative.""",
+    default_name="sparse_dice_crossentropy",
 )
 
 BINARY_LOSS_DOCSTRING = """Combined Binary Dice and Binary Cross-Entropy Loss.
@@ -281,7 +371,51 @@ regardless of the number of channels in the prediction tensor (`y_pred`):
     channel represents the probability of a specific binary class being present.
 
 """ + BASE_COMMON_ARGS.format(
-    specific_args=DICE_CE_DOCSTRING, default_name="binary_dice_crossentropy"
+    specific_args=DICE_CE_DOCSTRING,
+    example="""    Compute binary Dice-CE loss with three common reductions::
+
+        import keras
+        from medicai.losses import BinaryDiceCELoss
+
+        y_true = keras.ops.array(
+            [
+                [[1.0], [0.0]],
+                [[1.0], [0.0]],
+            ],
+            dtype="float32",
+        )
+        y_pred = keras.ops.array(
+            [
+                [[0.8], [0.2]],
+                [[0.6], [0.4]],
+            ],
+            dtype="float32",
+        )
+
+        loss_none = BinaryDiceCELoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="none",
+        )
+        loss_sum = BinaryDiceCELoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="sum",
+        )
+        loss_mean = BinaryDiceCELoss(
+            from_logits=False,
+            num_classes=1,
+            reduction="mean",
+        )
+
+        # reduction="none" -> [[0.4231], [0.9108]]
+        # reduction="sum"  -> 1.3340
+        # reduction="mean" -> 0.6670""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.
+    ValueError: If ``ignore_class_ids`` is used while ``num_classes > 1``.
+    ValueError: If ``dice_weight`` or ``ce_weight`` is negative.""",
+    default_name="binary_dice_crossentropy",
 )
 
 CategoricalDiceCELoss.__doc__ = CATEGORICAL_LOSS_DOCSTRING

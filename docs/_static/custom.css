@@ -1,0 +1,533 @@
+/* Primary brand color - medical blue. */
+:root {
+    --pst-color-primary: #0a7bbd;
+    --pst-color-primary-highlight: #085f9a;
+    --pst-sidebar-width: 14rem;
+}
+
+/* Keep the left navigation compact. */
+.bd-sidebar-primary {
+    max-width: 14rem;
+}
+
+.bd-sidebar-primary .bd-links__title,
+.bd-sidebar-primary .nav-link {
+    font-size: 0.88rem;
+}
+
+.bd-sidebar-primary .nav {
+    gap: 0.05rem;
+}
+
+/* Keep navbar search inline and compact instead of relying on the overlay. */
+.bd-header .bd-search {
+    min-width: 14rem;
+    max-width: 18rem;
+}
+
+.bd-header .bd-search .form-control {
+    height: 2rem;
+    font-size: 0.9rem;
+}
+
+/* Make API tables slightly more compact. */
+.autosummary td {
+    padding: 0.3rem 0.5rem;
+}
+
+/* Slightly larger code font for readability. */
+pre {
+    font-size: 0.88em;
+}
+
+/* Smaller API subheadings used inside long autodoc docstrings. */
+p.api-subheading.rubric {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Compact overview landing page. */
+#home > h1:first-child,
+#overview > h1:first-child {
+    display: none;
+}
+
+.medicai-lp {
+    --medicai-teal-bg: #E1F5EE;
+    --medicai-teal-text: #085041;
+    --medicai-teal-border: #5DCAA5;
+    --medicai-teal: #1D9E75;
+    --medicai-blue-bg: #E6F1FB;
+    --medicai-blue-text: #0C447C;
+    --medicai-blue-border: #85B7EB;
+    --medicai-amber-bg: #FAEEDA;
+    --medicai-amber-text: #633806;
+    --medicai-amber-border: #EF9F27;
+    --medicai-purple-bg: #EEEDFE;
+    --medicai-purple-text: #3C3489;
+    --medicai-coral-bg: #FAECE7;
+    --medicai-coral-text: #993C1D;
+    --medicai-gray-bg: #F1EFE8;
+    --medicai-gray-text: #444441;
+    --medicai-border: var(--pst-color-border, #d8dee4);
+    --medicai-muted: var(--pst-color-text-muted, #667085);
+    --medicai-link: var(--pst-color-link, #2980B9);
+    font-family: var(--pst-font-family-base);
+}
+
+.medicai-hero {
+    padding: 0.75rem 0 1.35rem;
+    margin-bottom: 1.35rem;
+}
+
+.medicai-badge,
+.medicai-pill,
+.medicai-btn,
+.medicai-filter-btn,
+.medicai-dim-pill,
+.medicai-task-badge,
+.medicai-arch-badge,
+.medicai-inline-chip,
+.medicai-transform-chip,
+.medicai-backend-tag {
+    font-family: var(--pst-font-family-monospace);
+}
+
+.medicai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1.25rem;
+    padding: 4px 12px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 999px;
+    background: var(--pst-color-surface);
+    color: var(--medicai-muted);
+    font-size: 11px;
+}
+
+.medicai-dot,
+.medicai-transform-chip span,
+.medicai-backend-tag span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--medicai-teal);
+    flex: 0 0 auto;
+}
+
+.medicai-hero h1 {
+    margin: 0 0 1rem;
+    color: var(--pst-color-heading, var(--pst-color-text-base));
+    font-family: var(--pst-font-family-heading);
+    font-size: 36px;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+}
+
+.medicai-hero h1 span {
+    color: var(--medicai-link);
+}
+
+.medicai-tagline {
+    max-width: 560px;
+    margin: 0 0 1.75rem;
+    color: var(--medicai-muted);
+    font-size: 15px;
+    line-height: 1.7;
+}
+
+.medicai-tagline code,
+.medicai-note code {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--pst-color-surface);
+    color: var(--medicai-link);
+    font-size: 12px;
+}
+
+.medicai-pill-row,
+.medicai-btn-row,
+.medicai-filter-row,
+.medicai-backend-row,
+.medicai-model-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.medicai-pill-row {
+    margin-bottom: 1.5rem;
+}
+
+.medicai-pill {
+    padding: 4px 12px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 999px;
+    background: var(--pst-color-background);
+    color: var(--medicai-muted);
+    font-size: 12px;
+}
+
+.medicai-pill.teal {
+    background: var(--medicai-teal-bg);
+    border-color: var(--medicai-teal-border);
+    color: var(--medicai-teal-text);
+}
+
+.medicai-pill.coral {
+    background: var(--medicai-coral-bg);
+    border-color: #F0997B;
+    color: var(--medicai-coral-text);
+}
+
+.medicai-pill.amber {
+    background: var(--medicai-amber-bg);
+    border-color: var(--medicai-amber-border);
+    color: var(--medicai-amber-text);
+}
+
+.medicai-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 8px;
+    background: var(--pst-color-background);
+    color: var(--medicai-link);
+    font-size: 13px;
+    text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.medicai-btn:hover {
+    border-color: var(--medicai-teal-border);
+    background: var(--pst-color-surface);
+    color: var(--medicai-link);
+    text-decoration: none;
+}
+
+.medicai-btn.primary {
+    border-color: var(--medicai-link);
+    background: var(--medicai-link);
+    color: #fff;
+}
+
+.medicai-btn.primary:hover {
+    border-color: var(--medicai-link);
+    background: var(--medicai-link);
+    color: #fff;
+}
+
+.medicai-section {
+    margin-bottom: 2.5rem;
+}
+
+.medicai-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+    color: var(--medicai-muted);
+    font-family: var(--pst-font-family-monospace);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.medicai-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+}
+
+.medicai-card {
+    padding: 1rem 1.1rem;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 12px;
+    background: var(--pst-color-background);
+}
+
+.medicai-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+}
+
+.medicai-card-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+.medicai-card-icon.teal {
+    background: var(--medicai-teal-bg);
+    color: #0F6E56;
+}
+
+.medicai-card-icon.blue {
+    background: var(--medicai-blue-bg);
+    color: var(--medicai-blue-text);
+}
+
+.medicai-card-icon.amber {
+    background: var(--medicai-amber-bg);
+    color: var(--medicai-amber-text);
+}
+
+.medicai-card-icon.purple {
+    background: var(--medicai-purple-bg);
+    color: var(--medicai-purple-text);
+}
+
+.medicai-card-icon.coral {
+    background: var(--medicai-coral-bg);
+    color: var(--medicai-coral-text);
+}
+
+.medicai-card h3 {
+    margin: 0 0 4px;
+    color: var(--pst-color-heading, var(--pst-color-text-base));
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.medicai-card p {
+    margin: 0;
+    color: var(--medicai-muted);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.medicai-model-meta {
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.medicai-model-meta p {
+    margin: 0;
+    color: var(--medicai-muted);
+    font-size: 13px;
+}
+
+.medicai-dim-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 8px;
+    background: var(--pst-color-surface);
+    color: var(--medicai-muted);
+    font-size: 11px;
+}
+
+.medicai-filter-row {
+    margin-bottom: 1rem;
+}
+
+.medicai-filter-btn {
+    padding: 3px 12px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 999px;
+    background: var(--pst-color-background);
+    color: var(--medicai-muted);
+    cursor: pointer;
+    font-size: 11px;
+    transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.medicai-filter-btn.active,
+.medicai-filter-btn:hover {
+    border-color: var(--medicai-teal-border);
+    background: var(--medicai-teal-bg);
+    color: var(--medicai-teal-text);
+}
+
+.medicai-filter-btn.active {
+    font-weight: 500;
+}
+
+.medicai-table-wrap {
+    overflow: hidden;
+    overflow-x: auto;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 12px;
+}
+
+.medicai-model-table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.medicai-model-table th {
+    padding: 8px 12px;
+    border-bottom: 0.5px solid var(--medicai-border);
+    background: var(--pst-color-surface);
+    color: var(--medicai-muted);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.medicai-model-table td {
+    padding: 9px 12px;
+    border-bottom: 0.5px solid var(--medicai-border);
+    color: var(--pst-color-text-base);
+}
+
+.medicai-model-table td:first-child {
+    font-family: var(--pst-font-family-monospace);
+    font-size: 12px;
+}
+
+.medicai-model-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.medicai-model-table tr:hover td {
+    background: var(--pst-color-surface);
+}
+
+.medicai-task-badge,
+.medicai-arch-badge,
+.medicai-inline-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+}
+
+.medicai-task-badge.cls {
+    background: var(--medicai-blue-bg);
+    color: var(--medicai-blue-text);
+}
+
+.medicai-task-badge.seg,
+.medicai-inline-chip.amber {
+    background: var(--medicai-amber-bg);
+    color: var(--medicai-amber-text);
+}
+
+.medicai-arch-badge.cnn {
+    background: var(--medicai-teal-bg);
+    color: var(--medicai-teal-text);
+}
+
+.medicai-arch-badge.transformer {
+    background: var(--medicai-purple-bg);
+    color: var(--medicai-purple-text);
+}
+
+.medicai-note {
+    margin: 0 0 1rem;
+    color: var(--medicai-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.medicai-transforms-wrap {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+}
+
+.medicai-transform-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 0.5px solid var(--medicai-border);
+    border-radius: 8px;
+    background: var(--pst-color-surface);
+    color: var(--medicai-muted);
+    cursor: default;
+    font-size: 12px;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.medicai-transform-chip span {
+    width: 4px;
+    height: 4px;
+}
+
+.medicai-transform-chip:hover {
+    border-color: var(--medicai-teal-border);
+    color: #0F6E56;
+}
+
+.medicai-compat-section {
+    padding-top: 1.5rem;
+    border-top: 0.5px solid var(--medicai-border);
+}
+
+.medicai-compat-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.medicai-compat-grid p {
+    margin: 0 0 8px;
+    color: var(--medicai-muted);
+    font-size: 12px;
+}
+
+.medicai-backend-tag {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+}
+
+.medicai-backend-tag.tf {
+    background: var(--medicai-amber-bg);
+    color: var(--medicai-amber-text);
+}
+
+.medicai-backend-tag.torch {
+    background: var(--medicai-coral-bg);
+    color: var(--medicai-coral-text);
+}
+
+.medicai-backend-tag.jax {
+    background: var(--medicai-teal-bg);
+    color: var(--medicai-teal-text);
+}
+
+.medicai-backend-tag.neutral {
+    background: var(--pst-color-surface);
+    color: var(--medicai-muted);
+}
+
+@media (max-width: 768px) {
+    .medicai-hero {
+        padding: 0.75rem 0 1.25rem;
+    }
+
+    .medicai-btn {
+        justify-content: center;
+    }
+
+    .medicai-btn-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

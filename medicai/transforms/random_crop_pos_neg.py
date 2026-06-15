@@ -7,25 +7,65 @@ from .tensor_bundle import TensorBundle
 
 class RandCropByPosNegLabel:
     """
-    Randomly crops 3D image patches based on positive and negative label ratios.
+    Randomly crop one image-label patch using positive and negative label sampling.
 
-    This transformation extracts patches from the input image and label tensor,
-    ensuring a balance between positive and negative label samples. The cropping
-    is performed based on the given spatial size and sampling ratios.
-    Optionally uses a reference image and threshold to refine negative sample locations.
+    This transform samples a patch center from either positive or negative
+    label locations according to the requested ``pos`` to ``neg`` ratio, then
+    extracts aligned crops from the image and label tensors. The cropped patch
+    replaces the original tensors under the same keys in the returned
+    ``TensorBundle``.
 
-    Attributes:
-        spatial_size (Tuple[int, int, int]): The size of the cropped patch (depth, height, width).
+    Args:
+        keys (Sequence[str]): Keys of the image and label tensors in the input
+            sample. This transform expects exactly two keys.
+        spatial_size (Tuple[int, int, int]): The size of the cropped patch ``(depth, height, width)``.
         pos (int): Number of positive samples to aim for.
         neg (int): Number of negative samples to aim for.
         num_samples (int): Number of patches to extract per input (currently supports only 1).
         image_reference_key (str, optional): Key for an optional reference image tensor.
-            If provided, negative samples are centered where label is 0 AND the
-            corresponding `image_reference` intensity (maximum across channels) is
-            greater than `image_threshold`. Defaults to None.
-        image_threshold (float): If `image_reference_key` is provided, this threshold
+            If provided, negative sampling is restricted to locations where the
+            label is zero and the reference image intensity exceeds
+            ``image_threshold``. Defaults to ``None``.
+        image_threshold (float): If ``image_reference_key`` is provided, this threshold
             is used to filter background regions for negative sampling based on the
-            `image_reference` intensity. Defaults to 0.0.
+            reference image intensity. Defaults to ``0.0``.
+
+    Example:
+        Sample a patch using image and label tensors::
+
+            import tensorflow as tf
+            from medicai.transforms import RandCropByPosNegLabel
+
+            sampler = RandCropByPosNegLabel(
+                keys=["image", "label"],
+                spatial_size=(32, 32, 32),
+                pos=1,
+                neg=1,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            label = tf.cast(
+                tf.random.uniform((64, 64, 64, 1), maxval=2, dtype=tf.int32), 
+                tf.float32
+            )
+
+            result = sampler({"image": image, "label": label})
+            patch_image = result["image"]
+            patch_label = result["label"]
+
+            print(patch_image.shape) # (32, 32, 32, 1)
+            print(patch_label.shape) # (32, 32, 32, 1)
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the cropped
+        patches using the same keys as the input.
+
+    Raises:
+        KeyError: If the required image or label key is missing from the input.
+        ValueError: If ``pos`` or ``neg`` is negative.
+        ValueError: If both ``pos`` and ``neg`` are zero.
+        ValueError: If ``keys`` does not contain exactly two elements.
+        ValueError: If ``num_samples`` is not ``1``.
     """
 
     def __init__(
@@ -38,32 +78,6 @@ class RandCropByPosNegLabel:
         image_reference_key: str = None,
         image_threshold: float = 0.0,
     ):
-        """
-        Initializes the RandCropByPosNegLabel transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the image and label tensors in the input dictionary.
-            spatial_size (Tuple[int, int, int]): The desired spatial size (depth, height, width)
-                of the cropped patches.
-            pos (int): The number of positive samples to aim for in the batch of cropped patches.
-                A positive sample is defined as a patch centered around a positive label.
-            neg (int): The number of negative samples to aim for in the batch of cropped patches.
-                A negative sample is defined as a patch centered around a negative label.
-            num_samples (int): The total number of random patches to extract per input.
-                The ratio of positive to negative samples will be approximately pos / (pos + neg).
-                Currently, only `num_samples=1` is supported. Default is 1.
-            image_reference_key (str, optional): Key in the input dictionary for an
-                optional reference image tensor used for refined negative sampling.
-                Defaults to None.
-            image_threshold (float): Threshold value used with the `image_reference_key`
-                to select background regions for negative sampling. Defaults to 0.0.
-
-        Raises:
-            ValueError: If `pos` or `neg` is negative.
-            ValueError: If both `pos` and `neg` are zero.
-            ValueError: If `keys` does not contain exactly two elements.
-            ValueError: If `num_samples` is not 1.
-        """
         if pos < 0 or neg < 0:
             raise ValueError("pos and neg must be non-negative.")
         if pos == 0 and neg == 0:
@@ -93,14 +107,15 @@ class RandCropByPosNegLabel:
         Applies the random cropping transformation to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors, expected to have
-                the keys specified in `self.keys` ('image' and 'label') and optionally
-                `self.image_reference_key`. The image and label tensors should be
-                4D (depth, height, width, channels).
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the image and label tensors referenced by ``self.keys``.
 
         Returns:
-            TensorBundle: A dictionary containing the cropped image and label patches.
-                The values are 4D tensors (depth, height, width, channels).
+            TensorBundle: The transformed output. We can retrieve the cropped
+            patches using the same keys as the input.
+
+        Raises:
+            KeyError: If the required image or label key is missing from the input.
         """
 
         if isinstance(inputs, dict):

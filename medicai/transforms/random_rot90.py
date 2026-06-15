@@ -6,13 +6,52 @@ from .tensor_bundle import TensorBundle
 
 
 class RandRotate90:
+    """Randomly rotate tensors by multiples of 90 degrees.
+
+    This transform applies a random quarter-turn rotation to the selected
+    tensors with probability ``prob``. The number of turns is sampled uniformly
+    from ``1`` to ``max_k``. Keys that are not present in the input are
+    skipped.
+
+    Args:
+        keys: Keys of the tensors to rotate.
+        prob: Probability of applying the 90-degree rotation.
+        max_k: Maximum number of 90-degree rotations sampled per call.
+        spatial_axes: Axes that define the rotation plane. The default
+            ``(1, 2)`` corresponds to height-width rotation for channel-last
+            volumetric tensors.
+
+    Example:
+        Randomly rotate an image-label pair in the height-width plane::
+
+            import tensorflow as tf
+            from medicai.transforms import RandRotate90
+
+            rotator = RandRotate90(
+                keys=["image", "label"],
+                prob=0.5,
+                max_k=3,
+                spatial_axes=(1, 2),
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            label = tf.random.uniform((64, 64, 64, 1), maxval=2, dtype=tf.int32)
+
+            result = rotator({"image": image, "label": label})
+            rotated_image = result["image"]
+            rotated_label = result["label"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the rotated
+        tensors using the same keys as the input.
+
+    Raises:
+        ValueError: If a selected tensor has fewer than two dimensions.
+        ValueError: If ``spatial_axes`` does not contain exactly two distinct
+            axes.
+    """
+
     def __init__(self, keys, prob=0.1, max_k=3, spatial_axes=(1, 2)):
-        """
-        Args:
-            prob: Probability of applying the 90-degree rotation.
-            max_k: Maximum number of 90-degree rotations (1 to max_k).
-            spatial_axes: Axes along which to rotate (default: (1,2) for height-width).
-        """
         self.keys = keys
         self.prob = prob
         self.max_k = max_k
@@ -83,6 +122,21 @@ class RandRotate90:
         return array
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
+        """Apply the random 90-degree rotation to the selected tensors.
+
+        Args:
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to rotate.
+
+        Returns:
+            TensorBundle: The transformed output. We can retrieve the rotated
+            tensors using the same keys as the input.
+
+        Raises:
+            ValueError: If a selected tensor has fewer than two dimensions.
+            ValueError: If ``self.spatial_axes`` does not contain exactly two
+                distinct axes.
+        """
 
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)

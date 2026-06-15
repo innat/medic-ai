@@ -8,32 +8,64 @@ from .xception_backbone import XceptionBackbone
 
 
 @keras.saving.register_keras_serializable(package="xception")
-@registration.register(family="xception")
+@registration.register(name="xception", family="xception")
 class Xception(keras.Model, DescribeMixin):
     """
-    A full Xception model for classification.
+    This class combines the ``XceptionBackbone`` with an optional
+    classification head. The backbone follows the Xception design with
+    depthwise separable convolutions and residual stage transitions, and it
+    exposes intermediate pyramid features ``P1`` through ``P5`` for
+    feature-based workflows.
 
-    Xception (Extreme Inception) is a deep convolutional neural network architecture
-    that replaces the standard Inception modules with depthwise separable convolutions.
-    This design improves model efficiency by decoupling spatial and channel-wise
-    feature extraction, reducing the number of parameters while maintaining high
-    performance.
+    Args:
+        input_shape: A tuple specifying the input shape of the model, not
+            including the batch size. This can describe either 2D or 3D
+            inputs.
+        include_rescaling: Whether to include a ``Rescaling`` layer at the
+            beginning of the model.
+        include_top: Whether to include the final classification head.
+        num_classes: Number of classes for the classification layer. This is
+            only relevant if ``include_top`` is ``True``.
+        pooling: Optional pooling mode applied when ``include_top`` is
+            ``False``. Supported values are ``"avg"`` and ``"max"``.
+        classifier_activation: Activation function used by the classification
+            head.
+        name: Optional model name.
+        **kwargs: Additional keyword arguments passed to ``keras.Model``.
 
-    This class implements the complete Xception architecture, including the
-    convolutional backbone (`XceptionBackbone`) and the optional classification
-    head (the "top"). The backbone exposes intermediate pyramid features P1–P5,
-    which can be used for feature-based tasks.
+    .. rubric:: Output modes
+       :class: api-subheading
+
+    The output depends on the ``include_top`` and ``pooling`` arguments:
+
+    - If ``include_top=True``, the model returns a classification tensor of
+      shape ``(batch_size, num_classes)``.
+    - If ``include_top=False`` and ``pooling`` is ``None``, the model returns
+      the final backbone feature tensor.
+    - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+      the model returns a pooled feature tensor.
 
     Example:
-    >>> from medicai.models import Xception
-    >>> model = Xception(input_shape=(224, 224, 3), num_classes=1000)
-    >>> model.pyramid_outputs['P1'].shape
-    (None, 112, 112, 64)
+        Build a 2D classification model::
 
-    The model can be used for a variety of tasks, including image
-    classification on 2D images (with input shape `(height, width, channels)`)
-    and volumetric data classification on 3D images (with input shape
-    `(depth, height, width, channels)`).
+            import torch
+            from medicai.models import Xception
+
+            model = Xception(
+                input_shape=(224, 224, 3),
+                include_top=True,
+                num_classes=2,
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape)  # torch.Size([1, 2])
+
+    Returns:
+        A ``keras.Model`` whose output depends on the configuration.
+
+    References:
+        - Xception: Deep Learning with Depthwise Separable Convolutions.
+          `arXiv:1610.02357 <https://arxiv.org/abs/1610.02357>`_
     """
 
     def __init__(

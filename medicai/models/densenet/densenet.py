@@ -238,44 +238,11 @@ class DenseNet264(DenseNetBase, DescribeMixin):
 
 
 DENSENET_DOCSTRING = """
-{name} model for classification, supporting both 2D and 3D inputs.
-
 This class provides a complete **{name}** model, including the
 convolutional backbone and the classification head (the "top"). DenseNet is
 characterized by its **Dense Blocks** where each layer receives feature maps from
 all preceding layers in the block, and the "bottleneck" (1x1 convolution) and
-"compression" (1x1 convolution + 2x2 average pooling) layers in between blocks.
-
-It can operate on **2D inputs** (e.g., images of shape `(H, W, C)`) or **3D inputs**
-(e.g., volumetric data of shape `(D, H, W, C)`).
-
-References:
-    - "Densely Connected Convolutional Networks". CVPR 2017.
-      [arXiv:1608.06993](https://arxiv.org/abs/1608.06993)
-
-Example:
-    # TensorFlow / Keras - 2D cases.
-    >>> import tensorflow as tf
-    >>> from medicai.models import {name}
-    >>> # Classification model
-    >>> model = {name}(input_shape=(224, 224, 3), num_classes=10)
-    >>> x = tf.random.normal((1, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-    (1, 10)
-
-    # PyTorch - 2D cases.
-    >>> import torch
-    >>> from medicai.models import {name}
-    >>> # Classification model
-    >>> model = {name}(input_shape=(224, 224, 3), num_classes=10) 
-    >>> x = torch.randn((1, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-    torch.Size([1, 10])
-
-
-Initializes the {name} model.
+"compression" (``1x1`` convolution + ``2x2`` average pooling) layers in between blocks.
 
 Args:
     input_shape: A tuple specifying the input shape of the model,
@@ -299,7 +266,85 @@ Args:
     classifier_activation: A string specifying the activation function
         to use for the classification layer. Defaults to `"softmax"`.
     name: (Optional) The name of the model.
-    **kwargs: Additional keyword arguments.
+
+
+Examples:
+    TensorFlow 2D classification::
+
+        import tensorflow as tf
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        x = tf.random.normal((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    PyTorch backend 2D classification::
+
+        import torch
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    Jax backend 2D classification::
+
+        import jax
+        import jax.numpy as jnp
+        from medicai.models import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), num_classes=10
+        )
+        key = jax.random.PRNGKey(0) 
+        x = jax.random.normal(key, (1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
+    TensorFlow 3D classification::
+
+        import tensorflow as tf
+        from medicai.models import {name}              
+
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        x = tf.random.normal((1, 64, 224, 224, 1))
+        y = model(x)                   
+        print(y.shape) # (1, 10)   
+
+    PyTorch backend 3D classification::
+
+        import torch
+        from medicai.models import {name}              
+
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        x = torch.randn((1, 64, 224, 224, 1 ))
+        y = model(x)            
+        print(y.shape) # (1, 10)
+
+    Jax backend 3D classification::
+
+        import jax
+        import jax.numpy as jnp     
+        from medicai.models import {name}     
+                 
+        model = {name}(
+            input_shape=(64, 224, 224, 1), num_classes=10
+        )
+        key = jax.random.PRNGKey(0)
+        x = jax.random.normal(key, (1, 64, 224, 224, 1))
+        y = model(x)
+        print(y.shape) # (1, 10)
+
 """
 
 DenseNet121.__doc__ = DENSENET_DOCSTRING.format(

@@ -6,15 +6,70 @@ from .tensor_bundle import TensorBundle
 
 
 class CropForeground:
-    """Crop an image based on the foreground defined by a selection function.
+    """
+    Crop selected tensors to the foreground region of a source tensor.
 
-    This transform identifies the foreground within a specified source tensor
-    using a provided selection function. It then determines the minimal bounding
-    box encompassing this foreground and crops all specified tensors in the
-    input bundle to this bounding box. Optionally, a margin can be added to the
-    bounding box, and the resulting dimensions can be made divisible by a
-    specified value. The start and end coordinates of the cropped region can
-    also be stored in the metadata of the input bundle.
+    This transform detects foreground in ``source_key`` using ``select_fn``,
+    builds a bounding box around that region, and applies the same crop to all
+    selected tensors. We can optionally add margins, enforce divisibility, and
+    store the crop coordinates in metadata.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to crop. Default is ("image", "label").
+        source_key (str): Key of the tensor to use to determine the foreground. Default is "image".
+        select_fn (Callable): A function that takes a tensor and returns a boolean mask
+            indicating the foreground. Default is lambda x: x > 0.
+        channel_indices (Optional[Sequence[int]]): If specified, only these channels of the
+            source tensor will be used to determine the foreground. Default is None.
+        margin (Union[Sequence[int], int]): Amount of margin to add to the bounding box.
+            If an int, the same margin is applied to all spatial dimensions. If a sequence,
+            it should have a length of 3, corresponding to the margin in depth, height, and width.
+            Default is 0.
+        allow_smaller (bool): If True, the cropped region can be smaller than the margin.
+            If False, the cropped region will be at least as large as 2 * margin in each dimension.
+            Default is True.
+        k_divisible (Union[Sequence[int], int]): Ensure the cropped size is divisible by k in each
+            dimension. If an int, the same value is applied to all spatial dimensions. If a
+            sequence, it should have a length of 3. Default is 1.
+        start_coord_key (Optional[str]): Key to store the start coordinates of the cropped region
+            in the metadata. If None, the start coordinates are not stored. Default is "foreground_start_coord".
+        end_coord_key (Optional[str]): Key to store the end coordinates of the cropped region
+            in the metadata. If None, the end coordinates are not stored. Default is "foreground_end_coord".
+        allow_missing_keys (bool): If True, processing will continue even if some of the specified
+            keys are not found in the input data. The missing keys will be ignored. Default is False.
+
+    Example:
+        Crop an image-label pair to the non-zero foreground of the image::
+
+            import tensorflow as tf
+            from medicai.transforms import CropForeground
+
+            cropper = CropForeground(
+                keys=["image", "label"],
+                source_key="image",
+                margin=4,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+
+            result = cropper({"image": image, "label": label})
+            cropped_image = result["image"]
+            cropped_label = result["label"]
+
+            print(cropped_image.shape) # (32, 64, 64, 1)
+            print(cropped_label.shape) # (32, 64, 64, 1)
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the cropped
+        tensors using the same keys as the input.
+
+    Raises:
+        KeyError: If ``source_key`` is missing and ``allow_missing_keys=False``.
+        ValueError: If a provided tensor does not have shape
+            ``(depth, height, width, channels)``.
+        ValueError: If ``margin`` or ``k_divisible`` is provided as a sequence
+            with length other than ``3``.
     """
 
     def __init__(
@@ -30,33 +85,6 @@ class CropForeground:
         end_coord_key: Optional[str] = "foreground_end_coord",
         allow_missing_keys: bool = False,
     ):
-        """
-        Initializes the CropForeground transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to crop. Default is ("image", "label").
-            source_key (str): Key of the tensor to use to determine the foreground. Default is "image".
-            select_fn (Callable): A function that takes a tensor and returns a boolean mask
-                indicating the foreground. Default is lambda x: x > 0.
-            channel_indices (Optional[Sequence[int]]): If specified, only these channels of the
-                source tensor will be used to determine the foreground. Default is None.
-            margin (Union[Sequence[int], int]): Amount of margin to add to the bounding box.
-                If an int, the same margin is applied to all spatial dimensions. If a sequence,
-                it should have a length of 3, corresponding to the margin in depth, height, and width.
-                Default is 0.
-            allow_smaller (bool): If True, the cropped region can be smaller than the margin.
-                If False, the cropped region will be at least as large as 2 * margin in each dimension.
-                Default is True.
-            k_divisible (Union[Sequence[int], int]): Ensure the cropped size is divisible by k in each
-                dimension. If an int, the same value is applied to all spatial dimensions. If a
-                sequence, it should have a length of 3. Default is 1.
-            start_coord_key (Optional[str]): Key to store the start coordinates of the cropped region
-                in the metadata. If None, the start coordinates are not stored. Default is "foreground_start_coord".
-            end_coord_key (Optional[str]): Key to store the end coordinates of the cropped region
-                in the metadata. If None, the end coordinates are not stored. Default is "foreground_end_coord".
-            allow_missing_keys (bool): If True, processing will continue even if some of the specified
-                keys are not found in the input data. The missing keys will be ignored. Default is False.
-        """
         self.keys = keys
         self.source_key = source_key
         self.select_fn = select_fn
@@ -73,10 +101,17 @@ class CropForeground:
         Apply the CropForeground transform to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to crop.
 
         Returns:
-            TensorBundle: A dictionary with cropped tensors and updated metadata.
+            TensorBundle: The transformed output. We can retrieve the cropped
+            tensors using the same keys as the input.
+
+        Raises:
+            KeyError: If ``source_key`` is missing and ``allow_missing_keys=False``.
+            ValueError: If a provided tensor does not have shape
+                ``(depth, height, width, channels)``.
         """
 
         if isinstance(inputs, dict):

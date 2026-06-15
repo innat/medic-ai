@@ -8,14 +8,73 @@ from .tensor_bundle import TensorBundle
 
 
 class Spacing:
-    """Resamples tensors to a specified physical spacing (voxel dimensions).
+    """
+    Resample tensors to a target physical spacing.
 
-    This transform takes tensors (e.g., image and label) and resamples them
-    to a target physical spacing defined by `pixdim`. It determines the
-    original spacing from the affine matrix in the metadata. If the affine
-    matrix is not provided, it defaults to a spacing of (1.0, 1.0, 1.0).
-    The resampling is performed using the `Resize` transform with specified
-    interpolation modes.
+    This transform uses the ``affine`` matrix stored in metadata to estimate
+    the original voxel spacing, then rescales the selected tensors to the
+    requested ``pixdim``. If no affine matrix is available, it falls back to
+    ``(1.0, 1.0, 1.0)`` spacing.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to resample.
+        pixdim (Tuple[float, float, float]): The desired physical spacing (voxel dimensions)
+            in (depth, height, width) or (z, y, x) order. Default is (1.0, 1.0, 1.0).
+        mode (Union[str, Sequence[str], Dict[str, str]]): Interpolation mode used for resampling.
+
+            - If a single string is provided, the same mode is used for all keys.
+            - If a tuple or list is provided, it must have the same length as
+              ``keys`` and each mode is applied to the corresponding key.
+            - If a dictionary is provided, each key is mapped to its own mode.
+
+            Supported modes are:
+
+            - 2D resampling: ``"bilinear"`` and ``"nearest"``
+            - 3D resampling: ``"trilinear"`` and ``"nearest"``
+
+    Example:
+        Resample an image-label pair to isotropic spacing::
+
+            import tensorflow as tf
+            from medicai.transforms import Spacing, TensorBundle
+
+            spacing = Spacing(
+                keys=["image", "label"],
+                pixdim=(1.0, 1.0, 1.0),
+                mode=("trilinear", "nearest"),
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+            affine = tf.eye(4)
+
+            bundle = TensorBundle(
+                {
+                    "image": image, 
+                    "label": label
+                },
+                meta={
+                    "affine": affine
+                },
+            )
+            result = spacing(bundle)
+            resampled_image = result["image"]
+            resampled_label = result["label"]
+
+            print(resampled_image.shape) # (32, 64, 64, 1)
+            print(resampled_label.shape) # (32, 64, 64, 1)
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the resampled
+        tensors using the same keys as the input.
+
+    Raises:
+        ValueError: If ``pixdim`` is neither 2D nor 3D.
+        ValueError: If ``mode`` is a tuple or list and its length does not
+            match the length of ``keys``.
+        ValueError: If an interpolation mode is not valid for the selected
+            spatial dimensionality.
+        TypeError: If ``mode`` is not a string, tuple, list, or dict.
     """
 
     def __init__(
@@ -24,20 +83,6 @@ class Spacing:
         pixdim: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         mode: Tuple[str, str] = ("trilinear", "nearest"),
     ):
-        """Initializes the Spacing transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to resample. Default is ("image", "label").
-            pixdim (Tuple[float, float, float]): The desired physical spacing (voxel dimensions)
-                in (depth, height, width) or (z, y, x) order. Default is (1.0, 1.0, 1.0).
-            mode (Union[str, Tuple[str, ...]]): The interpolation mode to use for resizing.
-                - If a single string is provided, the same mode is used for all keys.
-                - If a tuple of strings is provided, it must have the same length as `keys`,
-                  and the mode at each index will be used for the tensor with the
-                  corresponding key. Supported modes include 'nearest', 'bilinear', 'trilinear'.
-                  for 2D resizing (using `tf.image.resize`) supports 'bilinear' and 'nearest'.
-                  for 3D resizing (using a custom volume resizer) supports 'trilinear' and 'nearest'.
-        """
         ndim = len(pixdim)
         if ndim not in (2, 3):
             raise ValueError(f"`pixdim` must be 2D or 3D, got {ndim}D.")
@@ -49,9 +94,17 @@ class Spacing:
 
         self.pixdim = pixdim
         self.keys = keys
-        self.image_mode = mode[0]
-        self.label_mode = mode[1]
-        self.mode = dict(zip(keys, mode))
+
+        if isinstance(mode, str):
+            self.mode = {key: mode for key in keys}
+        elif isinstance(mode, (tuple, list)):
+            if len(mode) != len(keys):
+                raise ValueError("Length of 'mode' must match length of 'keys'.")
+            self.mode = dict(zip(keys, mode))
+        elif isinstance(mode, dict):
+            self.mode = mode
+        else:
+            raise TypeError("'mode' must be a string, tuple, list, or dict.")
 
         for key, m in self.mode.items():
             if m not in valid_modes:
@@ -75,12 +128,17 @@ class Spacing:
         """Apply the spacing resampling to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata.
-                The metadata is expected to contain an 'affine' key representing the
-                affine transformation matrix.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle``. If
+                available, the metadata should contain an ``affine`` matrix used
+                to infer the original voxel spacing.
 
         Returns:
-            TensorBundle: A dictionary with resampled tensors and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the resampled
+            tensors using the same keys as the input.
+
+        Warns:
+            UserWarning: If the input metadata does not contain an ``affine``
+            matrix, the transform falls back to spacing ``(1.0, 1.0, 1.0)``.
         """
 
         if isinstance(inputs, dict):

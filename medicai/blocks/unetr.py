@@ -6,24 +6,54 @@ from medicai.utils import get_conv_layer
 
 class UNETRBasicBlock(layers.Layer):
     """
-    A basic building block for a 3D UNet, consisting of two convolutional layers
-    with normalization and LeakyReLU activation, and optional dropout.
+    A basic convolutional block used in UNETR-style architectures, supporting
+    both ``2D`` and ``3D`` inputs. The spatial dimensionality is automatically
+    detected from the incoming tensor shape, allowing the same block to be used
+    in both image and volumetric segmentation pipelines without any configuration
+    change. The block consists of two convolutional layers with normalization and
+    LeakyReLU activation, and optional dropout. Depending on ``res_block``, the
+    block either includes a residual skip connection (``UNetResBlock``) or applies
+    the two convolutions sequentially without a shortcut (``UNetBasicBlock``).
 
     Args:
-        filters (int): The number of output channels for both convolutional layers.
-        kernel_size (int): The size of the convolutional kernel in all spatial dimensions
-            (default: 3).
-        stride (int): The stride of the first convolutional layer in all spatial dimensions
-            (default: 1).
-        norm_name (Optional[str]): The name of the normalization layer to use.
-            Options are "instance" (requires tensorflow-addons), "batch", or None for no
-            normalization (default: "instance").
-        dropout_rate (Optional[float]): The dropout rate (between 0 and 1). If None, no
-            dropout is applied (default: None).
+        filters (int): Number of output channels for both convolutional layers.
+        kernel_size (int, optional): Size of the convolutional kernel in all
+            spatial dimensions. Defaults to ``3``.
+        stride (int, optional): Stride of the first convolutional layer in all
+            spatial dimensions. Defaults to ``1``.
+        norm_name (str or None, optional): Normalization layer to use. Options
+            are ``"instance"``, ``"batch"``, or ``None`` for no normalization.
+            Defaults to ``"instance"``.
+        res_block (bool, optional): If ``True``, uses ``UNetResBlock`` (residual
+            connection); otherwise uses ``UNetBasicBlock``. Defaults to ``True``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNETRBasicBlock
+
+            x = np.random.randn(1, 128, 128, 32).astype(np.float32)
+            block = UNETRBasicBlock(
+                filters=64,
+                kernel_size=3,
+                stride=1,
+                norm_name="batch",
+            )
+            y = block(x)
+            print(y.shape) # (1, 128, 128, 64)
 
     Returns:
-        Callable: A function that takes an input tensor and returns the output
-            tensor after applying the basic block.
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, *spatial_dims, filters)``, where spatial dimensions
+        are determined by the input shape, ``stride``, ``kernel_size``,
+        and ``padding`` of the underlying block.
+
+    Raises:
+        ValueError: If ``norm_name`` is not one of ``"instance"``,
+            ``"batch"``, or ``None``, depending on what the underlying
+            ``UNetResBlock`` or ``UNetBasicBlock`` validates.
     """
 
     def __init__(
@@ -33,6 +63,7 @@ class UNETRBasicBlock(layers.Layer):
         stride=1,
         norm_name="instance",
         res_block=True,
+        dropout_rate=None,
         name="unetr_basic_block",
         **kwargs
     ):
@@ -43,6 +74,7 @@ class UNETRBasicBlock(layers.Layer):
         self.stride = stride
         self.norm_name = norm_name
         self.res_block = res_block
+        self.dropout_rate = dropout_rate
 
         # child block
         if res_block:
@@ -51,6 +83,7 @@ class UNETRBasicBlock(layers.Layer):
                 kernel_size=kernel_size,
                 stride=stride,
                 norm_name=norm_name,
+                dropout_rate=dropout_rate,
             )
         else:
             self.block = UNetBasicBlock(
@@ -58,6 +91,7 @@ class UNETRBasicBlock(layers.Layer):
                 kernel_size=kernel_size,
                 stride=stride,
                 norm_name=norm_name,
+                dropout_rate=dropout_rate,
             )
 
     def build(self, input_shape):
@@ -76,6 +110,7 @@ class UNETRBasicBlock(layers.Layer):
                 "stride": self.stride,
                 "norm_name": self.norm_name,
                 "res_block": self.res_block,
+                "dropout_rate": self.dropout_rate,
             }
         )
         return config
@@ -83,26 +118,62 @@ class UNETRBasicBlock(layers.Layer):
 
 class UNETRUpsamplingBlock(layers.Layer):
     """
-    A UNETR Decoder block that performs feature upsampling, concatenation with
-    a skip connection, and subsequent feature processing.
+    UNETR decoder block that performs transposed convolution upsampling,
+    skip connection concatenation, and subsequent convolutional feature
+    processing. It supports both ``2D`` and ``3D`` inputs, with spatial
+    dimensionality automatically detected from the incoming tensor shapes.
 
+    The block expects a list of two inputs:
 
-    This block typically takes two inputs: the feature map to be upsampled
-    from the previous decoder stage (x_in) and the corresponding skip connection
-    from the encoder (x_skip).
+    1. ``x_in``: Feature map from the previous decoder stage, to be upsampled.
+    2. ``x_skip``: Encoder skip connection concatenated after upsampling.
+
+    The operation sequence is:
+
+    1. Transposed convolution upsamples ``x_in`` by ``upsample_kernel_size``.
+    2. The upsampled tensor is concatenated with ``x_skip`` along the channel axis.
+    3. The concatenated features are processed by either a residual block
+       (``UNetResBlock``) or a sequential block (``UNetBasicBlock``).
 
     Args:
-        filters (int): The number of output channels after feature processing.
-        kernel_size (int or tuple): The kernel size for the internal convolutional processing
-            block (Basic or Residual). (default: 3).
-        stride (int or tuple): The stride for the internal convolutional processing block.
-            (default: 1).
-        upsample_kernel_size (int or tuple): Kernel size/stride for the transpose convolution
-            layer used for upsampling. (default: 2).
-        norm_name (Optional[str]): The name of the normalization layer to use in the internal
-            processing block (default: "instance").
-        res_block (bool): If True, uses a residual block (`UnetResBlock`) for feature
-            processing; otherwise, uses a basic block (`UnetBasicBlock`). (default: True).
+        filters (int): Number of output channels after feature processing.
+        kernel_size (int or tuple, optional): Kernel size for the internal
+            convolutional block. Defaults to ``3``.
+        stride (int or tuple, optional): Stride for the internal convolutional
+            block. Defaults to ``1``.
+        upsample_kernel_size (int or tuple, optional): Kernel size and stride
+            for the transposed convolution upsampling layer. Defaults to ``2``.
+        norm_name (str or None, optional): Normalization layer used in the
+            internal processing block. Options are ``"instance"``, ``"batch"``,
+            or ``None``. Defaults to ``"instance"``.
+        res_block (bool, optional): If ``True``, uses ``UNetResBlock`` (with
+            residual connection); otherwise uses ``UNetBasicBlock`` (sequential).
+            Defaults to ``True``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNETRUpsamplingBlock
+
+            x_in   = np.random.randn(1, 16, 16, 256).astype(np.float32)
+            x_skip = np.random.randn(1, 32, 32, 128).astype(np.float32)
+            block = UNETRUpsamplingBlock(filters=128, norm_name="batch")
+            y = block([x_in, x_skip])
+            print(y.shape)  # (1, 32, 32, 128)
+
+    Returns:
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, *upsampled_spatial_dims, filters)``, where spatial
+        dimensions are scaled by ``upsample_kernel_size`` relative to
+        ``x_in`` and must match the spatial dimensions of ``x_skip``
+        after upsampling.
+
+    Raises:
+        ValueError: If ``norm_name`` is not one of ``"instance"``,
+            ``"batch"``, or ``None``, depending on what the underlying
+            ``UNetResBlock`` or ``UNetBasicBlock`` validates.
     """
 
     def __init__(
@@ -189,37 +260,67 @@ class UNETRUpsamplingBlock(layers.Layer):
 
 class UNETRPreUpsamplingBlock(layers.Layer):
     """
-    A Keras Layer that implements the UNETR Projection Upsampling block.
+    UNETR projection upsampling block that progressively upsamples encoder
+    features before they are merged into the decoder pathway. It supports
+    both ``2D`` and ``3D`` inputs, with spatial dimensionality automatically
+    detected from the incoming tensor shape.
 
-    This block performs an initial transpose convolution to upsample features,
-    followed by a sequence of 'num_layer' blocks. Each subsequent block consists
-    of another transpose convolution (upsample) and an optional convolutional
-    sub-block (basic or residual).
+    The block applies ``1 + num_layer`` transposed convolution upsampling
+    steps in total:
+
+    1. An initial transposed convolution to project and upsample the input.
+    2. ``num_layer`` additional stages, each consisting of a transposed
+       convolution followed by an optional convolutional sub-block
+       (``UNetResBlock`` or ``UNetBasicBlock``) controlled by ``conv_block``
+       and ``res_block``.
 
     Args:
-        filters (int): Number of output channels for the block.
-        num_layer (int): Number of repeated (Upsample + Conv) stages after the initial upsample.
-        kernel_size (int or tuple): Kernel size for the optional convolutional sub-blocks.
+        filters (int): Number of output channels for all transposed convolution
+            and convolutional sub-block layers.
+        num_layer (int): Number of repeated upsample stages after the initial
+            transposed convolution.
+        kernel_size (int or tuple): Kernel size for the optional convolutional
+            sub-blocks.
         stride (int or tuple): Stride for the optional convolutional sub-blocks.
-        upsample_kernel_size (int or tuple): Kernel/stride size for all transpose convolutions.
-        conv_block (bool): If True, applies convolutional/residual sub-blocks after transpose convs.
-        res_block (bool): If True and conv_block is True, uses UnetResBlock; otherwise,
-            uses UnetBasicBlock.
+        upsample_kernel_size (int or tuple): Kernel size and stride used for all
+            transposed convolution upsampling layers.
+        conv_block (bool, optional): If ``True``, applies a convolutional
+            sub-block after each transposed convolution stage. Defaults to
+            ``False``.
+        res_block (bool, optional): If ``True`` and ``conv_block=True``, uses
+            ``UNetResBlock``; otherwise uses ``UNetBasicBlock``. Defaults to
+            ``False``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
 
     Example:
-        # Create a 3D UNETR upsampling block
-        up_block = UNETRPreUpsamplingBlock(
-            filters=128,
-            num_layer=2,
-            kernel_size=3,
-            stride=1,
-            upsample_kernel_size=2,
-            conv_block=True,
-            res_block=True,
-        )
-        # Assuming input x is 3D, e.g., (B, 16, 16, 16, C)
-        # This block will perform 1 + 2 = 3 upsampling steps.
-        y = up_block(x)
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.blocks import UNETRPreUpsamplingBlock
+
+            x = np.random.randn(1, 16, 16, 16, 32).astype(np.float32)
+            block = UNETRPreUpsamplingBlock(
+                filters=128,
+                num_layer=2,
+                kernel_size=3,
+                stride=1,
+                upsample_kernel_size=2,
+                conv_block=True,
+                res_block=True,
+            )
+            y = block(x)
+            print(y.shape)  # (1, 128, 128, 128, 128)
+
+    Returns:
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, *upsampled_spatial_dims, filters)``, where each spatial
+        dimension is scaled by ``upsample_kernel_size`` a total of
+        ``1 + num_layer`` times.
+
+    Raises:
+        ValueError: If ``norm_name`` passed to the internal ``UNetResBlock``
+            or ``UNetBasicBlock`` is invalid, depending on what those blocks
+            validate at build time.
     """
 
     def __init__(

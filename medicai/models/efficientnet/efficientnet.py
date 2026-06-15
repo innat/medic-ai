@@ -426,57 +426,19 @@ class EfficientNetL2(EfficientNetBase, DescribeMixin):
             **kwargs,
         )
 
-
 EfficientNet_DOCSTRING = """
-{name} backbone model supporting both 2D and 3D inputs.
-
-This class implements the feature extraction (backbone) part of the EfficientNet architecture,
-which scales width, depth, and resolution uniformly using compound scaling.
-It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
-(e.g., volumetric data of shape `(D, H, W, C)`).
-
-The backbone produces multi-scale feature maps that can be used for downstream
-tasks such as classification, detection, or segmentation.
-
-References:
-    - "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks".
-      ICML 2019. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
-
-Example:
-    # TensorFlow / Keras - 2D cases.
-    >>> import tensorflow as tf
-    >>> from medicai.models import {name}
-    >>> model = {name}(input_shape=(224, 224, 3), include_top=False)
-    >>> x = tf.random.normal((1, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-
-    # PyTorch - 2D cases.
-    >>> import torch
-    >>> from medicai.models import {name}
-    >>> model = {name}(input_shape=(224, 224, 3), include_top=False)
-    >>> x = torch.randn(1, 224, 224, 3)
-    >>> y = model(x)
-    >>> y.shape
-
-    # PyTorch - 3D cases
-    >>> import torch
-    >>> from medicai.models import {name}
-    >>> model = {name}(input_shape=(96, 96, 96, 1), include_top=False)
-    >>> x = torch.randn(1, 96, 96, 96, 1)
-    >>> y = model(x)
-    >>> y.shape
-
-
-Initializes the {name} model.
+This class provides a complete {name} model, including the convolutional
+backbone and the classification head (the "top"). The backbone follows the
+EfficientNet V1 design, which scales width and depth through compound
+scaling, and the full model can be used either for end-to-end classification
+or as a feature extractor.
 
 Args:
     input_shape: A tuple specifying the input shape of the model,
-        not including the batch size. Can be `(height, width, channels)`
-        for 2D or `(depth, height, width, channels)` for 3D.
+        not including the batch size. Can be `(height, width, channels)` for
+        2D or `(depth, height, width, channels)` for 3D.
     include_rescaling: A boolean indicating whether to include a
-        `Rescaling` layer at the beginning of the model. If `True`,
-        the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
+        ``Rescaling`` and normalization step at the beginning of the model.
     include_top: A boolean indicating whether to include the fully
         connected classification layer at the top of the network. If
         `False`, the model's output will be the features from the
@@ -484,8 +446,8 @@ Args:
     num_classes: An integer specifying the number of classes for the
         classification layer. This is only relevant if `include_top`
         is `True`.
-    dropout_rate: Apply dropout after pooling='avg' if `include_top`
-        is `True`.
+    dropout_rate: A float specifying the dropout rate applied before the
+        classification layer when ``include_top`` is ``True``.
     pooling: (Optional) A string specifying the type of pooling to
         apply to the output of the backbone. Can be `"avg"` for global
         average pooling or `"max"` for global max pooling. This is only
@@ -493,7 +455,33 @@ Args:
     classifier_activation: A string specifying the activation function
         to use for the classification layer.
     name: (Optional) The name of the model.
-    **kwargs: Additional keyword arguments.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+        - If ``include_top=True``, the output is a classification tensor of shape
+        ``(batch_size, num_classes)``.
+        - If ``include_top=False`` and ``pooling`` is ``None``, the output is the
+        final backbone feature tensor.
+        - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+        the output is a pooled feature tensor.
+
+Examples:
+
+    .. code-block:: python
+    
+        import torch
+        from medicai.models.efficientnet import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), include_top=True, num_classes=2
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # torch.Size([1, 2])
+
+References:
+    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. ICML 2019.
+        `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_
 """
 
 

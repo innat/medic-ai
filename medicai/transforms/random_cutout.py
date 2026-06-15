@@ -7,36 +7,79 @@ from .tensor_bundle import TensorBundle
 
 class RandCutOut:
     """
-    Random CutOut augmentation for 2D slices stacked as a 3D volume.
+    Apply random CutOut augmentation to a volumetric image tensor.
 
-    This transform randomly masks rectangular regions (cutouts) independently
-    for each slice along the depth dimension. The masked regions can be filled
-    with either a constant value or Gaussian noise scaled to the image range.
+    This transform randomly masks rectangular regions in the image tensor of an
+    image-label pair. The mask can be applied independently per slice or shared
+    across the full depth dimension, and the masked image region is filled with
+    either a constant value or Gaussian noise scaled to the image range. The
+    label tensor is used to avoid cutout over ``invalid_label`` regions when
+    requested, but it is returned unchanged.
 
-    Expected image shape:
-        - (D, H, W, C) or
-        - (D, H, W)
+    Expected image shape for ``image``:
+        - ``(D, H, W, C)`` or
+        - ``(D, H, W)``
+
+    Expected label shape for ``label``:
+        - ``(D, H, W, 1)`` or
+        - ``(D, H, W)``
+
+    Args:
+        keys (Sequence[str]): Sequence containing the image key and label key.
+            The current implementation expects exactly two keys.
+        mask_size (Sequence[int]): Cutout mask size as ``(height, width)``.
+        num_cuts (int): Number of cutout regions applied per volume.
+        prob (float): Probability of applying CutOut.
+        fill_mode (str): How masked regions are filled. Supported values are
+            ``"constant"`` and ``"gaussian"``.
+        fill_value (float): Constant fill value used when
+            ``fill_mode="constant"``.
+        gaussian_std (float): Standard deviation of the Gaussian noise used
+            when ``fill_mode="gaussian"``.
+        invalid_label (Optional[int]): Label value where cutout should be
+            avoided when building the mask. Default is ``None``.
+        cutout_mode (str): Controls whether cutout is applied slice-wise or
+            volume-wise. Supported values are ``"slice"`` and ``"volume"``.
 
     Example:
-        >>> import tensorflow as tf
-        >>> from medicai.transforms import RandCutOut
-        >>> # Create a dummy 3D volume with channels
-        >>> image = tf.random.uniform((128, 128, 128, 4))
-        >>> label = tf.random.randint(0, 2, (128, 128, 128, 1))
-        >>> rand_cutout = RandCutOut(
-        ...     keys=["image", "label"],
-        ...     mask_size=[
-        ...         image.shape[1] // 4,
-        ...         image.shape[2] // 4,
-        ...     ],
-        ...     num_cuts=5,
-        ...     prob=0.8,
-        ...     fill_mode="constant",
-        ...     fill_value=0.0,
-        ... )
-        >>>
-        >>> output = rand_cutout({"image": image})
-        >>> augmented_image, label = output["image"], output["label"]
+        Apply CutOut to an image-label pair::
+
+            import tensorflow as tf
+            from medicai.transforms import RandCutOut
+
+            image = tf.random.uniform((128, 128, 128, 4))
+            label = tf.random.uniform((128, 128, 128, 1), maxval=2, dtype=tf.int32)
+
+            rand_cutout = RandCutOut(
+                keys=["image", "label"],
+                mask_size=[image.shape[1] // 4, image.shape[2] // 4],
+                num_cuts=5,
+                prob=0.8,
+                fill_mode="constant",
+                fill_value=0.0,
+            )
+
+            output = rand_cutout({"image": image, "label": label})
+            augmented_image = output["image"]
+            unchanged_label = output["label"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the augmented
+        image tensor and unchanged label tensor using the same keys as the
+        input.
+
+    Raises:
+        KeyError: If the required image or label key is missing from the input.
+        ValueError: If ``keys`` is provided as a sequence whose length is not
+            ``2``.
+        ValueError: If ``mask_size`` is not a sequence of two positive
+            integers.
+        ValueError: If ``num_cuts`` is not positive.
+        ValueError: If ``prob`` is outside the range ``[0, 1]``.
+        ValueError: If ``fill_mode`` is not one of ``{"constant",
+            "gaussian"}``.
+        ValueError: If ``cutout_mode`` is not one of ``{"slice",
+            "volume"}``.
     """
 
     def __init__(
@@ -124,6 +167,20 @@ class RandCutOut:
         self.invalid_label = invalid_label
 
     def __call__(self, inputs):
+        """Apply CutOut augmentation to the selected tensors.
+
+        Args:
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the image and label tensors.
+
+        Returns:
+            TensorBundle: The transformed output. We can retrieve the augmented
+            image tensor and unchanged label tensor using the same keys as the
+            input.
+
+        Raises:
+            KeyError: If the required image or label key is missing from the input.
+        """
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)
 

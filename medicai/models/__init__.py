@@ -19,7 +19,7 @@ from .convnext import (
     ConvNeXtXLarge,
 )
 from .deeplabv3plus import DeepLabV3Plus
-from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNetBackbone
+from .densenet import DenseNet121, DenseNet169, DenseNet201, DenseNet264, DenseNetBackbone
 from .efficientnet import (
     EfficientNetB0,
     EfficientNetB1,

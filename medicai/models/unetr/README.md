@@ -34,7 +34,7 @@ encoder = ViTBackbone(
     num_heads=6,
     hidden_dim=384,
     mlp_dim=1536,
-    use_class_token=True,
+    use_class_token=False,
 )
 model = UNETR(
     encoder=encoder, 

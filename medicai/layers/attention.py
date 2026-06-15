@@ -12,7 +12,66 @@ from medicai.utils.model_utils import (
 
 
 class AttentionGate(keras.layers.Layer):
-    """https://arxiv.org/abs/1804.03999"""
+    """
+    Attention Gate layer used in Attention U-Net architectures. The purpose of 
+    an Attention Gate is to selectively emphasize relevant spatial regions from 
+    encoder skip connections before merging them into the decoder pathway. Instead 
+    of directly passing all encoder features, the gate suppresses irrelevant background 
+    information and highlights task-relevant regions. The layer receives one list of
+    two inputs:
+
+    1. ``x``: Encoder skip connection feature map containing high-resolution spatial information
+    2. ``g``: Decoder gating signal containing coarse semantic information from deeper layers.
+
+    The attention mechanism works as follows:
+
+    1. The encoder feature map ``x`` is projected using a ``1x1`` convolution
+       with stride ``2`` to reduce spatial resolution and channel dimensions.
+
+    2. The decoder gating signal ``g`` is projected using another ``1x1``
+       convolution so both tensors share compatible feature dimensions.
+
+    3. The transformed tensors are added together and passed through
+       a ``ReLU`` activation.
+
+    4. A final ``1x1`` convolution followed by a ``sigmoid`` activation generates
+       an attention coefficient map ``alpha`` with values in the range
+       ``[0, 1]``.
+
+    5. The attention map is upsampled back to the original encoder feature
+       resolution.
+
+    6. The original encoder features are multiplied by the attention map,
+       producing gated skip features that emphasize important regions.
+
+    Args:
+        filters (int): Number of intermediate attention filters used in the gating
+            transformation.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+    Examples:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AttentionGate
+
+            x = np.random.randn(1, 128, 128, 64).astype(np.float32)
+            g = np.random.randn(1, 64, 64, 128).astype(np.float32)
+            gate = AttentionGate(filters=32) 
+            y = gate([x, g])
+            print(y.shape) # (1, 128, 128, 64)
+
+    Returns:
+        keras.KerasTensor: Gated output tensor of the same shape as the
+        encoder skip connection ``x``, i.e., ``(batch, *x_spatial, x_channels)``.
+        The encoder features are weighted by an attention map ``alpha`` of
+        shape ``(batch, *x_spatial, 1)``, where values near ``1`` indicate
+        task-relevant regions and values near ``0`` suppress background.
+
+    Raises:
+        ValueError: If the spatial dimensionality of the encoder input ``x``
+            is neither ``2`` nor ``3`` (i.e., input rank is not ``4`` or ``5``).
+    """
 
     def __init__(self, filters, **kwargs):
         super().__init__(**kwargs)
@@ -104,6 +163,51 @@ class AttentionGate(keras.layers.Layer):
 
 
 class SqueezeExcitation(keras.layers.Layer):
+    """
+    Squeeze-and-Excitation (SE) block. The purpose of the SE block is to improve 
+    feature representation by adaptively recalibrating channel-wise feature responses. 
+    Instead of treating all feature channels equally, the SE block learns which 
+    channels are more important and scales them accordingly. The mechanism consists of 
+    two main operations: 
+
+    1. **Squeeze**: Global spatial information is aggregated using global average pooling, producing a compact channel descriptor. 
+    2. **Excitation**: The pooled descriptor is passed through two lightweight fully-connected transformations (implemented here using ``1x1`` or ``1x1x1`` convolutions) to learn channel-wise attention weights. 
+    
+    Finally, the learned channel attention weights are multiplied with the original input tensor, emphasizing informative channels and suppressing less useful ones.
+
+    Args: 
+        ratio (int): Reduction ratio used to decrease channel dimensionality inside the 
+            excitation bottleneck. A larger ratio reduces parameter count and 
+            computational cost. Defaults to ``16``. 
+        activation (str): Activation function used in the intermediate excitation 
+            layer. Defaults to ``"relu"``. 
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
+
+
+    Examples:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import SqueezeExcitation
+
+            x = np.random.randn(1, 128, 128, 64).astype(np.float32)
+            se_block = SqueezeExcitation(ratio=16) 
+            y = se_block(x)
+            print(y.shape) # (1, 128, 128, 64) 
+
+    Returns:
+        keras.KerasTensor: Output tensor of the same shape as the input
+        ``(batch, *spatial_dims, channels)``, where each channel is
+        scaled by a learned attention weight in the range ``[0, 1]``
+        produced by the excitation bottleneck.
+
+    Raises:
+        ValueError: If ``ratio`` is greater than the number of input
+            channels, causing ``reduced_channels`` to floor to ``0``
+            before the ``max(1, ...)`` clamp — consider adding an
+            explicit guard if a minimum bottleneck size larger than
+            ``1`` is required.
+    """
     def __init__(self, ratio=16, activation="relu", **kwargs):
         super().__init__(**kwargs)
         self.ratio = ratio
@@ -173,18 +277,68 @@ class UniformSqrtDim(initializers.Initializer):
 
 class EfficientPairedAttention(keras.layers.Layer):
     """
-    Efficient Paired Attention (EPA) layer used in UNETR++.
+    Efficient Paired Attention (EPA) layer from the ``UNETR++`` architecture. This layer 
+    combines channel attention and spatial attention into a computationally efficient 
+    dual-attention mechanism for transformer-based medical image segmentation. EPA computes 
+    two complementary attention branches:
 
-    This layer implements a dual attention mechanism combining:
-    1. Channel Attention (CA): Performs attention along the feature/head
-       dimension to capture inter-channel dependencies.
-    2. Spatial Attention (SA): Projects the input sequence to a reduced number
-       of spatial tokens (N -> K) for efficient spatial interaction modeling.
+    1. **Channel Attention (CA)**: Learns relationships across feature channels to enhance semantic feature interactions. 
+    2. **Spatial Attention (SA)**: Learns spatial dependencies between sequence tokens using a reduced token representation for improved efficiency. 
+    
+    Unlike standard self-attention, EPA reduces the computational cost of spatial attention 
+    by projecting the original sequence length ``N -> K``, where ``K`` is significantly 
+    smaller than ``N``. This allows the model to capture long-range spatial interactions 
+    while reducing memory and computation requirements. 
+    
+    The layer uses: 
 
-    The layer is designed to handle high-resolution 2D or 3D inputs efficiently
-    and supports multi-head attention. EPA maintains separate learnable
-    temperature parameters for scaling attention logits and applies dropout
-    for regularization.
+    1. Shared ``query`` and ``key`` projections 
+    2. Separate value projections for channel and spatial attention 
+    3. Learnable temperature parameters for scaling attention logits 
+    4. Dropout regularization for both attention branches 
+    
+    The outputs from channel attention and spatial attention are combined through 
+    element-wise summation.
+
+    Args:
+        sequence_length (int): Length of the input sequence to the
+            attention mechanism.
+        hidden_size (int): Integer, number of channels in the input features.
+        spatial_reduced_tokens (int): Integer, reduced number of spatial tokens
+            used in spatial attention projection.
+        num_heads (int): Integer, number of attention heads.
+        qkv_bias (bool): Boolean, whether to include bias in the QKV dense layers.
+        channel_attn_drop (float): Float, dropout probability for channel attention.
+        spatial_attn_drop (float): Float, dropout probability for spatial attention.
+        name (str): Optional string, name of the layer.
+        **kwargs: Additional keyword arguments passed to the parent Layer.
+
+    Examples:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import EfficientPairedAttention
+
+            x = np.random.randn(2, 64, 128).astype(np.float32)
+            epa_block = EfficientPairedAttention(
+                sequence_length=64, 
+                hidden_size=128, 
+                spatial_reduced_tokens=16,
+                num_heads=4,
+            )
+            y = epa_block(x)
+            print(y.shape) # (2, 64, 128)
+    
+    Returns:
+        keras.KerasTensor: Output tensor of the same shape as the input
+        ``(batch, sequence_length, hidden_size)``, computed as the
+        element-wise sum of the channel attention and spatial attention
+        branch outputs.
+
+    Raises:
+        ValueError: If ``hidden_size`` is not divisible by ``num_heads``,
+            since the head dimension is computed as
+            ``hidden_size // num_heads``.
     """
 
     def __init__(
@@ -199,34 +353,6 @@ class EfficientPairedAttention(keras.layers.Layer):
         name="efficient_paired_attention",
         **kwargs,
     ):
-        """
-        Initializes the EfficientPairedAttention layer.
-
-        Args:
-            sequence_length: Integer, length of the input sequence (N) to the
-                attention mechanism.
-            hidden_size: Integer, number of channels in the input features.
-            spatial_reduced_tokens: Integer, reduced number of spatial tokens (K)
-                used in spatial attention projection.
-            num_heads: Integer, number of attention heads.
-            qkv_bias: Boolean, whether to include bias in the QKV dense layers.
-            channel_attn_drop: Float, dropout probability for channel attention.
-            spatial_attn_drop: Float, dropout probability for spatial attention.
-            name: Optional string, name of the layer.
-            **kwargs: Additional keyword arguments passed to the parent Layer.
-
-        Example:
-        >>> from medicai.layers import EfficientPairedAttention
-        >>> epa = EfficientPairedAttention(
-        ...     sequence_length=64,
-        ...     hidden_size=128,
-        ...     spatial_reduced_tokens=16,
-        ...     num_heads=4,
-        ... )
-        >>> x = keras.random.normal((2, 64, 128))
-        >>> y = epa(x)
-        >>> print(y.shape)  # (2, 64, 128)
-        """
         super().__init__(name=name, **kwargs)
         self.sequence_length = sequence_length
         self.hidden_size = hidden_size

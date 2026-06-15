@@ -6,11 +6,42 @@ from .tensor_bundle import TensorBundle
 
 
 class RandFlip:
-    """Randomly flips tensors along specified spatial axes with a given probability.
+    """Randomly flip selected tensors along specified axes.
 
-    This transformation randomly decides whether to flip the input tensors based
-    on the provided probability. If the decision is to flip, it reverses the
-    tensor elements along the specified spatial axes.
+    This transform samples one random decision per call. If the sample is below
+    ``prob``, it reverses each selected tensor along ``spatial_axis``. Keys that
+    are not present in the input are skipped.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to potentially flip.
+        prob (float): Probability of applying the flip operation. Default is
+            ``0.1``.
+        spatial_axis (Optional[Union[int, Sequence[int]]]): Spatial axis or
+            axes passed to ``tf.reverse``. If ``None``, no flipping is applied
+            even when the random condition is met.
+
+    Example:
+        Randomly flip an image-label pair along the height axis::
+
+            import tensorflow as tf
+            from medicai.transforms import RandFlip
+
+            flipper = RandFlip(
+                keys=["image", "label"],
+                prob=0.5,
+                spatial_axis=1,
+            )
+
+            image = tf.random.normal((64, 64, 64, 1))
+            label = tf.random.uniform((64, 64, 64, 1), maxval=2, dtype=tf.int32)
+
+            result = flipper({"image": image, "label": label})
+            flipped_image = result["image"]
+            flipped_label = result["label"]
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the flipped
+        tensors using the same keys as the input.
     """
 
     def __init__(
@@ -19,19 +50,6 @@ class RandFlip:
         prob: float = 0.1,
         spatial_axis: Union[int, Sequence[int], None] = None,
     ):
-        """
-        Initializes the RandFlip transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to potentially flip.
-            prob (float): Probability of applying the flip operation (between 0 and 1).
-                Default is 0.1.
-            spatial_axis (Optional[Union[int, Sequence[int]]]): The spatial axis or axes
-                along which to flip the tensor. If None, no flipping is performed
-                by this transform (even if the random probability condition is met).
-                For a 4D tensor (e.g., depth, height, width, channels), the spatial
-                axes are typically 0, 1, and 2. Default is None.
-        """
         self.keys = keys
         self.prob = prob
         self.spatial_axis = spatial_axis
@@ -41,10 +59,12 @@ class RandFlip:
         Apply the random flipping transformation to the input TensorBundle.
 
         Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata.
+            inputs (TensorBundle): A sample dictionary or ``TensorBundle`` containing
+                the tensors to flip.
 
         Returns:
-            TensorBundle: A dictionary with potentially flipped tensors and the original metadata.
+            TensorBundle: The transformed output. We can retrieve the flipped
+            tensors using the same keys as the input.
         """
 
         if isinstance(inputs, dict):

@@ -16,20 +16,70 @@ def ConvBnAct(
     name="",
 ):
     """
-    Generic convolution → normalization → activation block.
-    Works for both 2D and 3D input tensors (auto-detects spatial dims).
+    This helper creates a lightweight configurable convolutional block commonly used in CNN architectures. 
+    The block dynamically supports both ``2D`` and ``3D`` inputs by automatically detecting the 
+    spatial dimensionality from the input tensor. The operation order is:
 
-    Args:
-        filters (int): Number of output filters.
-        kernel_size (int | tuple): Size of the convolution kernel.
-        strides (int | tuple): Stride value for convolution.
-        padding (str): Padding type, e.g. 'same' or 'valid'.
-        normalization (str | None): Type of normalization ('batch', 'layer', etc.) or None.
-        activation (str | None): Type of activation (e.g. 'relu', 'gelu', etc.) or None.
-        name (str): Optional prefix for layer naming.
+    1. Convolution 
+    2. Normalization (**optional**) 
+    3. Activation (**optional**)
+
+    Bias is automatically disabled in the convolution layer when a normalization layer is used, 
+    since normalization already introduces learnable affine parameters.
+
+    Args: 
+        filters (int): Number of convolution output channels. kernel_size (int or tuple, 
+            optional): Size of the convolution kernel. Defaults to ``3``. 
+        strides (int or tuple, optional): Convolution stride value. Defaults to ``1``. 
+        padding (str, optional): Padding mode for convolution. Common options are ``"same"`` 
+            and ``"valid"``. Defaults to ``"same"``. 
+        normalization (str or None, optional): Type of normalization layer to apply after 
+            convolution. Examples include ``"batch"``, ``"layer"``, etc. If ``None``, 
+            normalization is skipped. Defaults to ``"batch"``. 
+        activation (str or None, optional): Activation function applied after normalization. 
+            Examples include ``"relu"``, ``"gelu"``, ``"swish"``, etc. If ``None``, 
+            activation is skipped. Defaults to ``"relu"``. 
+        name (str, optional): Prefix used for internal layer naming. Defaults to ``""``.
+
+    Example:
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ConvBnAct
+
+            x = np.random.randn(1, 128, 128, 3).astype(np.float32)
+            y = ConvBnAct(
+                filters=64, 
+                kernel_size=3, 
+                strides=2, 
+                activation="relu"
+            )(x)
+            print(y.shape) # (1, 64, 64, 64)
+
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import ConvBnAct
+
+            x = np.random.randn(1, 64, 128, 128, 3).astype(np.float32)
+            y = ConvBnAct(
+                filters=64, 
+                kernel_size=3, 
+                strides=2,
+                activation=None,
+                normalization=None
+            )(x)
+            print(y.shape) # (1, 32, 64, 64, 64)
 
     Returns:
-        function: A function that applies the block to an input tensor.
+        Callable: A function ``apply(x)`` that accepts a ``keras.KerasTensor`` and returns 
+        a ``keras.KerasTensor`` of shape ``(batch, *spatial_dims, filters)``, where 
+        ``spatial_dims`` are determined by the stride and padding applied to the input 
+        spatial dimensions.
+
+    Raises:
+        ValueError: If the input tensor ``x`` does not have a rank of ``4`` (2D) or 
+            ``5`` (3D), i.e., spatial dimensionality is neither ``2`` nor ``3``.
     """
 
     def apply(x):
@@ -68,13 +118,14 @@ def ConvBnAct(
 
 class DepthwiseConv3D(layers.Conv3D):
     """
-    Depthwise 3D convolution layer.
-
-    This layer performs a depthwise convolution: it applies a single
-    convolutional filter per input channel (channel-wise convolution).
-    Unlike `Conv3D`, which mixes information across channels,
-    `DepthwiseConv3D` processes each channel independently, making it
-    computationally cheaper.
+    This layer implements a depthwise convolution for ``3D`` inputs, where
+    each input channel is convolved independently using its own spatial
+    kernel. Unlike a standard ``Conv3D`` layer, which mixes information
+    across channels, this layer preserves channel-wise separation and
+    only increases channels via ``depth_multiplier``. This design significantly 
+    reduces computational cost while retaining strong spatial feature extraction 
+    capability, making it suitable for lightweight 3D CNN architectures. The output 
+    channels are computed as: ``output_channels = input_channels × depth_multiplier``
 
     Args:
         kernel_size (int or tuple of 3 ints):
@@ -82,39 +133,51 @@ class DepthwiseConv3D(layers.Conv3D):
         strides (int or tuple of 3 ints, default=1):
             Stride length of the convolution.
         padding (str, default="valid"):
-            One of `"valid"` or `"same"`. Padding method.
+            One of ``"valid"`` or ``"same"``. Padding method.
         depth_multiplier (int, default=1):
             Number of depthwise convolution output channels for each input channel.
         dilation_rate (int or tuple of 3 ints, default=1):
             Dilation rate for dilated convolution.
-        depthwise_initializer (str or keras.initializers.Initializer, default="glorot_uniform"):
+        depthwise_initializer (str or ``keras.initializers.Initializer``, default="glorot_uniform"):
             Initializer for the depthwise kernel matrix.
-        bias_initializer (str or keras.initializers.Initializer, default="zeros"):
+        bias_initializer (str or ``keras.initializers.Initializer``, default="zeros"):
             Initializer for the bias vector.
-        depthwise_regularizer (str or keras.regularizers.Regularizer, optional):
+        depthwise_regularizer (str or ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the depthwise kernel.
-        bias_regularizer (str or keras.regularizers.Regularizer, optional):
+        bias_regularizer (str or ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the bias vector.
-        activity_regularizer (str or keras.regularizers.Regularizer, optional):
+        activity_regularizer (str or ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the output.
-        depthwise_constraint (str or keras.constraints.Constraint, optional):
+        depthwise_constraint (str or ``keras.constraints.Constraint``, optional):
             Constraint function applied to the depthwise kernel.
-        bias_constraint (str or keras.constraints.Constraint, optional):
+        bias_constraint (str or ``keras.constraints.Constraint``, optional):
             Constraint function applied to the bias vector.
 
-    Input shape:
-        5D tensor with shape `(batch, depth, height, width, channels)`.
-
-    Output shape:
-        5D tensor with shape `(batch, new_depth, new_height, new_width, channels * depth_multiplier)`.
-
     Example:
-    ```python
-    x = keras.Input((16, 64, 64, 3))
-    y = DepthwiseConv3D(kernel_size=3, padding="same", depth_multiplier=2)(x)
-    model = keras.Model(x, y)
-    model.summary()
-    ```
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import DepthwiseConv3D
+
+            x = np.random.randn(1, 16, 64, 64, 3).astype(np.float32)
+            y = DepthwiseConv3D(
+                kernel_size=3,
+                padding="same",
+                depth_multiplier=2
+            )(x)
+            print(y.shape) # (1, 16, 64, 64, 6)
+    
+    Returns:
+        keras.KerasTensor: Output tensor of shape 
+        ``(batch, d_out, h_out, w_out, input_channels × depth_multiplier)``,
+        where the spatial dimensions ``d_out``, ``h_out``, and ``w_out`` depend 
+        on the input shape, ``kernel_size``, ``strides``, ``padding``, and 
+        ``dilation_rate``.
+
+    Raises:
+        ValueError: If the channel dimension of the input tensor is ``None`` 
+            (i.e., undefined at build time), since the number of depthwise 
+            filters cannot be inferred.
     """
 
     def __init__(
@@ -197,84 +260,84 @@ class DepthwiseConv3D(layers.Conv3D):
 
 class SeparableConv3D(layers.Layer):
     """
-    3D Separable convolution layer.
+    This layer decomposes a standard ``Conv3D`` operation into two efficient steps:
 
-    This layer performs a depthwise convolution that acts separately on
-    channels, followed by a pointwise convolution that mixes channels.
-    This decomposition significantly reduces the computational complexity
-    and the number of parameters compared to a standard `Conv3D` layer,
-    making it suitable for deep 3D models (e.g., video or volumetric data).
+    1. **Depthwise 3D convolution**: Applies a spatial convolution independently on each input channel (no channel mixing).
+    2. **Pointwise 3D convolution**: Combines information across channels to produce the final feature representation.
 
-    The layer is implemented as a sequence of:
-    1. `DepthwiseConv3D` (kernel_size=KxKxK, groups=C_in)
-    2. `Conv3D` (kernel_size=1x1x1)
+    This factorization significantly reduces the number of parameters
+    and computational cost compared to a full ``3D`` convolution, making it
+    suitable for volumetric data, medical imaging, and video models.
 
     Args:
         filters (int): The number of output filters in the pointwise convolution.
-        kernel_size (int or tuple of 3 ints): The depth, height, and width of the
+        kernel_size (int or tuple of ``3`` ints): The depth, height, and width of the
             depthwise convolution window.
-        strides (int or tuple of 3 ints, optional): The strides of the
+        strides (int or tuple of ``3`` ints, optional): The strides of the
             depthwise convolution along the depth, height, and width axes.
-            Defaults to (1, 1, 1).
-        padding (str, optional): One of `"valid"` or `"same"`. Defaults to `"valid"`.
+            Defaults to ``(1, 1, 1)``.
+        padding (str, optional): One of ``"valid"`` or ``"same"``. Defaults to ``"valid"``.
         data_format (str, optional): The ordering of the dimensions in the inputs.
-            Only `"channels_last"` is typically supported for 3D Keras implementations.
-            Defaults to `"channels_last"`.
-        dilation_rate (int or tuple of 3 ints, optional): The dilation rate for the
-            depthwise convolution. Defaults to (1, 1, 1).
+            Only ``"channels_last"`` is typically supported for 3D Keras implementations.
+            Defaults to ``"channels_last"``.
+        dilation_rate (int or tuple of ``3`` ints, optional): The dilation rate for the
+            depthwise convolution. Defaults to ``(1, 1, 1)``.
         depth_multiplier (int, optional): The number of depthwise convolution output
             channels for each input channel. Defaults to 1.
         activation (str or callable, optional): Activation function to use after the
-            pointwise convolution. If `None`, no activation is applied (linear activation).
-            Defaults to `None`.
-        use_bias (bool, optional): Whether the layer uses a bias vector. Defaults to `True`.
-        depthwise_initializer (str or keras.initializers.Initializer, optional):
-            Initializer for the depthwise kernel. Defaults to `"glorot_uniform"`.
-        pointwise_initializer (str or keras.initializers.Initializer, optional):
-            Initializer for the pointwise kernel. Defaults to `"glorot_uniform"`.
-        bias_initializer (str or keras.initializers.Initializer, optional):
-            Initializer for the bias vector. Defaults to `"zeros"`.
-        depthwise_regularizer (str or keras.regularizers.Regularizer, optional):
-            Regularizer function applied to the depthwise kernel. Defaults to `None`.
-        pointwise_regularizer (str or keras.regularizers.Regularizer, optional):
-            Regularizer function applied to the pointwise kernel. Defaults to `None`.
-        bias_regularizer (str or keras.regularizers.Regularizer, optional):
-            Regularizer function applied to the bias vector. Defaults to `None`.
-        activity_regularizer (str or keras.regularizers.Regularizer, optional):
-            Regularizer function applied to the output of the layer. Defaults to `None`.
-        depthwise_constraint (str or keras.constraints.Constraint, optional):
-            Constraint function applied to the depthwise kernel. Defaults to `None`.
-        pointwise_constraint (str or keras.constraints.Constraint, optional):
-            Constraint function applied to the pointwise kernel. Defaults to `None`.
-        bias_constraint (str or keras.constraints.Constraint, optional):
-            Constraint function applied to the bias vector. Defaults to `None`.
-
-    Input shape:
-        5D tensor with shape:
-        `(batch_size, spatial_dim_1, spatial_dim_2, spatial_dim_3, channels)`
-        if `data_format='channels_last'`.
-
-    Output shape:
-        5D tensor with shape:
-        `(batch_size, new_d, new_h, new_w, filters)`
-        if `data_format='channels_last'`.
+            pointwise convolution. If ``None``, no activation is applied (linear activation).
+            Defaults to ``None``.
+        use_bias (bool, optional): Whether the layer uses a bias vector. Defaults to ``True``.
+        depthwise_initializer (str or ``keras.initializers.Initializer``, optional):
+            Initializer for the depthwise kernel. Defaults to ``"glorot_uniform"``.
+        pointwise_initializer (str or ``keras.initializers.Initializer``, optional):
+            Initializer for the pointwise kernel. Defaults to ``"glorot_uniform"``.
+        bias_initializer (str or ``keras.initializers.Initializer``, optional):
+            Initializer for the bias vector. Defaults to ``"zeros"``.
+        depthwise_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+            Regularizer function applied to the depthwise kernel. Defaults to ``None``.
+        pointwise_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+            Regularizer function applied to the pointwise kernel. Defaults to ``None``.
+        bias_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+            Regularizer function applied to the bias vector. Defaults to ``None``.
+        activity_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+            Regularizer function applied to the output of the layer. Defaults to ``None``.
+        depthwise_constraint (str or ``keras.constraints.Constraint``, optional):
+            Constraint function applied to the depthwise kernel. Defaults to ``None``.
+        pointwise_constraint (str or ``keras.constraints.Constraint``, optional):
+            Constraint function applied to the pointwise kernel. Defaults to ``None``.
+        bias_constraint (str or ``keras.constraints.Constraint``, optional):
+            Constraint function applied to the bias vector. Defaults to ``None``.
 
     Example:
-    ```python
-    # Input is a 3D volume (16 frames, 64x64 spatial, 3 channels)
-    x = keras.Input((16, 64, 64, 3))
+        .. code-block:: python
+    
+            import numpy as np
+            from medicai.layers import SeparableConv3D
 
-    # Apply SeparableConv3D with 128 output filters and 5x5x5 kernel
-    y = SeparableConv3D(
-        filters=128,
-        kernel_size=5,
-        padding="same",
-        depth_multiplier=2,
-        activation='relu'
-    )(x)
+            x = np.random.randn(1, 16, 64, 64, 3).astype(np.float32)
+            y = SeparableConv3D(
+                filters=128,
+                kernel_size=5,
+                padding="same",
+                depth_multiplier=2,
+                activation="relu",
+            )(x)
+            print(y.shape) # (1, 16, 64, 64, 128)
 
-    model = keras.Model(x, y)
-    ```
+    Returns:
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, d_out, h_out, w_out, filters)``, where the spatial dimensions
+        ``d_out``, ``h_out``, and ``w_out`` are determined by the depthwise
+        convolution's ``kernel_size``, ``strides``, ``padding``, and
+        ``dilation_rate``. The pointwise ``1×1×1`` convolution then projects
+        the intermediate ``input_channels × depth_multiplier`` channels to
+        ``filters`` output channels.
+
+    Raises:
+        ValueError: If the channel dimension of the input tensor is ``None``
+            at build time, raised internally by ``DepthwiseConv3D`` since the
+            depthwise filter count cannot be inferred.
     """
 
     def __init__(
@@ -400,39 +463,72 @@ class SeparableConv3D(layers.Layer):
 
 
 class AtrousSpatialPyramidPooling(layers.Layer):
-    """Implements the Atrous Spatial Pyramid Pooling support for 2D and 3D.
-    For 2D input shape: `height, width, channel`.
-    For 3D input shape: `depth, height, width, channel`.
+    """
+    Atrous Spatial Pyramid Pooling (ASPP) layer supporting both ``2D`` and ``3D`` inputs. This layer implements multi-scale context aggregation using parallel
+    atrous (dilated) convolutions, combined with global average pooling.
 
-    Reference for Atrous Spatial Pyramid Pooling [Rethinking Atrous Convolution
-    for Semantic Image Segmentation](https://arxiv.org/pdf/1706.05587.pdf) and
-    [Encoder-Decoder with Atrous Separable Convolution for Semantic Image
-    Segmentation](https://arxiv.org/pdf/1802.02611.pdf)
+    ASPP is designed to capture features at multiple receptive field scales
+    without reducing spatial resolution, making it especially effective for
+    dense prediction tasks such as semantic segmentation. The module consists of:
+
+    1. A ``1x1`` convolution branch for local feature encoding.
+    2. Multiple parallel dilated convolution branches with different
+       dilation rates (multi-scale context).
+    3. A global average pooling branch for image-level context.
+    4. A final projection layer that fuses all features.
+
+    The outputs of all branches are concatenated along the channel dimension
+    and passed through a final convolutional projection.
 
     Args:
-    dilation_rates: list of ints. The dilation rate for parallel dilated conv.
-        Usually a sample choice of rates are `[6, 12, 18]`.
-    num_channels: int. The number of output channels, defaults to `256`.
-    activation: str. Activation to be used, defaults to `relu`.
-    dropout: float. The dropout rate of the final projection output after the
-        activations and batch norm, defaults to `0.0`, which means no dropout is
-        applied to the output.
+        dilation_rates (list[int]): List of dilation rates for parallel atrous convolutions.
+            Typical values: ``[6, 12, 18]``.
+        num_channels (int, optional): Number of output channels per branch.
+            Defaults to ``256``.
+        activation (str, optional): Activation function used in all ASPP branches.
+            Defaults to ``"relu"``.
+        separable (bool, optional): If ``True``, uses depthwise separable convolutions instead of
+            standard convolutions in atrous branches. Defaults to ``False``.
+        dropout (float, optional): Dropout rate applied after the final projection layer.
+            Defaults to ``0.0``.
+        **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
 
     Example:
-    ```python
-    input_tensor = keras.layers.Input((224, 224, 3))
-    backbone = medicai.models.EfficientNetB0(
-        input_tensor=input_tensor,
-        include_top=False
-    )
-    output = backbone(inp)
-    output = SpatialPyramidPooling(
-        dilation_rates=[6, 12, 18]
-    )(output)
-    ```
+        .. code-block:: python
 
-    Reference:
-        - https://github.com/keras-team/keras-hub
+            import numpy as np
+            from medicai.layers import AtrousSpatialPyramidPooling
+
+            x = np.random.randn(1, 16, 64, 64, 3).astype(np.float32)
+            y = AtrousSpatialPyramidPooling(
+                dilation_rates=[6, 12, 18],
+                num_channels=256,
+            )(x)
+            print(y.shape) # (1, 16, 64, 64, 256)
+
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.layers import AtrousSpatialPyramidPooling
+
+            x = np.random.randn(1, 224, 224, 3).astype(np.float32)
+            y = AtrousSpatialPyramidPooling(
+                dilation_rates=[6, 12, 18],
+                num_channels=256,
+            )(x)
+            print(y.shape) # (1, 224, 224, 256)
+ 
+    Returns:
+        keras.KerasTensor: Output tensor of shape
+        ``(batch, *spatial_dims, num_channels)``, where ``spatial_dims``
+        matches the input spatial dimensions exactly (preserved via ``"same"``
+        padding and the global pooling branch's bilinear/trilinear resize).
+        The final projection fuses ``(2 + len(dilation_rates)) × num_channels``
+        concatenated branch features down to ``num_channels``.
+
+    Raises:
+        ValueError: If the spatial dimensionality of the input tensor is
+            neither ``2`` nor ``3`` (i.e., input rank is not ``4`` or ``5``).
     """
 
     def __init__(

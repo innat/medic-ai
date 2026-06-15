@@ -428,34 +428,6 @@ It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
 The backbone produces multi-scale feature maps that can be used for downstream
 tasks such as classification, detection, or segmentation.
 
-References:
-    - Tan, M. and Le, Q. V. (2019). "EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks".
-      ICML 2019. [arXiv:1905.11946](https://arxiv.org/abs/1905.11946)
-
-Example (2D):
-    >>> model = {name}(
-    ...     width_coefficient=1.0,
-    ...     depth_coefficient=1.0,
-    ...     input_shape=(224, 224, 3),
-    ...     include_rescaling=True,
-    ... )
-    >>> x = tf.random.normal((1, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-    TensorShape([1, 7, 7, 1280])
-
-Example (3D):
-    >>> model = {name}(
-    ...     width_coefficient=1.0,
-    ...     depth_coefficient=1.0,
-    ...     input_shape=(32, 224, 224, 3),
-    ...     include_rescaling=True,
-    ... )
-    >>> x = tf.random.normal((1, 32, 224, 224, 3))
-    >>> y = model(x)
-    >>> y.shape
-    TensorShape([1, 1, 7, 7, 1280])
-
 Args:
     width_coefficient (float):
         Scaling coefficient for network width (number of filters per layer).
@@ -472,17 +444,40 @@ Args:
         Ensures the number of filters is divisible by this value after scaling.
     activation (str, default="swish"):
         Activation function used throughout the model.
-    blocks_args (list or str, default="{default_blocks}"):
-        Configuration for the sequence of MBConv/FusedMBConv blocks.
+    blocks_args (list or str, default="{default_blocks}"): Configuration for the sequence of MBConv/FusedMBConv blocks.
         - If "default", uses the standard EfficientNet block structure.
-        - If a string key (e.g., "efficientnetv2-s"), loads the corresponding preset from
-          `DEFAULT_BLOCKS_ARGS_V2`.
+        - If a string key (e.g., "efficientnetv2-s"), loads the corresponding preset from ``DEFAULT_BLOCKS_ARGS_V2``.
         - If a list, expects a custom block configuration dict.
     include_rescaling (bool, default=False):
         If True, includes input rescaling (1/255) and normalization layers.
+{extra_args}\
     name (str, default="{default_name}"):
         Model name.
-{extra_args}
+
+Returns:
+    A ``keras.Model`` whose forward pass returns the final backbone
+    feature tensor. Intermediate multi-scale features are available in
+    the ``pyramid_outputs`` attribute.
+
+Examples:
+    .. code-block:: python
+
+        import torch
+        from medicai.models.efficientnet import {name}
+
+        model = {name}(
+            width_coefficient=1.0,
+            depth_coefficient=1.0,
+            input_shape=(224, 224, 3),
+            include_rescaling=True,
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape)  # torch.Size([1, 7, 7, 1280])
+
+References:
+    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. ICML 2019.
+        `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_
 """
 
 # --- version-specific extensions ---
@@ -497,12 +492,12 @@ EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
     name="EfficientNetBackboneV2",
     default_blocks="efficientnetv2-s",
     default_name="efficientnet_v2",
-    extra_args="""
-    min_depth (int, default=8):
-        Minimum number of filters in any layer after scaling.
-    bn_momentum (float, default=0.9):
-        Momentum used for batch normalization layers.
-""",
+    extra_args=(
+        "    min_depth (int, default=8):\n"
+        "        Minimum number of filters in any layer after scaling.\n"
+        "    bn_momentum (float, default=0.9):\n"
+        "        Momentum used for batch normalization layers.\n"
+    ),
 )
 
 # attach

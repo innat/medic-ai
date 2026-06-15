@@ -167,59 +167,6 @@ class MiTBase(keras.Model):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b0", family="mit")
 class MixViTB0(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B0 (MiT-B0) model.
-
-    MiT-B0 is the smallest and most efficient variant of the **Mix Transformer**
-    (MiT) family, providing an excellent trade-off between speed and performance.
-    It is parameterized with the configuration specified for the B0 variant in
-    the original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B0 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB0
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB0(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB0(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Initializes the Mix Transformer B0 (MiT-B0) model.
-
-    This constructor automatically sets the MiT-B0-specific hyper-parameters
-    and accepts configuration for the input and output head.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
-
     def __init__(
         self,
         *,
@@ -294,61 +241,6 @@ class MixViTB0(MiTBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b1", family="mit")
 class MixViTB1(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B1 (MiT-B1) model.
-
-    MiT-B1 is a small and efficient variant of the **Mix Transformer**
-    (MiT) family, providing an excellent trade-off between speed and performance.
-    It is parameterized with the configuration specified for the B1 variant in
-    the original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B1 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB1
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB1(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB1(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Reference:
-        'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
-        - Encoder: MiT-B1
-        - Paper: https://arxiv.org/abs/2105.15203
-
-    Initializes the Mix Transformer B1 (MiT-B1) model.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
-
     def __init__(
         self,
         *,
@@ -425,62 +317,6 @@ class MixViTB1(MiTBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b2", family="mit")
 class MixViTB2(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B2 (MiT-B2) model.
-
-    MiT-B2 is a small variant of the **Mix Transformer** (MiT) family. It offers
-    improved performance over MiT-B0 and MiT-B1 by increasing the number of
-    transformer blocks in each stage of the encoder, providing a larger capacity.
-    The architecture is parameterized with the configuration specific to the B2
-    variant from the original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B2 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB2
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB2(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB2(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Reference:
-        'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
-        - Encoder: MiT-B2
-        - Paper: https://arxiv.org/abs/2105.15203
-
-    Initializes the Mix Transformer B2 (MiT-B2) model.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
-
     def __init__(
         self,
         *,
@@ -557,66 +393,6 @@ class MixViTB2(MiTBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b3", family="mit")
 class MixViTB3(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B3 (MiT-B3) model.
-
-    MiT-B3 is a medium-sized variant of the **Mix Transformer** (MiT) family. It offers
-    strong performance by significantly increasing the number of transformer blocks
-    in the third stage of the encoder, building upon the B2 architecture. This provides
-    greater representational capacity for more complex vision tasks. The architecture
-    is parameterized with the configuration specific to the B3 variant from the
-    original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B3 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB3
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB3(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB3(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Reference:
-        'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
-        - Encoder: MiT-B3
-        - Paper: https://arxiv.org/abs/2105.15203
-
-    Initializes the Mix Transformer B3 (MiT-B3) model.
-
-    This constructor automatically sets the MiT-B3-specific hyper-parameters
-    (e.g., `depths=[3, 4, 18, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
-    and accepts configuration for the input and output head.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
 
     def __init__(
         self,
@@ -693,63 +469,6 @@ class MixViTB3(MiTBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b4", family="mit")
 class MixViTB4(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B4 (MiT-B4) model.
-
-    MiT-B4 is a large variant of the **Mix Transformer** (MiT) family. It offers
-    very high performance for demanding vision tasks by significantly increasing
-    the number of transformer blocks in the second and third stages of the encoder.
-    This provides a larger representational capacity compared to the B3 variant.
-    The architecture is parameterized with the configuration specific to the B4
-    variant from the original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B4 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB4
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB4(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB4(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Reference:
-        'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
-        - Encoder: MiT-B4
-        - Paper: https://arxiv.org/abs/2105.15203
-
-    Initializes the Mix Transformer B4 (MiT-B4) model.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
-
     def __init__(
         self,
         *,
@@ -825,67 +544,6 @@ class MixViTB4(MiTBase, DescribeMixin):
 @keras.saving.register_keras_serializable(package="mit")
 @registration.register(name="mit_b5", family="mit")
 class MixViTB5(MiTBase, DescribeMixin):
-    """
-    Mix Transformer B5 (MiT-B5) model.
-
-    MiT-B5 is the **largest and most powerful variant** of the **Mix Transformer**
-    (MiT) family. It is designed for maximum performance on complex vision tasks by
-    significantly increasing the number of transformer blocks in the second and
-    third stages of the encoder compared to other variants. The architecture is
-    parameterized with the configuration specific to the B5 variant from the
-    original SegFormer paper.
-
-    This class inherits from `MiTBase` and sets the hyper-parameters for
-    depths, feature dimensions, heads, and attention reduction ratios specific
-    to the B5 architecture.
-
-    Example:
-    >>> from medicai.models import MixViTB5
-    >>> # 2D Model (e.g., for ImageNet)
-    >>> model_2d = MixViTB5(input_shape=(224, 224, 3), num_classes=5, ...)
-    >>> # 3D Model (e.g., for medical volumes)
-    >>> model_3d = MixViTB5(input_shape=(64, 64, 64, 1), num_classes=5, ...)
-
-    Reference:
-        'SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers'
-        - Encoder: MiT-B5
-        - Paper: https://arxiv.org/abs/2105.15203
-
-    Initializes the Mix Transformer B5 (MiT-B5) model.
-
-    This constructor automatically sets the MiT-B5-specific hyper-parameters
-    (e.g., `depths=[3, 6, 40, 3]`, `project_dim=[64, 128, 320, 512]`, etc.)
-    and accepts configuration for the input and output head.
-
-    Args:
-        input_shape: A tuple specifying the shape of the input tensor,
-            excluding the batch dimension. Format is typically (H, W, C) for 2D
-            images or (D, H, W, C) for 3D volumes.
-            *Effect:* Defines the input shape for the entire model.
-        include_rescaling: Boolean, determines whether to include a **rescaling**
-            layer at the start of the model to normalize pixel values.
-            *Effect:* If True, applies an input pre-processing step. Default: False.
-        include_top: Boolean, whether to include the final **Dense classification
-            layer** (the "top") on top of the feature extractor.
-            *Effect:* If True, the model output is a probability distribution/logits.
-            If False, the model outputs the feature map for downstream tasks. Default: True.
-        num_classes: Optional integer, the number of output classes. Only
-            relevant if `include_top` is True.
-            *Effect:* Sets the number of units in the final Dense layer. Default: 1000.
-        pooling: Optional string, only relevant when `include_top=False`.
-            Specifies the global pooling type to apply to the feature map:
-            'avg' for Global Average Pooling or 'max' for Global Max Pooling.
-            *Effect:* Collapses the spatial dimensions of the output feature map. Default: None.
-        classifier_activation: Optional activation function for the final
-            Dense classification layer. Only relevant if `include_top` is True.
-            *Effect:* Typically 'softmax' for multi-class classification or
-            'sigmoid' for multi-label classification. Default: "softmax".
-        name: Optional string, the name to give the Keras model.
-            *Effect:* Sets the model's identifier. Default: Auto-generated.
-        **kwargs: Additional keyword arguments passed to the parent `keras.Model`
-            constructor.
-    """
-
     def __init__(
         self,
         *,
@@ -958,3 +616,72 @@ class MixViTB5(MiTBase, DescribeMixin):
             name=name,
             **kwargs,
         )
+
+MIT_DOCSTRING = """
+{name} model for classification, supporting both 2D and 3D inputs.
+
+This class provides a complete {name} model, including the hierarchical
+transformer backbone and the classification head (the "top"). The backbone
+follows the Mix Transformer (MiT) design with overlapping patch embedding and
+multi-stage transformer encoding, and the full model can be used either for
+end-to-end classification or as a feature extractor.
+
+It can operate on 2D inputs (e.g., images of shape `(H, W, C)`) or 3D inputs
+(e.g., volumetric data of shape `(D, H, W, C)`).
+
+Args:
+    input_shape: A tuple specifying the input shape of the model,
+        not including the batch size. Can be `(height, width, channels)` for
+        2D or `(depth, height, width, channels)` for 3D.
+    include_rescaling: A boolean indicating whether to include a
+        ``Rescaling`` layer at the beginning of the model.
+    include_top: A boolean indicating whether to include the fully
+        connected classification layer at the top of the network. If
+        `False`, the model's output will be the features from the
+        backbone, without the final classifier.
+    num_classes: An integer specifying the number of classes for the
+        classification layer. This is only relevant if `include_top`
+        is `True`.
+    pooling: (Optional) A string specifying the type of pooling to
+        apply to the output of the backbone. Can be `"avg"` for global
+        average pooling or `"max"` for global max pooling. This is only
+        relevant if `include_top` is `False`.
+    classifier_activation: A string specifying the activation function
+        to use for the classification layer.
+    name: (Optional) The name of the model.
+
+Returns:
+    A ``keras.Model`` whose output depends on the configuration:
+
+        - If ``include_top=True``, the output is a classification tensor of shape
+        ``(batch_size, num_classes)``.
+        - If ``include_top=False`` and ``pooling`` is ``None``, the output is the
+        final backbone feature tensor.
+        - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+        the output is a pooled feature tensor with last dimension
+        ``{projection_dim_last}``.
+
+Examples:
+    .. code-block:: python
+
+        import torch
+        from medicai.models.mit import {name}
+
+        model = {name}(
+            input_shape=(224, 224, 3), include_top=True, num_classes=2
+        )
+        x = torch.randn((1, 224, 224, 3))
+        y = model(x)
+        print(y.shape) # torch.Size([1, 2])
+
+References:
+    - SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers. NeurIPS 2021.
+        `arXiv:2105.15203 <https://arxiv.org/abs/2105.15203>`_
+"""
+
+MixViTB0.__doc__ = MIT_DOCSTRING.format(name="MixViTB0", projection_dim_last=256)
+MixViTB1.__doc__ = MIT_DOCSTRING.format(name="MixViTB1", projection_dim_last=512)
+MixViTB2.__doc__ = MIT_DOCSTRING.format(name="MixViTB2", projection_dim_last=512)
+MixViTB3.__doc__ = MIT_DOCSTRING.format(name="MixViTB3", projection_dim_last=512)
+MixViTB4.__doc__ = MIT_DOCSTRING.format(name="MixViTB4", projection_dim_last=512)
+MixViTB5.__doc__ = MIT_DOCSTRING.format(name="MixViTB5", projection_dim_last=512)

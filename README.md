@@ -1,6 +1,8 @@
 
 
-<img src="assets/logo.jpg" width="500"/>
+<h1 style="font-size: 70px; font-weight: 400; line-height: 1;">
+  medic<span style="color: #0ea5b7;">ai</span>
+</h1>
 
 
 [![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query) 
@@ -163,7 +165,7 @@ Spacing
 
 # 📚 Documentation
 
-To learn more about **model**, **transformation**, and **training**, please visit official documentation: [`medicai/docs`](https://innat.github.io/medic-ai/)
+To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
 
 # 🤝 Contributing
 

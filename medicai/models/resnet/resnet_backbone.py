@@ -15,35 +15,114 @@ from .resnet_layers import apply_resnet_block
 
 @keras.saving.register_keras_serializable(package="resnet.backbone")
 class ResNetBackbone(keras.Model, DescribeMixin):
-    """ResNet, ResNeXt, and ResNetV2 core network with hyperparameters.
+    """
+    ResNet feature-extraction backbone with multi-scale feature outputs.
 
-    This class implements a ResNet backbone as described in [Deep Residual
-    Learning for Image Recognition](https://arxiv.org/abs/1512.03385)(
-    CVPR 2016), [Identity Mappings in Deep Residual Networks](
-    https://arxiv.org/abs/1603.05027)(ECCV 2016), [ResNet strikes back: An
-    improved training procedure in timm](https://arxiv.org/abs/2110.00476)(
-    NeurIPS 2021 Workshop) and [Bag of Tricks for Image Classification with
-    Convolutional Neural Networks](https://arxiv.org/abs/1812.01187).
+    This class builds only the backbone portion of a **ResNet**-family model. It
+    supports standard ResNet, pre-activation **ResNetV2**, **ResNet-vd** style stems,
+    and **ResNeXt** grouped-convolution variants. It is intended for workflows
+    that need reusable feature maps rather than a final classification layer,
+    such as custom classifiers, detection heads, or segmentation decoders.
 
-    The difference in ResNet and ResNetV2 rests in the structure of their
-    individual building blocks. In **ResNetV2**, the batch normalization and
-    ReLU activation precede the convolution layers, as opposed to **ResNet** where
-    the batch normalization and ReLU activation are applied after the
-    convolution layers. The `use_pre_activation` argument controls this behavior.
+    The backbone is constructed in the following stages:
 
-    This model also extends ResNeXt with **grouped convolutions** and follows the
-    ResNeXt architecture described in "Aggregated Residual Transformations for
-    Deep Neural Networks". It uses **width_per_group** with **groups**.
+    1. An input layer is created from ``input_shape`` or ``input_tensor``.
+    2. An optional ``Rescaling`` layer normalizes raw image intensities.
+    3. A convolutional stem is applied. Depending on the configuration, this
+       can be a single large convolution or a deeper multi-convolution stem.
+    4. The stem output is stored as ``P1`` and then downsampled with max
+       pooling before entering the residual stacks.
+    5. A sequence of residual stages is applied. Each stage contains the
+       configured number of residual blocks and produces one pyramid level in
+       ``pyramid_outputs``.
+    6. If pre-activation is enabled, a final batch normalization and ReLU
+       activation are applied to the last stage output.
 
-    **ResNetVd** introduces two key modifications to the standard ResNet:
-    1. The initial convolutional layer is replaced by a series of three
-    smaller successive convolutional layers (a "deep stem").
-    2. Shortcut connections in downsampling stages use an average pooling
-    operation rather than performing downsampling within the convolutional
-    layers themselves.
+    Args:
+        input_shape: A tuple specifying the input shape of the model,
+            not including the batch size. Can be `(height, width, channels)`
+            for 2D or `(depth, height, width, channels)` for 3D.
+        input_tensor: (Optional) Keras tensor (i.e. output of `layers.Input()`)
+            to use as image input for the model.
+        conv_filters: A list of integers for the number of filters of the initial
+            convolution(s). Use `[64]` for ResNet-50/101/152 (v1/v2) and `[32, 32, 64]`
+            for ResNet50-vd and ResNet200-vd.
+        conv_kernel_sizes: A list of integers for the kernel sizes of the initial
+            convolution(s). Use `[7]` for ResNet-50/101/152 (v1/v2) and `[3, 3, 3]`
+            for ResNet50-vd and ResNet200-vd.
+        num_filters: A list of integers for the number of filters for each
+            stack.
+        num_blocks: A list of integers for the number of blocks for each stack.
+        num_strides: A list of integers for the strides for each stack.
+        block_type: A string for the block type to stack. One of `"basic_block"`,
+            `"bottleneck_block"`, or `"bottleneck_block_vd"`. Use `"basic_block"`
+            for ResNet18 and ResNet34. Use `"bottleneck_block"` for ResNet50,
+            ResNet101 and ResNet152. Use `"bottleneck_block_vd"` for the vd models.
+        include_rescaling: A boolean indicating whether to include a
+            `Rescaling` layer at the beginning of the model. If `True`,
+            the input pixels will be scaled from `[0, 255]` to `[0, 1]`.
+        use_pre_activation: A boolean indicating whether to use pre-activation or not.
+            `True` for ResNetV2, `False` for ResNetVd.
+        groups: int. Number of groups for grouped convolution. Defaults to 1.
+        se_block: bool. If `True`, apply Squeeze-and-Excitation block. Defaults to `False`.
+        se_ratio: int. Reduction ratio for SE block. Defaults to 16.
+        se_activation: str. Activation function for SE block. Defaults to "relu"
+        width_per_group: int. Bottleneck width for ResNeXt. Defaults to 64.
 
-    Reference:
-        https://github.com/keras-team/keras-hub/tree/master
+    Returns:
+        A ``keras.Model`` whose forward pass returns the final backbone
+        feature tensor. Intermediate multi-scale features are available in
+        the ``pyramid_outputs`` attribute.
+
+    Examples:
+        PyTorch backend 2D feature extractor::
+
+            import torch
+            from medicai.models.resnet import ResNetBackbone
+
+            model = ResNetBackbone(
+                input_shape=(224, 224, 3),
+                conv_filters=[64],
+                conv_kernel_sizes=[7],
+                num_filters=[64, 128, 256, 512],
+                num_blocks=[3, 4, 6, 3],
+                num_strides=[1, 2, 2, 2],
+                block_type="bottleneck_block",
+                use_pre_activation=False,
+            )
+            x = torch.randn((1, 224, 224, 3))
+            y = model(x)
+            print(y.shape) # torch.Size([1, 7, 7, 2048])
+
+
+        We can also build custom **ResNeXt** with ``32`` cardinality and ``4`` bottleneck width with **ResNet101** config::
+
+            import keras
+            from medicai.models.resnet import ResNetBackbone
+
+            backbone = ResNetBackbone(
+                input_shape=(96, 96, 96, 4),
+                num_blocks=[3, 4, 23, 3],
+                block_type="bottleneck_block",
+                groups=64,
+                width_per_group=4
+            )
+            model = keras.Sequential(
+                [
+                    backbone,
+                    keras.layers.GlobalAveragePooling3D(),
+                    keras.layers.Dense(1, activation='sigmoid')
+                ]
+            )
+
+
+    References:
+        - Deep Residual Learning for Image Recognition. CVPR 2016.
+            `arXiv:1512.03385 <https://arxiv.org/abs/1512.03385>`_
+        - Identity Mappings in Deep Residual Networks. ECCV 2016.
+            `arXiv:1603.05027 <https://arxiv.org/abs/1603.05027>`_
+        - Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017.
+            `arXiv:1611.05431 <https://arxiv.org/abs/1611.05431>`_
     """
 
     def __init__(

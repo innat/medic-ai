@@ -6,44 +6,59 @@ from .tensor_bundle import TensorBundle
 
 
 class Orientation:
-    """Reorients a volume to a specified axis orientation using the affine matrix.
+    """
+    Reorient tensors to a target anatomical axis code.
 
-    This transform takes a tensor bundle containing an image and its affine
-    matrix and reorients the image data to the desired 'axcodes' (e.g., 'RAS').
-    It determines the current orientation from the affine matrix and calculates
-    the necessary transpositions and flips to achieve the target orientation.
+    This transform reads the ``affine`` matrix stored in metadata, infers the
+    current orientation, and then applies the required transpositions and flips
+    to reach the requested ``axcodes`` such as ``"RAS"``. The transform is
+    designed for tensors with three spatial axes and an optional channel-last
+    dimension.
+
+    Args:
+        keys (Sequence[str]): Keys of the tensors to reorient.
+        axcodes (str): The desired axis orientation as a 3-character string (e.g., ``RAS``, ``LPS``).
+            The characters correspond to the anatomical directions:
+            R: Right, L: Left, A: Anterior, P: Posterior, S: Superior, I: Inferior.
+            Default is ``RAS`` (Right-Anterior-Superior).
+
+    Example:
+        Reorient an image-label pair to ``RAS``::
+
+            import tensorflow as tf
+            from medicai.transforms import Orientation, TensorBundle
+
+            orient = Orientation(keys=["image", "label"], axcodes="RAS")
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+            affine = tf.eye(4)
+
+            bundle = TensorBundle(
+                {"image": image, "label": label},
+                meta={"affine": affine},
+            )
+            result = orient(bundle)
+            reoriented_image = result["image"]
+            reoriented_label = result["label"]
+
+            print(reoriented_image.shape) # (32, 64, 64, 1)
+            print(reoriented_label.shape) # (32, 64, 64, 1)
+
+    Returns:
+        TensorBundle: The transformed output. We can retrieve the reoriented
+        tensors using the same keys as the input.
+
+    Raises:
+        ValueError: If ``axcodes`` is not a 3-character orientation code.
+        ValueError: If the input metadata does not contain an ``affine`` matrix.
     """
 
     def __init__(self, keys: Sequence[str] = ("image", "label"), axcodes: str = "RAS"):
-        """
-        Initializes the Orientation transform.
-
-        Args:
-            keys (Sequence[str]): Keys of the tensors to reorient. Default is ("image", "label").
-            axcodes (str): The desired axis orientation as a 3-character string (e.g., "RAS", "LPS").
-                The characters correspond to the anatomical directions:
-                R: Right, L: Left, A: Anterior, P: Posterior, S: Superior, I: Inferior.
-                Default is "RAS" (Right-Anterior-Superior).
-        """
         self.keys = keys
         self.axcodes = axcodes.upper()
 
     def __call__(self, inputs: Union[TensorBundle, Dict[str, tf.Tensor]]) -> TensorBundle:
-        """
-        Apply the orientation transformation to the input TensorBundle.
-
-        Args:
-            inputs (TensorBundle): A dictionary containing tensors and metadata,
-                where the metadata is expected to contain an 'affine' key
-                representing the affine transformation matrix.
-
-        Returns:
-            TensorBundle: A dictionary with reoriented tensors and the original metadata.
-
-        Raises:
-            ValueError: If the 'affine' matrix is not found in the input metadata.
-        """
-
         if isinstance(inputs, dict):
             inputs = TensorBundle(inputs)
 
@@ -62,7 +77,7 @@ class Orientation:
 
     def apply_orientation(self, image: tf.Tensor, affine: tf.Tensor, axcodes: str) -> tf.Tensor:
         """
-        Applies orientation transformation to an image, considering the affine matrix.
+        Apply the orientation transformation to one tensor using the affine matrix.
 
         Args:
             image (tf.Tensor): The input image tensor (shape [..., channels]).
