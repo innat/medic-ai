@@ -1,4 +1,4 @@
-<img src="docs/_static/medicai-wordmark-wide.svg" alt="medicai" width="300">
+<img src="docs/_static/medicai-wordmark-wide.svg" alt="medicai" width="360">
 
 [![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query) 
 
