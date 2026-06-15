@@ -1,3 +1,91 @@
+[project]
+name = "medicai"
+dynamic = ["version"]
+description = "Keras-based medical 2D and 3D image analysis library."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "innat", email = "innat.dev@gmail.com" }
+]
+keywords = ["medical-imaging", "keras", "deep-learning", "segmentation", "classification"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+  "keras",
+  "matplotlib",
+  "nibabel",
+  "numpy",
+  "omegaconf",
+  "pandas",
+  "PyYAML",
+  "requests",
+  "rich",
+  "scipy",
+  "tqdm",
+  "typeguard",
+  "typing_extensions",
+  "tzdata",
+  "urllib3",
+]
+
+[project.optional-dependencies]
+docs = [
+  "myst-parser>=2.0",
+  "pydata-sphinx-theme>=0.15",
+  "sphinx>=7.0",
+  "sphinx-autobuild>=2024.10.3",
+  "sphinx-copybutton>=0.5",
+  "sphinx-design>=0.5",
+  "sphinx-notfound-page>=1.0",
+]
+test = [
+  "pytest",
+]
+dev = [
+  "black",
+  "flake8",
+  "isort",
+  "myst-parser>=2.0",
+  "pydata-sphinx-theme>=0.15",
+  "pytest",
+  "sphinx>=7.0",
+  "sphinx-autobuild>=2024.10.3",
+  "sphinx-copybutton>=0.5",
+  "sphinx-design>=0.5",
+  "sphinx-notfound-page>=1.0",
+]
+tensorflow = [
+  "tensorflow",
+]
+jax = [
+  "jax",
+]
+torch = [
+  "torch",
+]
+all = [
+  "tensorflow",
+  "jax",
+  "torch",
+]
+
+[project.urls]
+Homepage = "https://github.com/innat/medic-ai"
+Documentation = "https://medicai.readthedocs.io/"
+Repository = "https://github.com/innat/medic-ai"
+Issues = "https://github.com/innat/medic-ai/issues"
+
 # Black formatting
 [tool.black]
 line-length = 100
@@ -30,6 +118,14 @@ virtual_env = "venv"
 exclude = "venv"
 ignore = ["E501", "W503", "E226"]
 
+[tool.setuptools.dynamic]
+version = { attr = "medicai.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["medicai", "medicai.*"]
+exclude = ["test", "dataloader", "notebooks"]
+
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"

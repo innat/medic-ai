@@ -4,17 +4,44 @@ Please refer to the current [roadmap](https://github.com/innat/medic-ai/wiki/Roa
 
 ## 1. Setup
 
+`medicai` now requires Python `3.12+`. Create a fresh environment before
+installing local dependencies.
+
+### Option A: `uv` (recommended)
+
 ```bash
 git clone https://github.com/innat/medic-ai
 cd medic-ai
-pip install -U keras pytest
-pip install -e .
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e .[dev]
 ```
 
-If you want to run backend-specific tests, install the corresponding runtime(s):
+### Option B: `venv` + `pip`
+
+```bash
+git clone https://github.com/innat/medic-ai
+cd medic-ai
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip setuptools wheel
+python -m pip install -e .[dev]
+```
+
+### Extras
+
+- `.[test]`: install the package plus `pytest`
+- `.[docs]`: install the documentation toolchain
+- `.[dev]`: install docs, tests, and formatting tools
+
+If you want to run backend-specific tests or examples, install the corresponding
+runtime(s) separately:
 - TensorFlow backend: `pip install tensorflow`
 - Torch backend: `pip install torch`
 - JAX backend: `pip install jax`
+
+The package includes `keras`, but it intentionally does not force a specific
+version of TensorFlow, PyTorch, or JAX.
 
 ## 2. Run tests
 
@@ -22,6 +49,14 @@ Run all tests:
 
 ```bash
 python -m pytest test/
+```
+
+Or, if you prefer the helper target:
+
+```bash
+make test-unit
+make test-integration
+make test-gpu
 ```
 
 Run by markers:
@@ -60,6 +95,8 @@ python -m pytest test/backends/test_backend_matrix_metrics_transforms_models.py
 Note: these tests may skip a backend if that runtime is not installed in your environment.
 
 ## 4. Set backend manually (optional)
+
+Set `KERAS_BACKEND` before importing `keras` or `medicai`.
 
 PowerShell:
 

@@ -1,9 +1,4 @@
-
-
-<h1 style="font-size: 70px; font-weight: 400; line-height: 1;">
-  medic<span style="color: #0ea5b7;">ai</span>
-</h1>
-
+<img src="docs/_static/medicai-wordmark-wide.svg" alt="medicai" width="360">
 
 [![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query) 
 
@@ -21,10 +16,9 @@
 # 📋 Table of Contents
 1. [Installation](#-installation)
 2. [Features](#-features)
-3. [Guides](#-guides)
-4. [Documentation](#-documentation)
-5. [Acknowledgements](#-acknowledgements)
-6. [Citation](#-citation)
+3. [Documentation](#-documentation)
+4. [Acknowledgements](#-acknowledgements)
+5. [Citation](#-citation)
 
 
 # 🛠 Installation
@@ -32,13 +26,32 @@
 PyPI version:
 
 ```bash
-!pip install medicai
+pip install medicai
 ```
+
+This installs `medicai` and `keras`, but leaves backend runtime selection to you.
+Install `tensorflow`, `torch`, or `jax` separately based on your workflow.
 
 Installing from source GitHub: (**recommended**)
 
 ```bash
-!pip install git+https://github.com/innat/medic-ai.git
+pip install git+https://github.com/innat/medic-ai.git
+```
+
+Using `uv` for local development:
+
+```bash
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install -e .[dev]
+```
+
+Optional extras:
+
+```bash
+pip install "medicai[docs]"
+pip install "medicai[test]"
+pip install "medicai[dev]"
 ```
 
 # Quick Overview
@@ -134,38 +147,9 @@ Spacing
 ```
 
 
-# 💡 Guides
-
-**Segmentation**: Available guides for 3D segmentation task.
-
-| Task | GitHub | Kaggle | View |
-|----------|----------|----------|----------|
-| Covid-19  | <a target="_blank" href="notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-covid-19-3d-image-segmentation/notebook"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     | <img src="assets/covid.gif" width="200"/>    |
-| BTCV  | <a target="_blank" href="notebooks/btcv.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>    | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-btcv-segmentation-in-keras/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>    | n/a     |
-| BraTS  | <a target="_blank" href="notebooks/brats.multi-gpu.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>    | n/a     |
-| Spleen | <a target="_blank" href="notebooks/spleen.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-spleen-3d-segmentation-in-keras"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     | <img src="assets/spleen.gif" width="200">  |
-
-**Classification**: Available guides for 3D classification task.
-
-| Task (Classification) | GitHub | Kaggle |
-|----------|----------|----------|
-| Covid-19   | <a target="_blank" href="notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
-**Classification**: Available guides for 2D classification task.
-
-| Task (Classification) | GitHub | Kaggle |
-|----------|----------|----------|
-| MedMNIST [BloodMNIST]   | <a target="_blank" href="notebooks/medicai-x-medmnist-starter-on-multi-class.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-x-medmnist-starter-on-multi-class"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
-**Segmentation**: Available guides for 2D segmentation task.
-
-| Task (Segmentation) | GitHub | Kaggle |
-|----------|----------|----------|
-| ISIC-2017   | <a target="_blank" href=""><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-x-isic-2017-starter-on-binary-segmentation"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
 # 📚 Documentation
 
-To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
+To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medic-ai.readthedocs.io/en/latest/)
 
 # 🤝 Contributing
 
@@ -178,4 +162,4 @@ This project is greatly inspired by [MONAI](https://monai.io/).
 
 # 📝 Citation
 
-If you use `medicai` in your research or educational purposes, please cite it using the metadata from our [`CITATION.cff`](https://github.com/innat/medic-ai/blob/main/CITATION.cff) file.
+If you use `medicai` in your research or educational purposes, please cite it using the metadata from our `CITATION.cff` file.

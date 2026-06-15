@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="62" viewBox="0 0 360 62" role="img" aria-labelledby="title desc">
+  <title id="title">medicai</title>
+  <desc id="desc">Compact wordmark with medic in dark gray and ai in teal.</desc>
+  <rect width="360" height="62" fill="none"/>
+  <text x="0" y="47" font-family="Trebuchet MS, Verdana, Arial, sans-serif" font-size="54" font-weight="400" letter-spacing="-1">
+    <tspan fill="#1f2933">medic</tspan><tspan fill="#0ea5b7">ai</tspan>
+  </text>
+</svg>
