@@ -20,7 +20,7 @@ venv:
 
 uv-venv:
 	uv venv --python 3.12
-	uv pip install --python .venv/bin/python -e .[dev]
+	uv pip install -e .[dev]
 
 style:
 	python -m black .

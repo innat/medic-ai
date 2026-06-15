@@ -32,7 +32,7 @@
 PyPI version:
 
 ```bash
-!pip install medicai
+pip install medicai
 ```
 
 This installs `medicai` and `keras`, but leaves backend runtime selection to you.
@@ -41,7 +41,7 @@ Install `tensorflow`, `torch`, or `jax` separately based on your workflow.
 Installing from source GitHub: (**recommended**)
 
 ```bash
-!pip install git+https://github.com/innat/medic-ai.git
+pip install git+https://github.com/innat/medic-ai.git
 ```
 
 Using `uv` for local development:
@@ -55,9 +55,9 @@ uv pip install -e .[dev]
 Optional extras:
 
 ```bash
-!pip install "medicai[docs]"
-!pip install "medicai[test]"
-!pip install "medicai[dev]"
+pip install "medicai[docs]"
+pip install "medicai[test]"
+pip install "medicai[dev]"
 ```
 
 # Quick Overview
