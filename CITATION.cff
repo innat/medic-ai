@@ -7,9 +7,10 @@ message: >-
   metadata from this file.
 type: software
 authors:
-  - given-names: Innat
-    family-names: Mohammed
+  - given-names: Mohammed
+    family-names: Innat
     email: innat.dev@gmail.com
+version: 0.0.3
 identifiers:
   - type: url
     value: 'https://github.com/innat/medic-ai'
@@ -18,5 +19,7 @@ abstract: >-
   Medic-AI is a Keras 3 based library for medical image
   analysis with machine learning methods.
 keywords:
-  - 'machine learning, medical image processing, keras'
+  - machine learning
+  - medical image processing
+  - keras
 license: Apache-2.0

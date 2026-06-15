@@ -16,10 +16,9 @@
 # 📋 Table of Contents
 1. [Installation](#-installation)
 2. [Features](#-features)
-3. [Guides](#-guides)
-4. [Documentation](#-documentation)
-5. [Acknowledgements](#-acknowledgements)
-6. [Citation](#-citation)
+3. [Documentation](#-documentation)
+4. [Acknowledgements](#-acknowledgements)
+5. [Citation](#-citation)
 
 
 # 🛠 Installation
@@ -148,38 +147,9 @@ Spacing
 ```
 
 
-# 💡 Guides
-
-**Segmentation**: Available guides for 3D segmentation task.
-
-| Task | GitHub | Kaggle | View |
-|----------|----------|----------|----------|
-| Covid-19  | <a target="_blank" href="notebooks/covid19.ct.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-covid-19-3d-image-segmentation/notebook"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     | <img src="assets/covid.gif" width="200"/>    |
-| BTCV  | <a target="_blank" href="notebooks/btcv.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>    | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-btcv-segmentation-in-keras/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>    | n/a     |
-| BraTS  | <a target="_blank" href="notebooks/brats.multi-gpu.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>    | n/a     |
-| Spleen | <a target="_blank" href="notebooks/spleen.segment.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>     | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-spleen-3d-segmentation-in-keras"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     | <img src="assets/spleen.gif" width="200">  |
-
-**Classification**: Available guides for 3D classification task.
-
-| Task (Classification) | GitHub | Kaggle |
-|----------|----------|----------|
-| Covid-19   | <a target="_blank" href="notebooks/covid19.ct.classification.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-3d-image-classification"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
-**Classification**: Available guides for 2D classification task.
-
-| Task (Classification) | GitHub | Kaggle |
-|----------|----------|----------|
-| MedMNIST [BloodMNIST]   | <a target="_blank" href="notebooks/medicai-x-medmnist-starter-on-multi-class.ipynb"><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-x-medmnist-starter-on-multi-class"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
-**Segmentation**: Available guides for 2D segmentation task.
-
-| Task (Segmentation) | GitHub | Kaggle |
-|----------|----------|----------|
-| ISIC-2017   | <a target="_blank" href=""><img src="https://img.shields.io/badge/GitHub-View%20source-lightgrey" /></a>       | <a target="_blank" href="https://www.kaggle.com/code/ipythonx/medicai-x-isic-2017-starter-on-binary-segmentation"><img src="https://kaggle.com/static/images/open-in-kaggle.svg" /></a>     |
-
 # 📚 Documentation
 
-To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
+To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medic-ai.readthedocs.io/en/latest/)
 
 # 🤝 Contributing
 
@@ -192,4 +162,4 @@ This project is greatly inspired by [MONAI](https://monai.io/).
 
 # 📝 Citation
 
-If you use `medicai` in your research or educational purposes, please cite it using the metadata from our [`CITATION.cff`](https://github.com/innat/medic-ai/blob/main/CITATION.cff) file.
+If you use `medicai` in your research or educational purposes, please cite it using the metadata from our `CITATION.cff` file.
