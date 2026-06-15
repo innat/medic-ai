@@ -1,10 +1,11 @@
 SHELL := /bin/bash
 
-.PHONY: help venv style clean test-unit test-integration test-gpu
+.PHONY: help venv uv-venv style clean test-unit test-integration test-gpu
 
 help:
 	@echo "Commands:"
-	@echo "  venv              : create virtual environment and install package in editable mode."
+	@echo "  venv              : create virtual environment and install package with dev extras."
+	@echo "  uv-venv           : create uv virtual environment and install package with dev extras."
 	@echo "  style             : run formatting tools (black + isort)."
 	@echo "  clean             : remove temporary/cache artifacts."
 	@echo "  test-unit         : run unit tests."
@@ -12,10 +13,14 @@ help:
 	@echo "  test-gpu          : run GPU-marked tests (auto-skip if no GPU)."
 
 venv:
-	python -m venv venv
-	source venv/bin/activate && \
+	python3.12 -m venv .venv
+	source .venv/bin/activate && \
 	python -m pip install -U pip setuptools wheel && \
-	python -m pip install -e .
+	python -m pip install -e .[dev]
+
+uv-venv:
+	uv venv --python 3.12
+	uv pip install --python .venv/bin/python -e .[dev]
 
 style:
 	python -m black .

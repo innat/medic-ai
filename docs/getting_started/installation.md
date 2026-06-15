@@ -8,6 +8,9 @@ You can install `medicai` either from PyPI or directly from the GitHub source re
 pip install medicai
 ```
 
+This installs the core package and its direct Python dependencies, including `keras`,
+but it does not install a backend runtime such as TensorFlow, PyTorch, or JAX.
+
 ## Install from GitHub Source
 
 ```bash
@@ -27,6 +30,18 @@ The package itself does not automatically install any backend framework. You mus
 - CUDA and related GPU drivers are properly installed
 - Your selected backend has GPU support enabled
 - The framework can successfully detect your GPU or TPU device
+
+Optional extras are available for local workflows:
+
+```bash
+pip install "medicai[docs]"
+pip install "medicai[test]"
+pip install "medicai[dev]"
+```
+
+- `docs` installs the documentation toolchain.
+- `test` installs the testing toolchain.
+- `dev` installs docs, tests, and formatting tools.
 
 ## Verifying GPU Access
 
@@ -84,4 +99,3 @@ print(keras.version())
 print(medicai.version())
 print(keras.config.backend())
 ```
-
