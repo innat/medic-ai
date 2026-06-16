@@ -476,8 +476,7 @@ Examples:
         print(y.shape)  # torch.Size([1, 7, 7, 1280])
 
 References:
-    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. ICML 2019.
-        `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_
+{references}\
 """
 
 # --- version-specific extensions ---
@@ -486,6 +485,10 @@ EfficientNetBackboneV1_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
     default_blocks="default",
     default_name="efficientnet",
     extra_args="",
+    references=(
+        "    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. "
+        "ICML 2019. `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_\n"
+    ),
 )
 
 EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
@@ -497,6 +500,10 @@ EfficientNetBackboneV2_DOCSTRING = EfficientNetBackbone_DOCSTRING.format(
         "        Minimum number of filters in any layer after scaling.\n"
         "    bn_momentum (float, default=0.9):\n"
         "        Momentum used for batch normalization layers.\n"
+    ),
+    references=(
+        "    - EfficientNetV2: Smaller Models and Faster Training. "
+        "`arXiv:2104.00298 <https://arxiv.org/abs/2104.00298>`_\n"
     ),
 )
 

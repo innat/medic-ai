@@ -397,8 +397,7 @@ Examples:
         print(y.shape) # (1, 2)
 
 References:
-    - EfficientNetV2: Smaller Models and Faster Training. ICML 2021.
-        `arXiv:2104.00298 <https://arxiv.org/abs/2104.00298>`_
+    - EfficientNetV2: Smaller Models and Faster Training. ICML 2021. `arXiv:2104.00298 <https://arxiv.org/abs/2104.00298>`_
 """
 
 

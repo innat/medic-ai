@@ -50,7 +50,7 @@ class ScaleIntensityRange:
             scaled_image = result["image"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the scaled
+        ``TensorBundle``: The transformed output. We can retrieve the scaled
         tensors using the same keys as the input.
     """
 

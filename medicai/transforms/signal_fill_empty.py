@@ -34,7 +34,7 @@ class SignalFillEmpty:
             filled_image = result["image"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the filled tensors
+        ``TensorBundle``: The transformed output. We can retrieve the filled tensors
         using the same keys as the input.
     """
 

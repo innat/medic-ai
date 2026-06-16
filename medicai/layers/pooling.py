@@ -463,8 +463,7 @@ class AdaptiveMaxPooling3D(AdaptivePooling3D):
 
     1. Deterministic output shapes for 3D data
     2. Strong feature selection via max-based aggregation
-    3. Efficient processing of volumetric inputs such as medical scans or
-      video clips
+    3. Efficient processing of volumetric inputs such as medical scans or video clips
 
     Args:
         output_size (int or tuple of int): Target 3D output size ``(depth, height, width)``.

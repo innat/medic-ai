@@ -17,8 +17,35 @@ class DropPath(layers.Layer):
             If ``None``, a random seed is used. Default is ``None``.
         **kwargs: Additional keyword arguments passed to the base Layer class.
     
+    Example:
+        .. code-block:: python    
+        
+            import keras
+            import numpy as np
+
+            x = keras.ops.ones((4, 8))
+            layer = DropPath(rate=0.5, seed=42)
+            y_train = layer(x, training=True)
+            y_test = layer(x, training=False)
+
+            print(y_train)
+            # tf.Tensor(
+            #     [[0. 0. 0. 0. 0. 0. 0. 0.]
+            #     [0. 0. 0. 0. 0. 0. 0. 0.]
+            #     [2. 2. 2. 2. 2. 2. 2. 2.]
+            #     [0. 0. 0. 0. 0. 0. 0. 0.]], shape=(4, 8), dtype=float32
+            # )
+
+            print(y_test)
+            # tf.Tensor(
+            #     [[1. 1. 1. 1. 1. 1. 1. 1.]
+            #     [1. 1. 1. 1. 1. 1. 1. 1.]
+            #     [1. 1. 1. 1. 1. 1. 1. 1.]
+            #     [1. 1. 1. 1. 1. 1. 1. 1.]], shape=(4, 8), dtype=float32
+            # )
+
     Returns:
-        keras.KerasTensor: Output tensor of the same shape as the input.
+        ``keras.KerasTensor``: Output tensor of the same shape as the input.
         During training, entire sample paths are randomly zeroed with
         probability ``rate`` and the surviving paths are scaled by
         ``1 / (1 - rate)`` to preserve expected output magnitude.

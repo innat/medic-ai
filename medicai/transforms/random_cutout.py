@@ -64,7 +64,7 @@ class RandCutOut:
             unchanged_label = output["label"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the augmented
+        ``TensorBundle``: The transformed output. We can retrieve the augmented
         image tensor and unchanged label tensor using the same keys as the
         input.
 

@@ -40,7 +40,7 @@ class RandFlip:
             flipped_label = result["label"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the flipped
+        ``TensorBundle``: The transformed output. We can retrieve the flipped
         tensors using the same keys as the input.
     """
 

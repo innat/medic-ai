@@ -44,7 +44,7 @@ class RandShiftIntensity:
             shifted_image = result["image"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the shifted
+        ``TensorBundle``: The transformed output. We can retrieve the shifted
         tensors using the same keys as the input.
     """
 

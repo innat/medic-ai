@@ -53,7 +53,7 @@ class NormalizeIntensity:
             normalized_image = result["image"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the normalized
+        ``TensorBundle``: The transformed output. We can retrieve the normalized
         tensors using the same keys as the input.
 
     Raises:

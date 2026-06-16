@@ -27,7 +27,7 @@ def _identity_keras_decorator(*args, **kwargs):
 
 class _FakeKerasModule(types.ModuleType):
     def __getattr__(self, name):
-        fake = type(name, (_FakeKerasObject,), {})
+        fake = type(name, (_FakeKerasObject,), {"__module__": self.__name__})
         setattr(self, name, fake)
         return fake
 
@@ -242,8 +242,10 @@ suppress_warnings = [
 
 def _format_keras_bases(app, name, obj, options, bases):
     for index, base in enumerate(bases):
-        if getattr(base, "__module__", None) == "keras":
-            bases[index] = f"``keras.{base.__qualname__}``"
+        module = getattr(base, "__module__", None)
+        if isinstance(module, str) and module.startswith("keras"):
+            qualname = getattr(base, "__qualname__", getattr(base, "__name__", ""))
+            bases[index] = f"``{module}.{qualname}``"
 
 
 def setup(app):

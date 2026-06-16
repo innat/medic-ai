@@ -45,7 +45,7 @@ class UNETRBasicBlock(layers.Layer):
             print(y.shape) # (1, 128, 128, 64)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *spatial_dims, filters)``, where spatial dimensions
         are determined by the input shape, ``stride``, ``kernel_size``,
         and ``padding`` of the underlying block.
@@ -164,7 +164,7 @@ class UNETRUpsamplingBlock(layers.Layer):
             print(y.shape)  # (1, 32, 32, 128)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *upsampled_spatial_dims, filters)``, where spatial
         dimensions are scaled by ``upsample_kernel_size`` relative to
         ``x_in`` and must match the spatial dimensions of ``x_skip``
@@ -312,7 +312,7 @@ class UNETRPreUpsamplingBlock(layers.Layer):
             print(y.shape)  # (1, 128, 128, 128, 128)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *upsampled_spatial_dims, filters)``, where each spatial
         dimension is scaled by ``upsample_kernel_size`` a total of
         ``1 + num_layer`` times.

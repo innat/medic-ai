@@ -453,8 +453,7 @@ Examples:
         print(y.shape) # torch.Size([1, 2])
 
 References:
-    - An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. ICLR 2021.
-        `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_
+    - An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale. ICLR 2021. `arXiv:2010.11929 <https://arxiv.org/abs/2010.11929>`_
 """
 
 ViTBase.__doc__ = VIT_DOCSTRING.format(name="ViTBase", hidden_dim=768)

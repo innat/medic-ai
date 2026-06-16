@@ -36,7 +36,7 @@ class TensorBundle:
             print(affine.shape) # (4, 4)
 
     Returns:
-        TensorBundle: A container that stores tensors in ``data`` and metadata
+        ``TensorBundle``: A container that stores tensors in ``data`` and metadata
         in ``meta``.
     """
 

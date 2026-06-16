@@ -33,18 +33,6 @@ class Xception(keras.Model, DescribeMixin):
         name: Optional model name.
         **kwargs: Additional keyword arguments passed to ``keras.Model``.
 
-    .. rubric:: Output modes
-       :class: api-subheading
-
-    The output depends on the ``include_top`` and ``pooling`` arguments:
-
-    - If ``include_top=True``, the model returns a classification tensor of
-      shape ``(batch_size, num_classes)``.
-    - If ``include_top=False`` and ``pooling`` is ``None``, the model returns
-      the final backbone feature tensor.
-    - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
-      the model returns a pooled feature tensor.
-
     Example:
         Build a 2D classification model::
 
@@ -61,11 +49,18 @@ class Xception(keras.Model, DescribeMixin):
             print(y.shape)  # torch.Size([1, 2])
 
     Returns:
-        A ``keras.Model`` whose output depends on the configuration.
+        ``keras.KerasTensor``: The output depends on the ``include_top`` and
+        ``pooling`` arguments:
+
+        - If ``include_top=True``, returns a classification tensor of shape
+          ``(batch_size, num_classes)``.
+        - If ``include_top=False`` and ``pooling`` is ``None``, returns the
+          final backbone feature tensor.
+        - If ``include_top=False`` and ``pooling`` is ``"avg"`` or ``"max"``,
+          returns a pooled feature tensor.
 
     References:
-        - Xception: Deep Learning with Depthwise Separable Convolutions.
-          `arXiv:1610.02357 <https://arxiv.org/abs/1610.02357>`_
+        - Xception: Deep Learning with Depthwise Separable Convolutions. `arXiv:1610.02357 <https://arxiv.org/abs/1610.02357>`_
     """
 
     def __init__(

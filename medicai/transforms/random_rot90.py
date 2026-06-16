@@ -42,7 +42,7 @@ class RandRotate90:
             rotated_label = result["label"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the rotated
+        ``TensorBundle``: The transformed output. We can retrieve the rotated
         tensors using the same keys as the input.
 
     Raises:

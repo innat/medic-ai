@@ -480,8 +480,7 @@ Examples:
         print(y.shape) # torch.Size([1, 2])
 
 References:
-    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. ICML 2019.
-        `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_
+    - EfficientNet: Rethinking Model Scaling for Convolutional Neural Networks. ICML 2019. `arXiv:1905.11946 <https://arxiv.org/abs/1905.11946>`_
 """
 
 

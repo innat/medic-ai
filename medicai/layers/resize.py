@@ -111,7 +111,7 @@ class ResizingND(layers.Layer):
             model = keras.Model(inp, out)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *target_spatial, channels)``, where ``target_spatial``
         is determined by ``target_shape`` directly or computed as
         ``floor(input_spatial[i] * scale_factor[i])`` for each spatial

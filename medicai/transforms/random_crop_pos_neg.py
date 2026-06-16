@@ -57,7 +57,7 @@ class RandCropByPosNegLabel:
             print(patch_label.shape) # (32, 32, 32, 1)
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the cropped
+        ``TTensorBundle``: The transformed output. We can retrieve the cropped
         patches using the same keys as the input.
 
     Raises:

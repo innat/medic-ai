@@ -65,7 +65,7 @@ class Spacing:
             print(resampled_label.shape) # (32, 64, 64, 1)
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the resampled
+        ``TensorBundle``: The transformed output. We can retrieve the resampled
         tensors using the same keys as the input.
 
     Raises:

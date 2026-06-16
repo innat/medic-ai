@@ -41,7 +41,7 @@ class MLPBlock(layers.Layer):
             print(y.shape) # (1, 128, 256)
 
     Returns:
-        keras.KerasTensor: Output tensor of the same shape as the input
+        ``keras.KerasTensor``: Output tensor of the same shape as the input
         ``(..., output_dim)``, where all leading dimensions are preserved
         and only the last dimension is projected to ``output_dim``.
 

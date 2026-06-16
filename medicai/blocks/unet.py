@@ -67,7 +67,7 @@ class UNetBasicBlock(layers.Layer):
             print(y.shape) # (1, 124, 124, 64)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, H_out, W_out, filters)`` for 2D inputs or
         ``(batch, D_out, H_out, W_out, filters)`` for 3D inputs,
         where the spatial dimensions depend on ``kernel_size``,
@@ -231,7 +231,7 @@ class UNetOutBlock(layers.Layer):
             print(y.shape)  # (1, 128, 128, 5)
 
     Returns:
-        keras.KerasTensor: Output prediction tensor of shape
+        ``keras.KerasTensor``: Output prediction tensor of shape
         ``(batch, H, W, num_classes)`` for 2D inputs or
         ``(batch, D, H, W, num_classes)`` for 3D inputs,
         where all spatial dimensions are fully preserved by the
@@ -360,7 +360,7 @@ class UNetResBlock(layers.Layer):
             print(y.shape) # (1, 64, 64, 64)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, H_out, W_out, filters)`` for 2D inputs or
         ``(batch, D_out, H_out, W_out, filters)`` for 3D inputs.
         Spatial dimensions are reduced when ``stride > 1``. If input

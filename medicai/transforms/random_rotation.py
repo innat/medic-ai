@@ -117,7 +117,7 @@ class RandRotate:
             augmented_label = output["label"]
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the rotated
+        ``TensorBundle``: The transformed output. We can retrieve the rotated
         tensors using the same keys as the input.
 
     Raises:

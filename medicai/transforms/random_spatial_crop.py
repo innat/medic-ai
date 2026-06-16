@@ -89,7 +89,7 @@ class RandSpatialCrop:
             print(cropped_label.shape) # (32, 32, 32, 1)
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the cropped
+        ``TensorBundle``: The transformed output. We can retrieve the cropped
         tensors using the same keys as the input.
 
     Raises:

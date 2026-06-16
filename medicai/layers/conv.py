@@ -72,7 +72,7 @@ def ConvBnAct(
             print(y.shape) # (1, 32, 64, 64, 64)
 
     Returns:
-        Callable: A function ``apply(x)`` that accepts a ``keras.KerasTensor`` and returns 
+        ``Callable``: A function ``apply(x)`` that accepts a ``keras.KerasTensor`` and returns 
         a ``keras.KerasTensor`` of shape ``(batch, *spatial_dims, filters)``, where 
         ``spatial_dims`` are determined by the stride and padding applied to the input 
         spatial dimensions.
@@ -168,7 +168,7 @@ class DepthwiseConv3D(layers.Conv3D):
             print(y.shape) # (1, 16, 64, 64, 6)
     
     Returns:
-        keras.KerasTensor: Output tensor of shape 
+        ``keras.KerasTensor``: Output tensor of shape 
         ``(batch, d_out, h_out, w_out, input_channels × depth_multiplier)``,
         where the spatial dimensions ``d_out``, ``h_out``, and ``w_out`` depend 
         on the input shape, ``kernel_size``, ``strides``, ``padding``, and 
@@ -284,29 +284,29 @@ class SeparableConv3D(layers.Layer):
             depthwise convolution. Defaults to ``(1, 1, 1)``.
         depth_multiplier (int, optional): The number of depthwise convolution output
             channels for each input channel. Defaults to 1.
-        activation (str or callable, optional): Activation function to use after the
+        activation (str, callable, optional): Activation function to use after the
             pointwise convolution. If ``None``, no activation is applied (linear activation).
             Defaults to ``None``.
         use_bias (bool, optional): Whether the layer uses a bias vector. Defaults to ``True``.
-        depthwise_initializer (str or ``keras.initializers.Initializer``, optional):
+        depthwise_initializer (str, ``keras.initializers.Initializer``, optional):
             Initializer for the depthwise kernel. Defaults to ``"glorot_uniform"``.
-        pointwise_initializer (str or ``keras.initializers.Initializer``, optional):
+        pointwise_initializer (str, ``keras.initializers.Initializer``, optional):
             Initializer for the pointwise kernel. Defaults to ``"glorot_uniform"``.
-        bias_initializer (str or ``keras.initializers.Initializer``, optional):
+        bias_initializer (str, ``keras.initializers.Initializer``, optional):
             Initializer for the bias vector. Defaults to ``"zeros"``.
-        depthwise_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+        depthwise_regularizer (str, ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the depthwise kernel. Defaults to ``None``.
-        pointwise_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+        pointwise_regularizer (str, ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the pointwise kernel. Defaults to ``None``.
-        bias_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+        bias_regularizer (str, ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the bias vector. Defaults to ``None``.
-        activity_regularizer (str or ``keras.regularizers.Regularizer``, optional):
+        activity_regularizer (str, ``keras.regularizers.Regularizer``, optional):
             Regularizer function applied to the output of the layer. Defaults to ``None``.
-        depthwise_constraint (str or ``keras.constraints.Constraint``, optional):
+        depthwise_constraint (str, ``keras.constraints.Constraint``, optional):
             Constraint function applied to the depthwise kernel. Defaults to ``None``.
-        pointwise_constraint (str or ``keras.constraints.Constraint``, optional):
+        pointwise_constraint (str, ``keras.constraints.Constraint``, optional):
             Constraint function applied to the pointwise kernel. Defaults to ``None``.
-        bias_constraint (str or ``keras.constraints.Constraint``, optional):
+        bias_constraint (str, ``keras.constraints.Constraint``, optional):
             Constraint function applied to the bias vector. Defaults to ``None``.
 
     Example:
@@ -326,7 +326,7 @@ class SeparableConv3D(layers.Layer):
             print(y.shape) # (1, 16, 64, 64, 128)
 
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, d_out, h_out, w_out, filters)``, where the spatial dimensions
         ``d_out``, ``h_out``, and ``w_out`` are determined by the depthwise
         convolution's ``kernel_size``, ``strides``, ``padding``, and
@@ -519,7 +519,7 @@ class AtrousSpatialPyramidPooling(layers.Layer):
             print(y.shape) # (1, 224, 224, 256)
  
     Returns:
-        keras.KerasTensor: Output tensor of shape
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *spatial_dims, num_channels)``, where ``spatial_dims``
         matches the input spatial dimensions exactly (preserved via ``"same"``
         padding and the global pooling branch's bilinear/trilinear resize).

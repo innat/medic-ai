@@ -912,12 +912,9 @@ Examples:
         print(y.shape) # (1, 10)
 
 References:
-    - Deep Residual Learning for Image Recognition. CVPR 2016.
-        `arXiv:1512.03385 <https://arxiv.org/abs/1512.03385>`_
-    - Identity Mappings in Deep Residual Networks. ECCV 2016.
-        `arXiv:1603.05027 <https://arxiv.org/abs/1603.05027>`_
-    - Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017.
-        `arXiv:1611.05431 <https://arxiv.org/abs/1611.05431>`_
+    - Deep Residual Learning for Image Recognition. CVPR 2016. `arXiv:1512.03385 <https://arxiv.org/abs/1512.03385>`_
+    - Identity Mappings in Deep Residual Networks. ECCV 2016. `arXiv:1603.05027 <https://arxiv.org/abs/1603.05027>`_
+    - Aggregated Residual Transformations for Deep Neural Networks. CVPR 2017. `arXiv:1611.05431 <https://arxiv.org/abs/1611.05431>`_
 """
 
 ResNet18.__doc__ = RESNET_DOCSTRING.format(name="ResNet18")

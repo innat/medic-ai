@@ -46,7 +46,7 @@ class Orientation:
             print(reoriented_label.shape) # (32, 64, 64, 1)
 
     Returns:
-        TensorBundle: The transformed output. We can retrieve the reoriented
+        ``TensorBundle``: The transformed output. We can retrieve the reoriented
         tensors using the same keys as the input.
 
     Raises:
