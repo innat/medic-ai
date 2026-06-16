@@ -41,7 +41,7 @@ pip install git+https://github.com/innat/medic-ai.git
 Using `uv` for local development:
 
 ```bash
-uv venv --python 3.12
+uv venv --python 3.10
 source .venv/bin/activate
 uv pip install -e .[dev]
 ```

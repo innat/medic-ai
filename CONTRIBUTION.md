@@ -4,7 +4,7 @@ Please refer to the current [roadmap](https://github.com/innat/medic-ai/wiki/Roa
 
 ## 1. Setup
 
-`medicai` now requires Python `3.12+`. Create a fresh environment before
+`medicai` now requires Python `3.10+`. Create a fresh environment before
 installing local dependencies.
 
 ### Option A: `uv` (recommended)
@@ -12,7 +12,7 @@ installing local dependencies.
 ```bash
 git clone https://github.com/innat/medic-ai
 cd medic-ai
-uv venv --python 3.12
+uv venv --python 3.10
 source .venv/bin/activate
 uv pip install -e .[dev]
 ```
@@ -22,7 +22,7 @@ uv pip install -e .[dev]
 ```bash
 git clone https://github.com/innat/medic-ai
 cd medic-ai
-python3.12 -m venv .venv
+python3.10 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip setuptools wheel
 python -m pip install -e .[dev]

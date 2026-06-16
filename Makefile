@@ -13,13 +13,13 @@ help:
 	@echo "  test-gpu          : run GPU-marked tests (auto-skip if no GPU)."
 
 venv:
-	python3.12 -m venv .venv
+	python3.10 -m venv .venv
 	source .venv/bin/activate && \
 	python -m pip install -U pip setuptools wheel && \
 	python -m pip install -e .[dev]
 
 uv-venv:
-	uv venv --python 3.12
+	uv venv --python 3.10
 	uv pip install -e .[dev]
 
 style:

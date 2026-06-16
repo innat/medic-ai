@@ -26,7 +26,7 @@ Contribute like a careful medical ML engineer:
 ## 2. Development Environment
 
 - Package manager: `uv`
-- Target Python: `>=3.12`
+- Target Python: `>=3.10`
 - Core libraries: `keras`, optional backend runtimes `tensorflow`, `torch`, `jax`
 - Medical I/O dependency: `nibabel`
 - On Windows, prefer running all repository commands from WSL rather than
@@ -39,7 +39,7 @@ Contribute like a careful medical ML engineer:
 Setup:
 
 ```bash
-uv venv --python 3.12
+uv venv --python 3.10
 source .venv/bin/activate
 uv pip install -e .[dev]
 ```
