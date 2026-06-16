@@ -149,7 +149,7 @@ Spacing
 
 # 📚 Documentation
 
-To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medic-ai.readthedocs.io/en/latest/)
+To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
 
 # 🤝 Contributing
 
