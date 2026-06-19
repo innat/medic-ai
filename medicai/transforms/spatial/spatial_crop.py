@@ -52,13 +52,17 @@ class SpatialCrop(KeyedTransform):
         present_keys = self.apply_to_present_keys(bundle, apply_crop)
 
         if crop_info["start"] is not None:
-            self.record_transform(
-                bundle,
-                {
-                    "keys": list(present_keys),
-                    "roi_start": crop_info["start"],
-                    "roi_size": crop_info["size"],
-                },
+            bundle.push_transform(
+                self.build_trace_entry(
+                    params={
+                        "keys": list(present_keys),
+                        "roi_start": crop_info["start"],
+                        "roi_size": crop_info["size"],
+                    },
+                    applied=True,
+                    random=False,
+                    invertible=False,
+                )
             )
         return bundle
 

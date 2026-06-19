@@ -86,14 +86,18 @@ class CropForeground(KeyedTransform):
         if self.end_coord_key is not None:
             bundle.meta[self.end_coord_key] = max_coords
 
-        self.record_transform(
-            bundle,
-            {
-                "keys": list(present_keys),
-                "roi_start": min_coords,
-                "roi_size": roi_size,
-                "source_key": self.source_key,
-            },
+        bundle.push_transform(
+            self.build_trace_entry(
+                params={
+                    "keys": list(present_keys),
+                    "roi_start": min_coords,
+                    "roi_size": roi_size,
+                    "source_key": self.source_key,
+                },
+                applied=True,
+                random=False,
+                invertible=False,
+            )
         )
         return bundle
 
