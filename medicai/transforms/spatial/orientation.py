@@ -12,6 +12,11 @@ class Orientation(KeyedTransform, InvertibleTransform):
 
     This transform remains explicitly 3D-only and expects channel-last sample
     tensors shaped like ``(D, H, W, C)``.
+
+    User-facing ``axcodes`` follow the usual anatomical convention order
+    ``(R/L, A/P, S/I)``. Internally, Medic-AI keeps tensors depth-first, so the
+    target tensor-axis orientation is interpreted in ``(D, H, W)`` order,
+    corresponding to ``(S/I, A/P, R/L)`` for an ``RAS`` target.
     """
 
     _AXIS_TO_WORLD = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
@@ -54,7 +59,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 f"Orientation currently supports only 3D tensors; got spatial rank "
                 f"{spatial_rank} for shape {sample_tensor.shape}."
             )
-        transform_info = self._compute_orientation_transform(affine, self.axcodes)
+        target_tensor_axcodes = self._target_tensor_axcodes(self.axcodes)
+        transform_info = self._compute_orientation_transform(affine, target_tensor_axcodes)
 
         def apply_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
             spatial_rank = get_spatial_rank(tensor)
@@ -79,6 +85,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 "original_affine": tf.identity(tf.cast(affine, tf.float32)),
                 "original_axcodes": current_orientation,
                 "target_axcodes": self.axcodes,
+                "target_tensor_axcodes": target_tensor_axcodes,
                 "perm_spatial": list(transform_info["perm_spatial"]),
                 "flip_axes": list(transform_info["flip_axes"]),
             },
@@ -201,7 +208,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
     def _compute_orientation_transform(
         self,
         affine: tf.Tensor,
-        target_axcodes: str,
+        target_tensor_axcodes: str,
     ) -> dict[str, tuple[int, ...]]:
         matrix = tf.cast(affine[:3, :3], tf.float32)
         current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
@@ -209,7 +216,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         current_signs = tf.sign(tf.gather_nd(matrix, gather_indices))
         current_signs = tf.where(current_signs == 0, tf.ones_like(current_signs), current_signs)
 
-        target_axes = [self._AXIS_TO_WORLD[c] for c in target_axcodes]
+        target_axes = [self._AXIS_TO_WORLD[c] for c in target_tensor_axcodes]
         perm_spatial = tuple(
             int(tf.argmax(tf.cast(tf.equal(current_axes, target_axis), tf.int32), output_type=tf.int32))
             for target_axis in target_axes
@@ -218,7 +225,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
             current_signs,
             tf.constant(perm_spatial, dtype=tf.int32),
         )
-        target_signs = tf.constant([self._AXIS_TO_SIGN[c] for c in target_axcodes], dtype=tf.float32)
+        target_signs = tf.constant(
+            [self._AXIS_TO_SIGN[c] for c in target_tensor_axcodes], dtype=tf.float32
+        )
         flip_axes = tuple(
             int(axis)
             for axis in tf.reshape(
@@ -227,6 +236,10 @@ class Orientation(KeyedTransform, InvertibleTransform):
             ).numpy().tolist()
         )
         return {"perm_spatial": perm_spatial, "flip_axes": flip_axes}
+
+    def _target_tensor_axcodes(self, axcodes: str) -> str:
+        """Map anatomical axis-code order to Medic-AI's depth-first tensor order."""
+        return axcodes[::-1]
 
     def _get_last_orientation_trace(self, bundle: TensorBundle) -> dict | None:
         for entry in reversed(bundle.get_applied_transforms()):

@@ -101,6 +101,7 @@ def test_orientation_records_trace_and_inverse_restores_shape():
 
     assert trace["name"] == "Orientation"
     assert trace["invertible"] is True
+    assert trace["params"]["target_tensor_axcodes"] == "SAR"
     restored = orientation.inverse(
         TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
     )
@@ -151,7 +152,7 @@ def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
     orientation = Orientation(keys=["image"], axcodes="RAS")
     forward = orientation(TensorBundle({"image": image}, {"affine": affine}))
 
-    assert tuple(ops.shape(forward["image"])) == (4, 3, 2, 1)
+    assert tuple(ops.shape(forward["image"])) == (2, 4, 3, 1)
 
     restored = orientation.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
