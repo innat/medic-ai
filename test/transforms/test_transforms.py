@@ -109,6 +109,52 @@ def test_orientation_records_trace_and_inverse_restores_shape():
 
 
 @pytest.mark.unit
+def test_orientation_flip_only_preserves_layout_and_restores_affine():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(np.diag([-1.0, 1.0, 1.0, 1.0]).astype(np.float32))
+
+    orientation = Orientation(keys=["image"], axcodes="RAS")
+    forward = orientation(TensorBundle({"image": image}, {"affine": affine}))
+
+    assert tuple(ops.shape(forward["image"])) == (4, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward["affine"]),
+        np.diag([1.0, 1.0, 1.0, 1.0]),
+        rtol=1e-6,
+    )
+
+    restored = orientation.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (4, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["affine"]),
+        np.diag([-1.0, 1.0, 1.0, 1.0]),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_orientation_raises_when_axis_permutation_is_required():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(
+        np.array(
+            [
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    orientation = Orientation(keys=["image"], axcodes="RAS")
+
+    with pytest.raises(ValueError, match="flip-only reorientation"):
+        orientation(TensorBundle({"image": image}, {"affine": affine}))
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_handles_flat_input():
     image = as_tensor(np.full((1, 2, 2), 5.0, dtype=np.float32))
     out = ScaleIntensityRange(keys=["image"], a_min=5.0, a_max=5.0, b_min=0.0, b_max=1.0)(
