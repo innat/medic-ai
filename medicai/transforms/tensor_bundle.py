@@ -118,6 +118,18 @@ class TensorBundle:
         """
         self.meta[key] = value
 
+    def get_applied_transforms(self) -> list[dict[str, Any]]:
+        """Return the recorded transform trace list, creating it when needed."""
+        trace = self.meta.get("applied_transforms")
+        if trace is None:
+            trace = []
+            self.meta["applied_transforms"] = trace
+        return trace
+
+    def push_transform(self, trace_entry: dict[str, Any]):
+        """Append one transform trace entry to metadata."""
+        self.get_applied_transforms().append(trace_entry)
+
     def __repr__(self) -> str:
         """Provides a string representation of the TensorBundle.
 

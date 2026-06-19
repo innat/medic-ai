@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.transforms import Compose, TensorBundle
+from medicai.transforms import Compose, Flip, ShiftIntensity, TensorBundle
 
 
 @pytest.mark.unit
@@ -50,3 +50,31 @@ def test_tensorbundle_repr_contains_data_and_meta():
     value = repr(bundle)
     assert "MetaTensor" in value
     assert "spacing" in value
+
+
+@pytest.mark.unit
+def test_compose_inverse_reverses_invertible_transforms_only():
+    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    pipeline = Compose(
+        [
+            Flip(keys=["image"], spatial_axis=1),
+            ShiftIntensity(keys=["image"], offsets=3.0),
+        ]
+    )
+
+    forward = pipeline({"image": image})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}))
+
+    expected = ops.convert_to_numpy(image) + 3.0
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
+
+
+@pytest.mark.unit
+def test_compose_inverse_accepts_mapping_inputs():
+    image = np.arange(6, dtype=np.float32).reshape(2, 3, 1)
+    pipeline = Compose([Flip(keys=["image"], spatial_axis=1)])
+
+    forward = pipeline({"image": image})
+    restored = pipeline.inverse({"image": forward["image"]})
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), image)
