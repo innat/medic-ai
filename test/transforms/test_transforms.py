@@ -134,8 +134,8 @@ def test_orientation_flip_only_preserves_layout_and_restores_affine():
 
 
 @pytest.mark.unit
-def test_orientation_raises_when_axis_permutation_is_required():
-    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
+    image = as_tensor(np.random.randn(2, 3, 4, 1).astype(np.float32))
     affine = as_tensor(
         np.array(
             [
@@ -149,9 +149,18 @@ def test_orientation_raises_when_axis_permutation_is_required():
     )
 
     orientation = Orientation(keys=["image"], axcodes="RAS")
+    forward = orientation(TensorBundle({"image": image}, {"affine": affine}))
 
-    with pytest.raises(ValueError, match="flip-only reorientation"):
-        orientation(TensorBundle({"image": image}, {"affine": affine}))
+    assert tuple(ops.shape(forward["image"])) == (4, 3, 2, 1)
+
+    restored = orientation.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (2, 3, 4, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["affine"]),
+        ops.convert_to_numpy(affine),
+        rtol=1e-6,
+    )
 
 
 @pytest.mark.unit
