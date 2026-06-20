@@ -2,7 +2,13 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.transforms import InvertibleTransform, KeyedTransform, RandTransform, TensorBundle, Transform
+from medicai.transforms import (
+    InvertibleTransform,
+    KeyedTransform,
+    RandomTransform,
+    TensorBundle,
+    Transform,
+)
 from medicai.transforms.base import ensure_tensor_bundle
 from medicai.transforms.utils import (
     ensure_spatial_tuple,
@@ -128,24 +134,24 @@ def test_invertible_transform_records_trace_entries():
 
 
 @pytest.mark.unit
-def test_rand_transform_validates_probability_range():
-    class DummyRandTransform(RandTransform):
+def test_random_transform_validates_probability_range():
+    class DummyRandomTransform(RandomTransform):
         def apply(self, bundle):
             return bundle
 
-    DummyRandTransform(prob=0.0)
-    DummyRandTransform(prob=1.0)
+    DummyRandomTransform(prob=0.0)
+    DummyRandomTransform(prob=1.0)
 
     with pytest.raises(ValueError):
-        DummyRandTransform(prob=-0.1)
+        DummyRandomTransform(prob=-0.1)
 
     with pytest.raises(ValueError):
-        DummyRandTransform(prob=1.1)
+        DummyRandomTransform(prob=1.1)
 
 
 @pytest.mark.unit
-def test_rand_transform_builds_standardized_trace_entries():
-    class DummyRandTransform(RandTransform):
+def test_random_transform_builds_standardized_trace_entries():
+    class DummyRandomTransform(RandomTransform):
         def apply(self, bundle):
             return self.record_random_transform(
                 bundle,
@@ -154,10 +160,10 @@ def test_rand_transform_builds_standardized_trace_entries():
                 kernel="DummyKernel",
             )
 
-    bundle = DummyRandTransform(prob=0.5)(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1)))}))
+    bundle = DummyRandomTransform(prob=0.5)(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1)))}))
     trace = bundle.get_applied_transforms()[-1]
 
-    assert trace["name"] == "DummyRandTransform"
+    assert trace["name"] == "DummyRandomTransform"
     assert trace["params"]["value"] == 3
     assert trace["applied"] is False
     assert trace["random"] is True

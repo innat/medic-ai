@@ -119,9 +119,12 @@ class Spacing(KeyedTransform, InvertibleTransform):
         if isinstance(mode, str):
             self.mode = {key: mode for key in keys}
         elif isinstance(mode, (tuple, list)):
-            if len(mode) != len(keys):
+            if len(keys) == 1 and len(mode) >= 1:
+                self.mode = {keys[0]: mode[0]}
+            elif len(mode) != len(keys):
                 raise ValueError("Length of 'mode' must match length of 'keys'.")
-            self.mode = dict(zip(keys, mode))
+            else:
+                self.mode = dict(zip(keys, mode))
         elif isinstance(mode, dict):
             self.mode = dict(mode)
         else:

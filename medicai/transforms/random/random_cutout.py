@@ -8,11 +8,11 @@ from ..utils import get_spatial_rank
 
 
 class RandomCutOut(RandomTransform):
-    """Apply random CutOut augmentation to a volumetric image tensor.
+    """Apply random CutOut augmentation to 2D or 3D image tensors.
 
     ``RandomCutOut`` samples one or more rectangular masks and replaces the
     corresponding image regions with either a constant value or Gaussian
-    noise. It currently operates on 3D channel-last samples shaped
+    noise. It supports channel-last samples shaped ``(H, W, C)`` and
     ``(D, H, W, C)`` and uses the paired label tensor to optionally avoid
     masking invalid regions.
 
@@ -26,11 +26,12 @@ class RandomCutOut(RandomTransform):
         gaussian_std: Standard deviation for Gaussian fill noise.
         invalid_label: Optional label value marking invalid regions.
         cutout_mode: Either ``"slice"`` for slice-wise masks or ``"volume"``
-            for the same mask across all depth slices.
+            for the same mask across all depth slices. For 2D inputs, both
+            modes behave identically because there is no depth axis.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Apply random cutout to a 3D image-label pair using a raw Python
+        Apply random cutout to a 2D image-label pair using a raw Python
         dictionary:
 
         .. code-block:: python
@@ -45,7 +46,7 @@ class RandomCutOut(RandomTransform):
                 prob=0.5,
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
+            image = tf.random.normal((64, 64, 1))
             label = tf.cast(image > 0, tf.int32)
             result = transform({"image": image, "label": label})
             output = result["image"]
@@ -128,15 +129,15 @@ class RandomCutOut(RandomTransform):
 
         image = bundle.data[self.image_key]
         label = bundle.data[self.label_key]
-        spatial_rank = get_spatial_rank(image if image.shape.rank == 4 else image[..., None])
-        if spatial_rank != 3:
+        spatial_rank = get_spatial_rank(image)
+        if spatial_rank not in (2, 3):
             raise ValueError(
-                f"RandCutOut currently supports only 3D inputs; got spatial rank {spatial_rank} "
-                f"for shape {image.shape}."
+                f"RandomCutOut currently supports only 2D or 3D inputs; got spatial rank "
+                f"{spatial_rank} for shape {image.shape}."
             )
 
         should_apply = self.sample_should_apply()
-        mask = self.generate_cutout_mask(image, label)
+        mask = self.generate_cutout_mask(image, label, spatial_rank)
 
         bundle.data[self.image_key] = tf.cond(
             should_apply,
@@ -171,8 +172,15 @@ class RandomCutOut(RandomTransform):
             fill = tf.fill(tf.shape(image), tf.cast(self.fill_value, image.dtype))
         return tf.where(mask_bool, image, fill)
 
-    def generate_cutout_mask(self, volume: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
-        """Generate a cutout mask for a 3D sample tensor."""
+    def generate_cutout_mask(
+        self, volume: tf.Tensor, label: tf.Tensor, spatial_rank: int
+    ) -> tf.Tensor:
+        """Generate a cutout mask for a 2D or 3D sample tensor."""
+        if spatial_rank == 2:
+            if label.shape.rank == 3:
+                label = label[..., 0]
+            return self._cutout_mask_2d(volume, label)
+
         if label.shape.rank == 4:
             label = label[..., 0]
         if volume.shape.rank == 3:
@@ -181,6 +189,29 @@ class RandomCutOut(RandomTransform):
         if self.cutout_mode == "slice":
             return self._cutout_mask_slice_wise(volume, label)
         return self._cutout_mask_volume_wise(volume, label)
+
+    def _cutout_mask_2d(self, image: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
+        shape = tf.shape(image)
+        height, width = shape[0], shape[1]
+        mask_h, mask_w = self.mask_size
+        cutout_mask = tf.ones((height, width), tf.float32)
+        valid_mask = (
+            tf.ones((height, width), tf.float32)
+            if self.invalid_label is None
+            else tf.cast(label != self.invalid_label, tf.float32)
+        )
+
+        for _ in range(self.num_cuts):
+            cy = tf.random.uniform([], 0, height, tf.int32)
+            cx = tf.random.uniform([], 0, width, tf.int32)
+            y = tf.range(height)
+            x = tf.range(width)
+            y_mask = (y >= cy - mask_h // 2) & (y < cy + mask_h // 2)
+            x_mask = (x >= cx - mask_w // 2) & (x < cx + mask_w // 2)
+            rect = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32) * valid_mask
+            cutout_mask *= 1.0 - rect
+
+        return cutout_mask[..., None]
 
     def _cutout_mask_slice_wise(self, volume: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
         shape = tf.shape(volume)

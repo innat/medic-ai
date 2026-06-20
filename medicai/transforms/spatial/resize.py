@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import ensure_spatial_tuple, get_spatial_rank
+from ..utils import ensure_spatial_tuple, get_tensor_rank
 
 
 class Resize(KeyedTransform, InvertibleTransform):
@@ -134,7 +134,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         original_shapes = {}
 
         def apply_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = tf.shape(tensor)[: get_spatial_rank(tensor)]
+            original_shapes[key] = self._get_original_spatial_shape(tensor)
             return self.resize_tensor(tensor, key, spatial_shape=self.spatial_shape)
 
         present_keys = self.apply_to_present_keys(bundle, apply_resize)
@@ -173,15 +173,19 @@ class Resize(KeyedTransform, InvertibleTransform):
         spatial_shape: Sequence[int] | tf.Tensor,
     ) -> tf.Tensor:
         """Resize one tensor to the requested spatial shape."""
-        spatial_rank = get_spatial_rank(tensor)
         if isinstance(spatial_shape, tf.Tensor):
             target_shape = spatial_shape
+            target_rank = spatial_shape.shape[0]
+            if target_rank is None:
+                raise ValueError("`spatial_shape` tensor must have a statically known length.")
         else:
+            target_rank = len(spatial_shape)
             target_shape = tf.convert_to_tensor(
-                ensure_spatial_tuple(spatial_shape, spatial_rank, "spatial_shape"),
+                ensure_spatial_tuple(spatial_shape, target_rank, "spatial_shape"),
                 dtype=tf.int32,
             )
 
+        spatial_rank = self._resolve_spatial_rank(tensor, target_rank)
         if spatial_rank == 2:
             return self._resize_2d(tensor, key, target_shape)
         if spatial_rank == 3:
@@ -192,7 +196,9 @@ class Resize(KeyedTransform, InvertibleTransform):
         return tf.image.resize(tensor, spatial_shape, method=self.mode.get(key))
 
     def _resize_3d(self, tensor: tf.Tensor, key: str, spatial_shape: tf.Tensor) -> tf.Tensor:
-        tensor = tensor[None, ...]
+        added_batch = tensor.shape.rank == 4
+        if added_batch:
+            tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,
             spatial_shape[0],
@@ -201,7 +207,40 @@ class Resize(KeyedTransform, InvertibleTransform):
             method=self.mode.get(key),
             align_corners=False,
         )
-        return resized[0]
+        return resized[0] if added_batch else resized
+
+    def _resolve_spatial_rank(self, tensor: tf.Tensor, target_rank: int) -> int:
+        """Resolve whether a tensor is unbatched or batched for the requested target rank."""
+        tensor_rank = get_tensor_rank(tensor)
+        if target_rank not in (2, 3):
+            raise ValueError(f"`spatial_shape` must be 2D or 3D, got {target_rank}D.")
+
+        if tensor_rank == target_rank + 1:
+            return target_rank
+        if tensor_rank == target_rank + 2:
+            return target_rank
+
+        raise ValueError(
+            "Resize expects a channel-last tensor shaped either as an unbatched sample "
+            f"or batched sample compatible with target spatial rank {target_rank}. "
+            f"Received shape {tensor.shape}."
+        )
+
+    def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
+        """Extract the original spatial shape using the configured target rank."""
+        target_rank = len(self.spatial_shape)
+        tensor_rank = get_tensor_rank(tensor)
+
+        if tensor_rank == target_rank + 1:
+            return tf.shape(tensor)[:target_rank]
+        if tensor_rank == target_rank + 2:
+            return tf.shape(tensor)[1 : 1 + target_rank]
+
+        raise ValueError(
+            "Resize expects a channel-last tensor shaped either as an unbatched sample "
+            f"or batched sample compatible with target spatial rank {target_rank}. "
+            f"Received shape {tensor.shape}."
+        )
 
     def _get_last_resize_trace(self, bundle: TensorBundle) -> dict | None:
         for entry in reversed(bundle.get_applied_transforms()):
