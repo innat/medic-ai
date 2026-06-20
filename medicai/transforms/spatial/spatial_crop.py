@@ -14,6 +14,11 @@ class SpatialCrop(KeyedTransform):
     ``(D, H, W, C)`` using either a crop ``roi_start`` or a crop
     ``roi_center`` together with ``roi_size``.
 
+    ``roi_size`` is interpreted per spatial dimension. Non-positive values are
+    treated as "use the full available size" for that dimension after bounds
+    checking. Crop bounds are clipped so the output always stays within the
+    selected tensor's spatial extent.
+
     Args:
         keys: Keys of the tensors to crop.
         roi_size: Desired spatial crop size.
@@ -22,6 +27,36 @@ class SpatialCrop(KeyedTransform):
         roi_center: Spatial center coordinates of the crop. Mutually exclusive
             with ``roi_start``.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Crop a centered 3D patch from an image-label pair:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import SpatialCrop
+
+            transform = SpatialCrop(
+                keys=["image", "label"],
+                roi_size=(32, 64, 64),
+                roi_center=(24, 48, 48),
+            )
+
+            image = tf.random.normal((48, 96, 96, 1))
+            label = tf.random.uniform((48, 96, 96, 1), maxval=2, dtype=tf.int32)
+
+            result = transform({"image": image, "label": label})
+
+    Returns:
+        ``TensorBundle``: The input bundle with cropped tensors and a
+        non-invertible transform trace entry appended when at least one
+        selected key is present.
+
+    Raises:
+        ValueError: If both ``roi_start`` and ``roi_center`` are provided, or
+            if a spatial parameter does not match the selected tensor rank.
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
     """
 
     def __init__(
@@ -67,7 +102,15 @@ class SpatialCrop(KeyedTransform):
         return bundle
 
     def compute_crop_bounds(self, tensor: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
-        """Compute bounded crop start and size for one tensor."""
+        """Compute bounded crop start coordinates and crop size.
+
+        Args:
+            tensor: Channel-last 2D or 3D sample tensor to crop.
+
+        Returns:
+            tuple[tf.Tensor, tf.Tensor]: A pair ``(starts, roi_size)`` where
+            both tensors have one value per spatial dimension.
+        """
         spatial_rank = get_spatial_rank(tensor)
         spatial_shape = get_spatial_shape(tensor)
         roi_size = tf.convert_to_tensor(
@@ -96,7 +139,17 @@ class SpatialCrop(KeyedTransform):
         return starts, roi_size
 
     def crop_tensor(self, tensor: tf.Tensor, starts: tf.Tensor, roi_size: tf.Tensor) -> tf.Tensor:
-        """Crop one tensor with dynamic TensorFlow slicing."""
+        """Crop one tensor using TensorFlow slicing.
+
+        Args:
+            tensor: Channel-last 2D or 3D sample tensor.
+            starts: Start indices for each spatial dimension.
+            roi_size: Crop size for each spatial dimension.
+
+        Returns:
+            ``tf.Tensor``: The cropped tensor with the original channel
+            dimension preserved.
+        """
         begin = tf.concat([starts, [0]], axis=0)
         size = tf.concat([roi_size, [tf.shape(tensor)[-1]]], axis=0)
         return tf.slice(tensor, begin=begin, size=size)

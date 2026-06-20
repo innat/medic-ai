@@ -8,18 +8,54 @@ from ..utils import get_spatial_rank, normalize_axes
 
 
 class Rotate90(KeyedTransform, InvertibleTransform):
-    """Rotate selected tensors by multiples of 90 degrees.
+    """Rotate selected tensors by quarter turns in a spatial plane.
 
-    This transform rotates tensors in a plane defined by ``spatial_axes``. It
-    supports both 2D channel-last tensors ``(H, W, C)`` and 3D channel-last
-    tensors ``(D, H, W, C)``.
+    ``Rotate90`` deterministically rotates channel-last sample tensors by
+    multiples of 90 degrees. The rotation plane is selected through
+    ``spatial_axes`` and can be used for:
+
+    - 2D tensors shaped ``(H, W, C)``
+    - 3D tensors shaped ``(D, H, W, C)``
+
+    For 2D tensors, leaving ``spatial_axes=None`` rotates in the image plane.
+    For 3D tensors, the default also rotates within the last two spatial
+    dimensions, preserving the leading depth axis.
+
+    The transform is invertible because the inverse is another quarter-turn
+    rotation with ``(-k) % 4``. Applied parameters are recorded in the
+    ``TensorBundle`` trace for inspection and downstream inversion workflows.
 
     Args:
         keys: Keys of the tensors to rotate.
-        k: Number of quarter turns.
+        k: Number of 90-degree counterclockwise quarter turns.
         spatial_axes: Two axes defining the rotation plane. If ``None``, the
             transform rotates in the last two spatial dimensions.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Rotate a 2D image-label pair by 90 degrees:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Rotate90
+
+            transform = Rotate90(keys=["image", "label"], k=1)
+
+            image = tf.random.normal((128, 128, 1))
+            label = tf.random.uniform((128, 128, 1), maxval=2, dtype=tf.int32)
+
+            result = transform({"image": image, "label": label})
+
+    Returns:
+        ``TensorBundle``: The input bundle with rotated tensors and an
+        invertible transform trace entry when ``k % 4 != 0``.
+
+    Raises:
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
+        ValueError: If a selected tensor is not channel-last 2D or 3D, or if
+            ``spatial_axes`` does not resolve to exactly two valid axes.
     """
 
     def __init__(
@@ -68,7 +104,16 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         return bundle
 
     def rotate_tensor(self, tensor: tf.Tensor, k: int | tf.Tensor | None = None) -> tf.Tensor:
-        """Rotate one tensor by multiples of 90 degrees."""
+        """Rotate one tensor by multiples of 90 degrees.
+
+        Args:
+            tensor: Channel-last 2D or 3D sample tensor.
+            k: Optional quarter-turn override. When ``None``, ``self.k`` is
+                used.
+
+        Returns:
+            ``tf.Tensor``: The rotated tensor.
+        """
         axes = self._resolve_axes(tensor)
         effective_k = tf.math.floormod(
             tf.cast(self.k if k is None else k, tf.int32),

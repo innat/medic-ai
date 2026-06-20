@@ -15,6 +15,89 @@ class CropForeground(KeyedTransform):
     builds a bounding box around that region, and applies the same crop to all
     selected tensors. It supports both 2D channel-last tensors ``(H, W, C)``
     and 3D channel-last tensors ``(D, H, W, C)``.
+
+    Foreground is computed by reducing the source tensor across the channel
+    dimension and selecting spatial locations where ``select_fn`` evaluates to
+    ``True``. Optional margins can then be added, and the final crop size can
+    be expanded to be divisible by a requested factor such as a network stride.
+
+    This transform records crop start and end coordinates in metadata when
+    ``start_coord_key`` and ``end_coord_key`` are provided. The transform is
+    not currently invertible.
+
+    Args:
+        keys: Keys of tensors to crop once the foreground bounding box has been
+            estimated.
+        source_key: Key of the tensor used to compute the foreground mask.
+        select_fn: Callable that receives the source tensor and returns a
+            boolean-like mask used to define foreground.
+        channel_indices: Optional subset of source channels used when
+            estimating foreground.
+        margin: Extra padding added around the detected bounding box. Can be a
+            scalar or a per-dimension sequence.
+        allow_smaller: If ``True``, allow the crop to shrink against image
+            boundaries when margin expansion would exceed the image extent.
+        k_divisible: Expand the crop so each spatial dimension is divisible by
+            this value or per-dimension sequence.
+        start_coord_key: Metadata key used to store crop start coordinates, or
+            ``None`` to skip storing them.
+        end_coord_key: Metadata key used to store crop end coordinates, or
+            ``None`` to skip storing them.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Crop a 2D image-label pair using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import CropForeground
+
+            transform = CropForeground(
+                keys=["image", "label"],
+                source_key="image",
+                margin=4,
+            )
+
+            image = tf.pad(tf.ones((24, 24, 1)), paddings=[[8, 8], [8, 8], [0, 0]])
+            label = tf.cast(image > 0, tf.float32)
+
+            result = transform({"image": image, "label": label})
+            cropped_image = result["image"]
+            cropped_label = result["label"]
+
+        Crop a 3D image volume using a ``TensorBundle`` and inspect the stored
+        crop coordinates:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import CropForeground, TensorBundle
+
+            transform = CropForeground(
+                keys=["image"],
+                source_key="image",
+                margin=(2, 4, 4),
+                k_divisible=2,
+            )
+
+            image = tf.pad(
+                tf.ones((8, 16, 16, 1)),
+                paddings=[[4, 4], [8, 8], [8, 8], [0, 0]],
+            )
+            bundle = TensorBundle({"image": image})
+
+            result = transform(bundle)
+            start = result["foreground_start_coord"]
+            end = result["foreground_end_coord"]
+
+    Returns:
+        ``TensorBundle``: The input bundle with cropped tensors, optional crop
+        coordinate metadata, and a non-invertible trace entry appended.
+
+    Raises:
+        KeyError: If ``source_key`` or a requested crop key is missing and
+            ``allow_missing_keys=False``.
     """
 
     def __init__(

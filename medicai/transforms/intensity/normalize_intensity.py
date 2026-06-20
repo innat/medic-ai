@@ -7,7 +7,81 @@ from ..tensor_bundle import TensorBundle
 
 
 class NormalizeIntensity(KeyedTransform):
-    """Normalize tensor intensities using global or channel-wise statistics."""
+    """Normalize selected tensors using global or channel-wise intensity statistics.
+
+    ``NormalizeIntensity`` standardizes tensor values by subtracting a mean-like
+    term and dividing by a standard-deviation-like term. The statistics can be
+    computed over the whole tensor or independently per channel, and can be
+    restricted to nonzero voxels or pixels when background values should be
+    excluded from normalization.
+
+    This transform operates on channel-last tensors and is commonly used for
+    medical images shaped like ``(H, W, C)`` or ``(D, H, W, C)``. Label tensors
+    are usually not appropriate inputs unless a workflow explicitly requires
+    intensity-style normalization on them.
+
+    Args:
+        keys: Keys of the tensors to normalize.
+        subtrahend: Optional fixed value to subtract. If ``None``, the mean of
+            the selected values is used.
+        divisor: Optional fixed value to divide by. If ``None``, the standard
+            deviation of the selected values is used.
+        nonzero: If ``True``, statistics are computed only over nonzero values.
+            For global normalization, zero-valued locations are left unchanged
+            after normalization. For channel-wise normalization, nonzero values
+            determine the statistics used for each channel.
+        channel_wise: If ``True``, normalize each channel independently using
+            channel-specific statistics. If ``False``, normalize using one set
+            of statistics over the full tensor.
+        dtype: Output dtype used for computation and returned tensors.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Normalize a 2D image using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import NormalizeIntensity
+
+            transform = NormalizeIntensity(
+                keys=["image"],
+                nonzero=True,
+                channel_wise=False,
+            )
+
+            image = tf.random.normal((64, 64, 1))
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Normalize a 3D image volume using a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import NormalizeIntensity, TensorBundle
+
+            transform = NormalizeIntensity(
+                keys=["image"],
+                nonzero=True,
+                channel_wise=False,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+
+    Returns:
+        ``TensorBundle``: The input bundle with selected tensors normalized in
+        place and a non-invertible trace entry appended.
+
+    Raises:
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
+    """
 
     def __init__(
         self,

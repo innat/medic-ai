@@ -13,6 +13,65 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     This transform remains 3D-focused for now and expects channel-last sample
     tensors shaped like ``(D, H, W, C)``.
+
+    A crop center is sampled from either positive-label voxels or negative
+    voxels according to the ``pos:neg`` ratio, then the same patch is cropped
+    from both image and label tensors.
+
+    Args:
+        keys: Two keys containing the image tensor and label tensor.
+        spatial_size: Output crop size as ``(D, H, W)``.
+        pos: Relative weight for positive-center sampling.
+        neg: Relative weight for negative-center sampling.
+        num_samples: Number of samples to return. Currently only ``1`` is
+            supported.
+        image_reference_key: Optional key for an intensity reference tensor
+            used to constrain negative sampling.
+        image_threshold: Threshold applied to ``image_reference_key`` during
+            negative sampling.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Randomly crop a 3D image-label pair using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomCropByPosNegLabel
+
+            transform = RandomCropByPosNegLabel(
+                keys=["image", "label"],
+                spatial_size=(16, 32, 32),
+                pos=1,
+                neg=1,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            result = transform({"image": image, "label": label})
+            output = result["image"]
+            print(output.shape)
+
+        Randomly crop a 3D image-label pair stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomCropByPosNegLabel, TensorBundle
+
+            transform = RandomCropByPosNegLabel(
+                keys=["image", "label"],
+                spatial_size=(16, 32, 32),
+                pos=1,
+                neg=1,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            bundle = TensorBundle({"image": image, "label": label})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
     """
 
     def __init__(

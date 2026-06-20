@@ -10,13 +10,92 @@ from ..utils import get_spatial_rank
 class Orientation(KeyedTransform, InvertibleTransform):
     """Reorient tensors to a target anatomical axis code.
 
-    This transform remains explicitly 3D-only and expects channel-last sample
-    tensors shaped like ``(D, H, W, C)``.
+    ``Orientation`` reorders and flips volumetric tensors so their voxel axes
+    match a requested anatomical orientation such as ``"RAS"`` while preserving
+    Medic-AI's internal tensor layout convention of depth-first,
+    channel-last data.
 
-    User-facing ``axcodes`` follow the usual anatomical convention order
-    ``(R/L, A/P, S/I)``. Internally, Medic-AI keeps tensors depth-first, so the
-    target tensor-axis orientation is interpreted in ``(D, H, W)`` order,
-    corresponding to ``(S/I, A/P, R/L)`` for an ``RAS`` target.
+    In Medic-AI, 3D sample tensors are expected to use the shape
+    ``(D, H, W, C)``, where:
+
+    - ``D`` is the depth axis
+    - ``H`` is the height axis
+    - ``W`` is the width axis
+    - ``C`` is the channel axis
+
+    The associated ``affine`` metadata must describe that same voxel order.
+    This means any loader that converts file-native arrays into Medic-AI's
+    ``(D, H, W, C)`` layout must also reorder the affine consistently before
+    calling this transform.
+
+    User-facing ``axcodes`` follow standard anatomical orientation order
+    ``(R/L, A/P, S/I)``. Internally, because Medic-AI tensors are depth-first,
+    the requested target is translated into the corresponding tensor-axis order
+    ``(D, H, W) -> (S/I, A/P, R/L)``. For example, ``axcodes="RAS"`` means
+    that after reorientation the tensor's depth axis corresponds to
+    superior-inferior, height corresponds to anterior-posterior, and width
+    corresponds to right-left.
+
+    This transform is invertible. During ``apply()``, it records the original
+    affine and axis mapping into the ``TensorBundle`` transform trace so
+    ``inverse()`` can restore both the tensor layout and affine metadata.
+
+    Args:
+        keys: Keys of tensors in the bundle to reorient. Each selected tensor
+            must be a 3D channel-last sample with shape ``(D, H, W, C)``.
+        axcodes: Target anatomical orientation code written in standard medical
+            imaging convention, such as ``"RAS"``, ``"LPS"``, or ``"LAS"``.
+            The string must contain exactly three characters.
+        allow_missing_keys: If ``True``, missing keys are skipped. If ``False``,
+            missing requested keys raise an error.
+
+    Example:
+        Reorient an image-label pair to ``RAS`` and then restore the original
+        orientation:
+
+        .. code-block:: python
+
+            import numpy as np
+            import tensorflow as tf
+            from medicai.transforms import Orientation, TensorBundle
+
+            orient = Orientation(keys=["image", "label"], axcodes="RAS")
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+            affine = tf.constant(
+                [
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
+                dtype=tf.float32,
+            )
+
+            bundle = TensorBundle(
+                {
+                    "image": image, 
+                    "label": label
+                },
+                meta={
+                    "affine": affine
+                },
+            )
+
+            forward = orient(bundle)
+            restored = orient.inverse(forward)
+            print(np.all(restored["image"].numpy() == image.numpy())) # True
+
+    Returns:
+        ``TensorBundle``: The input bundle with selected tensors reoriented in
+        place, updated ``affine`` metadata, and an invertible transform trace
+        appended to ``bundle.meta["applied_transforms"]``.
+
+    Raises:
+        ValueError: If ``axcodes`` is not a 3-character string.
+        ValueError: If ``affine`` metadata is missing.
+        ValueError: If any selected tensor is not 3D spatially.
+        KeyError: If none of the requested keys are present and ``allow_missing_keys=False``.
     """
 
     _AXIS_TO_WORLD = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
@@ -51,24 +130,13 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 return bundle
             raise KeyError(f"None of the keys {self.keys} were found in input data.")
 
+        self._validate_bundle_is_3d(bundle)
         current_orientation = self.get_orientation_from_affine(affine)
         sample_tensor = bundle.data[sample_key]
-        spatial_rank = get_spatial_rank(sample_tensor)
-        if spatial_rank != 3:
-            raise ValueError(
-                f"Orientation currently supports only 3D tensors; got spatial rank "
-                f"{spatial_rank} for shape {sample_tensor.shape}."
-            )
         target_tensor_axcodes = self._target_tensor_axcodes(self.axcodes)
         transform_info = self._compute_orientation_transform(affine, target_tensor_axcodes)
 
         def apply_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            spatial_rank = get_spatial_rank(tensor)
-            if spatial_rank != 3:
-                raise ValueError(
-                    f"Orientation currently supports only 3D tensors; got spatial rank "
-                    f"{spatial_rank} for shape {tensor.shape}."
-                )
             return self.orient_tensor(tensor, transform_info["perm_spatial"], transform_info["flip_axes"])
 
         present_keys = self.apply_to_present_keys(bundle, apply_orientation)
@@ -120,6 +188,20 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self.apply_to_present_keys(bundle, apply_inverse_orientation, keys=present_keys)
         bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
         return bundle
+
+    def _validate_bundle_is_3d(self, bundle: TensorBundle) -> None:
+        """Validate that present tensors use Medic-AI 3D sample layout."""
+        for key in self.keys:
+            if key not in bundle.data:
+                continue
+            tensor = bundle.data[key]
+            spatial_rank = get_spatial_rank(tensor)
+            if spatial_rank != 3:
+                raise ValueError(
+                    "Orientation supports only 3D channel-last tensors shaped "
+                    f"(D, H, W, C). Key '{key}' has shape {tensor.shape} with spatial rank "
+                    f"{spatial_rank}."
+                )
 
     def orient_tensor(
         self,

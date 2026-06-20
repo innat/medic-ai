@@ -8,7 +8,52 @@ from ..intensity.shift_intensity import ShiftIntensity
 
 
 class RandomShiftIntensity(RandomTransform):
-    """Randomly shift the intensity values of specified tensors."""
+    """Randomly shift intensity values of selected tensors.
+
+    ``RandomShiftIntensity`` samples additive offsets from a configured range
+    and applies them with a given probability using the deterministic
+    :class:`~medicai.transforms.ShiftIntensity` kernel.
+
+    The transform expects channel-last tensors such as ``(H, W, C)`` or
+    ``(D, H, W, C)``. Offsets may be sampled once per tensor or separately per
+    channel depending on ``channel_wise``.
+
+    Args:
+        keys: Keys of the tensors to shift.
+        offsets: Symmetric scalar magnitude or explicit ``(min, max)`` offset
+            range to sample from.
+        prob: Probability of applying the shift.
+        channel_wise: If ``True``, sample independent per-channel offsets.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Randomly shift a 2D image using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomShiftIntensity
+
+            transform = RandomShiftIntensity(keys=["image"], offsets=0.1, prob=0.5)
+            image = tf.random.normal((64, 64, 1))
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Randomly shift a 3D image stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomShiftIntensity, TensorBundle
+
+            transform = RandomShiftIntensity(keys=["image"], offsets=0.1, prob=0.5)
+            image = tf.random.normal((32, 64, 64, 1))
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+    """
 
     def __init__(
         self,

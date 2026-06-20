@@ -7,7 +7,67 @@ from ..tensor_bundle import TensorBundle
 
 
 class SignalFillEmpty(KeyedTransform):
-    """Fill NaN, positive infinity, and negative infinity values in selected tensors."""
+    """Replace invalid floating-point signal values in selected tensors.
+
+    ``SignalFillEmpty`` sanitizes tensors by replacing ``NaN`` values and
+    positive or negative infinities with finite values. This is useful before
+    downstream normalization, resampling, or batching steps that assume valid
+    numeric inputs.
+
+    The transform is intended for image-like tensors in channel-last layout,
+    such as ``(H, W, C)`` or ``(D, H, W, C)``.
+
+    Args:
+        keys: Keys of the tensors to sanitize.
+        replacement: Value used for ``NaN`` entries. Positive and negative
+            infinity values default to the largest and smallest finite
+            ``float32`` values unless overridden in :meth:`nan_to_num`.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Replace invalid values in a 2D image using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import SignalFillEmpty
+
+            transform = SignalFillEmpty(keys=["image"], replacement=0.0)
+
+            image = tf.constant([[[float("nan")], [1.0]]], dtype=tf.float32)
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Sanitize a 3D image volume using a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import SignalFillEmpty, TensorBundle
+
+            transform = SignalFillEmpty(keys=["image"], replacement=0.0)
+
+            image = tf.random.normal((16, 32, 32, 1))
+            image = tf.tensor_scatter_nd_update(
+                image,
+                indices=[[0, 0, 0, 0]],
+                updates=[float("nan")],
+            )
+
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+
+    Returns:
+        ``TensorBundle``: The input bundle with selected tensors sanitized in
+        place and a non-invertible trace entry appended.
+
+    Raises:
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
+    """
 
     def __init__(
         self,

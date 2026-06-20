@@ -9,7 +9,62 @@ from ..spatial.spatial_crop import SpatialCrop
 
 
 class RandomSpatialCrop(RandomTransform):
-    """Randomly crop a spatial region of interest from selected tensors."""
+    """Randomly crop a spatial region of interest from selected tensors.
+
+    ``RandomSpatialCrop`` samples a crop center and, optionally, a crop size
+    before extracting a spatial patch with the deterministic
+    :class:`~medicai.transforms.SpatialCrop` kernel.
+
+    This transform supports:
+
+    - 2D tensors shaped ``(H, W, C)``
+    - 3D tensors shaped ``(D, H, W, C)``
+
+    When ``invalid_label`` is provided, the crop center can be sampled using
+    the ``"label"`` tensor to favor valid regions.
+
+    Args:
+        keys: Keys of the tensors to crop.
+        roi_size: Minimum or fixed crop size.
+        max_roi_size: Maximum crop size when ``random_size=True``.
+        random_center: If ``True``, sample crop centers randomly.
+        random_size: If ``True``, sample crop sizes between ``roi_size`` and
+            ``max_roi_size``.
+        invalid_label: Label value treated as invalid when enforcing valid
+            crop regions.
+        min_valid_ratio: Minimum fraction of valid labels required in a crop.
+        max_attempts: Maximum attempts when searching for a crop that satisfies
+            ``min_valid_ratio``.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Randomly crop a 2D image using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomSpatialCrop
+
+            transform = RandomSpatialCrop(keys=["image"], roi_size=(32, 32))
+            image = tf.random.normal((64, 64, 1))
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Randomly crop a 3D image stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomSpatialCrop, TensorBundle
+
+            transform = RandomSpatialCrop(keys=["image"], roi_size=(16, 32, 32))
+            image = tf.random.normal((32, 64, 64, 1))
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+    """
 
     def __init__(
         self,

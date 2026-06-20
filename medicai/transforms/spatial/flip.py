@@ -8,17 +8,65 @@ from ..utils import normalize_axes
 
 
 class Flip(KeyedTransform, InvertibleTransform):
-    """Deterministically flip selected tensors along one or more axes.
+    """Flip selected tensors along one or more spatial axes.
 
-    This transform reverses each selected tensor along the requested axes. It
-    supports both 2D channel-last tensors ``(H, W, C)`` and 3D channel-last
-    tensors ``(D, H, W, C)``.
+    ``Flip`` deterministically reverses channel-last sample tensors using
+    TensorFlow's ``tf.reverse``. It can be applied to common Medic-AI
+    dictionary-style samples such as image-label pairs and supports both:
+
+    - 2D tensors shaped ``(H, W, C)``
+    - 3D tensors shaped ``(D, H, W, C)``
+
+    The transform is invertible because applying the same flip twice restores
+    the original orientation. During :meth:`apply`, the normalized axes are
+    recorded in the ``TensorBundle`` transform trace so downstream pipelines
+    can inspect what was applied.
 
     Args:
         keys: Keys of the tensors to flip.
-        spatial_axis: Axis or axes passed to ``tf.reverse``. If ``None``, the
-            transform is a no-op.
+        spatial_axis: Spatial axis or axes to reverse. Axes follow the tensor's
+            sample layout, so ``0`` refers to ``H`` for 2D tensors and ``D``
+            for 3D tensors. If ``None``, the transform is a no-op.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Flip a 3D image-label pair along the depth axis:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Flip
+
+            transform = Flip(keys=["image", "label"], spatial_axis=0)
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+
+            result = transform({"image": image, "label": label})
+
+        Flip a 2D image stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Flip, TensorBundle
+
+            transform = Flip(keys=["image"], spatial_axis=0)
+            image = tf.random.normal((64, 64, 1))
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+
+    Returns:
+        ``TensorBundle``: The input bundle with flipped tensors and an
+        invertible transform trace entry when a flip is applied.
+
+    Raises:
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
+        ValueError: If ``spatial_axis`` contains invalid axes for a selected
+            tensor.
     """
 
     def __init__(
@@ -60,7 +108,15 @@ class Flip(KeyedTransform, InvertibleTransform):
         return bundle
 
     def flip_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
-        """Flip one tensor using the configured axes."""
+        """Flip one tensor using the configured spatial axes.
+
+        Args:
+            tensor: Channel-last 2D or 3D sample tensor to reverse.
+
+        Returns:
+            ``tf.Tensor``: The flipped tensor. If ``spatial_axis`` is
+            ``None``, the input tensor is returned unchanged.
+        """
         if self.spatial_axis is None:
             return tensor
         return tf.reverse(tensor, axis=self._resolve_axes(tensor))

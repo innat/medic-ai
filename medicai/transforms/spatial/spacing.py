@@ -12,8 +12,94 @@ from .resize import resize_volumes
 class Spacing(KeyedTransform, InvertibleTransform):
     """Resample tensors to a target physical spacing.
 
-    This transform remains explicitly 3D-only and expects channel-last sample
-    tensors shaped like ``(D, H, W, C)``.
+    ``Spacing`` uses voxel spacing derived from the input affine matrix to
+    resample 3D channel-last tensors to a requested physical resolution. It is
+    intended for volumetric medical images and corresponding labels that follow
+    Medic-AI's ``(D, H, W, C)`` tensor convention.
+
+    The transform reads the source spacing from ``bundle.meta["affine"]``. If
+    no affine is provided, it falls back to spacing ``(1.0, 1.0, 1.0)`` and
+    emits a warning. The output spacing is recorded in ``bundle.meta["pixdim"]``.
+
+    ``Spacing`` is invertible in the sense that it records the original voxel
+    spacing and spatial shapes so :meth:`inverse` can resample tensors back to
+    their prior shape and spacing metadata. Because this is a resampling
+    operation, the restored tensor is not guaranteed to be numerically
+    identical to the original input.
+
+    Args:
+        keys: Keys of tensors to resample.
+        pixdim: Target voxel spacing given as ``(depth, height, width)``
+            spacing values.
+        mode: Interpolation mode specified as a single string, a sequence
+            aligned with ``keys``, or a mapping from key to mode. Valid 3D
+            modes are ``"trilinear"`` and ``"nearest"``.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Resample a 3D image-label pair to isotropic spacing using a raw Python
+        dictionary and affine metadata:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Spacing
+
+            transform = Spacing(
+                keys=["image", "label"],
+                pixdim=(1.0, 1.0, 1.0),
+                mode=("trilinear", "nearest"),
+            )
+
+            image = tf.random.normal((24, 128, 128, 1))
+            label = tf.random.uniform((24, 128, 128, 1), maxval=2, dtype=tf.int32)
+            affine = tf.constant(
+                [
+                    [0.0, 0.0, 2.5, 0.0],
+                    [0.0, 0.8, 0.0, 0.0],
+                    [3.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
+                dtype=tf.float32,
+            )
+
+            result = transform({"image": image, "label": label}, {"affine": affine})
+
+        Resample a 3D image volume using a ``TensorBundle`` and restore its
+        prior spacing:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Spacing, TensorBundle
+
+            transform = Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0))
+
+            image = tf.random.normal((24, 64, 64, 1))
+            affine = tf.constant(
+                [
+                    [0.0, 0.0, 2.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [3.0, 0.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
+                dtype=tf.float32,
+            )
+
+            bundle = TensorBundle({"image": image}, {"affine": affine})
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
+    Returns:
+        ``TensorBundle``: The input bundle with resampled tensors, updated
+        spacing metadata, and an invertible transform trace entry appended.
+
+    Raises:
+        ValueError: If ``pixdim`` is not length 3, if a tensor is not 3D
+            spatially, or if an invalid interpolation mode is provided.
+        TypeError: If ``mode`` is not a string, sequence, or mapping.
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
     """
 
     def __init__(
@@ -49,6 +135,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        self._validate_bundle_is_3d(bundle)
         affine = bundle.meta.get("affine")
         if affine is not None:
             original_spacing = self.get_spacing_from_affine(affine)
@@ -116,6 +203,20 @@ class Spacing(KeyedTransform, InvertibleTransform):
         self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
         bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
         return bundle
+
+    def _validate_bundle_is_3d(self, bundle: TensorBundle) -> None:
+        """Validate that present tensors use Medic-AI 3D sample layout."""
+        for key in self.keys:
+            if key not in bundle.data:
+                continue
+            tensor = bundle.data[key]
+            spatial_rank = get_spatial_rank(tensor)
+            if spatial_rank != 3:
+                raise ValueError(
+                    "Spacing supports only 3D channel-last tensors shaped "
+                    f"(D, H, W, C). Key '{key}' has shape {tensor.shape} with spatial rank "
+                    f"{spatial_rank}."
+                )
 
     def get_spacing_from_affine(self, affine: tf.Tensor) -> tf.Tensor:
         """Calculate voxel spacing from a 4x4 affine matrix."""

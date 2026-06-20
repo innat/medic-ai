@@ -56,7 +56,56 @@ def rotate_volume(
 
 
 class RandomRotate(RandomTransform):
-    """Random rotation transform for 3D volumes using slice-wise 2D rotation."""
+    """Randomly rotate 3D volumes using slice-wise 2D projection transforms.
+
+    ``RandomRotate`` samples an angle and rotates each depth slice in the
+    height-width plane. The first key is treated like an image tensor and uses
+    bilinear interpolation, while the optional second key is treated like a
+    label tensor and uses nearest-neighbor interpolation.
+
+    This transform currently supports only 3D channel-last tensors shaped
+    ``(D, H, W, C)``.
+
+    Args:
+        keys: One or two keys. When two keys are provided, they are typically
+            image then label.
+        factor: Maximum absolute sampled rotation angle in radians.
+        prob: Probability of applying the rotation.
+        fill_value: Constant fill value for the primary image key when
+            ``fill_mode="constant"``.
+        fill_mode: Either ``"constant"`` or ``"crop"``.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Randomly rotate a 3D image-label pair using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomRotate
+
+            transform = RandomRotate(keys=["image", "label"], factor=0.2, prob=0.5)
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            result = transform({"image": image, "label": label})
+            output = result["image"]
+            print(output.shape)
+
+        Randomly rotate a 3D image-label pair stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomRotate, TensorBundle
+
+            transform = RandomRotate(keys=["image", "label"], factor=0.2, prob=0.5)
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            bundle = TensorBundle({"image": image, "label": label})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+    """
 
     def __init__(
         self,

@@ -8,13 +8,97 @@ from ..utils import ensure_spatial_tuple, get_spatial_rank
 
 
 class Resize(KeyedTransform, InvertibleTransform):
-    """Resize selected tensors to a target spatial shape."""
+    """Resize selected tensors to a requested spatial shape.
+
+    ``Resize`` resamples channel-last tensors to a fixed 2D or 3D spatial
+    shape while preserving the channel dimension. It supports both image-like
+    tensors and label-like tensors, with interpolation configured per key so
+    continuous images can use linear interpolation while discrete labels can
+    use nearest-neighbor interpolation.
+
+    This transform supports:
+
+    - 2D tensors shaped ``(H, W, C)``
+    - 3D tensors shaped ``(D, H, W, C)``
+
+    ``Resize`` is invertible in the limited sense that it records the original
+    spatial shape and can resize the transformed result back to that shape via
+    :meth:`inverse`. As with any resampling transform, the restored tensor is
+    shape-consistent but may not be numerically identical to the original.
+
+    Args:
+        keys: Keys of tensors to resize.
+        mode: Interpolation mode specified as a single string, a sequence
+            aligned with ``keys``, or a mapping from key to mode. Valid modes
+            are ``"bilinear"`` and ``"nearest"`` for 2D targets, and
+            ``"trilinear"`` and ``"nearest"`` for 3D targets. This argument
+            is required so callers explicitly choose a rank-appropriate mode.
+        spatial_shape: Target spatial shape. Must be length 2 for 2D resizing
+            or length 3 for 3D resizing. This argument is required so callers
+            explicitly define the intended output rank.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Resize a 2D image-label pair using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Resize
+
+            transform = Resize(
+                keys=["image", "label"],
+                mode=("bilinear", "nearest"),
+                spatial_shape=(128, 128),
+            )
+
+            image = tf.random.normal((96, 96, 1))
+            label = tf.random.uniform((96, 96, 1), maxval=2, dtype=tf.int32)
+
+            result = transform({"image": image, "label": label})
+            resized_image = result["image"]
+            resized_label = result["label"]
+
+        Resize a 3D image volume using a ``TensorBundle`` and restore its
+        original shape:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Resize, TensorBundle
+
+            transform = Resize(
+                keys=["image"],
+                mode="trilinear",
+                spatial_shape=(32, 64, 64),
+            )
+
+            image = tf.random.normal((48, 96, 96, 1))
+            bundle = TensorBundle({"image": image})
+
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
+            print(forward["image"].shape)
+            print(restored["image"].shape)
+
+    Returns:
+        ``TensorBundle``: The input bundle with resized tensors, recorded
+        original shapes, and an invertible transform trace entry appended.
+
+    Raises:
+        ValueError: If ``spatial_shape`` is not 2D or 3D, or if an invalid
+            interpolation mode is provided for the requested dimensionality.
+        TypeError: If ``mode`` is not a string, sequence, or mapping.
+        KeyError: If a requested key is missing and
+            ``allow_missing_keys=False``.
+    """
 
     def __init__(
         self,
         keys: Sequence[str],
-        mode: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
-        spatial_shape: Sequence[int] = (96, 96, 96),
+        mode: str | Sequence[str] | Mapping[str, str],
+        spatial_shape: Sequence[int],
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)

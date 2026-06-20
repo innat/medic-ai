@@ -8,7 +8,53 @@ from ..spatial.flip import Flip
 
 
 class RandomFlip(RandomTransform):
-    """Randomly flip selected tensors along specified axes."""
+    """Randomly flip selected tensors along specified spatial axes.
+
+    ``RandomFlip`` wraps the deterministic :class:`~medicai.transforms.Flip`
+    kernel with probabilistic application. When the sampled Bernoulli draw is
+    ``True``, each selected channel-last sample tensor is reversed along the
+    configured axes.
+
+    This transform supports:
+
+    - 2D tensors shaped ``(H, W, C)``
+    - 3D tensors shaped ``(D, H, W, C)``
+
+    Args:
+        keys: Keys of the tensors to flip.
+        prob: Probability of applying the flip.
+        spatial_axis: Spatial axis or axes to reverse. If ``None``, the
+            transform behaves as a no-op.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Randomly flip a 2D image using a raw Python dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomFlip
+
+            transform = RandomFlip(keys=["image"], prob=0.5, spatial_axis=0)
+            image = tf.random.normal((64, 64, 1))
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Randomly flip a 3D image stored in a ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomFlip, TensorBundle
+
+            transform = RandomFlip(keys=["image"], prob=0.5, spatial_axis=0)
+            image = tf.random.normal((32, 64, 64, 1))
+            bundle = TensorBundle({"image": image})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+    """
 
     def __init__(
         self,

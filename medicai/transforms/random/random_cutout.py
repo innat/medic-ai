@@ -8,7 +8,71 @@ from ..utils import get_spatial_rank
 
 
 class RandomCutOut(RandomTransform):
-    """Apply random CutOut augmentation to a volumetric image tensor."""
+    """Apply random CutOut augmentation to a volumetric image tensor.
+
+    ``RandomCutOut`` samples one or more rectangular masks and replaces the
+    corresponding image regions with either a constant value or Gaussian
+    noise. It currently operates on 3D channel-last samples shaped
+    ``(D, H, W, C)`` and uses the paired label tensor to optionally avoid
+    masking invalid regions.
+
+    Args:
+        keys: Two keys containing the image tensor and label tensor.
+        mask_size: Height-width mask size for each cutout window.
+        num_cuts: Number of cutout windows to sample.
+        prob: Probability of applying cutout.
+        fill_mode: Either ``"constant"`` or ``"gaussian"``.
+        fill_value: Constant fill value used when ``fill_mode="constant"``.
+        gaussian_std: Standard deviation for Gaussian fill noise.
+        invalid_label: Optional label value marking invalid regions.
+        cutout_mode: Either ``"slice"`` for slice-wise masks or ``"volume"``
+            for the same mask across all depth slices.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Example:
+        Apply random cutout to a 3D image-label pair using a raw Python
+        dictionary:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomCutOut
+
+            transform = RandomCutOut(
+                keys=["image", "label"],
+                mask_size=(16, 16),
+                num_cuts=2,
+                prob=0.5,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            result = transform({"image": image, "label": label})
+            output = result["image"]
+            print(output.shape)
+
+        Apply random cutout to a 3D image-label pair stored in a
+        ``TensorBundle``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomCutOut, TensorBundle
+
+            transform = RandomCutOut(
+                keys=["image", "label"],
+                mask_size=(16, 16),
+                num_cuts=2,
+                prob=0.5,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            label = tf.cast(image > 0, tf.int32)
+            bundle = TensorBundle({"image": image, "label": label})
+            result = transform(bundle)
+            output = result["image"]
+            print(output.shape)
+    """
 
     def __init__(
         self,
