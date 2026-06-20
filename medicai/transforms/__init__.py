@@ -1,4 +1,10 @@
-from medicai.transforms.base import Compose, InvertibleTransform, KeyedTransform, RandomTransform, Transform
+from medicai.transforms.base import (
+    Compose,
+    InvertibleTransform,
+    KeyedTransform,
+    RandomTransform,
+    Transform,
+)
 from medicai.transforms.intensity.normalize_intensity import NormalizeIntensity
 from medicai.transforms.intensity.scaling import ScaleIntensityRange
 from medicai.transforms.intensity.shift_intensity import ShiftIntensity

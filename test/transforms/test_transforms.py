@@ -594,6 +594,34 @@ def test_rand_crop_by_pos_neg_label_uses_spatial_crop_kernel():
 
 
 @pytest.mark.unit
+def test_rand_crop_by_pos_neg_label_supports_2d_and_3d():
+    image_2d = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
+    label_2d = as_tensor(np.pad(np.ones((2, 2, 1), dtype=np.float32), ((3, 3), (3, 3), (0, 0))))
+    out_2d = RandCropByPosNegLabel(
+        keys=["image", "label"],
+        spatial_size=(4, 4),
+        pos=1,
+        neg=1,
+    )(TensorBundle({"image": image_2d, "label": label_2d}))
+
+    image_3d = as_tensor(np.random.randn(6, 6, 6, 1).astype(np.float32))
+    label_3d = ops.convert_to_tensor(
+        np.pad(np.ones((2, 2, 2, 1), dtype=np.float32), ((2, 2), (2, 2), (2, 2), (0, 0)))
+    )
+    out_3d = RandCropByPosNegLabel(
+        keys=["image", "label"],
+        spatial_size=(3, 3, 3),
+        pos=1,
+        neg=1,
+    )(TensorBundle({"image": image_3d, "label": label_3d}))
+
+    assert tuple(ops.shape(out_2d["image"])) == (4, 4, 1)
+    assert tuple(ops.shape(out_2d["label"])) == (4, 4, 1)
+    assert tuple(ops.shape(out_3d["image"])) == (3, 3, 3, 1)
+    assert tuple(ops.shape(out_3d["label"])) == (3, 3, 3, 1)
+
+
+@pytest.mark.unit
 def test_rand_crop_by_pos_neg_label_validates_arguments():
     with pytest.raises(ValueError, match="pos and neg must be non-negative"):
         RandCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=-1, neg=1)
@@ -610,12 +638,19 @@ def test_rand_crop_by_pos_neg_label_validates_arguments():
 
 @pytest.mark.unit
 def test_rand_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys():
+    image_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
+    label_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
+    transform = RandCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2), pos=1, neg=1)
+
+    with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
+        transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
+
     image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     label_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    transform = RandCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=1, neg=1)
-
-    with pytest.raises(ValueError, match="currently supports only 3D inputs"):
-        transform(TensorBundle({"image": image_2d, "label": label_2d}))
+    with pytest.raises(ValueError, match="`spatial_size` must contain exactly 2 values"):
+        RandCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=1, neg=1)(
+            TensorBundle({"image": image_2d, "label": label_2d})
+        )
 
     skip_transform = RandCropByPosNegLabel(
         keys=["image", "label"],

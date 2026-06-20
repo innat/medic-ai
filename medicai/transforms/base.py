@@ -229,7 +229,7 @@ class Compose(Transform):
                     clip=True,
                 ),
                 Resize(
-                    keys=["image", "label"], 
+                    keys=["image", "label"],
                     spatial_shape=(96, 96, 96),
                     mode=("trilinear", "nearest")
                 )

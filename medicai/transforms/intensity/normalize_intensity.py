@@ -101,7 +101,9 @@ class NormalizeIntensity(KeyedTransform):
         self.dtype = dtype
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        present_keys = self.apply_to_present_keys(bundle, lambda tensor, _: self.normalize_tensor(tensor))
+        present_keys = self.apply_to_present_keys(
+            bundle, lambda tensor, _: self.normalize_tensor(tensor)
+        )
         bundle.push_transform(
             self.build_trace_entry(
                 params={
@@ -140,7 +142,9 @@ class NormalizeIntensity(KeyedTransform):
             div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
             return (channel - sub) / div
 
-        permutation = tf.concat([tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0)
+        permutation = tf.concat(
+            [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0
+        )
         transposed_tensor = tf.transpose(tensor, perm=permutation)
         transposed_mask = tf.transpose(mask, perm=permutation)
         normalized_transposed = tf.map_fn(
@@ -148,7 +152,9 @@ class NormalizeIntensity(KeyedTransform):
             (transposed_tensor, transposed_mask),
             dtype=tensor.dtype,
         )
-        inverse_permutation = tf.concat([tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0)
+        inverse_permutation = tf.concat(
+            [tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0
+        )
         return tf.transpose(normalized_transposed, perm=inverse_permutation)
 
     def _normalize_global(self, tensor: tf.Tensor) -> tf.Tensor:

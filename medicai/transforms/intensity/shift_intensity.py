@@ -76,7 +76,9 @@ class ShiftIntensity(KeyedTransform):
         self.apply_to_present_keys(bundle, lambda tensor, _: self.shift_tensor(tensor))
         return bundle
 
-    def shift_tensor(self, tensor: tf.Tensor, offsets: Union[float, tf.Tensor, None] = None) -> tf.Tensor:
+    def shift_tensor(
+        self, tensor: tf.Tensor, offsets: Union[float, tf.Tensor, None] = None
+    ) -> tf.Tensor:
         """Shift one tensor by a scalar or broadcastable offset."""
         offset = tf.cast(self.offsets if offsets is None else offsets, dtype=tensor.dtype)
         return tensor + offset

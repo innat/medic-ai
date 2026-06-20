@@ -220,7 +220,9 @@ class CropForeground(KeyedTransform):
         )
 
         min_coords = tf.maximum(tf.cast(min_coords, tf.int32) - margin, 0)
-        max_coords = tf.minimum(tf.cast(max_coords, tf.int32) + margin, tf.cast(image_shape, tf.int32))
+        max_coords = tf.minimum(
+            tf.cast(max_coords, tf.int32) + margin, tf.cast(image_shape, tf.int32)
+        )
 
         if not allow_smaller:
             min_coords = tf.minimum(min_coords, tf.cast(image_shape, tf.int32) - margin)

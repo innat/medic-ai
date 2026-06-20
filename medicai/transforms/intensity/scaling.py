@@ -106,7 +106,9 @@ class ScaleIntensityRange(KeyedTransform):
         self.dtype = dtype
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        present_keys = self.apply_to_present_keys(bundle, lambda tensor, _: self.scale_tensor(tensor))
+        present_keys = self.apply_to_present_keys(
+            bundle, lambda tensor, _: self.scale_tensor(tensor)
+        )
         bundle.push_transform(
             self.build_trace_entry(
                 params={

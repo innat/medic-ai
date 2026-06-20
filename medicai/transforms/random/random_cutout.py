@@ -100,9 +100,13 @@ class RandomCutOut(RandomTransform):
         if num_cuts <= 0:
             raise ValueError("`num_cuts` must be a positive integer.")
         if fill_mode not in {"gaussian", "constant"}:
-            raise ValueError(f'`fill_mode` must be either "gaussian" or "constant". Got {fill_mode}.')
+            raise ValueError(
+                f'`fill_mode` must be either "gaussian" or "constant". Got {fill_mode}.'
+            )
         if cutout_mode not in {"slice", "volume"}:
-            raise ValueError(f'`cutout_mode` must be one of {{"slice", "volume"}}. Got {cutout_mode}.')
+            raise ValueError(
+                f'`cutout_mode` must be one of {{"slice", "volume"}}. Got {cutout_mode}.'
+            )
 
         self.image_key = keys[0]
         self.label_key = keys[1]

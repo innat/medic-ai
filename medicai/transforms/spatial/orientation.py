@@ -74,7 +74,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
 
             bundle = TensorBundle(
                 {
-                    "image": image, 
+                    "image": image,
                     "label": label
                 },
                 meta={
@@ -137,7 +137,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
         transform_info = self._compute_orientation_transform(affine, target_tensor_axcodes)
 
         def apply_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            return self.orient_tensor(tensor, transform_info["perm_spatial"], transform_info["flip_axes"])
+            return self.orient_tensor(
+                tensor, transform_info["perm_spatial"], transform_info["flip_axes"]
+            )
 
         present_keys = self.apply_to_present_keys(bundle, apply_orientation)
         bundle.meta["affine"] = self.reoriented_affine(
@@ -300,7 +302,11 @@ class Orientation(KeyedTransform, InvertibleTransform):
 
         target_axes = [self._AXIS_TO_WORLD[c] for c in target_tensor_axcodes]
         perm_spatial = tuple(
-            int(tf.argmax(tf.cast(tf.equal(current_axes, target_axis), tf.int32), output_type=tf.int32))
+            int(
+                tf.argmax(
+                    tf.cast(tf.equal(current_axes, target_axis), tf.int32), output_type=tf.int32
+                )
+            )
             for target_axis in target_axes
         )
         current_signs_for_output = tf.gather(
@@ -315,7 +321,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
             for axis in tf.reshape(
                 tf.where(tf.not_equal(current_signs_for_output, target_signs)),
                 [-1],
-            ).numpy().tolist()
+            )
+            .numpy()
+            .tolist()
         )
         return {"perm_spatial": perm_spatial, "flip_axes": flip_axes}
 

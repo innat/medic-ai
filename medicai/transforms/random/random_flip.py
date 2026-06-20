@@ -3,8 +3,8 @@ from typing import Sequence, Union
 import tensorflow as tf
 
 from ..base import RandomTransform
-from ..tensor_bundle import TensorBundle
 from ..spatial.flip import Flip
+from ..tensor_bundle import TensorBundle
 
 
 class RandomFlip(RandomTransform):

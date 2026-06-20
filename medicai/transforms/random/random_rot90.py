@@ -3,8 +3,8 @@ from typing import Sequence
 import tensorflow as tf
 
 from ..base import RandomTransform
-from ..tensor_bundle import TensorBundle
 from ..spatial.rotate90 import Rotate90
+from ..tensor_bundle import TensorBundle
 
 
 class RandomRotate90(RandomTransform):

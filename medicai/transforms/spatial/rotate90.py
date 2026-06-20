@@ -102,7 +102,9 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             return bundle
 
         inverse_k = (-effective_k) % 4
-        self.apply_to_present_keys(bundle, lambda tensor, _: self.rotate_tensor(tensor, k=inverse_k))
+        self.apply_to_present_keys(
+            bundle, lambda tensor, _: self.rotate_tensor(tensor, k=inverse_k)
+        )
         return bundle
 
     def rotate_tensor(self, tensor: tf.Tensor, k: int | tf.Tensor | None = None) -> tf.Tensor:

@@ -3,8 +3,8 @@ from typing import Sequence, Tuple, Union
 import tensorflow as tf
 
 from ..base import RandomTransform
-from ..tensor_bundle import TensorBundle
 from ..intensity.shift_intensity import ShiftIntensity
+from ..tensor_bundle import TensorBundle
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -75,7 +75,9 @@ class RandomShiftIntensity(RandomTransform):
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_shift = self.sample_should_apply()
-        shift = ShiftIntensity(keys=self.keys, offsets=0.0, allow_missing_keys=self.allow_missing_keys)
+        shift = ShiftIntensity(
+            keys=self.keys, offsets=0.0, allow_missing_keys=self.allow_missing_keys
+        )
         sampled_offsets = {}
         present_keys = shift.iter_present_keys(bundle)
 

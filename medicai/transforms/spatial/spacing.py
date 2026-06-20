@@ -141,9 +141,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
             original_spacing = self.get_spacing_from_affine(affine)
         else:
             original_spacing = tf.constant((1.0, 1.0, 1.0), dtype=tf.float32)
-            warnings.warn(
-                "Affine matrix is not provided. Using default spacing (1.0, 1.0, 1.0)."
-            )
+            warnings.warn("Affine matrix is not provided. Using default spacing (1.0, 1.0, 1.0).")
 
         original_shapes = {}
 

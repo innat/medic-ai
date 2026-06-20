@@ -207,7 +207,9 @@ class RandomRotate(RandomTransform):
             method=method,
         )
 
-    def _get_lrr_size(self, width: tf.Tensor, height: tf.Tensor, angle: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
+    def _get_lrr_size(
+        self, width: tf.Tensor, height: tf.Tensor, angle: tf.Tensor
+    ) -> tuple[tf.Tensor, tf.Tensor]:
         """Compute Largest Rectangle Rotation size."""
         angle = tf.abs(angle)
         width = tf.cast(width, tf.float32)

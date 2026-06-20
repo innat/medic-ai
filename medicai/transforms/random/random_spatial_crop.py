@@ -3,9 +3,9 @@ from typing import Sequence
 import tensorflow as tf
 
 from ..base import RandomTransform
+from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank, get_spatial_shape
-from ..spatial.spatial_crop import SpatialCrop
 
 
 class RandomSpatialCrop(RandomTransform):
@@ -159,9 +159,11 @@ class RandomSpatialCrop(RandomTransform):
             max_roi_size = (
                 tf.fill([spatial_rank], tf.cast(self.max_roi_size, tf.int32))
                 if isinstance(self.max_roi_size, int)
-                else tf.convert_to_tensor(self.max_roi_size, dtype=tf.int32)
-                if self.max_roi_size is not None
-                else spatial_shape
+                else (
+                    tf.convert_to_tensor(self.max_roi_size, dtype=tf.int32)
+                    if self.max_roi_size is not None
+                    else spatial_shape
+                )
             )
             max_roi_size = tf.where(max_roi_size <= 0, spatial_shape, max_roi_size)
 
@@ -173,7 +175,10 @@ class RandomSpatialCrop(RandomTransform):
                 return tf.random.uniform([], minval=min_s, maxval=max_s + 1, dtype=tf.int32)
 
             roi_size = tf.stack(
-                [sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i]) for i in range(roi_size.shape[0])]
+                [
+                    sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i])
+                    for i in range(roi_size.shape[0])
+                ]
             )
         else:
             roi_size = tf.where(roi_size > 0, roi_size, spatial_shape)
@@ -188,7 +193,10 @@ class RandomSpatialCrop(RandomTransform):
 
         max_start = tf.maximum(spatial_shape - roi_size, 0)
         random_start = tf.stack(
-            [tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32) for i in range(spatial_rank)]
+            [
+                tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32)
+                for i in range(spatial_rank)
+            ]
         )
         return random_start + roi_size // 2
 
