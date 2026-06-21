@@ -193,13 +193,17 @@ class CropForeground(KeyedTransform):
         """Find the bounding box of the foreground in the image."""
         mask = tf.reduce_any(select_fn(image), axis=-1)
         coords = tf.where(mask)
+        coord_dtype = coords.dtype
 
         def empty_bbox():
-            return tf.zeros((spatial_rank,), dtype=tf.int32), get_spatial_shape(image)
+            return (
+                tf.zeros((spatial_rank,), dtype=coord_dtype),
+                tf.cast(get_spatial_shape(image), coord_dtype),
+            )
 
         def foreground_bbox():
-            min_coords = tf.reduce_min(coords[:, :spatial_rank], axis=0)
-            max_coords = tf.reduce_max(coords[:, :spatial_rank], axis=0) + 1
+            min_coords = tf.cast(tf.reduce_min(coords[:, :spatial_rank], axis=0), coord_dtype)
+            max_coords = tf.cast(tf.reduce_max(coords[:, :spatial_rank], axis=0) + 1, coord_dtype)
             return min_coords, max_coords
 
         return tf.cond(tf.shape(coords)[0] > 0, foreground_bbox, empty_bbox)

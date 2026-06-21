@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from keras import ops
+import tensorflow as tf
 
 from medicai.transforms import (
     Compose,
@@ -596,6 +597,30 @@ def test_crop_foreground_channel_indices_and_k_divisible():
     shape = tuple(ops.shape(out["image"]))
     assert shape[0] % 2 == 0
     assert shape[1] % 2 == 0
+
+
+@pytest.mark.unit
+def test_crop_foreground_runs_under_tf_function_graph_mode():
+    transform = CropForeground(keys=["image"], source_key="image")
+    image = as_tensor(
+        np.array(
+            [
+                [[0.0], [0.0], [0.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [0.0], [0.0], [0.0]],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    @tf.function
+    def apply_transform(x):
+        return transform({"image": x})["image"]
+
+    output = apply_transform(image)
+
+    assert tuple(ops.shape(output)) == (2, 2, 1)
 
 
 @pytest.mark.unit
