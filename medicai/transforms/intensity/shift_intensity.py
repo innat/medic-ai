@@ -73,7 +73,15 @@ class ShiftIntensity(KeyedTransform):
         self.offsets = offsets
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        self.apply_to_present_keys(bundle, lambda tensor, _: self.shift_tensor(tensor))
+        present_keys = self.apply_to_present_keys(bundle, lambda tensor, _: self.shift_tensor(tensor))
+        bundle.push_transform(
+            self.build_trace_entry(
+                params={"keys": list(present_keys), "offsets": self.offsets},
+                applied=True,
+                random=False,
+                invertible=False,
+            )
+        )
         return bundle
 
     def shift_tensor(

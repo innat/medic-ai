@@ -121,6 +121,8 @@ class RandomRotate(RandomTransform):
             raise TypeError("`keys` must be a list or tuple.")
         if len(keys) not in (1, 2):
             raise ValueError("`keys` must have length 1 or 2.")
+        if factor < 0:
+            raise ValueError(f"`factor` must be non-negative. Received {factor}.")
         if fill_mode not in {"crop", "constant"}:
             raise ValueError("fill_mode must be either 'crop' or 'constant'.")
 

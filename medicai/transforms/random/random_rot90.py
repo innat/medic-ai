@@ -65,6 +65,8 @@ class RandomRotate90(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob)
+        if max_k < 1:
+            raise ValueError(f"`max_k` must be >= 1. Received {max_k}.")
         self.keys = tuple(keys)
         self.max_k = max_k
         self.spatial_axes = spatial_axes

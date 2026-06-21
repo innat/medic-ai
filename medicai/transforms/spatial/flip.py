@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import normalize_axes
+from ..utils import get_spatial_rank, normalize_spatial_axes
 
 
 class Flip(KeyedTransform, InvertibleTransform):
@@ -127,4 +127,5 @@ class Flip(KeyedTransform, InvertibleTransform):
             axes = (axes,)
         if axes is None:
             return ()
-        return normalize_axes(tuple(axes), rank=tensor.shape.rank, name="spatial_axis")
+        spatial_rank = get_spatial_rank(tensor)
+        return normalize_spatial_axes(tuple(axes), spatial_rank)

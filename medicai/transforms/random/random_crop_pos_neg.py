@@ -131,7 +131,11 @@ class RandomCropByPosNegLabel(RandomTransform):
                 f"{spatial_rank} for shape {image.shape}."
             )
 
-        image_reference = bundle.data.get(self.image_reference_key)
+        image_reference = None
+        if self.image_reference_key is not None:
+            if self.image_reference_key not in bundle.data:
+                raise KeyError(f"Key '{self.image_reference_key}' not found in input data.")
+            image_reference = bundle.data[self.image_reference_key]
         center = self.sample_center(image, label, image_reference, spatial_rank)
         roi_size = tf.convert_to_tensor(self.spatial_size, dtype=tf.int32)
         if roi_size.shape.rank != 1 or roi_size.shape[0] != spatial_rank:
@@ -219,8 +223,21 @@ class RandomCropByPosNegLabel(RandomTransform):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
 
         def fallback_coords():
-            full_mask = tf.ones(fallback_shape, dtype=tf.bool)
-            return tf.where(full_mask)
+            num_cols = tf.shape(coords)[1]
+            random_coord = tf.stack(
+                [
+                    tf.random.uniform(
+                        shape=(),
+                        minval=0,
+                        maxval=fallback_shape[axis],
+                        dtype=tf.int32,
+                    )
+                    for axis in range(spatial_rank)
+                ]
+            )
+            padding = tf.zeros([num_cols - spatial_rank], dtype=tf.int32)
+            full_coord = tf.concat([random_coord, padding], axis=0)
+            return tf.expand_dims(tf.cast(full_coord, coords.dtype), axis=0)
 
         coords = tf.cond(tf.shape(coords)[0] > 0, lambda: coords, fallback_coords)
         idx = tf.random.uniform(shape=[], minval=0, maxval=tf.shape(coords)[0], dtype=tf.int32)

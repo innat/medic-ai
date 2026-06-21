@@ -98,6 +98,8 @@ class ScaleIntensityRange(KeyedTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        if (b_min is None) != (b_max is None):
+            raise ValueError("`b_min` and `b_max` must be provided together or both omitted.")
         self.a_min = a_min
         self.a_max = a_max
         self.b_min = b_min

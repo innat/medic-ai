@@ -39,6 +39,15 @@ def test_tensorbundle_creation_and_meta_access():
 
 
 @pytest.mark.unit
+def test_tensorbundle_validates_applied_transform_trace_type():
+    bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
+    bundle.meta["applied_transforms"] = "invalid"
+
+    with pytest.raises(TypeError, match="must be a list"):
+        bundle.get_applied_transforms()
+
+
+@pytest.mark.unit
 def test_tensorbundle_setitem_routes_to_data_or_meta():
     bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
     new_image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
@@ -244,6 +253,22 @@ def test_lambda_transform_supports_inverse_and_meta_hooks():
 
 
 @pytest.mark.unit
+def test_lambda_transform_inverse_with_prob_uses_tensor_trace_flag():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 5.0,
+        inverse_fn=lambda tensor: tensor - 5.0,
+        prob=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+
+
+@pytest.mark.unit
 def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
     with pytest.raises(ValueError):
         LambdaTransform(keys=["image"], fn=lambda tensor: tensor, prob=1.5)
@@ -255,6 +280,8 @@ def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
     strict = LambdaTransform(keys=["image"], fn=lambda tensor: tensor)
     with pytest.raises(KeyError):
         strict(bundle)
+
+
 
 
 @pytest.mark.unit

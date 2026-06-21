@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, normalize_axes
+from ..utils import get_spatial_rank, normalize_spatial_axes
 
 
 class Rotate90(KeyedTransform, InvertibleTransform):
@@ -163,7 +163,8 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 raise ValueError("Rotate90 requires at least two spatial dimensions.")
             return (spatial_rank - 2, spatial_rank - 1)
 
-        axes = normalize_axes(tuple(self.spatial_axes), rank=tensor.shape.rank, name="spatial_axes")
+        spatial_rank = get_spatial_rank(tensor)
+        axes = normalize_spatial_axes(tuple(self.spatial_axes), spatial_rank)
         if len(axes) != 2:
             raise ValueError("`spatial_axes` must contain exactly two axes.")
         return axes

@@ -124,6 +124,8 @@ class TensorBundle:
         if trace is None:
             trace = []
             self.meta["applied_transforms"] = trace
+        elif not isinstance(trace, list):
+            raise TypeError("`meta['applied_transforms']` must be a list.")
         return trace
 
     def push_transform(self, trace_entry: dict[str, Any]):

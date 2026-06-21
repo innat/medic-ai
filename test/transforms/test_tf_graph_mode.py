@@ -129,8 +129,8 @@ def test_spacing_and_orientation_run_under_tf_function():
 
     out_image, out_label, out_affine = apply_transforms(image, label, affine)
 
-    assert tuple(ops.shape(out_image)) == (8, 10, 12, 1)
-    assert tuple(ops.shape(out_label)) == (8, 10, 12, 1)
+    assert tuple(ops.shape(out_image)) == (12, 10, 8, 1)
+    assert tuple(ops.shape(out_label)) == (12, 10, 8, 1)
     assert tuple(ops.shape(out_affine)) == (4, 4)
 
 
@@ -195,7 +195,9 @@ def test_random_crop_by_pos_neg_label_runs_under_tf_function_for_2d_and_3d():
 def test_random_rotate_and_cutout_run_under_tf_function():
     random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)
     random_cutout_2d = RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0)
-    random_cutout_3d = RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0)
+    random_cutout_slicewise = RandomCutOut(
+        keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0
+    )
 
     image_3d = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label_3d = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
@@ -215,7 +217,7 @@ def test_random_rotate_and_cutout_run_under_tf_function():
 
     @tf.function
     def apply_cutout_3d(x, y):
-        result = random_cutout_3d({"image": x, "label": y})
+        result = random_cutout_slicewise({"image": x, "label": y})
         return result["image"]
 
     rotated_image, rotated_label = apply_rotate(image_3d, label_3d)

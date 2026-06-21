@@ -135,12 +135,19 @@ class NormalizeIntensity(KeyedTransform):
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask = channel_and_mask
             channel_masked = tf.boolean_mask(channel, channel_mask)
-            mean = tf.reduce_mean(channel_masked)
-            std = tf.math.reduce_std(channel_masked)
-            sub = self.subtrahend if self.subtrahend is not None else mean
-            div = self.divisor if self.divisor is not None else std
-            div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-            return (channel - sub) / div
+            has_valid = tf.size(channel_masked) > 0
+
+            def normalize_nonempty():
+                mean = tf.reduce_mean(channel_masked)
+                std = tf.math.reduce_std(channel_masked)
+                sub = self.subtrahend if self.subtrahend is not None else mean
+                div = self.divisor if self.divisor is not None else std
+                sub = tf.cast(sub, channel.dtype)
+                div = tf.cast(div, channel.dtype)
+                div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
+                return (channel - sub) / div
+
+            return tf.cond(has_valid, normalize_nonempty, lambda: channel)
 
         permutation = tf.concat(
             [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0

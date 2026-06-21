@@ -1,70 +1,55 @@
 # Transformations
 
-`medicai.transforms` are designed for medical imaging workflows and are implemented with TensorFlow-compatible operations so they can be used in `tf.data` pipelines.
+`medicai.transforms` provides TensorFlow-native preprocessing and augmentation
+utilities for medical imaging workflows. The transforms are designed to work
+cleanly inside `tf.data` pipelines, and most of them are rank-agnostic across
+2D and 3D channel-last tensors.
 
-Most transforms accept either a sample dictionary or a `TensorBundle` and
-return a `TensorBundle`. The transformed tensors stay under the same keys, so
-if we pass inputs such as `image` and `label`, we retrieve the outputs using
-those same keys after each transform or composed pipeline.
+Most transforms accept either:
 
-The package is organized into three groups:
+- a plain sample mapping such as `{"image": image, "label": label}`
+- an existing `TensorBundle`
 
-- `medicai.transforms.spatial`: spatial transforms such as `Resize`,
-  `SpatialCrop`, `Flip`, and `Rotate90`
-- `medicai.transforms.intensity`: intensity transforms such as
-  `NormalizeIntensity`, `ScaleIntensityRange`, and `ShiftIntensity`
-- `medicai.transforms.random`: random augmentations built on top of the
-  deterministic kernels where appropriate
+In both cases, the output is a `TensorBundle`, and transformed tensors remain
+available under the same keys.
+
+The package is organized into three practical groups:
+
+- `medicai.transforms.spatial`
+- `medicai.transforms.intensity`
+- `medicai.transforms.random`
 
 ## Input Conventions
 
-Medic-AI transforms operate on channel-last sample tensors:
+Medic-AI transforms operate on channel-last tensors:
 
-- 2D samples use `(H, W, C)`
-- 3D samples use `(D, H, W, C)`
+- 2D tensors use `(H, W, C)`
+- 3D tensors use `(D, H, W, C)`
 
-Most transforms are intentionally 2D/3D agnostic and expect users to provide
-rank-appropriate spatial arguments explicitly. For example, `Resize` requires
-the caller to pass both `spatial_shape` and `mode`, rather than assuming a 2D
-or 3D default.
+Most transforms are intentionally 2D/3D agnostic, so callers should provide
+rank-appropriate spatial arguments explicitly instead of relying on implicit
+defaults.
 
 Two spatial transforms are intentionally 3D-only:
 
 - `Spacing`
 - `Orientation`
 
-These transforms expect volumetric tensors and will raise clear validation
-errors when called with 2D inputs.
-
-## Data Container
-
-```{eval-rst}
-.. autoclass:: medicai.transforms.TensorBundle
-```
-
-## Building Pipelines
-
-`Compose` chains transforms sequentially. It accepts either a raw mapping or
-an existing `TensorBundle`, converts NumPy arrays to TensorFlow tensors, and
-passes the same container through the whole pipeline.
-
-```python
-from medicai.transforms import Compose, NormalizeIntensity, RandomFlip, Resize
-
-pipeline = Compose(
-    [
-        NormalizeIntensity(keys=["image"], nonzero=True),
-        RandomFlip(keys=["image", "label"], prob=0.5, spatial_axis=0),
-        Resize(
-            keys=["image", "label"],
-            mode=("trilinear", "nearest"),
-            spatial_shape=(64, 128, 128),
-        ),
-    ]
-)
-```
+These expect volumetric inputs and should reject 2D usage with a clear error.
 
 ## Spatial Transforms
+
+Spatial transforms change geometry, layout, orientation, or spatial extent.
+Most of them are designed to work for both 2D and 3D tensors as long as the
+caller provides spatial arguments with the correct rank.
+
+Common examples:
+
+- `SpatialCrop` for extracting a fixed region
+- `Flip` and `Rotate90` for deterministic spatial reordering
+- `Resize` for resampling to a target spatial shape
+- `CropForeground` for foreground-aware cropping
+- `Spacing` and `Orientation` for 3D spatial metadata-aware transforms
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.SpatialCrop
@@ -80,13 +65,19 @@ pipeline = Compose(
 .. autoclass:: medicai.transforms.Orientation
 
 .. autoclass:: medicai.transforms.CropForeground
-
-.. autoclass:: medicai.transforms.RandomCropByPosNegLabel
-
-.. autoclass:: medicai.transforms.RandomSpatialCrop
 ```
 
 ## Intensity Transforms
+
+Intensity transforms adjust voxel or pixel values without changing spatial
+layout.
+
+Common examples:
+
+- `NormalizeIntensity` for mean/std normalization
+- `ScaleIntensityRange` for mapping one range into another
+- `ShiftIntensity` for additive offsets
+- `SignalFillEmpty` for handling invalid values such as `NaN` and `Inf`
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.NormalizeIntensity
@@ -96,12 +87,24 @@ pipeline = Compose(
 .. autoclass:: medicai.transforms.ShiftIntensity
 
 .. autoclass:: medicai.transforms.SignalFillEmpty
-
-.. autoclass:: medicai.transforms.RandomShiftIntensity
-
 ```
 
 ## Random Transforms
+
+Random transforms introduce stochastic augmentation. In the current API, these
+are public transform classes built on top of TensorFlow random ops and, where
+appropriate, deterministic kernels such as `Flip`, `Rotate90`, or
+`ShiftIntensity`.
+
+Common examples:
+
+- `RandomFlip`
+- `RandomRotate90`
+- `RandomRotate`
+- `RandomShiftIntensity`
+- `RandomSpatialCrop`
+- `RandomCropByPosNegLabel`
+- `RandomCutOut`
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomFlip
@@ -115,41 +118,162 @@ pipeline = Compose(
 .. autoclass:: medicai.transforms.RandomRotate
 
 .. autoclass:: medicai.transforms.RandomCutOut
+
+.. autoclass:: medicai.transforms.RandomShiftIntensity
 ```
 
-## Base Abstractions
+## LambdaTransform
 
-The public base classes are also exported from `medicai.transforms` so custom
-transforms can use the same container, trace, and composition behavior as the
-built-in transforms.
+`LambdaTransform` is the lightest way to create custom transforms without
+writing a full subclass. It is useful when a simple callable is enough, but we
+still want to keep Medic-AI features such as:
+
+- keyed execution
+- optional probability-based application
+- optional inverse behavior
+- metadata update hooks
+- transform trace recording
+
+Example:
+
+```python
+import tensorflow as tf
+
+from medicai.transforms import LambdaTransform, TensorBundle
+
+transform = LambdaTransform(
+    keys=["image"],
+    fn=lambda tensor: tensor + 1.0,
+    inverse_fn=lambda tensor: tensor - 1.0,
+    trace_params={"description": "add constant"},
+    name="AddOne",
+)
+
+image = tf.ones((64, 64, 1), dtype=tf.float32)
+bundle = TensorBundle({"image": image})
+
+forward = transform(bundle)
+restored = transform.inverse(forward)
+```
 
 ```{eval-rst}
-.. autoclass:: medicai.transforms.Transform
+.. autoclass:: medicai.transforms.LambdaTransform
+```
 
-.. autoclass:: medicai.transforms.KeyedTransform
+## TensorBundle
 
-.. autoclass:: medicai.transforms.RandomTransform
+`TensorBundle` is the internal execution container used by
+`medicai.transforms`. It keeps transform inputs and metadata together in one
+object:
 
-.. autoclass:: medicai.transforms.InvertibleTransform
+- `bundle.data` stores tensors such as `image`, `label`, or `mask`
+- `bundle.meta` stores side information such as `affine` or applied-transform
+  trace entries
 
+Users do not always need to instantiate it directly, because `Transform.__call__`
+will convert a plain mapping into a `TensorBundle`. Still, it is useful when we
+want to pass metadata explicitly or inspect trace history between steps.
+
+Example:
+
+```python
+import tensorflow as tf
+
+from medicai.transforms import TensorBundle
+
+image = tf.random.normal((32, 32, 1))
+label = tf.zeros((32, 32, 1), dtype=tf.float32)
+
+bundle = TensorBundle(
+    {"image": image, "label": label},
+    {"affine": tf.eye(4)},
+)
+```
+
+```{eval-rst}
+.. autoclass:: medicai.transforms.TensorBundle
+```
+
+## Compose
+
+`Compose` builds transform pipelines by chaining transforms sequentially. It
+accepts either a plain mapping or a `TensorBundle`, normalizes the input, and
+passes the same container through each transform.
+
+Example:
+
+```python
+from medicai.transforms import (
+    Compose,
+    NormalizeIntensity,
+    RandomFlip,
+    Resize,
+)
+
+pipeline = Compose(
+    [
+        NormalizeIntensity(keys=["image"], nonzero=True),
+        RandomFlip(keys=["image", "label"], prob=0.5, spatial_axis=0),
+        Resize(
+            keys=["image", "label"],
+            mode=("trilinear", "nearest"),
+            spatial_shape=(64, 128, 128),
+        ),
+    ]
+)
+```
+
+```{eval-rst}
 .. autoclass:: medicai.transforms.Compose
 ```
 
-## Creating Custom Transforms
+## Transform
 
-The usual extension patterns are:
+`Transform` is the root abstraction. It is the right base class when a custom
+transform needs full control over the whole `TensorBundle`, including both
+tensor data and metadata.
 
-- inherit from `Transform` when you need full control over the input bundle
-- inherit from `KeyedTransform` when the transform applies to a known set of
-  data keys such as `image` and `label`
-- inherit from `RandomTransform` when the transform needs probabilistic
-  application through `sample_should_apply()`
-- mix in `InvertibleTransform` when the transform can record enough metadata
-  to support `inverse()`
+Typical use cases:
 
-### Custom Deterministic Transform
+- transforms that need to inspect or update `bundle.meta`
+- transforms that do not naturally map to a fixed list of tensor keys
+- wrapper transforms that orchestrate more than one internal operation
 
-Use `KeyedTransform` when the transform updates one or more known keys.
+Example custom transform:
+
+```python
+import tensorflow as tf
+
+from medicai.transforms import TensorBundle, Transform
+
+
+class AttachSpacingFlag(Transform):
+    def apply(self, bundle: TensorBundle) -> TensorBundle:
+        bundle.meta["has_affine"] = "affine" in bundle.meta
+        if "image" in bundle.data:
+            image = bundle["image"]
+            bundle.data["image"] = tf.identity(image)
+        return bundle
+```
+
+```{eval-rst}
+.. autoclass:: medicai.transforms.Transform
+```
+
+## KeyedTransform
+
+`KeyedTransform` is the most common base class for deterministic user-defined
+transforms. It is intended for transforms that operate on a known list of keys
+such as `image`, `label`, or `mask`.
+
+It provides:
+
+- `self.keys`
+- `allow_missing_keys`
+- `iter_present_keys()`
+- `apply_to_present_keys()`
+
+Example custom transform:
 
 ```python
 import tensorflow as tf
@@ -178,10 +302,23 @@ class MultiplyIntensity(KeyedTransform):
         return bundle
 ```
 
-### Custom Random Transform
+```{eval-rst}
+.. autoclass:: medicai.transforms.KeyedTransform
+```
 
-Use `RandomTransform` when the transform should be applied with probability
-`prob`.
+## RandomTransform
+
+`RandomTransform` is the base class for transforms with probabilistic
+application. It mainly provides `prob`, `sample_should_apply()`, and
+`record_random_transform()`.
+
+Use it when:
+
+- the transform should apply only with some probability
+- the decision should stay inside TensorFlow ops for `tf.data` compatibility
+- we want standard random-trace recording
+
+Example custom transform:
 
 ```python
 import tensorflow as tf
@@ -196,6 +333,7 @@ class RandomAddBias(RandomTransform):
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_apply = self.sample_should_apply()
+
         if "image" in bundle.data:
             image = bundle["image"]
             bundle.data["image"] = tf.cond(
@@ -203,6 +341,7 @@ class RandomAddBias(RandomTransform):
                 lambda: image + tf.cast(self.bias, image.dtype),
                 lambda: image,
             )
+
         self.record_random_transform(
             bundle,
             params={"keys": ["image"], "bias": self.bias},
@@ -211,10 +350,23 @@ class RandomAddBias(RandomTransform):
         return bundle
 ```
 
-### Custom Invertible Transform
+```{eval-rst}
+.. autoclass:: medicai.transforms.RandomTransform
+```
 
-Use `InvertibleTransform` when the transform can restore the original sample
-from trace metadata.
+## InvertibleTransform
+
+`InvertibleTransform` marks transforms that can reverse their forward effect.
+This is useful for workflows where preprocessing must later be undone, such as
+post-processing predictions back into the original spatial frame.
+
+In practice, invertible custom transforms usually:
+
+- inherit from `KeyedTransform` and `InvertibleTransform`
+- record enough information during `apply()`
+- implement `inverse()` using either stored state or bundle trace metadata
+
+Example custom transform:
 
 ```python
 import tensorflow as tf
@@ -243,18 +395,6 @@ class AddConstant(KeyedTransform, InvertibleTransform):
         return bundle
 ```
 
-### Design Guidelines
-
-- keep tensors in channel-last layout
-- prefer TensorFlow ops throughout the transform implementation
-- make 2D/3D-capable transforms rank-agnostic instead of encoding 2D or 3D
-  defaults
-- reserve explicit rank checks for transforms that are intentionally 3D-only
-- record trace entries for debugging, auditability, and inversion support when
-  applicable
-
-## Pipeline API
-
 ```{eval-rst}
-.. autoclass:: medicai.transforms.Compose
+.. autoclass:: medicai.transforms.InvertibleTransform
 ```

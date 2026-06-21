@@ -194,6 +194,10 @@ class RandomCutOut(RandomTransform):
         shape = tf.shape(image)
         height, width = shape[0], shape[1]
         mask_h, mask_w = self.mask_size
+        y_lo = mask_h // 2
+        y_hi = mask_h - y_lo
+        x_lo = mask_w // 2
+        x_hi = mask_w - x_lo
         cutout_mask = tf.ones((height, width), tf.float32)
         valid_mask = (
             tf.ones((height, width), tf.float32)
@@ -206,8 +210,8 @@ class RandomCutOut(RandomTransform):
             cx = tf.random.uniform([], 0, width, tf.int32)
             y = tf.range(height)
             x = tf.range(width)
-            y_mask = (y >= cy - mask_h // 2) & (y < cy + mask_h // 2)
-            x_mask = (x >= cx - mask_w // 2) & (x < cx + mask_w // 2)
+            y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
+            x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32) * valid_mask
             cutout_mask *= 1.0 - rect
 
@@ -217,6 +221,10 @@ class RandomCutOut(RandomTransform):
         shape = tf.shape(volume)
         depth, height, width = shape[0], shape[1], shape[2]
         mask_h, mask_w = self.mask_size
+        y_lo = mask_h // 2
+        y_hi = mask_h - y_lo
+        x_lo = mask_w // 2
+        x_hi = mask_w - x_lo
         cutout_mask = tf.ones((depth, height, width), tf.float32)
         valid_mask = (
             tf.ones((depth, height, width), tf.float32)
@@ -230,8 +238,8 @@ class RandomCutOut(RandomTransform):
 
             y = tf.range(height)[None, :]
             x = tf.range(width)[None, :]
-            y_mask = (y >= cy[:, None] - mask_h // 2) & (y < cy[:, None] + mask_h // 2)
-            x_mask = (x >= cx[:, None] - mask_w // 2) & (x < cx[:, None] + mask_w // 2)
+            y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
+            x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
             rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32) * valid_mask
             cutout_mask *= 1.0 - rect
 
@@ -241,6 +249,10 @@ class RandomCutOut(RandomTransform):
         shape = tf.shape(volume)
         depth, height, width = shape[0], shape[1], shape[2]
         mask_h, mask_w = self.mask_size
+        y_lo = mask_h // 2
+        y_hi = mask_h - y_lo
+        x_lo = mask_w // 2
+        x_hi = mask_w - x_lo
         cutout_mask = tf.ones((depth, height, width), tf.float32)
         valid_mask = (
             tf.ones((depth, height, width), tf.float32)
@@ -253,8 +265,8 @@ class RandomCutOut(RandomTransform):
             cx = tf.random.uniform([], 0, width, tf.int32)
             y = tf.range(height)
             x = tf.range(width)
-            y_mask = (y >= cy - mask_h // 2) & (y < cy + mask_h // 2)
-            x_mask = (x >= cx - mask_w // 2) & (x < cx + mask_w // 2)
+            y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
+            x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)
             rect = tf.broadcast_to(rect_hw[None, ...], (depth, height, width)) * valid_mask
             cutout_mask *= 1.0 - rect

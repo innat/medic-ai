@@ -79,6 +79,8 @@ class RandomSpatialCrop(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=1.0)
+        if not keys:
+            raise ValueError("`keys` must contain at least one key.")
         self.keys = tuple(keys)
         self.roi_size = roi_size
         self.max_roi_size = max_roi_size
@@ -203,7 +205,8 @@ class RandomSpatialCrop(RandomTransform):
     def _get_label_aware_center(
         self, spatial_shape: tf.Tensor, roi_size: tf.Tensor, label: tf.Tensor, spatial_rank: int
     ) -> tf.Tensor:
-        label = tf.squeeze(label)
+        if label.shape.rank is not None and label.shape.rank > spatial_rank:
+            label = tf.squeeze(label, axis=-1)
         valid_mask = label != self.invalid_label
         valid_coords = tf.where(valid_mask)
 

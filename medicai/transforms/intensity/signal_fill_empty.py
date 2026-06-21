@@ -105,17 +105,15 @@ class SignalFillEmpty(KeyedTransform):
         posinf = tf.float32.max if posinf is None else posinf
         neginf = -tf.float32.max if neginf is None else neginf
 
-        tensor = tf.where(
-            tf.math.is_nan(tensor), tf.fill(tf.shape(tensor), tf.cast(nan, tf.float32)), tensor
-        )
+        tensor = tf.where(tf.math.is_nan(tensor), tf.cast(nan, tf.float32), tensor)
         tensor = tf.where(
             tf.math.is_inf(tensor) & (tensor > 0),
-            tf.fill(tf.shape(tensor), tf.cast(posinf, tf.float32)),
+            tf.cast(posinf, tf.float32),
             tensor,
         )
         tensor = tf.where(
             tf.math.is_inf(tensor) & (tensor < 0),
-            tf.fill(tf.shape(tensor), tf.cast(neginf, tf.float32)),
+            tf.cast(neginf, tf.float32),
             tensor,
         )
         return tf.cast(tensor, original_dtype)

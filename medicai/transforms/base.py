@@ -49,6 +49,20 @@ def ensure_tensor_bundle(
     return TensorBundle(_convert_numpy_mapping(inputs), _convert_numpy_mapping(meta))
 
 
+def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
+    """Convert a trace `applied` flag into a Python bool when possible."""
+    if isinstance(applied, bool):
+        return applied
+    if tf.is_tensor(applied):
+        static_value = tf.get_static_value(tf.cast(applied, tf.bool))
+        if static_value is None:
+            raise ValueError(
+                "Cannot evaluate a symbolic `applied` trace flag outside eager execution."
+            )
+        return bool(static_value)
+    return bool(applied)
+
+
 class Transform:
     """Base class for Medic-AI transforms.
 
@@ -163,13 +177,13 @@ class KeyedTransform(Transform):
         Returns:
             list[str]: The keys that were present and updated.
         """
-        original_keys = self.keys
-        try:
-            if keys is not None:
-                self.keys = tuple(keys)
-            present_keys = self.iter_present_keys(bundle)
-        finally:
-            self.keys = original_keys
+        target_keys = tuple(keys) if keys is not None else self.keys
+        present_keys = []
+        for key in target_keys:
+            if key in bundle.data:
+                present_keys.append(key)
+            elif not self.allow_missing_keys:
+                raise KeyError(f"Key '{key}' not found in input data.")
 
         for key in present_keys:
             bundle.data[key] = fn(bundle.data[key], key)
@@ -244,6 +258,8 @@ class LambdaTransform(KeyedTransform):
         self.name = name
         self.trace_params = dict(trace_params or {})
         self._trace_id = f"lambda_{next(self._instance_counter)}"
+        self._fn_takes_key = self._accepts_two_args(fn)
+        self._inverse_fn_takes_key = self._accepts_two_args(inverse_fn)
 
     @property
     def invertible(self) -> bool:
@@ -291,7 +307,7 @@ class LambdaTransform(KeyedTransform):
             return super().inverse(bundle)
 
         trace = self._get_last_trace(bundle)
-        if trace is None or not trace.get("applied", True):
+        if trace is None or not _trace_applied_to_bool(trace.get("applied", True)):
             return bundle
 
         present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
@@ -313,15 +329,22 @@ class LambdaTransform(KeyedTransform):
         return None
 
     def _call_tensor_fn(self, fn, tensor: tf.Tensor, key: str) -> tf.Tensor:
+        takes_key = self._fn_takes_key if fn is self.fn else self._inverse_fn_takes_key
+        if takes_key:
+            return fn(tensor, key)
+        return fn(tensor)
+
+    @staticmethod
+    def _accepts_two_args(fn) -> bool:
+        if fn is None:
+            return False
         signature = inspect.signature(fn)
         positional = [
             param
             for param in signature.parameters.values()
             if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         ]
-        if len(positional) >= 2:
-            return fn(tensor, key)
-        return fn(tensor)
+        return len(positional) >= 2
 
 
 class Compose(Transform):

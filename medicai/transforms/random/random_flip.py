@@ -74,6 +74,12 @@ class RandomFlip(RandomTransform):
         should_flip = self.sample_should_apply()
 
         if self.flip.spatial_axis is None:
+            self.record_random_transform(
+                bundle,
+                params={"keys": [], "spatial_axis": None},
+                applied=False,
+                kernel="Flip",
+            )
             return bundle
 
         present_keys = self.flip.apply_to_present_keys(
