@@ -2,6 +2,7 @@ from medicai.transforms.base import (
     Compose,
     InvertibleTransform,
     KeyedTransform,
+    LambdaTransform,
     RandomTransform,
     Transform,
 )

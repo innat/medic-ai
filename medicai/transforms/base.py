@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import itertools
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -187,6 +189,139 @@ class InvertibleTransform(Transform):
         """Append a transform trace entry to bundle metadata."""
         bundle.push_transform(self.build_trace_entry(params=params, applied=True, random=False))
         return bundle
+
+
+class LambdaTransform(KeyedTransform):
+    """Apply callable-based keyed transforms with optional random and inverse behavior.
+
+    ``LambdaTransform`` is a user-friendly transform wrapper for cases where
+    defining a full transform subclass would be unnecessary overhead. It keeps
+    Medic-AI's internal ``TensorBundle`` execution model while letting users
+    provide simple tensor callables for forward and optional inverse execution.
+
+    Args:
+        keys: Keys of tensors to transform.
+        fn: Callable applied to each selected tensor. It may accept either
+            ``tensor`` or ``(tensor, key)``.
+        prob: Optional probability of applying the transform. If ``None``, the
+            transform is deterministic and always applies.
+        inverse_fn: Optional callable used by :meth:`inverse`. It may accept
+            either ``tensor`` or ``(tensor, key)``.
+        meta_fn: Optional callable that receives a shallow copy of
+            ``bundle.meta`` after forward execution and returns updated
+            metadata. If it returns ``None``, in-place mutation is assumed.
+        inverse_meta_fn: Optional callable mirroring ``meta_fn`` for inverse
+            execution.
+        allow_missing_keys: If ``True``, missing keys are skipped.
+        name: Optional kernel name recorded in the transform trace.
+        trace_params: Optional static trace parameters merged into the recorded
+            trace entry.
+    """
+
+    _instance_counter = itertools.count()
+
+    def __init__(
+        self,
+        keys: Sequence[str],
+        fn,
+        prob: float | None = None,
+        inverse_fn=None,
+        meta_fn=None,
+        inverse_meta_fn=None,
+        allow_missing_keys: bool = False,
+        name: str | None = None,
+        trace_params: Mapping[str, Any] | None = None,
+    ):
+        super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        if prob is not None and not 0.0 <= prob <= 1.0:
+            raise ValueError(f"`prob` must be in the range [0, 1]. Received {prob}.")
+
+        self.fn = fn
+        self.prob = prob
+        self.inverse_fn = inverse_fn
+        self.meta_fn = meta_fn
+        self.inverse_meta_fn = inverse_meta_fn
+        self.name = name
+        self.trace_params = dict(trace_params or {})
+        self._trace_id = f"lambda_{next(self._instance_counter)}"
+
+    @property
+    def invertible(self) -> bool:
+        return self.inverse_fn is not None
+
+    def apply(self, bundle: TensorBundle) -> TensorBundle:
+        should_apply: tf.Tensor | bool = True
+        if self.prob is not None:
+            should_apply = tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
+
+        present_keys = self.iter_present_keys(bundle)
+        for key in present_keys:
+            tensor = bundle.data[key]
+            if self.prob is None:
+                bundle.data[key] = self._call_tensor_fn(self.fn, tensor, key)
+            else:
+                bundle.data[key] = tf.cond(
+                    should_apply,
+                    lambda tensor=tensor, key=key: self._call_tensor_fn(self.fn, tensor, key),
+                    lambda tensor=tensor: tensor,
+                )
+
+        if self.meta_fn is not None:
+            updated_meta = self.meta_fn(dict(bundle.meta))
+            if updated_meta is not None:
+                bundle.meta = updated_meta
+
+        bundle.push_transform(
+            self.build_trace_entry(
+                params={
+                    "keys": list(present_keys),
+                    "_lambda_id": self._trace_id,
+                    **self.trace_params,
+                },
+                applied=should_apply,
+                random=self.prob is not None,
+                invertible=self.invertible,
+                kernel=self.name,
+            )
+        )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        if self.inverse_fn is None:
+            return super().inverse(bundle)
+
+        trace = self._get_last_trace(bundle)
+        if trace is None or not trace.get("applied", True):
+            return bundle
+
+        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+        for key in present_keys:
+            bundle.data[key] = self._call_tensor_fn(self.inverse_fn, bundle.data[key], key)
+
+        if self.inverse_meta_fn is not None:
+            updated_meta = self.inverse_meta_fn(dict(bundle.meta))
+            if updated_meta is not None:
+                bundle.meta = updated_meta
+        return bundle
+
+    def _get_last_trace(self, bundle: TensorBundle) -> dict[str, Any] | None:
+        for entry in reversed(bundle.get_applied_transforms()):
+            if entry.get("name") != type(self).__name__:
+                continue
+            if entry.get("params", {}).get("_lambda_id") == self._trace_id:
+                return entry
+        return None
+
+    def _call_tensor_fn(self, fn, tensor: tf.Tensor, key: str) -> tf.Tensor:
+        signature = inspect.signature(fn)
+        positional = [
+            param
+            for param in signature.parameters.values()
+            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        if len(positional) >= 2:
+            return fn(tensor, key)
+        return fn(tensor)
 
 
 class Compose(Transform):

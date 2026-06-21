@@ -5,6 +5,7 @@ from keras import ops
 from medicai.transforms import (
     InvertibleTransform,
     KeyedTransform,
+    LambdaTransform,
     RandomTransform,
     TensorBundle,
     Transform,
@@ -169,6 +170,91 @@ def test_random_transform_builds_standardized_trace_entries():
     assert trace["random"] is True
     assert trace["invertible"] is False
     assert trace["kernel"] == "DummyKernel"
+
+
+@pytest.mark.unit
+def test_lambda_transform_applies_deterministic_callable_and_records_trace():
+    bundle = TensorBundle({"image": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 2.0,
+        name="add_two",
+        trace_params={"value": 2},
+    )
+
+    output = transform(bundle)
+    trace = output.get_applied_transforms()[-1]
+
+    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 3.0)
+    assert trace["name"] == "LambdaTransform"
+    assert trace["params"]["keys"] == ["image"]
+    assert trace["params"]["value"] == 2
+    assert trace["random"] is False
+    assert trace["invertible"] is False
+    assert trace["kernel"] == "add_two"
+
+
+@pytest.mark.unit
+def test_lambda_transform_supports_tensor_and_key_signature():
+    bundle = TensorBundle({"image": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor, key: tensor + (1.0 if key == "image" else 0.0),
+    )
+
+    output = transform(bundle)
+
+    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 2.0)
+
+
+@pytest.mark.unit
+def test_lambda_transform_supports_random_application():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+
+    skipped = LambdaTransform(keys=["image"], fn=lambda tensor: tensor + 3.0, prob=0.0)(
+        TensorBundle({"image": image})
+    )
+    applied = LambdaTransform(keys=["image"], fn=lambda tensor: tensor + 3.0, prob=1.0)(
+        TensorBundle({"image": image})
+    )
+
+    np.testing.assert_allclose(ops.convert_to_numpy(skipped["image"]), 1.0)
+    np.testing.assert_allclose(ops.convert_to_numpy(applied["image"]), 4.0)
+    assert not bool(ops.convert_to_numpy(skipped.get_applied_transforms()[-1]["applied"]))
+    assert bool(ops.convert_to_numpy(applied.get_applied_transforms()[-1]["applied"]))
+
+
+@pytest.mark.unit
+def test_lambda_transform_supports_inverse_and_meta_hooks():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 5.0,
+        inverse_fn=lambda tensor: tensor - 5.0,
+        meta_fn=lambda meta: {**meta, "forward_tag": True},
+        inverse_meta_fn=lambda meta: {**meta, "inverse_tag": True},
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+    assert forward.meta["forward_tag"] is True
+    assert restored.meta["inverse_tag"] is True
+
+
+@pytest.mark.unit
+def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
+    with pytest.raises(ValueError):
+        LambdaTransform(keys=["image"], fn=lambda tensor: tensor, prob=1.5)
+
+    permissive = LambdaTransform(keys=["image"], fn=lambda tensor: tensor, allow_missing_keys=True)
+    bundle = TensorBundle({"other": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
+    assert permissive(bundle) is bundle
+
+    strict = LambdaTransform(keys=["image"], fn=lambda tensor: tensor)
+    with pytest.raises(KeyError):
+        strict(bundle)
 
 
 @pytest.mark.unit
