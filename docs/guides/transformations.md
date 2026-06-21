@@ -216,8 +216,8 @@ pipeline = Compose(
         RandomFlip(keys=["image", "label"], prob=0.5, spatial_axis=0),
         Resize(
             keys=["image", "label"],
-            mode=("trilinear", "nearest"),
-            spatial_shape=(64, 128, 128),
+            interpolation=("trilinear", "nearest"),
+            target_shape=(64, 128, 128),
         ),
     ]
 )

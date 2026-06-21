@@ -30,12 +30,12 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     Args:
         keys: Keys of tensors to resize.
-        mode: Interpolation mode specified as a single string, a sequence
-            aligned with ``keys``, or a mapping from key to mode. Valid modes
+        interpolation: Interpolation mode specified as a single string, a sequence
+            aligned with ``keys``, or a mapping from key to interpolation mode. Valid modes
             are ``"bilinear"`` and ``"nearest"`` for 2D targets, and
             ``"trilinear"`` and ``"nearest"`` for 3D targets. This argument
             is required so callers explicitly choose a rank-appropriate mode.
-        spatial_shape: Target spatial shape. Must be length 2 for 2D resizing
+        target_shape: Target spatial shape. Must be length 2 for 2D resizing
             or length 3 for 3D resizing. This argument is required so callers
             explicitly define the intended output rank.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -50,8 +50,8 @@ class Resize(KeyedTransform, InvertibleTransform):
 
             transform = Resize(
                 keys=["image", "label"],
-                mode=("bilinear", "nearest"),
-                spatial_shape=(128, 128),
+                interpolation=("bilinear", "nearest"),
+                target_shape=(128, 128),
             )
 
             image = tf.random.normal((96, 96, 1))
@@ -71,8 +71,8 @@ class Resize(KeyedTransform, InvertibleTransform):
 
             transform = Resize(
                 keys=["image"],
-                mode="trilinear",
-                spatial_shape=(32, 64, 64),
+                interpolation="trilinear",
+                target_shape=(32, 64, 64),
             )
 
             image = tf.random.normal((48, 96, 96, 1))
@@ -89,9 +89,9 @@ class Resize(KeyedTransform, InvertibleTransform):
         original shapes, and an invertible transform trace entry appended.
 
     Raises:
-        ValueError: If ``spatial_shape`` is not 2D or 3D, or if an invalid
+        ValueError: If ``target_shape`` is not 2D or 3D, or if an invalid
             interpolation mode is provided for the requested dimensionality.
-        TypeError: If ``mode`` is not a string, sequence, or mapping.
+        TypeError: If ``interpolation`` is not a string, sequence, or mapping.
         KeyError: If a requested key is missing and
             ``allow_missing_keys=False``.
     """
@@ -99,35 +99,35 @@ class Resize(KeyedTransform, InvertibleTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        mode: str | Sequence[str] | Mapping[str, str],
-        spatial_shape: Sequence[int],
+        interpolation: str | Sequence[str] | Mapping[str, str],
+        target_shape: Sequence[int],
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
-        self.spatial_shape = tuple(spatial_shape)
+        self.target_shape = tuple(target_shape)
 
-        ndim = len(self.spatial_shape)
+        ndim = len(self.target_shape)
         if ndim not in (2, 3):
-            raise ValueError(f"`spatial_shape` must be 2D or 3D, got {ndim}D.")
+            raise ValueError(f"`target_shape` must be 2D or 3D, got {ndim}D.")
 
-        valid_modes = {"bilinear", "nearest"} if ndim == 2 else {"trilinear", "nearest"}
+        valid_interpolations = {"bilinear", "nearest"} if ndim == 2 else {"trilinear", "nearest"}
 
-        if isinstance(mode, str):
-            self.mode = {key: mode for key in keys}
-        elif isinstance(mode, (tuple, list)):
-            if len(mode) != len(keys):
-                raise ValueError("Length of 'mode' must match length of 'keys'.")
-            self.mode = dict(zip(keys, mode))
-        elif isinstance(mode, dict):
-            self.mode = dict(mode)
+        if isinstance(interpolation, str):
+            self.interpolation = {key: interpolation for key in keys}
+        elif isinstance(interpolation, (tuple, list)):
+            if len(interpolation) != len(keys):
+                raise ValueError("Length of 'interpolation' must match length of 'keys'.")
+            self.interpolation = dict(zip(keys, interpolation))
+        elif isinstance(interpolation, dict):
+            self.interpolation = dict(interpolation)
         else:
-            raise TypeError("'mode' must be a string, tuple, list, or dict.")
+            raise TypeError("'interpolation' must be a string, tuple, list, or dict.")
 
-        for key, resize_mode in self.mode.items():
-            if resize_mode not in valid_modes:
+        for key, resize_interpolation in self.interpolation.items():
+            if resize_interpolation not in valid_interpolations:
                 raise ValueError(
-                    f"Invalid mode '{resize_mode}' for {ndim}D input. "
-                    f"Allowed: {sorted(valid_modes)} (key='{key}')."
+                    f"Invalid interpolation '{resize_interpolation}' for {ndim}D input. "
+                    f"Allowed: {sorted(valid_interpolations)} (key='{key}')."
                 )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -135,16 +135,16 @@ class Resize(KeyedTransform, InvertibleTransform):
 
         def apply_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shapes[key] = self._get_original_spatial_shape(tensor)
-            return self.resize_tensor(tensor, key, spatial_shape=self.spatial_shape)
+            return self.resize_tensor(tensor, key, target_shape=self.target_shape)
 
         present_keys = self.apply_to_present_keys(bundle, apply_resize)
         self.record_transform(
             bundle,
             {
                 "keys": list(present_keys),
-                "spatial_shape": self.spatial_shape,
+                "target_shape": self.target_shape,
                 "original_shapes": original_shapes,
-                "mode": {key: self.mode[key] for key in present_keys},
+                "interpolation": {key: self.interpolation[key] for key in present_keys},
             },
         )
         return bundle
@@ -161,7 +161,7 @@ class Resize(KeyedTransform, InvertibleTransform):
             target_shape = original_shapes.get(key)
             if target_shape is None:
                 return tensor
-            return self.resize_tensor(tensor, key, spatial_shape=target_shape)
+            return self.resize_tensor(tensor, key, target_shape=target_shape)
 
         self.apply_to_present_keys(bundle, apply_inverse_resize, keys=present_keys)
         return bundle
@@ -170,41 +170,41 @@ class Resize(KeyedTransform, InvertibleTransform):
         self,
         tensor: tf.Tensor,
         key: str,
-        spatial_shape: Sequence[int] | tf.Tensor,
+        target_shape: Sequence[int] | tf.Tensor,
     ) -> tf.Tensor:
         """Resize one tensor to the requested spatial shape."""
-        if isinstance(spatial_shape, tf.Tensor):
-            target_shape = spatial_shape
-            target_rank = spatial_shape.shape[0]
+        if isinstance(target_shape, tf.Tensor):
+            target_shape_tensor = target_shape
+            target_rank = target_shape.shape[0]
             if target_rank is None:
-                raise ValueError("`spatial_shape` tensor must have a statically known length.")
+                raise ValueError("`target_shape` tensor must have a statically known length.")
         else:
-            target_rank = len(spatial_shape)
-            target_shape = tf.convert_to_tensor(
-                ensure_spatial_tuple(spatial_shape, target_rank, "spatial_shape"),
+            target_rank = len(target_shape)
+            target_shape_tensor = tf.convert_to_tensor(
+                ensure_spatial_tuple(target_shape, target_rank, "target_shape"),
                 dtype=tf.int32,
             )
 
         spatial_rank = self._resolve_spatial_rank(tensor, target_rank)
         if spatial_rank == 2:
-            return self._resize_2d(tensor, key, target_shape)
+            return self._resize_2d(tensor, key, target_shape_tensor)
         if spatial_rank == 3:
-            return self._resize_3d(tensor, key, target_shape)
+            return self._resize_3d(tensor, key, target_shape_tensor)
         raise ValueError(f"Resize supports only 2D or 3D tensors, got spatial rank {spatial_rank}.")
 
-    def _resize_2d(self, tensor: tf.Tensor, key: str, spatial_shape: tf.Tensor) -> tf.Tensor:
-        return tf.image.resize(tensor, spatial_shape, method=self.mode.get(key))
+    def _resize_2d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
+        return tf.image.resize(tensor, target_shape, method=self.interpolation.get(key))
 
-    def _resize_3d(self, tensor: tf.Tensor, key: str, spatial_shape: tf.Tensor) -> tf.Tensor:
+    def _resize_3d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
         added_batch = tensor.shape.rank == 4
         if added_batch:
             tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,
-            spatial_shape[0],
-            spatial_shape[1],
-            spatial_shape[2],
-            method=self.mode.get(key),
+            target_shape[0],
+            target_shape[1],
+            target_shape[2],
+            method=self.interpolation.get(key),
             align_corners=False,
         )
         return resized[0] if added_batch else resized
@@ -213,7 +213,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         """Resolve whether a tensor is unbatched or batched for the requested target rank."""
         tensor_rank = get_tensor_rank(tensor)
         if target_rank not in (2, 3):
-            raise ValueError(f"`spatial_shape` must be 2D or 3D, got {target_rank}D.")
+            raise ValueError(f"`target_shape` must be 2D or 3D, got {target_rank}D.")
 
         if tensor_rank == target_rank + 1:
             return target_rank
@@ -228,7 +228,7 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
         """Extract the original spatial shape using the configured target rank."""
-        target_rank = len(self.spatial_shape)
+        target_rank = len(self.target_shape)
         tensor_rank = get_tensor_rank(tensor)
 
         if tensor_rank == target_rank + 1:

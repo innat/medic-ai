@@ -33,16 +33,16 @@ def as_tensor(array, dtype=None):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("mode", "spatial_shape", "error"),
+    ("interpolation", "target_shape", "error"),
     [
-        (("bilinear", "nearest"), (4,), "`spatial_shape` must be 2D or 3D"),
-        ("trilinear", (4, 5), "Invalid mode 'trilinear' for 2D input"),
-        ("bilinear", (4, 5, 6), "Invalid mode 'bilinear' for 3D input"),
+        (("bilinear", "nearest"), (4,), "`target_shape` must be 2D or 3D"),
+        ("trilinear", (4, 5), "Invalid interpolation 'trilinear' for 2D input"),
+        ("bilinear", (4, 5, 6), "Invalid interpolation 'bilinear' for 3D input"),
     ],
 )
-def test_resize_validates_rank_and_mode(mode, spatial_shape, error):
+def test_resize_validates_rank_and_interpolation(interpolation, target_shape, error):
     with pytest.raises(ValueError, match=error):
-        Resize(keys=["image", "label"], mode=mode, spatial_shape=spatial_shape)
+        Resize(keys=["image", "label"], interpolation=interpolation, target_shape=target_shape)
 
 
 @pytest.mark.unit
@@ -50,8 +50,8 @@ def test_resize_accepts_mapping_mode_and_allow_missing_keys():
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
     transform = Resize(
         keys=["image", "label"],
-        mode={"image": "bilinear", "label": "nearest"},
-        spatial_shape=(3, 4),
+        interpolation={"image": "bilinear", "label": "nearest"},
+        target_shape=(3, 4),
         allow_missing_keys=True,
     )
 
@@ -71,8 +71,8 @@ def test_resize_transform_for_2d_and_3d():
     )
     out_2d = Resize(
         keys=["image", "label"],
-        mode=("bilinear", "nearest"),
-        spatial_shape=(24, 20),
+        interpolation=("bilinear", "nearest"),
+        target_shape=(24, 20),
     )(inputs_2d)
     assert tuple(ops.shape(out_2d["image"])) == (1, 24, 20, 1)
     assert tuple(ops.shape(out_2d["label"])) == (1, 24, 20, 1)
@@ -85,8 +85,8 @@ def test_resize_transform_for_2d_and_3d():
     )
     out_3d = Resize(
         keys=["image", "label"],
-        mode=("trilinear", "nearest"),
-        spatial_shape=(8, 10, 12),
+        interpolation=("trilinear", "nearest"),
+        target_shape=(8, 10, 12),
     )(inputs_3d)
     assert tuple(ops.shape(out_3d["image"])) == (8, 10, 12, 1)
     assert tuple(ops.shape(out_3d["label"])) == (8, 10, 12, 1)
@@ -98,7 +98,7 @@ def test_resize_transform_for_2d_and_3d():
 @pytest.mark.unit
 def test_resize_inverse_restores_original_spatial_shape():
     image = as_tensor(np.random.randn(6, 8, 1).astype(np.float32))
-    resize = Resize(keys=["image"], mode="bilinear", spatial_shape=(3, 4))
+    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(3, 4))
 
     forward = resize(TensorBundle({"image": image}))
     restored = resize.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -110,7 +110,7 @@ def test_resize_inverse_restores_original_spatial_shape():
 @pytest.mark.unit
 def test_resize_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
-    resize = Resize(keys=["image"], mode="bilinear", spatial_shape=(2, 2))
+    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2))
 
     restored = resize.inverse(bundle)
 
@@ -1165,7 +1165,7 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
         [
             ShiftIntensity(keys=["image"], offsets=2.0),
             Flip(keys=["image"], spatial_axis=1),
-            Resize(keys=["image"], mode="bilinear", spatial_shape=(2, 2)),
+            Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2)),
         ]
     )
 
