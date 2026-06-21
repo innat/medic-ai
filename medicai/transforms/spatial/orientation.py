@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Sequence
 
 import tensorflow as tf
@@ -131,7 +133,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
             raise KeyError(f"None of the keys {self.keys} were found in input data.")
 
         self._validate_bundle_is_3d(bundle)
-        current_orientation = self.get_orientation_from_affine(affine)
         sample_tensor = bundle.data[sample_key]
         target_tensor_axcodes = self._target_tensor_axcodes(self.axcodes)
         transform_info = self._compute_orientation_transform(affine, target_tensor_axcodes)
@@ -153,11 +154,11 @@ class Orientation(KeyedTransform, InvertibleTransform):
             {
                 "keys": list(present_keys),
                 "original_affine": tf.identity(tf.cast(affine, tf.float32)),
-                "original_axcodes": current_orientation,
+                "original_axcodes": self.get_orientation_from_affine(affine),
                 "target_axcodes": self.axcodes,
                 "target_tensor_axcodes": target_tensor_axcodes,
-                "perm_spatial": list(transform_info["perm_spatial"]),
-                "flip_axes": list(transform_info["flip_axes"]),
+                "perm_spatial": transform_info["perm_spatial"],
+                "flip_axes": transform_info["flip_axes"],
             },
         )
         return bundle
@@ -167,9 +168,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
         if trace is None:
             return bundle
 
-        original_axcodes = trace["params"].get("original_axcodes")
         original_affine = trace["params"].get("original_affine")
-        if original_axcodes is None or original_affine is None:
+        if original_affine is None:
             return bundle
 
         affine = bundle.meta.get("affine")
@@ -180,8 +180,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
         flip_axes = trace["params"].get("flip_axes")
         if perm_spatial is None or flip_axes is None:
             return bundle
-        perm_spatial = tuple(int(axis) for axis in perm_spatial)
-        flip_axes = tuple(int(axis) for axis in flip_axes)
+        perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
+        flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
 
         def apply_inverse_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
             return self.inverse_orient_tensor(tensor, perm_spatial, flip_axes)
@@ -208,43 +208,66 @@ class Orientation(KeyedTransform, InvertibleTransform):
     def orient_tensor(
         self,
         tensor: tf.Tensor,
-        perm_spatial: tuple[int, int, int],
-        flip_axes: tuple[int, ...],
+        perm_spatial: tuple[int, int, int] | tf.Tensor,
+        flip_axes: tuple[int, ...] | tf.Tensor,
     ) -> tf.Tensor:
         """Reorient one tensor using a spatial permutation followed by flips."""
-        reoriented = tf.transpose(tensor, perm=[*perm_spatial, 3])
-        if not flip_axes:
-            return reoriented
-        return tf.reverse(reoriented, axis=list(flip_axes))
+        perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
+        perm = tf.concat([perm_spatial, tf.constant([3], dtype=tf.int32)], axis=0)
+        reoriented = tf.transpose(tensor, perm=perm)
+
+        flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
+        return tf.cond(
+            tf.shape(flip_axes)[0] > 0,
+            lambda: tf.reverse(reoriented, axis=flip_axes),
+            lambda: reoriented,
+        )
 
     def inverse_orient_tensor(
         self,
         tensor: tf.Tensor,
-        perm_spatial: tuple[int, int, int],
-        flip_axes: tuple[int, ...],
+        perm_spatial: tuple[int, int, int] | tf.Tensor,
+        flip_axes: tuple[int, ...] | tf.Tensor,
     ) -> tf.Tensor:
         """Invert a spatial permutation and flips applied by ``orient_tensor``."""
-        restored = tf.reverse(tensor, axis=list(flip_axes)) if flip_axes else tensor
-        inverse_perm_spatial = [0, 0, 0]
-        for output_axis, input_axis in enumerate(perm_spatial):
-            inverse_perm_spatial[input_axis] = output_axis
-        return tf.transpose(restored, perm=[*inverse_perm_spatial, 3])
+        perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
+        flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
+        restored = tf.cond(
+            tf.shape(flip_axes)[0] > 0,
+            lambda: tf.reverse(tensor, axis=flip_axes),
+            lambda: tensor,
+        )
+        inverse_perm_spatial = tf.scatter_nd(
+            indices=tf.expand_dims(perm_spatial, axis=1),
+            updates=tf.range(3, dtype=tf.int32),
+            shape=(3,),
+        )
+        inverse_perm = tf.concat([inverse_perm_spatial, tf.constant([3], dtype=tf.int32)], axis=0)
+        return tf.transpose(restored, perm=inverse_perm)
 
-    def get_orientation_from_affine(self, affine: tf.Tensor) -> str:
+    def get_orientation_from_affine(self, affine: tf.Tensor) -> tf.Tensor:
         """Infer a three-letter orientation code from a 4x4 affine matrix."""
         matrix = tf.cast(affine[:3, :3], tf.float32)
-        codes = []
-        for axis_index in range(3):
-            direction = matrix[:, axis_index]
-            dominant_axis = int(tf.argmax(tf.abs(direction), output_type=tf.int32))
-            sign = tf.gather(direction, dominant_axis) >= 0
-            if dominant_axis == 0:
-                codes.append("R" if bool(sign) else "L")
-            elif dominant_axis == 1:
-                codes.append("A" if bool(sign) else "P")
-            else:
-                codes.append("S" if bool(sign) else "I")
-        return "".join(codes)
+        current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
+        gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
+        signs = tf.gather_nd(matrix, gather_indices) >= 0
+
+        def axis_code(axis_index: tf.Tensor, sign: tf.Tensor) -> tf.Tensor:
+            return tf.case(
+                [
+                    (tf.equal(axis_index, 0), lambda: tf.where(sign, "R", "L")),
+                    (tf.equal(axis_index, 1), lambda: tf.where(sign, "A", "P")),
+                ],
+                default=lambda: tf.where(sign, "S", "I"),
+                exclusive=True,
+            )
+
+        codes = tf.map_fn(
+            lambda pair: axis_code(pair[0], tf.cast(pair[1], tf.bool)),
+            (current_axes, tf.cast(signs, tf.int32)),
+            fn_output_signature=tf.string,
+        )
+        return tf.strings.reduce_join(codes)
 
     def reoriented_affine(
         self,
@@ -293,7 +316,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self,
         affine: tf.Tensor,
         target_tensor_axcodes: str,
-    ) -> dict[str, tuple[int, ...]]:
+    ) -> dict[str, tf.Tensor]:
         matrix = tf.cast(affine[:3, :3], tf.float32)
         current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
         gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
@@ -301,29 +324,24 @@ class Orientation(KeyedTransform, InvertibleTransform):
         current_signs = tf.where(current_signs == 0, tf.ones_like(current_signs), current_signs)
 
         target_axes = [self._AXIS_TO_WORLD[c] for c in target_tensor_axcodes]
-        perm_spatial = tuple(
-            int(
+        perm_spatial = tf.stack(
+            [
                 tf.argmax(
                     tf.cast(tf.equal(current_axes, target_axis), tf.int32), output_type=tf.int32
                 )
-            )
-            for target_axis in target_axes
+                for target_axis in target_axes
+            ]
         )
         current_signs_for_output = tf.gather(
             current_signs,
-            tf.constant(perm_spatial, dtype=tf.int32),
+            perm_spatial,
         )
         target_signs = tf.constant(
             [self._AXIS_TO_SIGN[c] for c in target_tensor_axcodes], dtype=tf.float32
         )
-        flip_axes = tuple(
-            int(axis)
-            for axis in tf.reshape(
-                tf.where(tf.not_equal(current_signs_for_output, target_signs)),
-                [-1],
-            )
-            .numpy()
-            .tolist()
+        flip_axes = tf.reshape(
+            tf.where(tf.not_equal(current_signs_for_output, target_signs)),
+            [-1],
         )
         return {"perm_spatial": perm_spatial, "flip_axes": flip_axes}
 
