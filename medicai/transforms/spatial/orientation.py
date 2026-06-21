@@ -273,32 +273,45 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self,
         affine: tf.Tensor,
         input_spatial_shape: tf.Tensor,
-        perm_spatial: tuple[int, int, int],
-        flip_axes: tuple[int, ...],
+        perm_spatial: tuple[int, int, int] | tf.Tensor,
+        flip_axes: tuple[int, ...] | tf.Tensor,
     ) -> tf.Tensor:
         """Update affine metadata for a spatial permutation and flips."""
         affine = tf.cast(affine, tf.float32)
         input_spatial_shape = tf.cast(input_spatial_shape, tf.float32)
+        perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
+        flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
+
+        flipped_output_mask = tf.scatter_nd(
+            indices=tf.expand_dims(flip_axes, axis=1),
+            updates=tf.ones_like(flip_axes, dtype=tf.float32),
+            shape=(3,),
+        )
+        signs = 1.0 - 2.0 * flipped_output_mask
+
         transform = tf.eye(4, dtype=tf.float32)
-        for output_axis, input_axis in enumerate(perm_spatial):
-            sign = -1.0 if output_axis in flip_axes else 1.0
-            column = tf.constant([[0.0], [0.0], [0.0], [0.0]], dtype=tf.float32)
-            column = tf.tensor_scatter_nd_update(
-                column,
-                indices=[[input_axis, 0]],
-                updates=[sign],
-            )
-            transform = tf.tensor_scatter_nd_update(
-                transform,
-                indices=[[row, output_axis] for row in range(4)],
-                updates=tf.reshape(column, [-1]),
-            )
-            if sign < 0:
-                transform = tf.tensor_scatter_nd_update(
-                    transform,
-                    indices=[[input_axis, 3]],
-                    updates=[input_spatial_shape[input_axis] - 1.0],
-                )
+        spatial_block = tf.transpose(tf.one_hot(perm_spatial, depth=3, dtype=tf.float32) * signs[:, None])
+        transform = tf.tensor_scatter_nd_update(
+            transform,
+            indices=[
+                [0, 0], [0, 1], [0, 2],
+                [1, 0], [1, 1], [1, 2],
+                [2, 0], [2, 1], [2, 2],
+            ],
+            updates=tf.reshape(spatial_block, [-1]),
+        )
+
+        flipped_input_mask = tf.scatter_nd(
+            indices=tf.expand_dims(perm_spatial, axis=1),
+            updates=flipped_output_mask,
+            shape=(3,),
+        )
+        translations = flipped_input_mask * (input_spatial_shape - 1.0)
+        transform = tf.tensor_scatter_nd_update(
+            transform,
+            indices=[[0, 3], [1, 3], [2, 3]],
+            updates=translations,
+        )
         return tf.linalg.matmul(affine, transform)
 
     def _get_flip_axes(
