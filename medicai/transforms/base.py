@@ -634,17 +634,27 @@ class LambdaTransform(KeyedTransform):
             return super().inverse(bundle)
 
         trace = self._get_last_trace(bundle)
-        if trace is None or not _trace_applied_to_bool(trace.get("applied", True)):
+        if trace is None:
             return bundle
 
+        applied = trace.get("applied", True)
         present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         for key in present_keys:
-            bundle.data[key] = self._call_tensor_fn(self.inverse_fn, bundle.data[key], key)
+            tensor = bundle.data[key]
+            if tf.is_tensor(applied):
+                bundle.data[key] = tf.cond(
+                    tf.cast(applied, tf.bool),
+                    lambda tensor=tensor, key=key: self._call_tensor_fn(self.inverse_fn, tensor, key),
+                    lambda tensor=tensor: tensor,
+                )
+            elif _trace_applied_to_bool(applied):
+                bundle.data[key] = self._call_tensor_fn(self.inverse_fn, tensor, key)
 
         if self.inverse_meta_fn is not None:
-            updated_meta = self.inverse_meta_fn(dict(bundle.meta))
-            if updated_meta is not None:
-                bundle.meta = updated_meta
+            if not tf.is_tensor(applied) and _trace_applied_to_bool(applied):
+                updated_meta = self.inverse_meta_fn(dict(bundle.meta))
+                if updated_meta is not None:
+                    bundle.meta = updated_meta
         return bundle
 
     def _get_last_trace(self, bundle: TensorBundle) -> dict[str, Any] | None:
@@ -725,8 +735,13 @@ class Compose(Transform):
                 )
             ])
 
-            image = np.random.randn(128, 128, 128, 1).astype(np.float32)
-            label = np.random.randint(0, 2, (128, 128, 128, 1)).astype(np.float32)
+            image = np.random.randn(
+                128, 128, 128, 1
+            ).astype(np.float32)
+            label = np.random.randint(
+                0, 2, (128, 128, 128, 1)
+            ).astype(np.float32)
+
             data = {
                 "image": image,
                 "label": label
@@ -747,7 +762,11 @@ class Compose(Transform):
             pipeline = Compose(
                 [
                     Flip(keys=["image"], spatial_axis=1),
-                    Resize(keys=["image"], interpolation="bilinear", target_shape=(32, 32)),
+                    Resize(
+                        keys=["image"], 
+                        interpolation="bilinear", 
+                        target_shape=(32, 32)
+                    ),
                 ]
             )
 

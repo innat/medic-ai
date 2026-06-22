@@ -574,6 +574,15 @@ def test_random_spatial_crop_requires_label_for_label_aware_mode():
 
 
 @pytest.mark.unit
+def test_random_spatial_crop_rejects_unsupported_spatial_rank():
+    image_4d_spatial = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
+    transform = RandomSpatialCrop(keys=["image"], roi_size=(2, 2, 2, 2))
+
+    with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
+        transform(TensorBundle({"image": image_4d_spatial}))
+
+
+@pytest.mark.unit
 def test_random_spatial_crop_label_aware_mode_keeps_thin_spatial_dimensions():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(1, 4, 3, 1))
     label = as_tensor(np.ones((1, 4, 3, 1), dtype=np.int32))

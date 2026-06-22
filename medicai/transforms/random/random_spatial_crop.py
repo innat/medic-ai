@@ -110,6 +110,11 @@ class RandomSpatialCrop(RandomTransform):
 
         sample_tensor = bundle.data[sample_key]
         spatial_rank = get_spatial_rank(sample_tensor)
+        if spatial_rank not in (2, 3):
+            raise ValueError(
+                f"{type(self).__name__} currently supports only 2D or 3D inputs; got spatial "
+                f"rank {spatial_rank} for shape {sample_tensor.shape}."
+            )
         spatial_shape = get_spatial_shape(sample_tensor)
         roi_size = self._get_roi_size(spatial_shape, spatial_rank)
 

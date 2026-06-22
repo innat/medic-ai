@@ -265,3 +265,26 @@ def test_lambda_transform_and_compose_run_under_tf_function():
     np.testing.assert_allclose(ops.convert_to_numpy(forward), 3.0)
     np.testing.assert_allclose(ops.convert_to_numpy(restored), 1.0)
     np.testing.assert_allclose(ops.convert_to_numpy(composed), 4.0)
+
+
+@pytest.mark.unit
+def test_lambda_transform_probabilistic_inverse_runs_under_tf_function():
+    lambda_transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 2.0,
+        inverse_fn=lambda tensor: tensor - 2.0,
+        prob=1.0,
+    )
+
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+
+    @tf.function
+    def apply_lambda(x):
+        forward = lambda_transform({"image": x})
+        restored = lambda_transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+        return forward["image"], restored["image"]
+
+    forward, restored = apply_lambda(image)
+
+    np.testing.assert_allclose(ops.convert_to_numpy(forward), 3.0)
+    np.testing.assert_allclose(ops.convert_to_numpy(restored), 1.0)
