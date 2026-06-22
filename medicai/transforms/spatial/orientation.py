@@ -88,6 +88,21 @@ class Orientation(KeyedTransform, InvertibleTransform):
             restored = orient.inverse(forward)
             print(np.all(restored["image"].numpy() == image.numpy())) # True
 
+        Reorient one volume and then map it back with ``inverse()``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Orientation, TensorBundle
+
+            transform = Orientation(keys=["image"], axcodes="RAS")
+            image = tf.random.normal((16, 32, 32, 1))
+            affine = tf.eye(4)
+
+            bundle = TensorBundle({"image": image}, {"affine": affine})
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
     Returns:
         ``TensorBundle``: The input bundle with selected tensors reoriented in
         place, updated ``affine`` metadata, and an invertible transform trace
@@ -290,13 +305,21 @@ class Orientation(KeyedTransform, InvertibleTransform):
         signs = 1.0 - 2.0 * flipped_output_mask
 
         transform = tf.eye(4, dtype=tf.float32)
-        spatial_block = tf.transpose(tf.one_hot(perm_spatial, depth=3, dtype=tf.float32) * signs[:, None])
+        spatial_block = tf.transpose(
+            tf.one_hot(perm_spatial, depth=3, dtype=tf.float32) * signs[:, None]
+        )
         transform = tf.tensor_scatter_nd_update(
             transform,
             indices=[
-                [0, 0], [0, 1], [0, 2],
-                [1, 0], [1, 1], [1, 2],
-                [2, 0], [2, 1], [2, 2],
+                [0, 0],
+                [0, 1],
+                [0, 2],
+                [1, 0],
+                [1, 1],
+                [1, 2],
+                [2, 0],
+                [2, 1],
+                [2, 2],
             ],
             updates=tf.reshape(spatial_block, [-1]),
         )

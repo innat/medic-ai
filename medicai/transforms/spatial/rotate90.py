@@ -49,6 +49,22 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
             result = transform({"image": image, "label": label})
 
+        Rotate a tensor and then restore it with ``inverse()``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Rotate90, TensorBundle
+
+            transform = Rotate90(keys=["image"], k=1)
+            image = tf.random.normal((64, 64, 1))
+
+            forward = transform(TensorBundle({"image": image}))
+            restored = transform.inverse(forward)
+
+            print(forward["image"].shape)
+            print(restored["image"].shape)
+
     Returns:
         ``TensorBundle``: The input bundle with rotated tensors and an
         invertible transform trace entry when ``k % 4 != 0``.

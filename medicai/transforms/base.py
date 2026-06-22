@@ -66,10 +66,40 @@ def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
 class Transform:
     """Base class for Medic-AI transforms.
 
+    ``Transform`` is the root abstraction of ``medicai.transforms``.
     Subclasses implement :meth:`apply` and receive a normalized
-    ``TensorBundle``. This keeps container conversion and shared behaviors in a
-    single place while allowing concrete transforms to focus on transform
-    logic.
+    :class:`~medicai.transforms.TensorBundle`, regardless of whether the user
+    called the transform with a raw mapping or an existing bundle.
+
+    This keeps input normalization, trace helpers, and inversion-related
+    conventions in one place while allowing concrete transforms to focus on
+    their transformation logic.
+
+    Use ``Transform`` directly when a custom transform needs:
+
+    - full access to both ``bundle.data`` and ``bundle.meta``
+    - custom control flow beyond keyed tensor iteration
+    - custom trace or inversion behavior
+
+    Example:
+        Define a simple metadata-aware transform:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import TensorBundle, Transform
+
+
+            class MarkSample(Transform):
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    bundle.meta["processed"] = True
+                    bundle.data["image"] = tf.identity(bundle["image"])
+                    return bundle
+
+
+            image = tf.random.normal((64, 64, 1))
+            output = MarkSample()(TensorBundle({"image": image}))
+            print(output.meta["processed"])
     """
 
     def __call__(
@@ -113,7 +143,47 @@ class Transform:
 
 
 class RandomTransform(Transform):
-    """Base class for random TensorFlow-native transforms."""
+    """Base class for random TensorFlow-native transforms.
+
+    ``RandomTransform`` adds probability-driven behavior on top of
+    :class:`~medicai.transforms.Transform`. It is intended for transforms that
+    sample whether to apply an operation using TensorFlow ops so the transform
+    remains compatible with eager execution, ``tf.function``, and
+    ``tf.data`` pipelines.
+
+    Args:
+        prob: Probability of applying the random transform. Must be in
+            ``[0, 1]``.
+
+    Example:
+        Build a tiny random transform that adds a bias to ``"image"``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomTransform, TensorBundle
+
+
+            class RandomAddOne(RandomTransform):
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    should_apply = self.sample_should_apply()
+                    image = bundle["image"]
+                    bundle.data["image"] = tf.cond(
+                        should_apply,
+                        lambda: image + 1.0,
+                        lambda: image,
+                    )
+                    self.record_random_transform(
+                        bundle,
+                        params={"keys": ["image"]},
+                        applied=should_apply,
+                    )
+                    return bundle
+
+
+            image = tf.zeros((32, 32, 1), dtype=tf.float32)
+            output = RandomAddOne(prob=0.5)(TensorBundle({"image": image}))
+    """
 
     def __init__(self, prob: float = 0.1):
         if not 0.0 <= prob <= 1.0:
@@ -144,7 +214,42 @@ class RandomTransform(Transform):
 
 
 class KeyedTransform(Transform):
-    """Base class for transforms operating on a known set of data keys."""
+    """Base class for transforms operating on a known set of data keys.
+
+    ``KeyedTransform`` is the most common base class for Medic-AI transforms.
+    It is designed for transforms that operate on a predefined set of keys
+    such as ``"image"``, ``"label"``, or ``"mask"``.
+
+    Args:
+        keys: Keys of tensors this transform should process.
+        allow_missing_keys: If ``True``, missing keys are skipped. If
+            ``False``, missing keys raise ``KeyError``.
+
+    Example:
+        Multiply selected tensors by a constant:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import KeyedTransform, TensorBundle
+
+
+            class Multiply(KeyedTransform):
+                def __init__(self, keys, factor):
+                    super().__init__(keys=keys)
+                    self.factor = factor
+
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    self.apply_to_present_keys(
+                        bundle,
+                        lambda tensor, _: tensor * tf.cast(self.factor, tensor.dtype),
+                    )
+                    return bundle
+
+
+            image = tf.ones((16, 16, 1), dtype=tf.float32)
+            output = Multiply(keys=["image"], factor=2.0)(TensorBundle({"image": image}))
+    """
 
     def __init__(self, keys: Sequence[str], allow_missing_keys: bool = False):
         self.keys = tuple(keys)
@@ -191,7 +296,52 @@ class KeyedTransform(Transform):
 
 
 class InvertibleTransform(Transform):
-    """Base class for transforms that can record inversion metadata."""
+    """Base class for transforms that can record inversion metadata.
+
+    ``InvertibleTransform`` marks transforms that can restore a previous sample
+    state through :meth:`inverse`. In practice, most invertible transforms also
+    record enough metadata during forward execution to reconstruct the original
+    tensor layout, shape, or geometry later.
+
+    Subclasses usually combine ``InvertibleTransform`` with either
+    :class:`~medicai.transforms.KeyedTransform` or
+    :class:`~medicai.transforms.Transform`.
+
+    Example:
+        Define a minimal additive invertible transform:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import InvertibleTransform, KeyedTransform, TensorBundle
+
+
+            class AddValue(KeyedTransform, InvertibleTransform):
+                def __init__(self, keys, value):
+                    KeyedTransform.__init__(self, keys=keys)
+                    self.value = value
+
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    self.apply_to_present_keys(
+                        bundle,
+                        lambda tensor, _: tensor + tf.cast(self.value, tensor.dtype),
+                    )
+                    self.record_transform(bundle, {"keys": list(self.keys), "value": self.value})
+                    return bundle
+
+                def inverse(self, bundle: TensorBundle) -> TensorBundle:
+                    self.apply_to_present_keys(
+                        bundle,
+                        lambda tensor, _: tensor - tf.cast(self.value, tensor.dtype),
+                    )
+                    return bundle
+
+
+            image = tf.ones((8, 8, 1), dtype=tf.float32)
+            transform = AddValue(keys=["image"], value=5.0)
+            forward = transform(TensorBundle({"image": image}))
+            restored = transform.inverse(forward)
+    """
 
     @property
     def invertible(self) -> bool:
@@ -230,6 +380,44 @@ class LambdaTransform(KeyedTransform):
         name: Optional kernel name recorded in the transform trace.
         trace_params: Optional static trace parameters merged into the recorded
             trace entry.
+
+    Example:
+        Apply a callable to one key and optionally invert it later:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import LambdaTransform, TensorBundle
+
+            transform = LambdaTransform(
+                keys=["image"],
+                fn=lambda tensor: tensor + 2.0,
+                inverse_fn=lambda tensor: tensor - 2.0,
+                name="add_two",
+            )
+
+            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            bundle = TensorBundle({"image": image})
+
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
+        Apply a probabilistic callable and record its trace:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import LambdaTransform, TensorBundle
+
+            transform = LambdaTransform(
+                keys=["image"],
+                fn=lambda tensor: tensor * 0.5,
+                prob=0.5,
+                trace_params={"kind": "scale"},
+            )
+
+            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            output = transform(TensorBundle({"image": image}))
     """
 
     _instance_counter = itertools.count()
@@ -342,14 +530,14 @@ class LambdaTransform(KeyedTransform):
         positional = [
             param
             for param in signature.parameters.values()
-            if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            if param.kind
+            in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         ]
         return len(positional) >= 2
 
 
 class Compose(Transform):
-    """
-    Compose a sequence of transforms into one pipeline.
+    """Compose a sequence of transforms into one pipeline.
 
     ``Compose`` is the entry point for building a transformation pipeline in
     ``medicai.transforms``. It accepts raw sample dictionaries, converts any
@@ -388,8 +576,8 @@ class Compose(Transform):
                 ),
                 Resize(
                     keys=["image", "label"],
-                    spatial_shape=(96, 96, 96),
-                    mode=("trilinear", "nearest")
+                    target_shape=(96, 96, 96),
+                    interpolation=("trilinear", "nearest")
                 )
             ])
 
@@ -403,6 +591,25 @@ class Compose(Transform):
             processed_image, processed_label = output["image"], output["label"]
             processed_image.shape, processed_label.shape
             # (TensorShape([96, 96, 96, 1]), TensorShape([96, 96, 96, 1]))
+
+        Invert an already-applied pipeline when its transforms support
+        ``inverse()``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Compose, Flip, Resize, TensorBundle
+
+            pipeline = Compose(
+                [
+                    Flip(keys=["image"], spatial_axis=1),
+                    Resize(keys=["image"], interpolation="bilinear", target_shape=(32, 32)),
+                ]
+            )
+
+            image = tf.random.normal((64, 64, 1))
+            forward = pipeline(TensorBundle({"image": image}))
+            restored = pipeline.inverse(forward)
 
     Returns:
         ``TensorBundle``: The transformed result, where the outputs are stored

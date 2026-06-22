@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from keras import ops
 import tensorflow as tf
+from keras import ops
 
 from medicai.transforms import (
     Compose,
@@ -128,7 +128,9 @@ def test_spacing_and_orientation_run_under_tf_function():
     @tf.function
     def apply_transforms(x, y, a):
         spaced = spacing({"image": x, "label": y}, {"affine": a})
-        oriented = orientation({"image": spaced["image"], "label": spaced["label"]}, {"affine": spaced["affine"]})
+        oriented = orientation(
+            {"image": spaced["image"], "label": spaced["label"]}, {"affine": spaced["affine"]}
+        )
         return oriented["image"], oriented["label"], oriented["affine"]
 
     out_image, out_label, out_affine = apply_transforms(image, label, affine)

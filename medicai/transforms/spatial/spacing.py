@@ -90,6 +90,28 @@ class Spacing(KeyedTransform, InvertibleTransform):
             forward = transform(bundle)
             restored = transform.inverse(forward)
 
+        Resample an image-label pair and then map it back to the original
+        spatial shape:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Spacing, TensorBundle
+
+            transform = Spacing(
+                keys=["image", "label"],
+                pixdim=(1.0, 1.0, 1.0),
+                mode=("trilinear", "nearest"),
+            )
+
+            image = tf.random.normal((12, 32, 32, 1))
+            label = tf.random.uniform((12, 32, 32, 1), maxval=2, dtype=tf.int32)
+            affine = tf.eye(4)
+
+            bundle = TensorBundle({"image": image, "label": label}, {"affine": affine})
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
     Returns:
         ``TensorBundle``: The input bundle with resampled tensors, updated
         spacing metadata, and an invertible transform trace entry appended.

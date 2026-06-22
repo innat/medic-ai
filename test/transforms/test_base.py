@@ -282,8 +282,6 @@ def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
         strict(bundle)
 
 
-
-
 @pytest.mark.unit
 def test_spatial_helpers_handle_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.zeros((16, 12, 1), dtype=np.float32))

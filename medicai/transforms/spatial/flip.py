@@ -44,6 +44,22 @@ class Flip(KeyedTransform, InvertibleTransform):
 
             result = transform({"image": image, "label": label})
 
+        Restore a flipped tensor with ``inverse()``:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Flip, TensorBundle
+
+            transform = Flip(keys=["image"], spatial_axis=1)
+            image = tf.random.normal((64, 64, 1))
+
+            forward = transform(TensorBundle({"image": image}))
+            restored = transform.inverse(forward)
+
+            print(forward["image"].shape)
+            print(restored["image"].shape)
+
         Flip a 2D image stored in a ``TensorBundle``:
 
         .. code-block:: python

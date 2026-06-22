@@ -84,6 +84,26 @@ class Resize(KeyedTransform, InvertibleTransform):
             print(forward["image"].shape)
             print(restored["image"].shape)
 
+        Resize an image-label pair and restore the original spatial size:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Resize, TensorBundle
+
+            transform = Resize(
+                keys=["image", "label"],
+                interpolation=("bilinear", "nearest"),
+                target_shape=(48, 48),
+            )
+
+            image = tf.random.normal((96, 96, 1))
+            label = tf.random.uniform((96, 96, 1), maxval=2, dtype=tf.int32)
+            bundle = TensorBundle({"image": image, "label": label})
+
+            forward = transform(bundle)
+            restored = transform.inverse(forward)
+
     Returns:
         ``TensorBundle``: The input bundle with resized tensors, recorded
         original shapes, and an invertible transform trace entry appended.
