@@ -411,7 +411,7 @@ class InvertibleTransform(Transform):
             class AddValue(KeyedTransform, InvertibleTransform):
                 def __init__(self, keys, value):
                     KeyedTransform.__init__(self, keys=keys)
-                    self.alue = value
+                    self.value = value
 
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(

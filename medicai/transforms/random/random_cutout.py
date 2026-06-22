@@ -204,12 +204,12 @@ class RandomCutOut(RandomTransform):
             if self.invalid_label is None
             else tf.cast(label != self.invalid_label, tf.float32)
         )
+        y = tf.range(height)
+        x = tf.range(width)
 
         for _ in range(self.num_cuts):
             cy = tf.random.uniform([], 0, height, tf.int32)
             cx = tf.random.uniform([], 0, width, tf.int32)
-            y = tf.range(height)
-            x = tf.range(width)
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32) * valid_mask
@@ -231,13 +231,12 @@ class RandomCutOut(RandomTransform):
             if self.invalid_label is None
             else tf.cast(label != self.invalid_label, tf.float32)
         )
+        y = tf.range(height)[None, :]
+        x = tf.range(width)[None, :]
 
         for _ in range(self.num_cuts):
             cy = tf.random.uniform([depth], 0, height, tf.int32)
             cx = tf.random.uniform([depth], 0, width, tf.int32)
-
-            y = tf.range(height)[None, :]
-            x = tf.range(width)[None, :]
             y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
             x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
             rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32) * valid_mask
@@ -259,12 +258,12 @@ class RandomCutOut(RandomTransform):
             if self.invalid_label is None
             else tf.cast(label != self.invalid_label, tf.float32)
         )
+        y = tf.range(height)
+        x = tf.range(width)
 
         for _ in range(self.num_cuts):
             cy = tf.random.uniform([], 0, height, tf.int32)
             cx = tf.random.uniform([], 0, width, tf.int32)
-            y = tf.range(height)
-            x = tf.range(width)
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)

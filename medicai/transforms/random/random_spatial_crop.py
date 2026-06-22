@@ -211,8 +211,9 @@ class RandomSpatialCrop(RandomTransform):
         self, spatial_shape: tf.Tensor, roi_size: tf.Tensor, label: tf.Tensor, spatial_rank: int
     ) -> tf.Tensor:
         if label.shape.rank is not None and label.shape.rank > spatial_rank:
-            label = tf.squeeze(label, axis=-1)
-        valid_mask = label != self.invalid_label
+            valid_mask = tf.reduce_any(label != self.invalid_label, axis=-1)
+        else:
+            valid_mask = label != self.invalid_label
         valid_coords = tf.where(valid_mask)
 
         def fallback():

@@ -145,7 +145,10 @@ class NormalizeIntensity(KeyedTransform):
                 sub = tf.cast(sub, channel.dtype)
                 div = tf.cast(div, channel.dtype)
                 div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-                return (channel - sub) / div
+                normalized = (channel - sub) / div
+                if self.nonzero:
+                    return tf.where(channel_mask, normalized, channel)
+                return normalized
 
             return tf.cond(has_valid, normalize_nonempty, lambda: channel)
 

@@ -363,6 +363,20 @@ def test_normalize_intensity_channel_wise_nonzero_leaves_empty_channel_unchanged
 
 
 @pytest.mark.unit
+def test_normalize_intensity_channel_wise_nonzero_preserves_zero_background():
+    image = as_tensor(np.array([[[0.0], [1.0]], [[3.0], [0.0]]], dtype=np.float32))
+    out = NormalizeIntensity(
+        keys=["image"],
+        nonzero=True,
+        channel_wise=True,
+    )(TensorBundle({"image": image}))
+
+    normalized = ops.convert_to_numpy(out["image"])
+    assert normalized[0, 0, 0] == 0.0
+    assert normalized[1, 1, 0] == 0.0
+
+
+@pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
     out = SignalFillEmpty(keys=["image"], replacement=0.0)(TensorBundle({"image": image}))
@@ -595,6 +609,30 @@ def test_random_spatial_crop_label_aware_mode_keeps_thin_spatial_dimensions():
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (1, 2, 2, 1)
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_label_aware_mode_supports_multi_channel_labels():
+    image = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
+    label = as_tensor(
+        np.stack(
+            [
+                np.pad(np.ones((2, 2), dtype=np.int32), ((1, 1), (1, 1))),
+                np.zeros((4, 4), dtype=np.int32),
+            ],
+            axis=-1,
+        )
+    )
+
+    out = RandomSpatialCrop(
+        keys=["image", "label"],
+        roi_size=(2, 2),
+        invalid_label=0,
+        random_center=False,
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 2, 1)
+    assert tuple(ops.shape(out["label"])) == (2, 2, 2)
 
 
 @pytest.mark.unit
