@@ -214,7 +214,10 @@ class Resize(KeyedTransform, InvertibleTransform):
             return self._resize_2d(tensor, key, target_shape_tensor)
         if spatial_rank == 3:
             return self._resize_3d(tensor, key, target_shape_tensor)
-        raise ValueError(f"Resize supports only 2D or 3D tensors, got spatial rank {spatial_rank}.")
+        raise ValueError(
+            f"{type(self).__name__} supports only 2D or 3D tensors, got spatial rank "
+            f"{spatial_rank}."
+        )
 
     def _resize_2d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
         return tf.image.resize(tensor, target_shape, method=self.interpolation.get(key))
@@ -245,7 +248,8 @@ class Resize(KeyedTransform, InvertibleTransform):
             return target_rank
 
         raise ValueError(
-            "Resize expects a channel-last tensor shaped either as an unbatched sample "
+            f"{type(self).__name__} expects a channel-last tensor shaped either as an unbatched "
+            "sample "
             f"or batched sample compatible with target spatial rank {target_rank}. "
             f"Received shape {tensor.shape}."
         )
@@ -261,7 +265,8 @@ class Resize(KeyedTransform, InvertibleTransform):
             return tf.shape(tensor)[1 : 1 + target_rank]
 
         raise ValueError(
-            "Resize expects a channel-last tensor shaped either as an unbatched sample "
+            f"{type(self).__name__} expects a channel-last tensor shaped either as an unbatched "
+            "sample "
             f"or batched sample compatible with target spatial rank {target_rank}. "
             f"Received shape {tensor.shape}."
         )

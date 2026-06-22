@@ -147,7 +147,8 @@ class RandomRotate(RandomTransform):
         spatial_rank = get_spatial_rank(sample_tensor)
         if spatial_rank != 3:
             raise ValueError(
-                f"RandRotate currently supports only 3D tensors; got spatial rank {spatial_rank} "
+                f"{type(self).__name__} currently supports only 3D tensors; got spatial rank "
+                f"{spatial_rank} "
                 f"for shape {sample_tensor.shape}."
             )
 

@@ -784,6 +784,11 @@ class Compose(Transform):
     def __init__(self, transforms):
         self.transforms = transforms
 
+    @property
+    def invertible(self) -> bool:
+        """Whether the composed pipeline contains any invertible transforms."""
+        return any(getattr(transform, "invertible", False) for transform in self.transforms)
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         """Apply the composed transform pipeline to the input data.
 

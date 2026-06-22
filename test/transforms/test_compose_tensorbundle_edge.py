@@ -78,3 +78,16 @@ def test_compose_inverse_accepts_mapping_inputs():
     restored = pipeline.inverse({"image": forward["image"]})
 
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), image)
+
+
+@pytest.mark.unit
+def test_compose_inverse_traverses_nested_compose_blocks():
+    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    inner = Compose([Flip(keys=["image"], spatial_axis=1)])
+    outer = Compose([inner, ShiftIntensity(keys=["image"], offsets=3.0)])
+
+    forward = outer({"image": image})
+    restored = outer.inverse(TensorBundle({"image": forward["image"]}))
+
+    expected = ops.convert_to_numpy(image) + 3.0
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)

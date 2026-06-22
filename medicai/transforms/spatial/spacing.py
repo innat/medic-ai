@@ -135,7 +135,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         self.pixdim = tuple(pixdim)
 
         if len(self.pixdim) != 3:
-            raise ValueError(f"`pixdim` must be 3D for Spacing, got {len(self.pixdim)}D.")
+            raise ValueError(f"`pixdim` must be 3D for {type(self).__name__}, got {len(self.pixdim)}D.")
 
         valid_modes = {"trilinear", "nearest"}
         if isinstance(mode, str):
@@ -177,7 +177,8 @@ class Spacing(KeyedTransform, InvertibleTransform):
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
-                    f"Spacing currently supports only 3D tensors; got spatial rank {spatial_rank} "
+                    f"{type(self).__name__} currently supports only 3D tensors; got spatial rank "
+                    f"{spatial_rank} "
                     f"for shape {tensor.shape}."
                 )
             original_shapes[key] = tf.shape(tensor)[:3]
@@ -239,7 +240,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
-                    "Spacing supports only 3D channel-last tensors shaped "
+                    f"{type(self).__name__} supports only 3D channel-last tensors shaped "
                     f"(D, H, W, C). Key '{key}' has shape {tensor.shape} with spatial rank "
                     f"{spatial_rank}."
                 )

@@ -185,14 +185,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
     def _resolve_axes(self, tensor: tf.Tensor) -> tuple[int, int]:
         if tensor.shape.rank is None or tensor.shape.rank < 3:
             raise ValueError(
-                "Rotate90 expects a channel-last sample tensor with shape (H, W, C) or "
+                f"{type(self).__name__} expects a channel-last sample tensor with shape (H, W, C) or "
                 f"(D, H, W, C). Received shape {tensor.shape}."
             )
 
         if self.spatial_axes is None:
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank < 2:
-                raise ValueError("Rotate90 requires at least two spatial dimensions.")
+                raise ValueError(f"{type(self).__name__} requires at least two spatial dimensions.")
             return (spatial_rank - 2, spatial_rank - 1)
 
         spatial_rank = get_spatial_rank(tensor)

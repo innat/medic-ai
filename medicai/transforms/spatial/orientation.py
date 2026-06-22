@@ -215,7 +215,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
-                    "Orientation supports only 3D channel-last tensors shaped "
+                    f"{type(self).__name__} supports only 3D channel-last tensors shaped "
                     f"(D, H, W, C). Key '{key}' has shape {tensor.shape} with spatial rank "
                     f"{spatial_rank}."
                 )

@@ -132,7 +132,7 @@ class RandomCutOut(RandomTransform):
         spatial_rank = get_spatial_rank(image)
         if spatial_rank not in (2, 3):
             raise ValueError(
-                f"RandomCutOut currently supports only 2D or 3D inputs; got spatial rank "
+                f"{type(self).__name__} currently supports only 2D or 3D inputs; got spatial rank "
                 f"{spatial_rank} for shape {image.shape}."
             )
 
