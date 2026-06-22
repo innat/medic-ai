@@ -57,13 +57,29 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             from medicai.transforms import Rotate90, TensorBundle
 
             transform = Rotate90(keys=["image"], k=1)
+
             image = tf.random.normal((64, 64, 1))
-
-            forward = transform(TensorBundle({"image": image}))
+            forward = transform({"image": image})
             restored = transform.inverse(forward)
-
             print(forward["image"].shape)
             print(restored["image"].shape)
+
+        Rotate a 3D image-label pair by 90 degrees:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Rotate90
+
+            transform = Rotate90(keys=["image", "label"], k=1)
+
+            image = tf.random.normal((64, 128, 128, 1))
+            label = tf.random.uniform(
+                (64, 128, 128, 1), maxval=2, dtype=tf.int32
+            )
+            result = transform({"image": image, "label": label})
+            print(result["image"].shape)
+            print(result["label"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with rotated tensors and an

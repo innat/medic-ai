@@ -43,9 +43,35 @@ class SpatialCrop(KeyedTransform):
             )
 
             image = tf.random.normal((48, 96, 96, 1))
-            label = tf.random.uniform((48, 96, 96, 1), maxval=2, dtype=tf.int32)
-
+            label = tf.random.uniform(
+                (48, 96, 96, 1), maxval=2, dtype=tf.int32
+            )
             result = transform({"image": image, "label": label})
+
+            print(result["image"].shape)
+            print(result["label"].shape)
+
+        Crop a centered 2D patch from an image-label pair:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import SpatialCrop
+
+            transform = SpatialCrop(
+                keys=["image", "label"],
+                roi_size=(64, 64),
+                roi_center=(48, 48),
+            )
+
+            image = tf.random.normal((96, 96, 1))
+            label = tf.random.uniform(
+                (96, 96, 1), maxval=2, dtype=tf.int32
+            )
+            result = transform({"image": image, "label": label})
+
+            print(result["image"].shape)
+            print(result["label"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with cropped tensors and a

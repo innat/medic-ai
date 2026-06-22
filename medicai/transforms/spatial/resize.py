@@ -55,7 +55,9 @@ class Resize(KeyedTransform, InvertibleTransform):
             )
 
             image = tf.random.normal((96, 96, 1))
-            label = tf.random.uniform((96, 96, 1), maxval=2, dtype=tf.int32)
+            label = tf.random.uniform(
+                (96, 96, 1), maxval=2, dtype=tf.int32
+            )
 
             result = transform({"image": image, "label": label})
             resized_image = result["image"]
@@ -77,7 +79,6 @@ class Resize(KeyedTransform, InvertibleTransform):
 
             image = tf.random.normal((48, 96, 96, 1))
             bundle = TensorBundle({"image": image})
-
             forward = transform(bundle)
             restored = transform.inverse(forward)
 
@@ -98,11 +99,14 @@ class Resize(KeyedTransform, InvertibleTransform):
             )
 
             image = tf.random.normal((96, 96, 1))
-            label = tf.random.uniform((96, 96, 1), maxval=2, dtype=tf.int32)
-            bundle = TensorBundle({"image": image, "label": label})
-
-            forward = transform(bundle)
+            label = tf.random.uniform(
+                (96, 96, 1), maxval=2, dtype=tf.int32
+            )
+            forward = transform({"image": image, "label": label})
             restored = transform.inverse(forward)
+
+            print(forward["image"].shape, forward["label"].shape)
+            print(restored["image"].shape, restored["label"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with resized tensors, recorded

@@ -75,11 +75,12 @@ class Transform:
     conventions in one place while allowing concrete transforms to focus on
     their transformation logic.
 
-    Use ``Transform`` directly when a custom transform needs:
-
-    - full access to both ``bundle.data`` and ``bundle.meta``
-    - custom control flow beyond keyed tensor iteration
-    - custom trace or inversion behavior
+    When to use this:
+        Use ``Transform`` when a custom transform needs to inspect or update
+        the whole bundle, especially metadata such as ``affine`` or applied
+        transform history. It is the best fit for orchestration-style
+        transforms that do not naturally operate on a fixed set of tensor
+        keys.
 
     Example:
         Define a simple metadata-aware transform:
@@ -89,17 +90,15 @@ class Transform:
             import tensorflow as tf
             from medicai.transforms import TensorBundle, Transform
 
-
             class MarkSample(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
-                    bundle.meta["processed"] = True
-                    bundle.data["image"] = tf.identity(bundle["image"])
+                    bundle["processed"] = True
+                    bundle["image"] = tf.identity(bundle["image"])
                     return bundle
 
-
             image = tf.random.normal((64, 64, 1))
-            output = MarkSample()(TensorBundle({"image": image}))
-            print(output.meta["processed"])
+            output = MarkSample()({"image": image})
+            print(output["processed"])
     """
 
     def __call__(
@@ -108,7 +107,18 @@ class Transform:
         return self.apply(ensure_tensor_bundle(inputs, meta))
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        """Apply the transform to a ``TensorBundle``."""
+        """Apply the transform to a ``TensorBundle``.
+
+        Subclasses override this method with their forward transform logic.
+
+        Args:
+            bundle: The normalized bundle containing tensor data and optional
+                metadata.
+
+        Returns:
+            TensorBundle: The updated bundle after the transform has been
+            applied.
+        """
         raise NotImplementedError
 
     @property
@@ -117,7 +127,20 @@ class Transform:
         return False
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
-        """Apply the inverse transform to a ``TensorBundle``."""
+        """Apply the inverse transform to a ``TensorBundle``.
+
+        Invertible subclasses override this method when they can restore a
+        previous sample state or geometry.
+
+        Args:
+            bundle: The bundle to restore.
+
+        Returns:
+            ``TensorBundle``: The bundle after inverse execution.
+
+        Raises:
+            NotImplementedError: If the transform does not support inversion.
+        """
         raise NotImplementedError(f"{type(self).__name__} does not implement inverse transforms.")
 
     def build_trace_entry(
@@ -129,7 +152,26 @@ class Transform:
         invertible: bool | None = None,
         kernel: str | None = None,
     ) -> dict[str, Any]:
-        """Build a standardized transform trace entry."""
+        """Build a standardized transform trace entry.
+
+        This helper centralizes the metadata format stored in
+        ``bundle.meta["applied_transforms"]`` so transforms can record a
+        consistent trace schema.
+
+        Args:
+            params: Optional transform-specific metadata to store.
+            applied: Whether the transform was actually applied. Random
+                transforms may store this as a TensorFlow boolean tensor.
+            random: Whether the transform is stochastic.
+            invertible: Optional override for the invertibility flag. When
+                omitted, the transform's ``invertible`` property is used.
+            kernel: Optional underlying kernel name, useful when a random
+                transform wraps a deterministic implementation.
+
+        Returns:
+            dict[str, Any]: A standardized trace entry ready to be appended to
+            the bundle metadata.
+        """
         trace_entry = {
             "name": type(self).__name__,
             "params": dict(params or {}),
@@ -155,6 +197,13 @@ class RandomTransform(Transform):
         prob: Probability of applying the random transform. Must be in
             ``[0, 1]``.
 
+    When to use this:
+        Use ``RandomTransform`` when a transform needs probabilistic behavior
+        implemented with TensorFlow ops so it stays compatible with
+        ``tf.function`` and ``tf.data``. It is most useful as a base for
+        random augmentations that decide whether to apply themselves per
+        sample.
+
     Example:
         Build a tiny random transform that adds a bias to ``"image"``:
 
@@ -162,7 +211,6 @@ class RandomTransform(Transform):
 
             import tensorflow as tf
             from medicai.transforms import RandomTransform, TensorBundle
-
 
             class RandomAddOne(RandomTransform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -180,9 +228,9 @@ class RandomTransform(Transform):
                     )
                     return bundle
 
-
             image = tf.zeros((32, 32, 1), dtype=tf.float32)
-            output = RandomAddOne(prob=0.5)(TensorBundle({"image": image}))
+            output = RandomAddOne(prob=0.5)({"image": image})
+            result = output['image']
     """
 
     def __init__(self, prob: float = 0.1):
@@ -191,7 +239,12 @@ class RandomTransform(Transform):
         self.prob = prob
 
     def sample_should_apply(self) -> tf.Tensor:
-        """Sample whether the random transform should be applied."""
+        """Sample whether the random transform should be applied.
+
+        Returns:
+            tf.Tensor: A scalar boolean tensor indicating whether the random
+            transform should execute for the current sample.
+        """
         return tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
 
     def record_random_transform(
@@ -201,7 +254,19 @@ class RandomTransform(Transform):
         applied: tf.Tensor | bool | None = None,
         kernel: str | None = None,
     ) -> TensorBundle:
-        """Append a random transform trace entry to bundle metadata."""
+        """Append a random transform trace entry to bundle metadata.
+
+        Args:
+            bundle: Bundle whose metadata should record the random transform.
+            params: Optional transform-specific metadata to attach.
+            applied: Whether the transform was applied. If omitted, ``True`` is
+                recorded.
+            kernel: Optional deterministic kernel name used internally.
+
+        Returns:
+            ``TensorBundle``: The same bundle, updated in place with one new trace
+            entry.
+        """
         bundle.push_transform(
             self.build_trace_entry(
                 params=params,
@@ -225,6 +290,12 @@ class KeyedTransform(Transform):
         allow_missing_keys: If ``True``, missing keys are skipped. If
             ``False``, missing keys raise ``KeyError``.
 
+    When to use this:
+        Use ``KeyedTransform`` when a transform acts on one or more known data
+        entries such as ``"image"``, ``"label"``, or ``"mask"``. This is the
+        default base class for deterministic per-key transforms because it
+        handles missing-key policy and keyed tensor updates for you.
+
     Example:
         Multiply selected tensors by a constant:
 
@@ -232,7 +303,6 @@ class KeyedTransform(Transform):
 
             import tensorflow as tf
             from medicai.transforms import KeyedTransform, TensorBundle
-
 
             class Multiply(KeyedTransform):
                 def __init__(self, keys, factor):
@@ -246,9 +316,8 @@ class KeyedTransform(Transform):
                     )
                     return bundle
 
-
             image = tf.ones((16, 16, 1), dtype=tf.float32)
-            output = Multiply(keys=["image"], factor=2.0)(TensorBundle({"image": image}))
+            output = Multiply(keys=["image"], factor=2.0)({"image": image})
     """
 
     def __init__(self, keys: Sequence[str], allow_missing_keys: bool = False):
@@ -256,7 +325,19 @@ class KeyedTransform(Transform):
         self.allow_missing_keys = allow_missing_keys
 
     def iter_present_keys(self, bundle: TensorBundle) -> list[str]:
-        """Return the data keys present in ``bundle`` for this transform."""
+        """Return the data keys present in ``bundle`` for this transform.
+
+        Args:
+            bundle: Bundle whose data mapping should be inspected.
+
+        Returns:
+            list[str]: Keys from ``self.keys`` that are present in
+            ``bundle.data``.
+
+        Raises:
+            KeyError: If a requested key is missing and
+                ``allow_missing_keys=False``.
+        """
         present_keys = []
         for key in self.keys:
             if key in bundle.data:
@@ -281,6 +362,10 @@ class KeyedTransform(Transform):
 
         Returns:
             list[str]: The keys that were present and updated.
+
+        Raises:
+            KeyError: If a requested key is missing and
+                ``allow_missing_keys=False``.
         """
         target_keys = tuple(keys) if keys is not None else self.keys
         present_keys = []
@@ -307,26 +392,39 @@ class InvertibleTransform(Transform):
     :class:`~medicai.transforms.KeyedTransform` or
     :class:`~medicai.transforms.Transform`.
 
+    When to use this:
+        Use ``InvertibleTransform`` when a transform can meaningfully undo its
+        forward effect, such as restoring the original orientation, shape, or
+        intensity adjustment. It is especially helpful for preprocessing steps
+        that must later be reversed during post-processing.
+
     Example:
         Define a minimal additive invertible transform:
 
         .. code-block:: python
 
             import tensorflow as tf
-            from medicai.transforms import InvertibleTransform, KeyedTransform, TensorBundle
-
+            from medicai.transforms import (
+                InvertibleTransform, KeyedTransform, TensorBundle
+            )
 
             class AddValue(KeyedTransform, InvertibleTransform):
                 def __init__(self, keys, value):
                     KeyedTransform.__init__(self, keys=keys)
-                    self.value = value
+                    self.alue = value
 
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
                         lambda tensor, _: tensor + tf.cast(self.value, tensor.dtype),
                     )
-                    self.record_transform(bundle, {"keys": list(self.keys), "value": self.value})
+                    self.record_transform(
+                        bundle, 
+                        {
+                            "keys": list(self.keys), 
+                            "value": self.value
+                        }
+                    )
                     return bundle
 
                 def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -335,7 +433,6 @@ class InvertibleTransform(Transform):
                         lambda tensor, _: tensor - tf.cast(self.value, tensor.dtype),
                     )
                     return bundle
-
 
             image = tf.ones((8, 8, 1), dtype=tf.float32)
             transform = AddValue(keys=["image"], value=5.0)
@@ -350,7 +447,17 @@ class InvertibleTransform(Transform):
     def record_transform(
         self, bundle: TensorBundle, params: Mapping[str, Any] | None = None
     ) -> TensorBundle:
-        """Append a transform trace entry to bundle metadata."""
+        """Append an invertible transform trace entry to bundle metadata.
+
+        Args:
+            bundle: Bundle whose metadata should record the transform.
+            params: Optional transform-specific metadata needed for debugging
+                or inverse execution.
+
+        Returns:
+            ``TensorBundle``: The same bundle, updated in place with one new trace
+            entry.
+        """
         bundle.push_transform(self.build_trace_entry(params=params, applied=True, random=False))
         return bundle
 
@@ -381,6 +488,12 @@ class LambdaTransform(KeyedTransform):
         trace_params: Optional static trace parameters merged into the recorded
             trace entry.
 
+    When to use this:
+        Use ``LambdaTransform`` when users want a lightweight custom transform
+        without defining a full subclass. It is a good fit for small
+        deterministic or random tensor edits, optional inverse behavior, and
+        simple metadata hooks.
+
     Example:
         Apply a callable to one key and optionally invert it later:
 
@@ -397,10 +510,35 @@ class LambdaTransform(KeyedTransform):
             )
 
             image = tf.ones((32, 32, 1), dtype=tf.float32)
-            bundle = TensorBundle({"image": image})
-
-            forward = transform(bundle)
+            forward = transform({"image": image})
             restored = transform.inverse(forward)
+            output = restored['image']
+
+        Apply the same transform wrapper to multiple keys:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import LambdaTransform
+
+            transform = LambdaTransform(
+                keys=["image", "label"],
+                fn=lambda tensor, key: (
+                    tensor / 255.0 
+                    if key == "image" 
+                    else tf.cast(tensor, tf.float32)
+                ),
+                name="prepare_pair",
+            )
+
+            image = tf.ones((32, 32, 1), dtype=tf.float32) * 255.0
+            label = tf.ones((32, 32, 1), dtype=tf.int32)
+            output = transform(
+                {
+                    "image": image,
+                    "label": label
+                }
+            )
 
         Apply a probabilistic callable and record its trace:
 
@@ -417,7 +555,8 @@ class LambdaTransform(KeyedTransform):
             )
 
             image = tf.ones((32, 32, 1), dtype=tf.float32)
-            output = transform(TensorBundle({"image": image}))
+            result = transform({"image": image})
+            output = result['image']
     """
 
     _instance_counter = itertools.count()
@@ -549,6 +688,11 @@ class Compose(Transform):
     - tensors are stored in the ``TensorBundle`` data mapping
     - optional metadata is stored in the ``TensorBundle`` metadata mapping
     - each transform reads from and writes back to the same container
+
+    When to use this:
+        Use ``Compose`` when multiple preprocessing or augmentation steps
+        should run as a single pipeline. It is the standard way to define a
+        reusable transform workflow for training, validation, or inference.
 
     Args:
         transforms (Sequence[callable]): A list or sequence of callable transform objects.

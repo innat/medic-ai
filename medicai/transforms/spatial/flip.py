@@ -40,7 +40,9 @@ class Flip(KeyedTransform, InvertibleTransform):
             transform = Flip(keys=["image", "label"], spatial_axis=0)
 
             image = tf.random.normal((32, 64, 64, 1))
-            label = tf.random.uniform((32, 64, 64, 1), maxval=2, dtype=tf.int32)
+            label = tf.random.uniform(
+                (32, 64, 64, 1), maxval=2, dtype=tf.int32
+            )
 
             result = transform({"image": image, "label": label})
 
@@ -54,7 +56,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             transform = Flip(keys=["image"], spatial_axis=1)
             image = tf.random.normal((64, 64, 1))
 
-            forward = transform(TensorBundle({"image": image}))
+            forward = transform({"image": image})
             restored = transform.inverse(forward)
 
             print(forward["image"].shape)
@@ -69,8 +71,8 @@ class Flip(KeyedTransform, InvertibleTransform):
 
             transform = Flip(keys=["image"], spatial_axis=0)
             image = tf.random.normal((64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            
+            result = transform({"image": image})
             output = result["image"]
             print(output.shape)
 
