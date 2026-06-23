@@ -238,15 +238,12 @@ class RandomSpatialCrop(RandomTransform):
             starts = tf.maximum(current_center - roi_size // 2, 0)
             ends = tf.minimum(starts + roi_size, spatial_shape)
             starts = tf.maximum(ends - roi_size, 0)
-
-            if spatial_rank == 2:
-                h0, w0 = tf.unstack(starts)
-                h1, w1 = tf.unstack(ends)
-                crop = label[h0:h1, w0:w1]
+            if label.shape.rank is not None and label.shape.rank > spatial_rank:
+                begin = tf.concat([starts, tf.constant([0], dtype=tf.int32)], axis=0)
+                size = tf.concat([roi_size, [tf.shape(label)[-1]]], axis=0)
+                crop = tf.slice(label, begin=begin, size=size)
             else:
-                d0, h0, w0 = tf.unstack(starts)
-                d1, h1, w1 = tf.unstack(ends)
-                crop = label[d0:d1, h0:h1, w0:w1]
+                crop = tf.slice(label, begin=starts, size=roi_size)
 
             valid_ratio = tf.reduce_mean(tf.cast(crop != self.invalid_label, tf.float32))
             new_center = tf.cond(

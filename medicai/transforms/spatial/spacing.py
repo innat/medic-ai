@@ -222,14 +222,8 @@ class Spacing(KeyedTransform, InvertibleTransform):
         def apply_inverse_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if key not in original_shapes:
                 return tensor
-            resized = self.spacing_resample(
-                tensor,
-                original_spacing=tf.constant(self.pixdim, dtype=tf.float32),
-                desired_spacing=tf.cast(original_spacing, tf.float32),
-                mode=self.mode[key],
-            )
             target_shape = original_shapes[key]
-            return self._resize_to_shape(resized, target_shape, self.mode[key])
+            return self._resize_to_shape(tensor, target_shape, self.mode[key])
 
         present_keys = [key for key in params.get("keys", []) if key in bundle.data]
         self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
