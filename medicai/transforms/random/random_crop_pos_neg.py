@@ -223,7 +223,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
 
         def fallback_coords():
-            num_cols = tf.shape(coords)[1]
+            num_cols = coords.shape[1] if coords.shape[1] is not None else tf.shape(coords)[1]
             random_coord = tf.random.uniform(
                 shape=(spatial_rank,),
                 minval=0,

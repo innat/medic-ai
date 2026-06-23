@@ -161,7 +161,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             branch_fns={
                 0: lambda: tensor,
                 1: lambda: self._rotate_once(tensor, axes),
-                2: lambda: self._rotate_once(self._rotate_once(tensor, axes), axes),
+                2: lambda: tf.reverse(tensor, axis=axes),
                 3: lambda: self._rotate_once(
                     self._rotate_once(self._rotate_once(tensor, axes), axes), axes
                 ),

@@ -337,17 +337,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
         )
         return tf.linalg.matmul(affine, transform)
 
-    def _get_flip_axes(
-        self,
-        current_axcodes: str,
-        target_axcodes: str,
-    ) -> tuple[int, ...]:
-        return tuple(
-            axis
-            for axis, (current_code, target_code) in enumerate(zip(current_axcodes, target_axcodes))
-            if self._AXIS_TO_SIGN[current_code] != self._AXIS_TO_SIGN[target_code]
-        )
-
     def _compute_orientation_transform(
         self,
         affine: tf.Tensor,

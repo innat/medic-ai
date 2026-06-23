@@ -267,7 +267,7 @@ class RandomCutOut(RandomTransform):
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)
-            rect = tf.broadcast_to(rect_hw[None, ...], (depth, height, width)) * valid_mask
+            rect = rect_hw[None, ...] * valid_mask
             cutout_mask *= 1.0 - rect
 
         return cutout_mask[..., None]
