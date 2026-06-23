@@ -167,8 +167,8 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
 
 @pytest.mark.unit
 def test_random_crop_by_pos_neg_label_runs_under_tf_function_for_2d_and_3d():
-    crop_2d = RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(4, 4), pos=1, neg=1)
-    crop_3d = RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(3, 3, 3), pos=1, neg=1)
+    crop_2d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(4, 4), pos=1, neg=1)
+    crop_3d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(3, 3, 3), pos=1, neg=1)
 
     image_2d = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
     label_2d = as_tensor(np.pad(np.ones((2, 2, 1), dtype=np.float32), ((3, 3), (3, 3), (0, 0))))

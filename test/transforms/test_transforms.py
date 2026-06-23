@@ -764,7 +764,7 @@ def test_random_crop_by_pos_neg_label_uses_spatial_crop_kernel():
 
     out = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        spatial_size=(3, 3, 3),
+        target_shape=(3, 3, 3),
         pos=1,
         neg=1,
     )(TensorBundle({"image": image, "label": label}))
@@ -783,7 +783,7 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
     label_2d = as_tensor(np.pad(np.ones((2, 2, 1), dtype=np.float32), ((3, 3), (3, 3), (0, 0))))
     out_2d = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        spatial_size=(4, 4),
+        target_shape=(4, 4),
         pos=1,
         neg=1,
     )(TensorBundle({"image": image_2d, "label": label_2d}))
@@ -794,7 +794,7 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
     )
     out_3d = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        spatial_size=(3, 3, 3),
+        target_shape=(3, 3, 3),
         pos=1,
         neg=1,
     )(TensorBundle({"image": image_3d, "label": label_3d}))
@@ -808,17 +808,17 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
 @pytest.mark.unit
 def test_random_crop_by_pos_neg_label_validates_arguments():
     with pytest.raises(ValueError, match="pos and neg must be non-negative"):
-        RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=-1, neg=1)
+        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=-1, neg=1)
 
     with pytest.raises(ValueError, match="pos and neg cannot both be zero"):
-        RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=0, neg=0)
+        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=0, neg=0)
 
     with pytest.raises(ValueError, match="requires a pair of image and label as keys"):
-        RandomCropByPosNegLabel(keys=["image"], spatial_size=(2, 2, 2), pos=1, neg=1)
+        RandomCropByPosNegLabel(keys=["image"], target_shape=(2, 2, 2), pos=1, neg=1)
 
     with pytest.raises(ValueError, match="currently supports only num_samples=1"):
         RandomCropByPosNegLabel(
-            keys=["image", "label"], spatial_size=(2, 2, 2), pos=1, neg=1, num_samples=2
+            keys=["image", "label"], target_shape=(2, 2, 2), pos=1, neg=1, num_samples=2
         )
 
 
@@ -826,21 +826,21 @@ def test_random_crop_by_pos_neg_label_validates_arguments():
 def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys():
     image_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
     label_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
-    transform = RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2), pos=1, neg=1)
+    transform = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2), pos=1, neg=1)
 
     with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
 
     image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     label_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    with pytest.raises(ValueError, match="`spatial_size` must contain exactly 2 values"):
-        RandomCropByPosNegLabel(keys=["image", "label"], spatial_size=(2, 2, 2), pos=1, neg=1)(
+    with pytest.raises(ValueError, match="`target_shape` must contain exactly 2 values"):
+        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=1, neg=1)(
             TensorBundle({"image": image_2d, "label": label_2d})
         )
 
     skip_transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        spatial_size=(2, 2, 2),
+        target_shape=(2, 2, 2),
         pos=1,
         neg=1,
         allow_missing_keys=True,
@@ -856,7 +856,7 @@ def test_random_crop_by_pos_neg_label_validates_image_reference_key():
 
     transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        spatial_size=(2, 2, 2),
+        target_shape=(2, 2, 2),
         pos=1,
         neg=1,
         image_reference_key="reference",

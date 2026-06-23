@@ -24,7 +24,7 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     Args:
         keys: Two keys containing the image tensor and label tensor.
-        spatial_size: Output crop size as ``(H, W)`` for 2D inputs or
+        target_shape: Output crop size as ``(H, W)`` for 2D inputs or
             ``(D, H, W)`` for 3D inputs.
         pos: Relative weight for positive-center sampling.
         neg: Relative weight for negative-center sampling.
@@ -46,7 +46,7 @@ class RandomCropByPosNegLabel(RandomTransform):
 
             transform = RandomCropByPosNegLabel(
                 keys=["image", "label"],
-                spatial_size=(32, 32),
+                target_shape=(32, 32),
                 pos=1,
                 neg=1,
             )
@@ -66,7 +66,7 @@ class RandomCropByPosNegLabel(RandomTransform):
 
             transform = RandomCropByPosNegLabel(
                 keys=["image", "label"],
-                spatial_size=(16, 32, 32),
+                target_shape=(16, 32, 32),
                 pos=1,
                 neg=1,
             )
@@ -82,7 +82,7 @@ class RandomCropByPosNegLabel(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        spatial_size: Sequence[int],
+        target_shape: Sequence[int],
         pos: int,
         neg: int,
         num_samples: int = 1,
@@ -105,7 +105,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             raise ValueError(f"{class_name} transformation currently supports only num_samples=1.")
 
         self.keys = tuple(keys)
-        self.spatial_size = spatial_size
+        self.target_shape = target_shape
         self.pos = pos
         self.neg = neg
         self.num_samples = num_samples
@@ -137,18 +137,18 @@ class RandomCropByPosNegLabel(RandomTransform):
                 raise KeyError(f"Key '{self.image_reference_key}' not found in input data.")
             image_reference = bundle.data[self.image_reference_key]
         center = self.sample_center(image, label, image_reference, spatial_rank)
-        roi_size = tf.convert_to_tensor(self.spatial_size, dtype=tf.int32)
+        roi_size = tf.convert_to_tensor(self.target_shape, dtype=tf.int32)
         if roi_size.shape.rank != 1 or roi_size.shape[0] != spatial_rank:
             raise ValueError(
-                f"`spatial_size` must contain exactly {spatial_rank} values for input shape "
-                f"{image.shape}; received {self.spatial_size}."
+                f"`target_shape` must contain exactly {spatial_rank} values for input shape "
+                f"{image.shape}; received {self.target_shape}."
             )
         spatial_shape = get_spatial_shape(image)
         starts = tf.maximum(center - roi_size // 2, 0)
         ends = tf.minimum(starts + roi_size, spatial_shape)
         starts = tf.maximum(ends - roi_size, 0)
 
-        crop = SpatialCrop(keys=self.keys, roi_size=self.spatial_size, allow_missing_keys=False)
+        crop = SpatialCrop(keys=self.keys, roi_size=self.target_shape, allow_missing_keys=False)
         present_keys = crop.apply_to_present_keys(
             bundle,
             lambda tensor, _: crop.crop_tensor(tensor, starts, roi_size),
@@ -224,11 +224,14 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         def fallback_coords():
             num_cols = coords.shape[1] if coords.shape[1] is not None else tf.shape(coords)[1]
-            random_coord = tf.random.uniform(
+            random_unit = tf.random.uniform(
                 shape=(spatial_rank,),
-                minval=0,
-                maxval=fallback_shape,
-                dtype=tf.int32,
+                minval=0.0,
+                maxval=1.0,
+            )
+            random_coord = tf.cast(
+                tf.floor(random_unit * tf.cast(fallback_shape[:spatial_rank], tf.float32)),
+                tf.int32,
             )
             padding = tf.zeros([num_cols - spatial_rank], dtype=tf.int32)
             full_coord = tf.concat([random_coord, padding], axis=0)
