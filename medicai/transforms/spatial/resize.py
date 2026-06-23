@@ -143,6 +143,9 @@ class Resize(KeyedTransform, InvertibleTransform):
                 raise ValueError("Length of 'interpolation' must match length of 'keys'.")
             self.interpolation = dict(zip(keys, interpolation))
         elif isinstance(interpolation, dict):
+            missing_keys = set(keys) - set(interpolation.keys())
+            if missing_keys:
+                raise ValueError(f"Missing interpolation mode for keys: {sorted(missing_keys)}")
             self.interpolation = dict(interpolation)
         else:
             raise TypeError("'interpolation' must be a string, tuple, list, or dict.")

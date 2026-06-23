@@ -135,7 +135,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
         self.pixdim = tuple(pixdim)
 
         if len(self.pixdim) != 3:
-            raise ValueError(f"`pixdim` must be 3D for {type(self).__name__}, got {len(self.pixdim)}D.")
+            raise ValueError(
+                f"`pixdim` must be 3D for {type(self).__name__}, got {len(self.pixdim)}D."
+            )
 
         valid_modes = {"trilinear", "nearest"}
         if isinstance(mode, str):
@@ -148,6 +150,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
             else:
                 self.mode = dict(zip(keys, mode))
         elif isinstance(mode, dict):
+            missing_keys = set(keys) - set(mode.keys())
+            if missing_keys:
+                raise ValueError(f"Missing resampling mode for keys: {sorted(missing_keys)}")
             self.mode = dict(mode)
         else:
             raise TypeError("'mode' must be a string, tuple, list, or dict.")

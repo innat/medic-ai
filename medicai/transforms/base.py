@@ -419,9 +419,9 @@ class InvertibleTransform(Transform):
                         lambda tensor, _: tensor + tf.cast(self.value, tensor.dtype),
                     )
                     self.record_transform(
-                        bundle, 
+                        bundle,
                         {
-                            "keys": list(self.keys), 
+                            "keys": list(self.keys),
                             "value": self.value
                         }
                     )
@@ -524,8 +524,8 @@ class LambdaTransform(KeyedTransform):
             transform = LambdaTransform(
                 keys=["image", "label"],
                 fn=lambda tensor, key: (
-                    tensor / 255.0 
-                    if key == "image" 
+                    tensor / 255.0
+                    if key == "image"
                     else tf.cast(tensor, tf.float32)
                 ),
                 name="prepare_pair",
@@ -610,9 +610,13 @@ class LambdaTransform(KeyedTransform):
                 )
 
         if self.meta_fn is not None:
-            updated_meta = self.meta_fn(dict(bundle.meta))
-            if updated_meta is not None:
-                bundle.meta = updated_meta
+            should_update_meta = self.prob is None or (
+                not tf.is_tensor(should_apply) and bool(should_apply)
+            )
+            if should_update_meta:
+                updated_meta = self.meta_fn(dict(bundle.meta))
+                if updated_meta is not None:
+                    bundle.meta = updated_meta
 
         bundle.push_transform(
             self.build_trace_entry(
@@ -644,7 +648,9 @@ class LambdaTransform(KeyedTransform):
             if tf.is_tensor(applied):
                 bundle.data[key] = tf.cond(
                     tf.cast(applied, tf.bool),
-                    lambda tensor=tensor, key=key: self._call_tensor_fn(self.inverse_fn, tensor, key),
+                    lambda tensor=tensor, key=key: self._call_tensor_fn(
+                        self.inverse_fn, tensor, key
+                    ),
                     lambda tensor=tensor: tensor,
                 )
             elif _trace_applied_to_bool(applied):
@@ -675,7 +681,10 @@ class LambdaTransform(KeyedTransform):
     def _accepts_two_args(fn) -> bool:
         if fn is None:
             return False
-        signature = inspect.signature(fn)
+        try:
+            signature = inspect.signature(fn)
+        except (TypeError, ValueError):
+            return False
         positional = [
             param
             for param in signature.parameters.values()
@@ -763,8 +772,8 @@ class Compose(Transform):
                 [
                     Flip(keys=["image"], spatial_axis=1),
                     Resize(
-                        keys=["image"], 
-                        interpolation="bilinear", 
+                        keys=["image"],
+                        interpolation="bilinear",
                         target_shape=(32, 32)
                     ),
                 ]

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import tensorflow as tf
 from keras import ops
 
 from medicai.transforms import (
@@ -253,6 +254,22 @@ def test_lambda_transform_supports_inverse_and_meta_hooks():
 
 
 @pytest.mark.unit
+def test_lambda_transform_skips_meta_hook_when_probabilistic_apply_is_false():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 5.0,
+        prob=0.0,
+        meta_fn=lambda meta: {**meta, "forward_tag": True},
+    )
+
+    result = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 1.0)
+    assert "forward_tag" not in result.meta
+
+
+@pytest.mark.unit
 def test_lambda_transform_inverse_with_prob_uses_tensor_trace_flag():
     image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
     transform = LambdaTransform(
@@ -280,6 +297,16 @@ def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
     strict = LambdaTransform(keys=["image"], fn=lambda tensor: tensor)
     with pytest.raises(KeyError):
         strict(bundle)
+
+
+@pytest.mark.unit
+def test_lambda_transform_accepts_builtin_tensor_functions_without_signature_errors():
+    transform = LambdaTransform(keys=["image"], fn=tf.identity)
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+
+    result = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 1.0)
 
 
 @pytest.mark.unit

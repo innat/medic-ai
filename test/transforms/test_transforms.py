@@ -62,6 +62,16 @@ def test_resize_accepts_mapping_mode_and_allow_missing_keys():
 
 
 @pytest.mark.unit
+def test_resize_rejects_mapping_without_all_requested_keys():
+    with pytest.raises(ValueError, match="Missing interpolation mode for keys"):
+        Resize(
+            keys=["image", "label"],
+            interpolation={"image": "bilinear"},
+            target_shape=(3, 4),
+        )
+
+
+@pytest.mark.unit
 def test_resize_transform_for_2d_and_3d():
     inputs_2d = TensorBundle(
         {
@@ -146,6 +156,16 @@ def test_spacing_validates_pixdim_and_mode():
 
     with pytest.raises(ValueError, match="Invalid mode 'bilinear' for 3D input"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), mode="bilinear")
+
+
+@pytest.mark.unit
+def test_spacing_rejects_mapping_without_all_requested_keys():
+    with pytest.raises(ValueError, match="Missing resampling mode for keys"):
+        Spacing(
+            keys=["image", "label"],
+            pixdim=(1.0, 1.0, 1.0),
+            mode={"image": "trilinear"},
+        )
 
 
 @pytest.mark.unit
@@ -400,6 +420,19 @@ def test_signal_fill_empty_preserves_input_dtype():
 
 
 @pytest.mark.unit
+def test_signal_fill_empty_replaces_infinities_with_dtype_finite_limits():
+    image = as_tensor(np.array([[[np.inf], [-np.inf]]], dtype=np.float16))
+
+    out = SignalFillEmpty(keys=["image"], replacement=0.0)(TensorBundle({"image": image}))
+
+    dtype_info = np.finfo(np.float16)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out["image"]),
+        np.array([[[dtype_info.max], [dtype_info.min]]], dtype=np.float16),
+    )
+
+
+@pytest.mark.unit
 def test_shift_intensity_records_trace():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     out = ShiftIntensity(keys=["image"], offsets=2.0)(TensorBundle({"image": image}))
@@ -585,6 +618,22 @@ def test_random_spatial_crop_requires_label_for_label_aware_mode():
 
     with pytest.raises(KeyError, match="`label` key is required"):
         transform(TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))}))
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
+    image = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
+    mask = as_tensor(np.pad(np.ones((2, 2, 1), dtype=np.int32), ((1, 1), (1, 1), (0, 0))))
+
+    out = RandomSpatialCrop(
+        keys=["image", "mask"],
+        roi_size=(2, 2),
+        invalid_label=0,
+        random_center=False,
+    )(TensorBundle({"image": image, "mask": mask}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 2, 1)
+    assert tuple(ops.shape(out["mask"])) == (2, 2, 1)
 
 
 @pytest.mark.unit
@@ -973,6 +1022,19 @@ def test_random_rotate_preserves_shape_and_records_trace():
     assert trace["random"] is True
     assert trace["invertible"] is False
     assert trace["kernel"] == "rotate_volume"
+
+
+@pytest.mark.unit
+def test_random_rotate_supports_integer_label_tensors():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 3, (4, 5, 6, 1)).astype(np.int32))
+
+    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)(
+        TensorBundle({"image": image, "label": label})
+    )
+
+    assert out["label"].dtype == label.dtype
+    assert tuple(ops.shape(out["label"])) == (4, 5, 6, 1)
 
 
 @pytest.mark.unit

@@ -71,7 +71,7 @@ class Flip(KeyedTransform, InvertibleTransform):
 
             transform = Flip(keys=["image"], spatial_axis=0)
             image = tf.random.normal((64, 64, 1))
-            
+
             result = transform({"image": image})
             output = result["image"]
             print(output.shape)

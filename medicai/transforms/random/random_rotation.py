@@ -40,19 +40,22 @@ def rotate_volume(
     fill_value: float = 0.0,
 ) -> tf.Tensor:
     """Rotate a 4D ``(D, H, W, C)`` tensor slice-wise over the height-width plane."""
+    original_dtype = image.dtype
+    image = tf.cast(image, tf.float32)
     img_shape = tf.shape(image)
     h, w = img_shape[1], img_shape[2]
     matrix = get_rotation_matrix(angle, h, w)
     matrices = tf.tile(tf.expand_dims(matrix, 0), [img_shape[0], 1])
 
-    return tf.raw_ops.ImageProjectiveTransformV3(
+    rotated = tf.raw_ops.ImageProjectiveTransformV3(
         images=image,
         transforms=matrices,
         output_shape=[h, w],
         interpolation=interpolation,
         fill_mode="CONSTANT",
-        fill_value=tf.cast(fill_value, image.dtype),
+        fill_value=tf.cast(fill_value, tf.float32),
     )
+    return tf.cast(rotated, original_dtype)
 
 
 class RandomRotate(RandomTransform):

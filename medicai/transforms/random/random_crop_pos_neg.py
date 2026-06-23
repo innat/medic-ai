@@ -224,16 +224,11 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         def fallback_coords():
             num_cols = tf.shape(coords)[1]
-            random_coord = tf.stack(
-                [
-                    tf.random.uniform(
-                        shape=(),
-                        minval=0,
-                        maxval=fallback_shape[axis],
-                        dtype=tf.int32,
-                    )
-                    for axis in range(spatial_rank)
-                ]
+            random_coord = tf.random.uniform(
+                shape=(spatial_rank,),
+                minval=0,
+                maxval=fallback_shape,
+                dtype=tf.int32,
             )
             padding = tf.zeros([num_cols - spatial_rank], dtype=tf.int32)
             full_coord = tf.concat([random_coord, padding], axis=0)

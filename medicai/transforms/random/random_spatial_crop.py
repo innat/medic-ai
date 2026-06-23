@@ -121,10 +121,11 @@ class RandomSpatialCrop(RandomTransform):
         if self.invalid_label is None:
             center = self._get_random_center(spatial_shape, roi_size, spatial_rank)
         else:
-            if "label" not in bundle.data:
-                raise KeyError("`label` key is required when `invalid_label` is specified.")
+            label_key = self.keys[1] if len(self.keys) > 1 else "label"
+            if label_key not in bundle.data:
+                raise KeyError(f"`{label_key}` key is required when `invalid_label` is specified.")
             center = self._get_label_aware_center(
-                spatial_shape, roi_size, bundle["label"], spatial_rank
+                spatial_shape, roi_size, bundle[label_key], spatial_rank
             )
 
         crop = SpatialCrop(
@@ -173,20 +174,13 @@ class RandomSpatialCrop(RandomTransform):
                 )
             )
             max_roi_size = tf.where(max_roi_size <= 0, spatial_shape, max_roi_size)
-
-            def sample_dim(min_s, max_s, img_s):
-                min_s = tf.where(min_s <= 0, img_s, min_s)
-                max_s = tf.where(max_s <= 0, img_s, max_s)
-                max_s = tf.minimum(max_s, img_s)
-                min_s = tf.minimum(min_s, max_s)
-                return tf.random.uniform([], minval=min_s, maxval=max_s + 1, dtype=tf.int32)
-
-            roi_size = tf.stack(
-                [
-                    sample_dim(roi_size[i], max_roi_size[i], spatial_shape[i])
-                    for i in range(roi_size.shape[0])
-                ]
-            )
+            min_s = tf.where(roi_size <= 0, spatial_shape, roi_size)
+            max_s = tf.where(max_roi_size <= 0, spatial_shape, max_roi_size)
+            max_s = tf.minimum(max_s, spatial_shape)
+            min_s = tf.minimum(min_s, max_s)
+            span = max_s - min_s + 1
+            random_unit = tf.random.uniform(shape=[spatial_rank], minval=0.0, maxval=1.0)
+            roi_size = min_s + tf.cast(tf.floor(random_unit * tf.cast(span, tf.float32)), tf.int32)
         else:
             roi_size = tf.where(roi_size > 0, roi_size, spatial_shape)
             roi_size = tf.minimum(roi_size, spatial_shape)
