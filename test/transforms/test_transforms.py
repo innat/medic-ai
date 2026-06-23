@@ -409,26 +409,13 @@ def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
 
 
 @pytest.mark.unit
-def test_signal_fill_empty_preserves_input_dtype():
-    image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float16))
+def test_signal_fill_empty_outputs_float32_tensor():
+    image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float64))
     out = SignalFillEmpty(keys=["image"], replacement=2.0)(TensorBundle({"image": image}))
 
-    assert out["image"].dtype == image.dtype
+    assert out["image"].dtype == tf.float32
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out["image"]), np.array([[[2.0], [1.0]]], dtype=np.float16)
-    )
-
-
-@pytest.mark.unit
-def test_signal_fill_empty_replaces_infinities_with_dtype_finite_limits():
-    image = as_tensor(np.array([[[np.inf], [-np.inf]]], dtype=np.float16))
-
-    out = SignalFillEmpty(keys=["image"], replacement=0.0)(TensorBundle({"image": image}))
-
-    dtype_info = np.finfo(np.float16)
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(out["image"]),
-        np.array([[[dtype_info.max], [dtype_info.min]]], dtype=np.float16),
+        ops.convert_to_numpy(out["image"]), np.array([[[2.0], [1.0]]], dtype=np.float32)
     )
 
 

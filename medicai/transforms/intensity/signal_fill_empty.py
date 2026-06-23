@@ -98,24 +98,21 @@ class SignalFillEmpty(KeyedTransform):
         neginf: float | None = None,
     ) -> tf.Tensor:
         """Replace NaN, positive infinity, and negative infinity values in a tensor."""
-        original_dtype = tensor.dtype
-        compute_dtype = tf.float32
-        tensor = tf.cast(tensor, compute_dtype)
-        dtype_limits = tf.experimental.numpy.finfo(original_dtype.as_numpy_dtype)
+        tensor = tf.cast(tf.convert_to_tensor(tensor), tf.float32)
 
         nan = self.replacement if nan is None else nan
-        posinf = dtype_limits.max if posinf is None else posinf
-        neginf = dtype_limits.min if neginf is None else neginf
+        posinf = tf.float32.max if posinf is None else posinf
+        neginf = -tf.float32.max if neginf is None else neginf
 
-        tensor = tf.where(tf.math.is_nan(tensor), tf.cast(nan, compute_dtype), tensor)
+        tensor = tf.where(tf.math.is_nan(tensor), tf.fill(tf.shape(tensor), nan), tensor)
         tensor = tf.where(
             tf.math.is_inf(tensor) & (tensor > 0),
-            tf.cast(posinf, compute_dtype),
+            tf.fill(tf.shape(tensor), posinf),
             tensor,
         )
         tensor = tf.where(
             tf.math.is_inf(tensor) & (tensor < 0),
-            tf.cast(neginf, compute_dtype),
+            tf.fill(tf.shape(tensor), neginf),
             tensor,
         )
-        return tf.cast(tensor, original_dtype)
+        return tensor
