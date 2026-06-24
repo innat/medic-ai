@@ -14,12 +14,12 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     ``Rotate90`` deterministically rotates channel-last sample tensors by
     multiples of 90 degrees. The rotation plane is selected through
-    ``spatial_axes`` and can be used for:
+    ``spatial_axis`` and can be used for:
 
     - 2D tensors shaped ``(H, W, C)``
     - 3D tensors shaped ``(D, H, W, C)``
 
-    For 2D tensors, leaving ``spatial_axes=None`` rotates in the image plane.
+    For 2D tensors, leaving ``spatial_axis=None`` rotates in the image plane.
     For 3D tensors, the default also rotates within the last two spatial
     dimensions, preserving the leading depth axis.
 
@@ -30,7 +30,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
     Args:
         keys: Keys of the tensors to rotate.
         k: Number of 90-degree counterclockwise quarter turns.
-        spatial_axes: Two axes defining the rotation plane. If ``None``, the
+        spatial_axis: Two axes defining the rotation plane. If ``None``, the
             transform rotates in the last two spatial dimensions.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -89,19 +89,19 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         KeyError: If a requested key is missing and
             ``allow_missing_keys=False``.
         ValueError: If a selected tensor is not channel-last 2D or 3D, or if
-            ``spatial_axes`` does not resolve to exactly two valid axes.
+            ``spatial_axis`` does not resolve to exactly two valid axes.
     """
 
     def __init__(
         self,
         keys: Sequence[str],
         k: int = 1,
-        spatial_axes: Sequence[int] | None = None,
+        spatial_axis: Sequence[int] | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.k = k
-        self.spatial_axes = spatial_axes
+        self.spatial_axis = spatial_axis
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         effective_k = self.k % 4
@@ -123,7 +123,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 {
                     "keys": list(present_keys),
                     "k": effective_k,
-                    "spatial_axes": normalized_axes["value"],
+                    "spatial_axis": normalized_axes["value"],
                 },
             )
         return bundle
@@ -189,14 +189,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 f"(D, H, W, C). Received shape {tensor.shape}."
             )
 
-        if self.spatial_axes is None:
+        if self.spatial_axis is None:
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank < 2:
                 raise ValueError(f"{type(self).__name__} requires at least two spatial dimensions.")
             return (spatial_rank - 2, spatial_rank - 1)
 
         spatial_rank = get_spatial_rank(tensor)
-        axes = normalize_spatial_axes(tuple(self.spatial_axes), spatial_rank)
+        axes = normalize_spatial_axes(tuple(self.spatial_axis), spatial_rank, name="spatial_axis")
         if len(axes) != 2:
-            raise ValueError("`spatial_axes` must contain exactly two axes.")
+            raise ValueError("`spatial_axis` must contain exactly two axes.")
         return axes

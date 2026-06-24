@@ -35,9 +35,11 @@ def as_tensor(array, dtype=None):
 @pytest.mark.unit
 def test_intensity_transforms_run_under_tf_function():
     normalize = NormalizeIntensity(keys=["image"], nonzero=True)
-    scale = ScaleIntensityRange(keys=["image"], a_min=0.0, a_max=1.0, b_min=-1.0, b_max=1.0)
-    shift = ShiftIntensity(keys=["image"], offsets=0.25)
-    fill = SignalFillEmpty(keys=["image"], replacement=0.0)
+    scale = ScaleIntensityRange(
+        keys=["image"], input_min=0.0, input_max=1.0, output_min=-1.0, output_max=1.0
+    )
+    shift = ShiftIntensity(keys=["image"], offset=0.25)
+    fill = SignalFillEmpty(keys=["image"], fill_value=0.0)
 
     image = as_tensor(np.array([[[0.0], [1.0]], [[np.nan], [0.5]]], dtype=np.float32))
 
@@ -58,7 +60,7 @@ def test_intensity_transforms_run_under_tf_function():
 
 @pytest.mark.unit
 def test_spatial_rank_agnostic_transforms_run_under_tf_function():
-    crop = SpatialCrop(keys=["image"], roi_size=(3, 4), roi_start=(1, 1))
+    crop = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
     flip = Flip(keys=["image"], spatial_axis=1)
     rotate = Rotate90(keys=["image"], k=1)
     resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5))
@@ -144,8 +146,10 @@ def test_spacing_and_orientation_run_under_tf_function():
 def test_random_rank_agnostic_transforms_run_under_tf_function():
     random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0)
     random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3)
-    random_spatial_crop = RandomSpatialCrop(keys=["image"], roi_size=(3, 4), random_center=False)
-    random_shift = RandomShiftIntensity(keys=["image"], offsets=0.25, prob=1.0)
+    random_spatial_crop = RandomSpatialCrop(
+        keys=["image"], crop_size=(3, 4), sample_center=False
+    )
+    random_shift = RandomShiftIntensity(keys=["image"], offset_range=0.25, prob=1.0)
 
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
 

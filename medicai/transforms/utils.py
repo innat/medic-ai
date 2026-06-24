@@ -89,6 +89,7 @@ def normalize_axes(axes: Sequence[int], rank: int, name: str = "axes") -> tuple[
 def normalize_spatial_axes(
     axes: Sequence[int],
     spatial_rank: int,
+    name: str = "spatial_axes",
 ) -> tuple[int, ...]:
     """Normalize axes expressed relative to spatial dimensions only."""
-    return normalize_axes(axes, spatial_rank, name="spatial_axes")
+    return normalize_axes(axes, spatial_rank, name=name)

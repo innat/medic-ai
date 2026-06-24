@@ -31,7 +31,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         keys: Keys of tensors to resample.
         pixdim: Target voxel spacing given as ``(depth, height, width)``
             spacing values.
-        mode: Interpolation mode specified as a single string, a sequence
+        interpolation: Interpolation mode specified as a single string, a sequence
             aligned with ``keys``, or a mapping from key to mode. Valid 3D
             modes are ``"trilinear"`` and ``"nearest"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -48,7 +48,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
             transform = Spacing(
                 keys=["image", "label"],
                 pixdim=(1.0, 1.0, 1.0),
-                mode=("trilinear", "nearest"),
+                interpolation=("trilinear", "nearest"),
             )
 
             image = tf.random.normal((24, 128, 128, 1))
@@ -101,7 +101,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
             transform = Spacing(
                 keys=["image", "label"],
                 pixdim=(1.0, 1.0, 1.0),
-                mode=("trilinear", "nearest"),
+                interpolation=("trilinear", "nearest"),
             )
 
             image = tf.random.normal((12, 32, 32, 1))
@@ -119,7 +119,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
     Raises:
         ValueError: If ``pixdim`` is not length 3, if a tensor is not 3D
             spatially, or if an invalid interpolation mode is provided.
-        TypeError: If ``mode`` is not a string, sequence, or mapping.
+        TypeError: If ``interpolation`` is not a string, sequence, or mapping.
         KeyError: If a requested key is missing and
             ``allow_missing_keys=False``.
     """
@@ -128,7 +128,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str] = ("image", "label"),
         pixdim: Sequence[float] = (1.0, 1.0, 1.0),
-        mode: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
+        interpolation: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -140,27 +140,27 @@ class Spacing(KeyedTransform, InvertibleTransform):
             )
 
         valid_modes = {"trilinear", "nearest"}
-        if isinstance(mode, str):
-            self.mode = {key: mode for key in keys}
-        elif isinstance(mode, (tuple, list)):
-            if len(keys) == 1 and len(mode) >= 1:
-                self.mode = {keys[0]: mode[0]}
-            elif len(mode) != len(keys):
-                raise ValueError("Length of 'mode' must match length of 'keys'.")
+        if isinstance(interpolation, str):
+            self.interpolation = {key: interpolation for key in keys}
+        elif isinstance(interpolation, (tuple, list)):
+            if len(keys) == 1 and len(interpolation) >= 1:
+                self.interpolation = {keys[0]: interpolation[0]}
+            elif len(interpolation) != len(keys):
+                raise ValueError("Length of 'interpolation' must match length of 'keys'.")
             else:
-                self.mode = dict(zip(keys, mode))
-        elif isinstance(mode, dict):
-            missing_keys = set(keys) - set(mode.keys())
+                self.interpolation = dict(zip(keys, interpolation))
+        elif isinstance(interpolation, dict):
+            missing_keys = set(keys) - set(interpolation.keys())
             if missing_keys:
-                raise ValueError(f"Missing resampling mode for keys: {sorted(missing_keys)}")
-            self.mode = dict(mode)
+                raise ValueError(f"Missing interpolation mode for keys: {sorted(missing_keys)}")
+            self.interpolation = dict(interpolation)
         else:
-            raise TypeError("'mode' must be a string, tuple, list, or dict.")
+            raise TypeError("'interpolation' must be a string, tuple, list, or dict.")
 
-        for key, resize_mode in self.mode.items():
-            if resize_mode not in valid_modes:
+        for key, resize_interpolation in self.interpolation.items():
+            if resize_interpolation not in valid_modes:
                 raise ValueError(
-                    f"Invalid mode '{resize_mode}' for 3D input. "
+                    f"Invalid interpolation '{resize_interpolation}' for 3D input. "
                     f"Allowed: {sorted(valid_modes)} (key='{key}')."
                 )
 
@@ -191,7 +191,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 tensor,
                 original_spacing=original_spacing,
                 desired_spacing=tf.constant(self.pixdim, dtype=tf.float32),
-                mode=self.mode[key],
+                interpolation=self.interpolation[key],
             )
 
         present_keys = self.apply_to_present_keys(bundle, apply_spacing)
@@ -203,7 +203,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 "pixdim": self.pixdim,
                 "original_spacing": original_spacing,
                 "original_shapes": original_shapes,
-                "mode": {key: self.mode[key] for key in present_keys},
+                "interpolation": {key: self.interpolation[key] for key in present_keys},
             },
         )
         return bundle
@@ -223,7 +223,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
             if key not in original_shapes:
                 return tensor
             target_shape = original_shapes[key]
-            return self._resize_to_shape(tensor, target_shape, self.mode[key])
+            return self._resize_to_shape(tensor, target_shape, self.interpolation[key])
 
         present_keys = [key for key in params.get("keys", []) if key in bundle.data]
         self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
@@ -254,22 +254,24 @@ class Spacing(KeyedTransform, InvertibleTransform):
         tensor: tf.Tensor,
         original_spacing: tf.Tensor,
         desired_spacing: tf.Tensor,
-        mode: str,
+        interpolation: str,
     ) -> tf.Tensor:
         """Resample one 3D tensor to the desired physical spacing."""
         scale = tf.cast(original_spacing, tf.float32) / tf.cast(desired_spacing, tf.float32)
         original_shape = tf.cast(tf.shape(tensor)[:3], tf.float32)
         new_shape = tf.cast(tf.round(original_shape * scale), tf.int32)
-        return self._resize_to_shape(tensor, new_shape, mode)
+        return self._resize_to_shape(tensor, new_shape, interpolation)
 
-    def _resize_to_shape(self, tensor: tf.Tensor, spatial_shape: tf.Tensor, mode: str) -> tf.Tensor:
+    def _resize_to_shape(
+        self, tensor: tf.Tensor, spatial_shape: tf.Tensor, interpolation: str
+    ) -> tf.Tensor:
         tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,
             spatial_shape[0],
             spatial_shape[1],
             spatial_shape[2],
-            method=mode,
+            method=interpolation,
             align_corners=False,
         )
         return resized[0]

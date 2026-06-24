@@ -58,7 +58,7 @@ def test_compose_inverse_reverses_invertible_transforms_only():
     pipeline = Compose(
         [
             Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offsets=3.0),
+            ShiftIntensity(keys=["image"], offset=3.0),
         ]
     )
 
@@ -84,7 +84,7 @@ def test_compose_inverse_accepts_mapping_inputs():
 def test_compose_inverse_traverses_nested_compose_blocks():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     inner = Compose([Flip(keys=["image"], spatial_axis=1)])
-    outer = Compose([inner, ShiftIntensity(keys=["image"], offsets=3.0)])
+    outer = Compose([inner, ShiftIntensity(keys=["image"], offset=3.0)])
 
     forward = outer({"image": image})
     restored = outer.inverse(TensorBundle({"image": forward["image"]}))

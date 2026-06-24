@@ -137,28 +137,28 @@ class RandomCropByPosNegLabel(RandomTransform):
                 raise KeyError(f"Key '{self.image_reference_key}' not found in input data.")
             image_reference = bundle.data[self.image_reference_key]
         center = self.sample_center(image, label, image_reference, spatial_rank)
-        roi_size = tf.convert_to_tensor(self.target_shape, dtype=tf.int32)
-        if roi_size.shape.rank != 1 or roi_size.shape[0] != spatial_rank:
+        crop_size = tf.convert_to_tensor(self.target_shape, dtype=tf.int32)
+        if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
             raise ValueError(
                 f"`target_shape` must contain exactly {spatial_rank} values for input shape "
                 f"{image.shape}; received {self.target_shape}."
             )
         spatial_shape = get_spatial_shape(image)
-        starts = tf.maximum(center - roi_size // 2, 0)
-        ends = tf.minimum(starts + roi_size, spatial_shape)
-        starts = tf.maximum(ends - roi_size, 0)
+        starts = tf.maximum(center - crop_size // 2, 0)
+        ends = tf.minimum(starts + crop_size, spatial_shape)
+        starts = tf.maximum(ends - crop_size, 0)
 
-        crop = SpatialCrop(keys=self.keys, roi_size=self.target_shape, allow_missing_keys=False)
+        crop = SpatialCrop(keys=self.keys, crop_size=self.target_shape, allow_missing_keys=False)
         present_keys = crop.apply_to_present_keys(
             bundle,
-            lambda tensor, _: crop.crop_tensor(tensor, starts, roi_size),
+            lambda tensor, _: crop.crop_tensor(tensor, starts, crop_size),
         )
         bundle.push_transform(
             self.build_trace_entry(
                 params={
                     "keys": list(present_keys),
-                    "roi_start": starts,
-                    "roi_size": roi_size,
+                    "crop_start": starts,
+                    "crop_size": crop_size,
                     "pos": self.pos,
                     "neg": self.neg,
                     "image_reference_key": self.image_reference_key,

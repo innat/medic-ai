@@ -23,7 +23,7 @@ class RandomRotate90(RandomTransform):
         keys: Keys of the tensors to rotate.
         prob: Probability of applying the rotation.
         max_k: Maximum number of quarter turns sampled per call.
-        spatial_axes: Two axes defining the rotation plane. If ``None``, the
+        spatial_axis: Two axes defining the rotation plane. If ``None``, the
             last two spatial dimensions are used.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -61,7 +61,7 @@ class RandomRotate90(RandomTransform):
         keys: Sequence[str],
         prob: float = 0.1,
         max_k: int = 3,
-        spatial_axes: Sequence[int] | None = None,
+        spatial_axis: Sequence[int] | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob)
@@ -69,7 +69,7 @@ class RandomRotate90(RandomTransform):
             raise ValueError(f"`max_k` must be >= 1. Received {max_k}.")
         self.keys = tuple(keys)
         self.max_k = max_k
-        self.spatial_axes = spatial_axes
+        self.spatial_axis = spatial_axis
         self.allow_missing_keys = allow_missing_keys
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -78,7 +78,7 @@ class RandomRotate90(RandomTransform):
         rotate = Rotate90(
             keys=self.keys,
             k=1,
-            spatial_axes=self.spatial_axes,
+            spatial_axis=self.spatial_axis,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -95,7 +95,7 @@ class RandomRotate90(RandomTransform):
             params={
                 "keys": list(present_keys),
                 "k": k,
-                "spatial_axes": self.spatial_axes,
+                "spatial_axis": self.spatial_axis,
             },
             applied=should_rotate,
             kernel="Rotate90",

@@ -731,10 +731,10 @@ class Compose(Transform):
             transform = Compose([
                 ScaleIntensityRange(
                     keys=["image"],
-                    a_min=-175,
-                    a_max=250,
-                    b_min=0.0,
-                    b_max=1.0,
+                    input_min=-175,
+                    input_max=250,
+                    output_min=0.0,
+                    output_max=1.0,
                     clip=True,
                 ),
                 Resize(

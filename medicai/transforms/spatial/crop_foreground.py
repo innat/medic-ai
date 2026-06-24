@@ -153,15 +153,15 @@ class CropForeground(KeyedTransform):
             spatial_rank,
         )
 
-        roi_size = max_coords - min_coords
+        crop_size = max_coords - min_coords
         crop = SpatialCrop(
             keys=self.keys,
-            roi_size=1,
+            crop_size=1,
             allow_missing_keys=self.allow_missing_keys,
         )
         present_keys = crop.apply_to_present_keys(
             bundle,
-            lambda tensor, _: crop.crop_tensor(tensor, min_coords, roi_size),
+            lambda tensor, _: crop.crop_tensor(tensor, min_coords, crop_size),
         )
 
         if self.start_coord_key is not None:
@@ -173,8 +173,8 @@ class CropForeground(KeyedTransform):
             self.build_trace_entry(
                 params={
                     "keys": list(present_keys),
-                    "roi_start": min_coords,
-                    "roi_size": roi_size,
+                    "crop_start": min_coords,
+                    "crop_size": crop_size,
                     "source_key": self.source_key,
                 },
                 applied=True,

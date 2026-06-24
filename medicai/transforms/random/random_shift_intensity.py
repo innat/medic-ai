@@ -20,7 +20,7 @@ class RandomShiftIntensity(RandomTransform):
 
     Args:
         keys: Keys of the tensors to shift.
-        offsets: Symmetric scalar magnitude or explicit ``(min, max)`` offset
+        offset_range: Symmetric scalar magnitude or explicit ``(min, max)`` offset
             range to sample from.
         prob: Probability of applying the shift.
         channel_wise: If ``True``, sample independent per-channel offsets.
@@ -34,7 +34,7 @@ class RandomShiftIntensity(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomShiftIntensity
 
-            transform = RandomShiftIntensity(keys=["image"], offsets=0.1, prob=0.5)
+            transform = RandomShiftIntensity(keys=["image"], offset_range=0.1, prob=0.5)
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
             output = result["image"]
@@ -47,7 +47,7 @@ class RandomShiftIntensity(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomShiftIntensity, TensorBundle
 
-            transform = RandomShiftIntensity(keys=["image"], offsets=0.1, prob=0.5)
+            transform = RandomShiftIntensity(keys=["image"], offset_range=0.1, prob=0.5)
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
             result = transform(bundle)
@@ -58,17 +58,17 @@ class RandomShiftIntensity(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offsets: Union[float, Tuple[float, float]],
+        offset_range: Union[float, Tuple[float, float]],
         prob: float = 0.1,
         channel_wise: bool = False,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob)
         self.keys = tuple(keys)
-        if isinstance(offsets, (int, float)):
-            self.offsets = (-abs(offsets), abs(offsets))
+        if isinstance(offset_range, (int, float)):
+            self.offset_range = (-abs(offset_range), abs(offset_range))
         else:
-            self.offsets = (min(offsets), max(offsets))
+            self.offset_range = (min(offset_range), max(offset_range))
 
         self.channel_wise = channel_wise
         self.allow_missing_keys = allow_missing_keys
@@ -76,7 +76,7 @@ class RandomShiftIntensity(RandomTransform):
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_shift = self.sample_should_apply()
         shift = ShiftIntensity(
-            keys=self.keys, offsets=0.0, allow_missing_keys=self.allow_missing_keys
+            keys=self.keys, offset=0.0, allow_missing_keys=self.allow_missing_keys
         )
         sampled_offsets = {}
         present_keys = shift.iter_present_keys(bundle)
@@ -86,21 +86,21 @@ class RandomShiftIntensity(RandomTransform):
                 offset_shape = [1] * (tensor.shape.rank - 1) + [tensor.shape[-1]]
                 offsets = tf.random.uniform(
                     shape=offset_shape,
-                    minval=self.offsets[0],
-                    maxval=self.offsets[1],
+                    minval=self.offset_range[0],
+                    maxval=self.offset_range[1],
                     dtype=tensor.dtype,
                 )
             else:
                 offsets = tf.random.uniform(
                     shape=(),
-                    minval=self.offsets[0],
-                    maxval=self.offsets[1],
+                    minval=self.offset_range[0],
+                    maxval=self.offset_range[1],
                     dtype=tensor.dtype,
                 )
             sampled_offsets[key] = offsets
             return tf.cond(
                 should_shift,
-                lambda tensor=tensor, offsets=offsets: shift.shift_tensor(tensor, offsets=offsets),
+                lambda tensor=tensor, offsets=offsets: shift.shift_tensor(tensor, offset=offsets),
                 lambda tensor=tensor: tensor,
             )
 
@@ -110,7 +110,8 @@ class RandomShiftIntensity(RandomTransform):
             params={
                 "keys": list(sampled_offsets.keys()),
                 "channel_wise": self.channel_wise,
-                "offsets": sampled_offsets,
+                "offset_range": self.offset_range,
+                "sampled_offsets": sampled_offsets,
             },
             applied=should_shift,
             kernel="ShiftIntensity",

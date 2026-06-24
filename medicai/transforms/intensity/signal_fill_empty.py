@@ -19,7 +19,7 @@ class SignalFillEmpty(KeyedTransform):
 
     Args:
         keys: Keys of the tensors to sanitize.
-        replacement: Value used for ``NaN`` entries. Positive and negative
+        fill_value: Value used for ``NaN`` entries. Positive and negative
             infinity values default to the largest and smallest finite
             ``float32`` values unless overridden in :meth:`nan_to_num`.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -32,7 +32,7 @@ class SignalFillEmpty(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import SignalFillEmpty
 
-            transform = SignalFillEmpty(keys=["image"], replacement=0.0)
+            transform = SignalFillEmpty(keys=["image"], fill_value=0.0)
 
             image = tf.constant([[[float("nan")], [1.0]]], dtype=tf.float32)
             result = transform({"image": image})
@@ -46,7 +46,7 @@ class SignalFillEmpty(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import SignalFillEmpty, TensorBundle
 
-            transform = SignalFillEmpty(keys=["image"], replacement=0.0)
+            transform = SignalFillEmpty(keys=["image"], fill_value=0.0)
 
             image = tf.random.normal((16, 32, 32, 1))
             image = tf.tensor_scatter_nd_update(
@@ -72,17 +72,17 @@ class SignalFillEmpty(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        replacement: float = 0.0,
+        fill_value: float = 0.0,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
-        self.replacement = replacement
+        self.fill_value = fill_value
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(bundle, lambda tensor, _: self.nan_to_num(tensor))
         bundle.push_transform(
             self.build_trace_entry(
-                params={"keys": list(present_keys), "replacement": self.replacement},
+                params={"keys": list(present_keys), "fill_value": self.fill_value},
                 applied=True,
                 random=False,
                 invertible=False,
@@ -100,7 +100,7 @@ class SignalFillEmpty(KeyedTransform):
         """Replace NaN, positive infinity, and negative infinity values in a tensor."""
         tensor = tf.cast(tf.convert_to_tensor(tensor), tf.float32)
 
-        nan = self.replacement if nan is None else nan
+        nan = self.fill_value if nan is None else nan
         posinf = tf.float32.max if posinf is None else posinf
         neginf = -tf.float32.max if neginf is None else neginf
 

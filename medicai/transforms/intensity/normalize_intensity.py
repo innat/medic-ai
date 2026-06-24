@@ -22,9 +22,9 @@ class NormalizeIntensity(KeyedTransform):
 
     Args:
         keys: Keys of the tensors to normalize.
-        subtrahend: Optional fixed value to subtract. If ``None``, the mean of
+        offset: Optional fixed value to subtract. If ``None``, the mean of
             the selected values is used.
-        divisor: Optional fixed value to divide by. If ``None``, the standard
+        scale: Optional fixed value to divide by. If ``None``, the standard
             deviation of the selected values is used.
         nonzero: If ``True``, statistics are computed only over nonzero values.
             For global normalization, zero-valued locations are left unchanged
@@ -86,16 +86,16 @@ class NormalizeIntensity(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        subtrahend=None,
-        divisor=None,
+        offset=None,
+        scale=None,
         nonzero: bool = False,
         channel_wise: bool = False,
         dtype=tf.float32,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
-        self.subtrahend = subtrahend
-        self.divisor = divisor
+        self.offset = offset
+        self.scale = scale
         self.nonzero = nonzero
         self.channel_wise = channel_wise
         self.dtype = dtype
@@ -140,8 +140,8 @@ class NormalizeIntensity(KeyedTransform):
             def normalize_nonempty():
                 mean = tf.reduce_mean(channel_masked)
                 std = tf.math.reduce_std(channel_masked)
-                sub = self.subtrahend if self.subtrahend is not None else mean
-                div = self.divisor if self.divisor is not None else std
+                sub = self.offset if self.offset is not None else mean
+                div = self.scale if self.scale is not None else std
                 sub = tf.cast(sub, channel.dtype)
                 div = tf.cast(div, channel.dtype)
                 div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
@@ -176,8 +176,8 @@ class NormalizeIntensity(KeyedTransform):
             mean = tf.reduce_mean(vals)
             std = tf.math.reduce_std(vals)
             std = tf.where(std == 0.0, 1.0, std)
-            sub = mean if self.subtrahend is None else tf.cast(self.subtrahend, tensor.dtype)
-            div = std if self.divisor is None else tf.cast(self.divisor, tensor.dtype)
+            sub = mean if self.offset is None else tf.cast(self.offset, tensor.dtype)
+            div = std if self.scale is None else tf.cast(self.scale, tensor.dtype)
             div = tf.where(div == 0.0, 1.0, div)
             if self.nonzero:
                 return tf.where(mask, (tensor - sub) / div, tensor)

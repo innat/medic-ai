@@ -20,7 +20,7 @@ class ShiftIntensity(KeyedTransform):
 
     Args:
         keys: Keys of the tensors to shift.
-        offsets: Scalar offset or per-channel offset tensor broadcastable to
+        offset: Scalar offset or per-channel offset tensor broadcastable to
             the selected tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -32,7 +32,7 @@ class ShiftIntensity(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import ShiftIntensity
 
-            transform = ShiftIntensity(keys=["image"], offsets=0.1)
+            transform = ShiftIntensity(keys=["image"], offset=0.1)
 
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
@@ -46,7 +46,7 @@ class ShiftIntensity(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import ShiftIntensity, TensorBundle
 
-            transform = ShiftIntensity(keys=["image"], offsets=0.1)
+            transform = ShiftIntensity(keys=["image"], offset=0.1)
 
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
@@ -66,11 +66,11 @@ class ShiftIntensity(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offsets: Union[float, tf.Tensor],
+        offset: Union[float, tf.Tensor],
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
-        self.offsets = offsets
+        self.offset = offset
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -78,7 +78,7 @@ class ShiftIntensity(KeyedTransform):
         )
         bundle.push_transform(
             self.build_trace_entry(
-                params={"keys": list(present_keys), "offsets": self.offsets},
+                params={"keys": list(present_keys), "offset": self.offset},
                 applied=True,
                 random=False,
                 invertible=False,
@@ -87,8 +87,8 @@ class ShiftIntensity(KeyedTransform):
         return bundle
 
     def shift_tensor(
-        self, tensor: tf.Tensor, offsets: Union[float, tf.Tensor, None] = None
+        self, tensor: tf.Tensor, offset: Union[float, tf.Tensor, None] = None
     ) -> tf.Tensor:
         """Shift one tensor by a scalar or broadcastable offset."""
-        offset = tf.cast(self.offsets if offsets is None else offsets, dtype=tensor.dtype)
-        return tensor + offset
+        offset_value = tf.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
+        return tensor + offset_value

@@ -146,4 +146,4 @@ class Flip(KeyedTransform, InvertibleTransform):
         if axes is None:
             return ()
         spatial_rank = get_spatial_rank(tensor)
-        return normalize_spatial_axes(tuple(axes), spatial_rank)
+        return normalize_spatial_axes(tuple(axes), spatial_rank, name="spatial_axis")

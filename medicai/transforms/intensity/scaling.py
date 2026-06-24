@@ -12,8 +12,8 @@ class ScaleIntensityRange(KeyedTransform):
     """Linearly map selected tensor intensities from one numeric range to another.
 
     ``ScaleIntensityRange`` applies an affine intensity transform using the
-    source interval ``[a_min, a_max]`` and, when provided, the target interval
-    ``[b_min, b_max]``. This is useful for bringing image intensities into a
+    source interval ``[input_min, input_max]`` and, when provided, the target interval
+    ``[output_min, output_max]``. This is useful for bringing image intensities into a
     stable range such as ``[0, 1]`` or ``[-1, 1]`` before training.
 
     The transform expects channel-last image tensors such as ``(H, W, C)`` or
@@ -22,12 +22,12 @@ class ScaleIntensityRange(KeyedTransform):
 
     Args:
         keys: Keys of the tensors to scale.
-        a_min: Lower bound of the source intensity range.
-        a_max: Upper bound of the source intensity range.
-        b_min: Lower bound of the target range. If ``None`` together with
-            ``b_max=None``, the normalized ``[0, 1]`` result is kept.
-        b_max: Upper bound of the target range.
-        clip: If ``True`` and both ``b_min`` and ``b_max`` are provided, clip
+        input_min: Lower bound of the source intensity range.
+        input_max: Upper bound of the source intensity range.
+        output_min: Lower bound of the target range. If ``None`` together with
+            ``output_max=None``, the normalized ``[0, 1]`` result is kept.
+        output_max: Upper bound of the target range.
+        clip: If ``True`` and both ``output_min`` and ``output_max`` are provided, clip
             the output to the target interval after scaling.
         dtype: Output dtype used for computation and returned tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -42,10 +42,10 @@ class ScaleIntensityRange(KeyedTransform):
 
             transform = ScaleIntensityRange(
                 keys=["image"],
-                a_min=0.0,
-                a_max=255.0,
-                b_min=-1.0,
-                b_max=1.0,
+                input_min=0.0,
+                input_max=255.0,
+                output_min=-1.0,
+                output_max=1.0,
                 clip=True,
             )
 
@@ -64,10 +64,10 @@ class ScaleIntensityRange(KeyedTransform):
 
             transform = ScaleIntensityRange(
                 keys=["image"],
-                a_min=-175.0,
-                a_max=250.0,
-                b_min=0.0,
-                b_max=1.0,
+                input_min=-175.0,
+                input_max=250.0,
+                output_min=0.0,
+                output_max=1.0,
                 clip=True,
             )
 
@@ -89,21 +89,23 @@ class ScaleIntensityRange(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        a_min: float,
-        a_max: float,
-        b_min: Optional[float] = None,
-        b_max: Optional[float] = None,
+        input_min: float,
+        input_max: float,
+        output_min: Optional[float] = None,
+        output_max: Optional[float] = None,
         clip: bool = False,
         dtype: tf.DType = tf.float32,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
-        if (b_min is None) != (b_max is None):
-            raise ValueError("`b_min` and `b_max` must be provided together or both omitted.")
-        self.a_min = a_min
-        self.a_max = a_max
-        self.b_min = b_min
-        self.b_max = b_max
+        if (output_min is None) != (output_max is None):
+            raise ValueError(
+                "`output_min` and `output_max` must be provided together or both omitted."
+            )
+        self.input_min = input_min
+        self.input_max = input_max
+        self.output_min = output_min
+        self.output_max = output_max
         self.clip = clip
         self.dtype = dtype
 
@@ -115,10 +117,10 @@ class ScaleIntensityRange(KeyedTransform):
             self.build_trace_entry(
                 params={
                     "keys": list(present_keys),
-                    "a_min": self.a_min,
-                    "a_max": self.a_max,
-                    "b_min": self.b_min,
-                    "b_max": self.b_max,
+                    "input_min": self.input_min,
+                    "input_max": self.input_max,
+                    "output_min": self.output_min,
+                    "output_max": self.output_max,
                     "clip": self.clip,
                 },
                 applied=True,
@@ -131,13 +133,17 @@ class ScaleIntensityRange(KeyedTransform):
     def scale_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
         """Scale one tensor from source range to target range."""
         tensor = tf.convert_to_tensor(tensor, dtype=self.dtype)
-        if self.a_max == self.a_min:
-            result = tensor - self.a_min if self.b_min is None else tensor - self.a_min + self.b_min
+        if self.input_max == self.input_min:
+            result = (
+                tensor - self.input_min
+                if self.output_min is None
+                else tensor - self.input_min + self.output_min
+            )
             return tf.cast(result, dtype=self.dtype)
 
-        tensor = (tensor - self.a_min) / (self.a_max - self.a_min)
-        if self.b_min is not None and self.b_max is not None:
-            tensor = tensor * (self.b_max - self.b_min) + self.b_min
-        if self.clip and self.b_min is not None and self.b_max is not None:
-            tensor = tf.clip_by_value(tensor, self.b_min, self.b_max)
+        tensor = (tensor - self.input_min) / (self.input_max - self.input_min)
+        if self.output_min is not None and self.output_max is not None:
+            tensor = tensor * (self.output_max - self.output_min) + self.output_min
+        if self.clip and self.output_min is not None and self.output_max is not None:
+            tensor = tf.clip_by_value(tensor, self.output_min, self.output_max)
         return tf.cast(tensor, dtype=self.dtype)

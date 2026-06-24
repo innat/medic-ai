@@ -154,17 +154,17 @@ def test_spacing_validates_pixdim_and_mode():
     with pytest.raises(ValueError, match="`pixdim` must be 3D"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0))
 
-    with pytest.raises(ValueError, match="Invalid mode 'bilinear' for 3D input"):
-        Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), mode="bilinear")
+    with pytest.raises(ValueError, match="Invalid interpolation 'bilinear' for 3D input"):
+        Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), interpolation="bilinear")
 
 
 @pytest.mark.unit
 def test_spacing_rejects_mapping_without_all_requested_keys():
-    with pytest.raises(ValueError, match="Missing resampling mode for keys"):
+    with pytest.raises(ValueError, match="Missing interpolation mode for keys"):
         Spacing(
             keys=["image", "label"],
             pixdim=(1.0, 1.0, 1.0),
-            mode={"image": "trilinear"},
+            interpolation={"image": "trilinear"},
         )
 
 
@@ -298,9 +298,9 @@ def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
 @pytest.mark.unit
 def test_scale_intensity_range_handles_flat_input():
     image = as_tensor(np.full((1, 2, 2), 5.0, dtype=np.float32))
-    out = ScaleIntensityRange(keys=["image"], a_min=5.0, a_max=5.0, b_min=0.0, b_max=1.0)(
-        TensorBundle({"image": image})
-    )
+    out = ScaleIntensityRange(
+        keys=["image"], input_min=5.0, input_max=5.0, output_min=0.0, output_max=1.0
+    )(TensorBundle({"image": image}))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 0.0, rtol=1e-6)
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "ScaleIntensityRange"
@@ -312,10 +312,10 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
     image = as_tensor(np.array([[[-1.0], [0.5], [2.0]]], dtype=np.float32))
     out = ScaleIntensityRange(
         keys=["image"],
-        a_min=0.0,
-        a_max=1.0,
-        b_min=0.0,
-        b_max=10.0,
+        input_min=0.0,
+        input_max=1.0,
+        output_min=0.0,
+        output_max=10.0,
         clip=True,
         dtype=np.float32,
     )(TensorBundle({"image": image}))
@@ -328,7 +328,7 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
 @pytest.mark.unit
 def test_scale_intensity_range_rejects_partial_target_range():
     with pytest.raises(ValueError, match="must be provided together"):
-        ScaleIntensityRange(keys=["image"], a_min=0.0, a_max=1.0, b_min=0.0)
+        ScaleIntensityRange(keys=["image"], input_min=0.0, input_max=1.0, output_min=0.0)
 
 
 @pytest.mark.unit
@@ -357,8 +357,8 @@ def test_normalize_intensity_channel_wise_with_fixed_stats():
     image = as_tensor(np.array([[[1.0, 5.0], [3.0, 9.0]]], dtype=np.float32))
     out = NormalizeIntensity(
         keys=["image"],
-        subtrahend=1.0,
-        divisor=2.0,
+        offset=1.0,
+        scale=2.0,
         channel_wise=True,
     )(TensorBundle({"image": image}))
 
@@ -399,7 +399,7 @@ def test_normalize_intensity_channel_wise_nonzero_preserves_zero_background():
 @pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
-    out = SignalFillEmpty(keys=["image"], replacement=0.0)(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=0.0)(TensorBundle({"image": image}))
 
     filled = ops.convert_to_numpy(out["image"])
     assert np.isfinite(filled).all()
@@ -411,7 +411,7 @@ def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
 @pytest.mark.unit
 def test_signal_fill_empty_outputs_float32_tensor():
     image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float64))
-    out = SignalFillEmpty(keys=["image"], replacement=2.0)(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=2.0)(TensorBundle({"image": image}))
 
     assert out["image"].dtype == tf.float32
     np.testing.assert_allclose(
@@ -422,17 +422,18 @@ def test_signal_fill_empty_outputs_float32_tensor():
 @pytest.mark.unit
 def test_shift_intensity_records_trace():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = ShiftIntensity(keys=["image"], offsets=2.0)(TensorBundle({"image": image}))
+    out = ShiftIntensity(keys=["image"], offset=2.0)(TensorBundle({"image": image}))
 
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "ShiftIntensity"
     assert trace["params"]["keys"] == ["image"]
+    assert trace["params"]["offset"] == 2.0
 
 
 @pytest.mark.unit
 def test_random_shift_intensity_preserves_shape_and_range():
     image = as_tensor(np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offsets=(-0.2, 0.8), prob=1.0)(
+    out = RandomShiftIntensity(keys=["image"], offset_range=(-0.2, 0.8), prob=1.0)(
         TensorBundle({"image": image})
     )
     shifted = ops.convert_to_numpy(out["image"])
@@ -452,19 +453,19 @@ def test_random_shift_intensity_preserves_shape_and_range():
 @pytest.mark.unit
 def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
     image = as_tensor(np.ones((4, 4, 2), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offsets=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0, channel_wise=True)(
         TensorBundle({"image": image})
     )
 
     trace = out.get_applied_transforms()[-1]
-    offsets = trace["params"]["offsets"]["image"]
+    offsets = trace["params"]["sampled_offsets"]["image"]
     assert tuple(ops.shape(offsets)) == (1, 1, 2)
 
 
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offsets=0.5, prob=0.0)(
+    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=0.0)(
         TensorBundle({"image": image})
     )
 
@@ -477,10 +478,10 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.ones((6, 5, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((4, 6, 5, 1), dtype=np.float32))
 
-    out_2d = RandomShiftIntensity(keys=["image"], offsets=0.5, prob=1.0)(
+    out_2d = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0)(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomShiftIntensity(keys=["image"], offsets=0.25, prob=1.0)(
+    out_3d = RandomShiftIntensity(keys=["image"], offset_range=0.25, prob=1.0)(
         TensorBundle({"image": image_3d})
     )
 
@@ -499,13 +500,13 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
 def test_random_shift_intensity_channel_wise_samples_per_channel_values():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
 
-    out = RandomShiftIntensity(keys=["image"], offsets=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0, channel_wise=True)(
         TensorBundle({"image": image})
     )
 
     shifted = ops.convert_to_numpy(out["image"])
     trace = out.get_applied_transforms()[-1]
-    offsets = ops.convert_to_numpy(trace["params"]["offsets"]["image"])
+    offsets = ops.convert_to_numpy(trace["params"]["sampled_offsets"]["image"])
 
     assert shifted.shape == (3, 4, 2)
     assert offsets.shape == (1, 1, 2)
@@ -518,10 +519,10 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(4, 5, 6, 1))
 
-    out_2d = SpatialCrop(keys=["image"], roi_size=(3, 4), roi_start=(1, 1))(
+    out_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))(
         TensorBundle({"image": image_2d})
     )
-    out_3d = SpatialCrop(keys=["image"], roi_size=(2, 3, 4), roi_center=(2, 2, 3))(
+    out_3d = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), roi_center=(2, 2, 3))(
         TensorBundle({"image": image_3d})
     )
 
@@ -532,14 +533,14 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
 
 @pytest.mark.unit
 def test_spatial_crop_validates_exclusive_start_and_center():
-    with pytest.raises(ValueError, match="Only one of `roi_start` or `roi_center` may be provided"):
-        SpatialCrop(keys=["image"], roi_size=(2, 2), roi_start=(0, 0), roi_center=(1, 1))
+    with pytest.raises(ValueError, match="Only one of `crop_start` or `roi_center` may be provided"):
+        SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), roi_center=(1, 1))
 
 
 @pytest.mark.unit
 def test_spatial_crop_nonpositive_roi_uses_full_extent():
     image = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
-    out = SpatialCrop(keys=["image"], roi_size=(0, -1))(TensorBundle({"image": image}))
+    out = SpatialCrop(keys=["image"], crop_size=(0, -1))(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(out["image"])) == (5, 6, 1)
 
@@ -549,10 +550,10 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(4, 5, 6, 1))
 
-    out_2d = RandomSpatialCrop(keys=["image"], roi_size=(3, 4), random_center=False)(
+    out_2d = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), sample_center=False)(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomSpatialCrop(keys=["image"], roi_size=(2, 3, 4), random_center=False)(
+    out_3d = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), sample_center=False)(
         TensorBundle({"image": image_3d})
     )
 
@@ -564,16 +565,16 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
 @pytest.mark.unit
 def test_random_spatial_crop_validates_configuration():
     with pytest.raises(ValueError, match="must contain at least one key"):
-        RandomSpatialCrop(keys=[], roi_size=(2, 2))
+        RandomSpatialCrop(keys=[], crop_size=(2, 2))
 
     with pytest.raises(ValueError, match="min_valid_ratio must be in range"):
-        RandomSpatialCrop(keys=["image"], roi_size=(2, 2), min_valid_ratio=1.5)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=1.5)
 
     with pytest.raises(ValueError, match="max_attempts must be a positive integer"):
-        RandomSpatialCrop(keys=["image"], roi_size=(2, 2), max_attempts=0)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), max_attempts=0)
 
     with pytest.raises(ValueError, match="must provide an invalid_label"):
-        RandomSpatialCrop(keys=["image"], roi_size=(2, 2), min_valid_ratio=0.2)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=0.2)
 
 
 @pytest.mark.unit
@@ -586,22 +587,22 @@ def test_random_spatial_crop_random_size_and_label_aware_modes():
 
     out = RandomSpatialCrop(
         keys=["image", "label"],
-        roi_size=(1, 2, 2),
-        max_roi_size=(2, 4, 4),
-        random_size=True,
+        crop_size=(1, 2, 2),
+        max_crop_size=(2, 4, 4),
+        sample_shape=True,
         invalid_label=0,
         min_valid_ratio=0.0,
     )(TensorBundle({"image": image, "label": label}))
 
     trace = out.get_applied_transforms()[-1]
-    roi_size = ops.convert_to_numpy(trace["params"]["roi_size"])
-    assert np.all(roi_size >= np.array([1, 2, 2]))
-    assert np.all(roi_size <= np.array([2, 4, 4]))
+    crop_size = ops.convert_to_numpy(trace["params"]["crop_size"])
+    assert np.all(crop_size >= np.array([1, 2, 2]))
+    assert np.all(crop_size <= np.array([2, 4, 4]))
 
 
 @pytest.mark.unit
 def test_random_spatial_crop_requires_label_for_label_aware_mode():
-    transform = RandomSpatialCrop(keys=["image"], roi_size=(2, 2), invalid_label=0)
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), invalid_label=0)
 
     with pytest.raises(KeyError, match="`label` key is required"):
         transform(TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))}))
@@ -614,9 +615,9 @@ def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
 
     out = RandomSpatialCrop(
         keys=["image", "mask"],
-        roi_size=(2, 2),
+        crop_size=(2, 2),
         invalid_label=0,
-        random_center=False,
+        sample_center=False,
     )(TensorBundle({"image": image, "mask": mask}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
@@ -626,7 +627,7 @@ def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
 @pytest.mark.unit
 def test_random_spatial_crop_rejects_unsupported_spatial_rank():
     image_4d_spatial = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
-    transform = RandomSpatialCrop(keys=["image"], roi_size=(2, 2, 2, 2))
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2, 2, 2))
 
     with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
         transform(TensorBundle({"image": image_4d_spatial}))
@@ -639,9 +640,9 @@ def test_random_spatial_crop_label_aware_mode_keeps_thin_spatial_dimensions():
 
     out = RandomSpatialCrop(
         keys=["image", "label"],
-        roi_size=(1, 2, 2),
+        crop_size=(1, 2, 2),
         invalid_label=0,
-        random_center=False,
+        sample_center=False,
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (1, 2, 2, 1)
@@ -662,9 +663,9 @@ def test_random_spatial_crop_label_aware_mode_supports_multi_channel_labels():
 
     out = RandomSpatialCrop(
         keys=["image", "label"],
-        roi_size=(2, 2),
+        crop_size=(2, 2),
         invalid_label=0,
-        random_center=False,
+        sample_center=False,
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
@@ -923,7 +924,7 @@ def test_rotate90_supports_2d_and_3d_and_records_inverse_trace():
     image_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
 
     rotate_2d = Rotate90(keys=["image"], k=1)
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axes=(1, 2))
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2))
 
     out_2d = rotate_2d(TensorBundle({"image": image_2d}))
     out_3d = rotate_3d(TensorBundle({"image": image_3d}))
@@ -952,13 +953,13 @@ def test_rotate90_k_zero_is_noop_and_invalid_axes_raise():
     assert out.get_applied_transforms() == []
 
     with pytest.raises(ValueError, match="must contain exactly two axes"):
-        Rotate90(keys=["image"], k=1, spatial_axes=(0,))(TensorBundle({"image": image}))
+        Rotate90(keys=["image"], k=1, spatial_axis=(0,))(TensorBundle({"image": image}))
 
 
 @pytest.mark.unit
 def test_rotate90_negative_axes_resolve_against_spatial_rank_only():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    out = Rotate90(keys=["image"], k=1, spatial_axes=(0, -1))(TensorBundle({"image": image}))
+    out = Rotate90(keys=["image"], k=1, spatial_axis=(0, -1))(TensorBundle({"image": image}))
 
     expected = np.rot90(ops.convert_to_numpy(image), k=1, axes=(0, 1))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), expected)
@@ -1259,7 +1260,7 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
     image = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
     transform = Compose(
         [
-            ShiftIntensity(keys=["image"], offsets=2.0),
+            ShiftIntensity(keys=["image"], offset=2.0),
             Flip(keys=["image"], spatial_axis=1),
             Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2)),
         ]
