@@ -286,6 +286,26 @@ def test_lambda_transform_inverse_with_prob_uses_tensor_trace_flag():
 
 
 @pytest.mark.unit
+def test_lambda_transform_probabilistic_meta_hooks_run_in_eager_mode_when_applied():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = LambdaTransform(
+        keys=["image"],
+        fn=lambda tensor: tensor + 5.0,
+        inverse_fn=lambda tensor: tensor - 5.0,
+        meta_fn=lambda meta: {**meta, "forward_tag": True},
+        inverse_meta_fn=lambda meta: {**meta, "inverse_tag": True},
+        prob=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+    assert forward.meta["forward_tag"] is True
+    assert restored.meta["inverse_tag"] is True
+
+
+@pytest.mark.unit
 def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
     with pytest.raises(ValueError):
         LambdaTransform(keys=["image"], fn=lambda tensor: tensor, prob=1.5)

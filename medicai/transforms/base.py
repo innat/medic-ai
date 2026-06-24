@@ -610,9 +610,10 @@ class LambdaTransform(KeyedTransform):
                 )
 
         if self.meta_fn is not None:
-            should_update_meta = self.prob is None or (
-                not tf.is_tensor(should_apply) and bool(should_apply)
-            )
+            try:
+                should_update_meta = self.prob is None or _trace_applied_to_bool(should_apply)
+            except ValueError:
+                should_update_meta = False
             if should_update_meta:
                 updated_meta = self.meta_fn(dict(bundle.meta))
                 if updated_meta is not None:
@@ -657,7 +658,11 @@ class LambdaTransform(KeyedTransform):
                 bundle.data[key] = self._call_tensor_fn(self.inverse_fn, tensor, key)
 
         if self.inverse_meta_fn is not None:
-            if not tf.is_tensor(applied) and _trace_applied_to_bool(applied):
+            try:
+                should_update_meta = _trace_applied_to_bool(applied)
+            except ValueError:
+                should_update_meta = False
+            if should_update_meta:
                 updated_meta = self.inverse_meta_fn(dict(bundle.meta))
                 if updated_meta is not None:
                     bundle.meta = updated_meta
