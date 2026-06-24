@@ -330,6 +330,20 @@ def test_lambda_transform_accepts_builtin_tensor_functions_without_signature_err
 
 
 @pytest.mark.unit
+def test_lambda_transform_passes_key_to_varargs_callable():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+
+    def fn(*args):
+        tensor, key = args
+        return tensor + (1.0 if key == "image" else 0.0)
+
+    transform = LambdaTransform(keys=["image"], fn=fn)
+    result = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 2.0)
+
+
+@pytest.mark.unit
 def test_spatial_helpers_handle_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.zeros((16, 12, 1), dtype=np.float32))
     image_3d = as_tensor(np.zeros((8, 16, 12, 1), dtype=np.float32))

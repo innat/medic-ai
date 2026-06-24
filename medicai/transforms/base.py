@@ -696,7 +696,11 @@ class LambdaTransform(KeyedTransform):
             if param.kind
             in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         ]
-        return len(positional) >= 2
+        has_var_positional = any(
+            param.kind == inspect.Parameter.VAR_POSITIONAL
+            for param in signature.parameters.values()
+        )
+        return len(positional) >= 2 or has_var_positional
 
 
 class Compose(Transform):

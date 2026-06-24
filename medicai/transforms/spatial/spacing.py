@@ -19,13 +19,15 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
     The transform reads the source spacing from ``bundle.meta["affine"]``. If
     no affine is provided, it falls back to spacing ``(1.0, 1.0, 1.0)`` and
-    emits a warning. The output spacing is recorded in ``bundle.meta["pixdim"]``.
+    emits a warning. When affine metadata is available, both
+    ``bundle.meta["pixdim"]`` and ``bundle.meta["affine"]`` are updated to
+    describe the resampled output space.
 
     ``Spacing`` is invertible in the sense that it records the original voxel
-    spacing and spatial shapes so :meth:`inverse` can resample tensors back to
-    their prior shape and spacing metadata. Because this is a resampling
-    operation, the restored tensor is not guaranteed to be numerically
-    identical to the original input.
+    spacing, affine, and spatial shapes so :meth:`inverse` can resample tensors
+    back to their prior shape and restore the original spatial metadata.
+    Because this is a resampling operation, the restored tensor is not
+    guaranteed to be numerically identical to the original input.
 
     Args:
         keys: Keys of tensors to resample.
@@ -196,12 +198,23 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
         present_keys = self.apply_to_present_keys(bundle, apply_spacing)
         bundle.meta["pixdim"] = tf.constant(self.pixdim, dtype=tf.float32)
+        original_affine = None
+        if affine is not None:
+            original_affine = tf.identity(tf.cast(affine, tf.float32))
+            scale_factors = tf.constant(self.pixdim, dtype=tf.float32) / tf.cast(
+                original_spacing, tf.float32
+            )
+            scaling_matrix = tf.linalg.diag(
+                tf.concat([scale_factors, tf.constant([1.0], dtype=tf.float32)], axis=0)
+            )
+            bundle.meta["affine"] = tf.linalg.matmul(original_affine, scaling_matrix)
         self.record_transform(
             bundle,
             {
                 "keys": list(present_keys),
                 "pixdim": self.pixdim,
                 "original_spacing": original_spacing,
+                "original_affine": original_affine,
                 "original_shapes": original_shapes,
                 "interpolation": {key: self.interpolation[key] for key in present_keys},
             },
@@ -215,6 +228,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
         params = trace["params"]
         original_spacing = params.get("original_spacing")
+        original_affine = params.get("original_affine")
         original_shapes = params.get("original_shapes", {})
         if original_spacing is None:
             return bundle
@@ -228,6 +242,8 @@ class Spacing(KeyedTransform, InvertibleTransform):
         present_keys = [key for key in params.get("keys", []) if key in bundle.data]
         self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
         bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
+        if original_affine is not None:
+            bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
         return bundle
 
     def _validate_bundle_is_3d(self, bundle: TensorBundle) -> None:

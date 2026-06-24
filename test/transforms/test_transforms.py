@@ -225,6 +225,37 @@ def test_spacing_records_trace_and_inverse_restores_original_shape():
 
 
 @pytest.mark.unit
+def test_spacing_updates_affine_metadata_and_inverse_restores_it():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(np.diag([2.0, 3.0, 4.0, 1.0]).astype(np.float32))
+
+    spacing = Spacing(keys=["image"], pixdim=(1.0, 1.5, 2.0))
+    forward = spacing(TensorBundle({"image": image}, {"affine": affine}))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward.meta["pixdim"]),
+        np.array([1.0, 1.5, 2.0], dtype=np.float32),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward.meta["affine"]),
+        np.diag([1.0, 1.5, 2.0, 1.0]).astype(np.float32),
+        rtol=1e-6,
+    )
+
+    restored = spacing.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored.meta["pixdim"]),
+        np.array([2.0, 3.0, 4.0], dtype=np.float32),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored.meta["affine"]),
+        ops.convert_to_numpy(affine),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
 def test_orientation_records_trace_and_inverse_restores_shape():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
