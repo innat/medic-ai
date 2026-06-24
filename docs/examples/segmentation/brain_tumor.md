@@ -228,7 +228,7 @@ def train_transformation(sample):
             RandSpatialCrop(
                 keys=["image", "label"], 
                 crop_size=input_shape[:3], 
-                sample_shape=False
+                random_shape=False
             ),
             RandFlip(keys=["image", "label"], spatial_axis=[0], prob=0.5),
             RandFlip(keys=["image", "label"], spatial_axis=[1], prob=0.5),

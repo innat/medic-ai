@@ -581,10 +581,10 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(4, 5, 6, 1))
 
-    out_2d = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), sample_center=False)(
+    out_2d = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), sample_center=False)(
+    out_3d = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), random_center=False)(
         TensorBundle({"image": image_3d})
     )
 
@@ -620,7 +620,7 @@ def test_random_spatial_crop_random_size_and_label_aware_modes():
         keys=["image", "label"],
         crop_size=(1, 2, 2),
         max_crop_size=(2, 4, 4),
-        sample_shape=True,
+        random_shape=True,
         invalid_label=0,
         min_valid_ratio=0.0,
     )(TensorBundle({"image": image, "label": label}))
@@ -648,7 +648,7 @@ def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
         keys=["image", "mask"],
         crop_size=(2, 2),
         invalid_label=0,
-        sample_center=False,
+        random_center=False,
     )(TensorBundle({"image": image, "mask": mask}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
@@ -673,7 +673,7 @@ def test_random_spatial_crop_label_aware_mode_keeps_thin_spatial_dimensions():
         keys=["image", "label"],
         crop_size=(1, 2, 2),
         invalid_label=0,
-        sample_center=False,
+        random_center=False,
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (1, 2, 2, 1)
@@ -696,7 +696,7 @@ def test_random_spatial_crop_label_aware_mode_supports_multi_channel_labels():
         keys=["image", "label"],
         crop_size=(2, 2),
         invalid_label=0,
-        sample_center=False,
+        random_center=False,
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)

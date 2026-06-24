@@ -26,9 +26,9 @@ class RandomSpatialCrop(RandomTransform):
     Args:
         keys: Keys of the tensors to crop.
         crop_size: Minimum or fixed crop size.
-        max_crop_size: Maximum crop size when ``sample_shape=True``.
-        sample_center: If ``True``, sample crop centers randomly.
-        sample_shape: If ``True``, sample crop sizes between ``crop_size`` and
+        max_crop_size: Maximum crop size when ``random_shape=True``.
+        random_center: If ``True``, sample crop centers randomly.
+        random_shape: If ``True``, sample crop sizes between ``crop_size`` and
             ``max_crop_size``.
         invalid_label: Label value treated as invalid when enforcing valid
             crop regions.
@@ -71,8 +71,8 @@ class RandomSpatialCrop(RandomTransform):
         keys: Sequence[str],
         crop_size,
         max_crop_size=None,
-        sample_center: bool = True,
-        sample_shape: bool = False,
+        random_center: bool = True,
+        random_shape: bool = False,
         invalid_label=None,
         min_valid_ratio: float = 0.0,
         max_attempts: int = 1,
@@ -84,8 +84,8 @@ class RandomSpatialCrop(RandomTransform):
         self.keys = tuple(keys)
         self.crop_size = crop_size
         self.max_crop_size = max_crop_size
-        self.sample_center = sample_center
-        self.sample_shape = sample_shape
+        self.random_center = random_center
+        self.random_shape = random_shape
         self.invalid_label = invalid_label
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
@@ -119,7 +119,7 @@ class RandomSpatialCrop(RandomTransform):
         crop_size = self._get_crop_size(spatial_shape, spatial_rank)
 
         if self.invalid_label is None:
-            center = self._get_sample_center(spatial_shape, crop_size, spatial_rank)
+            center = self._get_random_center(spatial_shape, crop_size, spatial_rank)
         else:
             label_key = self.keys[1] if len(self.keys) > 1 else "label"
             if label_key not in bundle.data:
@@ -147,8 +147,8 @@ class RandomSpatialCrop(RandomTransform):
                     "keys": list(present_keys),
                     "crop_start": starts,
                     "crop_size": crop_size,
-                    "sample_center": self.sample_center,
-                    "sample_shape": self.sample_shape,
+                    "random_center": self.random_center,
+                    "random_shape": self.random_shape,
                 },
                 applied=True,
                 random=True,
@@ -163,7 +163,7 @@ class RandomSpatialCrop(RandomTransform):
         else:
             crop_size = tf.convert_to_tensor(self.crop_size, dtype=tf.int32)
 
-        if self.sample_shape:
+        if self.random_shape:
             max_crop_size = (
                 tf.fill([spatial_rank], tf.cast(self.max_crop_size, tf.int32))
                 if isinstance(self.max_crop_size, int)
@@ -186,10 +186,10 @@ class RandomSpatialCrop(RandomTransform):
             crop_size = tf.minimum(crop_size, spatial_shape)
         return crop_size
 
-    def _get_sample_center(
+    def _get_random_center(
         self, spatial_shape: tf.Tensor, crop_size: tf.Tensor, spatial_rank: int
     ) -> tf.Tensor:
-        if not self.sample_center:
+        if not self.random_center:
             return spatial_shape // 2
 
         max_start = tf.maximum(spatial_shape - crop_size, 0)
@@ -211,7 +211,7 @@ class RandomSpatialCrop(RandomTransform):
         valid_coords = tf.where(valid_mask)
 
         def fallback():
-            return self._get_sample_center(spatial_shape, crop_size, spatial_rank)
+            return self._get_random_center(spatial_shape, crop_size, spatial_rank)
 
         def sample_valid_center():
             idx = tf.random.uniform([], 0, tf.shape(valid_coords)[0], dtype=tf.int32)
@@ -249,7 +249,7 @@ class RandomSpatialCrop(RandomTransform):
             new_center = tf.cond(
                 valid_ratio >= self.min_valid_ratio,
                 lambda: current_center,
-                lambda: self._get_sample_center(spatial_shape, crop_size, spatial_rank),
+                lambda: self._get_random_center(spatial_shape, crop_size, spatial_rank),
             )
             return i + 1, new_center
 

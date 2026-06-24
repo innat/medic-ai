@@ -147,7 +147,7 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
     random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0)
     random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3)
     random_spatial_crop = RandomSpatialCrop(
-        keys=["image"], crop_size=(3, 4), sample_center=False
+        keys=["image"], crop_size=(3, 4), random_center=False
     )
     random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)
 
