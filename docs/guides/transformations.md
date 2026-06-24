@@ -82,7 +82,7 @@ Common examples:
 .. autoclass:: medicai.transforms.SignalFillEmpty
 ```
 
-## Random Transforms
+## Random
 
 Random transforms introduce stochastic augmentation.
 
@@ -120,44 +120,44 @@ Common examples:
 
 ## Custom Transforms
 
-The base abstractions below are most useful when implementing custom
-transforms or understanding how ``medicai`` pipelines are structured internally.
+The APIs below are most useful when building custom transforms or
+understanding how `medicai.transforms` pipelines are structured internally.
 
-## LambdaTransform
+### LambdaTransform
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.LambdaTransform
 ```
 
-## Transform
+### Transform
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.Transform
    :members: apply, inverse, build_trace_entry
 ```
 
-## KeyedTransform
+### KeyedTransform
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.KeyedTransform
    :members: apply_to_present_keys, iter_present_keys
 ```
 
-## RandomTransform
+### RandomTransform
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomTransform
    :members: sample_should_apply, record_random_transform
 ```
 
-## InvertibleTransform
+### InvertibleTransform
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.InvertibleTransform
    :members: record_transform, inverse
 ```
 
-## Advanced: TensorBundle
+### Advanced: TensorBundle
 
 `TensorBundle` is the internal execution container used by
 `medicai.transforms`. You usually do not need to create it directly unless
