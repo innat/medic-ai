@@ -7,18 +7,10 @@ cleanly inside `tf.data.Dataset` pipelines, or, ``keras.utils.PyDataset`` and, `
 Most transforms accept either:
 
 - a plain sample mapping such as `{"image": image, "label": label}`
-- an existing `TensorBundle`
+- an existing :class:`~medicai.transforms.TensorBundle`
 
 In both cases, the output is a `TensorBundle`, and transformed tensors remain
 available under the same keys.
-
-Most users do not need to construct `TensorBundle` manually. It mainly becomes
-important when:
-
-- passing metadata such as `affine`
-- inspecting applied transform traces
-- calling `inverse()`
-- writing custom transforms
 
 ## Input Conventions
 
