@@ -237,7 +237,7 @@ def train_transformation(sample):
                 keys=["image"], nonzero=True, channel_wise=True
             ),
             RandShiftIntensity(
-                keys=["image"], offset_range=0.10, prob=1.0
+                keys=["image"], offset=0.10, prob=1.0
             ),
         ]
     )

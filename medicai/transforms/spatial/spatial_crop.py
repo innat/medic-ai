@@ -12,7 +12,7 @@ class SpatialCrop(KeyedTransform):
 
     This transform crops channel-last 2D tensors ``(H, W, C)`` and 3D tensors
     ``(D, H, W, C)`` using either a crop ``crop_start`` or a crop
-    ``roi_center`` together with ``crop_size``.
+    ``crop_center`` together with ``crop_size``.
 
     ``crop_size`` is interpreted per spatial dimension. Non-positive values are
     treated as "use the full available size" for that dimension after bounds
@@ -23,8 +23,8 @@ class SpatialCrop(KeyedTransform):
         keys: Keys of the tensors to crop.
         crop_size: Desired spatial crop size.
         crop_start: Spatial start coordinates of the crop. Mutually exclusive
-            with ``roi_center``.
-        roi_center: Spatial center coordinates of the crop. Mutually exclusive
+            with ``crop_center``.
+        crop_center: Spatial center coordinates of the crop. Mutually exclusive
             with ``crop_start``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -39,7 +39,7 @@ class SpatialCrop(KeyedTransform):
             transform = SpatialCrop(
                 keys=["image", "label"],
                 crop_size=(32, 64, 64),
-                roi_center=(24, 48, 48),
+                crop_center=(24, 48, 48),
             )
 
             image = tf.random.normal((48, 96, 96, 1))
@@ -61,7 +61,7 @@ class SpatialCrop(KeyedTransform):
             transform = SpatialCrop(
                 keys=["image", "label"],
                 crop_size=(64, 64),
-                roi_center=(48, 48),
+                crop_center=(48, 48),
             )
 
             image = tf.random.normal((96, 96, 1))
@@ -79,7 +79,7 @@ class SpatialCrop(KeyedTransform):
         selected key is present.
 
     Raises:
-        ValueError: If both ``crop_start`` and ``roi_center`` are provided, or
+        ValueError: If both ``crop_start`` and ``crop_center`` are provided, or
             if a spatial parameter does not match the selected tensor rank.
         KeyError: If a requested key is missing and
             ``allow_missing_keys=False``.
@@ -90,16 +90,16 @@ class SpatialCrop(KeyedTransform):
         keys: Sequence[str],
         crop_size: int | Sequence[int],
         crop_start: Sequence[int] | None = None,
-        roi_center: Sequence[int] | None = None,
+        crop_center: Sequence[int] | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
-        if crop_start is not None and roi_center is not None:
-            raise ValueError("Only one of `crop_start` or `roi_center` may be provided.")
+        if crop_start is not None and crop_center is not None:
+            raise ValueError("Only one of `crop_start` or `crop_center` may be provided.")
 
         self.crop_size = crop_size
         self.crop_start = tuple(crop_start) if crop_start is not None else None
-        self.roi_center = tuple(roi_center) if roi_center is not None else None
+        self.crop_center = tuple(crop_center) if crop_center is not None else None
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         crop_info = {"start": None, "size": None}
@@ -151,9 +151,9 @@ class SpatialCrop(KeyedTransform):
                 ensure_spatial_tuple(self.crop_start, spatial_rank, "crop_start"),
                 dtype=tf.int32,
             )
-        elif self.roi_center is not None:
+        elif self.crop_center is not None:
             center = tf.convert_to_tensor(
-                ensure_spatial_tuple(self.roi_center, spatial_rank, "roi_center"),
+                ensure_spatial_tuple(self.crop_center, spatial_rank, "crop_center"),
                 dtype=tf.int32,
             )
             starts = tf.maximum(center - crop_size // 2, 0)

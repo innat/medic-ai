@@ -149,7 +149,7 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
     random_spatial_crop = RandomSpatialCrop(
         keys=["image"], crop_size=(3, 4), sample_center=False
     )
-    random_shift = RandomShiftIntensity(keys=["image"], offset_range=0.25, prob=1.0)
+    random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)
 
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
 

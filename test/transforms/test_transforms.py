@@ -464,7 +464,7 @@ def test_shift_intensity_records_trace():
 @pytest.mark.unit
 def test_random_shift_intensity_preserves_shape_and_range():
     image = as_tensor(np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset_range=(-0.2, 0.8), prob=1.0)(
+    out = RandomShiftIntensity(keys=["image"], offset=(-0.2, 0.8), prob=1.0)(
         TensorBundle({"image": image})
     )
     shifted = ops.convert_to_numpy(out["image"])
@@ -484,7 +484,7 @@ def test_random_shift_intensity_preserves_shape_and_range():
 @pytest.mark.unit
 def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
     image = as_tensor(np.ones((4, 4, 2), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)(
         TensorBundle({"image": image})
     )
 
@@ -496,7 +496,7 @@ def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=0.0)(
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(
         TensorBundle({"image": image})
     )
 
@@ -509,10 +509,10 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.ones((6, 5, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((4, 6, 5, 1), dtype=np.float32))
 
-    out_2d = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0)(
+    out_2d = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomShiftIntensity(keys=["image"], offset_range=0.25, prob=1.0)(
+    out_3d = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)(
         TensorBundle({"image": image_3d})
     )
 
@@ -531,7 +531,7 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
 def test_random_shift_intensity_channel_wise_samples_per_channel_values():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
 
-    out = RandomShiftIntensity(keys=["image"], offset_range=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)(
         TensorBundle({"image": image})
     )
 
@@ -553,7 +553,7 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     out_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))(
         TensorBundle({"image": image_2d})
     )
-    out_3d = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), roi_center=(2, 2, 3))(
+    out_3d = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), crop_center=(2, 2, 3))(
         TensorBundle({"image": image_3d})
     )
 
@@ -564,8 +564,8 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
 
 @pytest.mark.unit
 def test_spatial_crop_validates_exclusive_start_and_center():
-    with pytest.raises(ValueError, match="Only one of `crop_start` or `roi_center` may be provided"):
-        SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), roi_center=(1, 1))
+    with pytest.raises(ValueError, match="Only one of `crop_start` or `crop_center` may be provided"):
+        SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), crop_center=(1, 1))
 
 
 @pytest.mark.unit
