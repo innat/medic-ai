@@ -7,7 +7,7 @@ cleanly inside `tf.data.Dataset` pipelines, or, ``keras.utils.PyDataset`` and, `
 Most transforms accept either:
 
 - a plain sample mapping such as `{"image": image, "label": label}`
-- an existing :class:`~medicai.transforms.TensorBundle`
+- an existing `TensorBundle`
 
 In both cases, the output is a `TensorBundle`, and transformed tensors remain
 available under the same keys.
