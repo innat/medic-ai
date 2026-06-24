@@ -2,85 +2,96 @@ import tensorflow as tf
 
 
 def nearest_interpolation(volume, target_depth, depth_axis=0):
-    # Generate floating-point indices for the target depth
+    """Resize a tensor along one axis with nearest-neighbor interpolation.
+
+    Args:
+        volume: Input tensor to resize.
+        target_depth: Target size for ``depth_axis``.
+        depth_axis: Axis to interpolate along.
+
+    Returns:
+        ``tf.Tensor``: The resized tensor.
+    """
     depth_indices = tf.linspace(
         0.0, tf.cast(tf.shape(volume)[depth_axis] - 1, tf.float32), target_depth
     )
-    # Round the indices to the nearest integer (nearest-neighbor interpolation)
     depth_indices = tf.cast(depth_indices, tf.int32)
-    # Gather slices from the original volume using the rounded indices
     resized_volume = tf.gather(volume, depth_indices, axis=depth_axis)
     return resized_volume
 
 
 def linear_interpolation(volume, target_depth, depth_axis=0, align_corners=False):
-    # Get the original depth size along the specified axis
+    """Resize a tensor along one axis with linear interpolation.
+
+    Args:
+        volume: Input tensor to resize.
+        target_depth: Target size for ``depth_axis``.
+        depth_axis: Axis to interpolate along.
+        align_corners: Whether corner indices should align exactly.
+
+    Returns:
+        ``tf.Tensor``: The resized tensor. Interpolation is performed in
+        ``float32`` space.
+    """
     original_depth = tf.shape(volume)[depth_axis]
 
-    # Early return if no resizing needed
     if original_depth == target_depth:
         return volume
 
-    # Generate floating-point indices for the target depth
     if align_corners:
-        # Corner pixels are aligned: map [0, orig_depth-1] to [0, target_depth-1]
         indices = tf.linspace(0.0, tf.cast(original_depth - 1, tf.float32), target_depth)
     else:
-        # Corner pixels are not aligned: use the PyTorch-style mapping
-        # This ensures that the resized tensor has the same geometric information
         if target_depth > 1:
             scale = tf.cast(original_depth, tf.float32) / tf.cast(target_depth, tf.float32)
             indices = (tf.range(target_depth, dtype=tf.float32) + 0.5) * scale - 0.5
-            # Clip to valid range
             indices = tf.clip_by_value(indices, 0.0, tf.cast(original_depth - 1, tf.float32))
         else:
-            # Single output - use center
-            # indices = tf.constant([(tf.cast(original_depth, tf.float32) - 1) / 2.0])
             indices = (tf.cast(original_depth, tf.float32) - 1) / 2.0
 
-    # Split indices into integer and fractional parts
     lower_indices = tf.cast(tf.floor(indices), tf.int32)
-    alpha = indices - tf.cast(lower_indices, tf.float32)  # Fractional part
+    alpha = indices - tf.cast(lower_indices, tf.float32)
 
-    # Adjust the shape of alpha for broadcasting along the depth axis
     alpha_shape = [1] * len(tf.shape(volume))
     alpha_shape[depth_axis] = target_depth
-    alpha = tf.reshape(alpha, alpha_shape)  # Reshape alpha for proper broadcasting
+    alpha = tf.reshape(alpha, alpha_shape)
 
-    # Gather the lower and upper slices along the specified depth axis
     lower_indices = tf.maximum(lower_indices, 0)
     upper_indices = tf.minimum(lower_indices + 1, original_depth - 1)
 
     lower_slices = tf.gather(volume, lower_indices, axis=depth_axis)
     upper_slices = tf.gather(volume, upper_indices, axis=depth_axis)
 
-    # Cast slices to float32 to ensure type compatibility with alpha
     lower_slices = tf.cast(lower_slices, tf.float32)
     upper_slices = tf.cast(upper_slices, tf.float32)
 
-    # Perform linear interpolation along the specified depth axis
     interpolated_volume = (1 - alpha) * lower_slices + alpha * upper_slices
 
     return interpolated_volume
 
 
 def cubic_interpolation(volume, target_depth, depth_axis=0):
-    # Get the original depth size along the specified axis
+    """Resize a tensor along one axis with cubic interpolation.
+
+    Args:
+        volume: Input tensor to resize.
+        target_depth: Target size for ``depth_axis``.
+        depth_axis: Axis to interpolate along.
+
+    Returns:
+        ``tf.Tensor``: The resized tensor. Interpolation is performed in
+        ``float32`` space.
+    """
     original_depth = tf.shape(volume)[depth_axis]
 
-    # Generate floating-point indices for the target depth
     indices = tf.linspace(0.0, tf.cast(original_depth - 1, tf.float32), target_depth)
 
-    # Split indices into integer and fractional parts
     lower_indices = tf.cast(tf.floor(indices), tf.int32)
-    alpha = indices - tf.cast(lower_indices, tf.float32)  # Fractional part
+    alpha = indices - tf.cast(lower_indices, tf.float32)
 
-    # Adjust the shape of alpha for broadcasting along the depth axis
     alpha_shape = [1] * len(tf.shape(volume))
     alpha_shape[depth_axis] = target_depth
-    alpha = tf.reshape(alpha, alpha_shape)  # Reshape alpha for proper broadcasting
+    alpha = tf.reshape(alpha, alpha_shape)
 
-    # Gather the four neighboring slices along the specified depth axis
     indices_0 = tf.maximum(lower_indices - 1, 0)
     indices_1 = lower_indices
     indices_2 = tf.minimum(lower_indices + 1, original_depth - 1)
@@ -91,13 +102,11 @@ def cubic_interpolation(volume, target_depth, depth_axis=0):
     slices_2 = tf.gather(volume, indices_2, axis=depth_axis)
     slices_3 = tf.gather(volume, indices_3, axis=depth_axis)
 
-    # Cast slices to float32 to ensure type compatibility with alpha
     slices_0 = tf.cast(slices_0, tf.float32)
     slices_1 = tf.cast(slices_1, tf.float32)
     slices_2 = tf.cast(slices_2, tf.float32)
     slices_3 = tf.cast(slices_3, tf.float32)
 
-    # Cubic interpolation coefficients
     alpha_sq = alpha**2
     alpha_cu = alpha**3
     w0 = -0.5 * alpha_cu + 1.0 * alpha_sq - 0.5 * alpha
@@ -105,7 +114,6 @@ def cubic_interpolation(volume, target_depth, depth_axis=0):
     w2 = -1.5 * alpha_cu + 2.0 * alpha_sq + 0.5 * alpha
     w3 = 0.5 * alpha_cu - 0.5 * alpha_sq
 
-    # Perform cubic interpolation along the specified depth axis
     interpolated_volume = w0 * slices_0 + w1 * slices_1 + w2 * slices_2 + w3 * slices_3
 
     return interpolated_volume

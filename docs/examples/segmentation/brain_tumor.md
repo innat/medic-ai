@@ -227,8 +227,8 @@ def train_transformation(sample):
             ),
             RandSpatialCrop(
                 keys=["image", "label"], 
-                roi_size=input_shape[:3], 
-                random_size=False
+                crop_size=input_shape[:3], 
+                sample_shape=False
             ),
             RandFlip(keys=["image", "label"], spatial_axis=[0], prob=0.5),
             RandFlip(keys=["image", "label"], spatial_axis=[1], prob=0.5),
@@ -237,7 +237,7 @@ def train_transformation(sample):
                 keys=["image"], nonzero=True, channel_wise=True
             ),
             RandShiftIntensity(
-                keys=["image"], offsets=0.10, prob=1.0
+                keys=["image"], offset=0.10, prob=1.0
             ),
         ]
     )
