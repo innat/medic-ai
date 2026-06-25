@@ -193,8 +193,6 @@ class RandomRotate(RandomTransform):
 
         applied = trace.get("applied", False)
         angle = trace["params"].get("angle")
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
-
         def apply_inverse_rotate(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if tf.is_tensor(applied):
                 return tf.cond(
@@ -206,7 +204,11 @@ class RandomRotate(RandomTransform):
                 return self.rotate_tensor(tensor, key, -angle)
             return tensor
 
-        for key in present_keys:
+        for key in trace["params"].get("keys", []):
+            if key not in bundle.data:
+                if self.allow_missing_keys:
+                    continue
+                raise KeyError(f"Key '{key}' not found in input data.")
             tensor = bundle.data[key]
             bundle.data[key] = apply_inverse_rotate(tensor, key)
         return bundle

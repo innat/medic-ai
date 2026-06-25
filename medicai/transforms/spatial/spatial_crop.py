@@ -102,25 +102,26 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         self.crop_center = tuple(crop_center) if crop_center is not None else None
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        crop_info = {"start": None, "size": None}
+        crop_starts = {}
+        crop_sizes = {}
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             starts, crop_size = self.compute_crop_bounds(tensor)
-            crop_info["start"] = starts
-            crop_info["size"] = crop_size
+            crop_starts[key] = starts
+            crop_sizes[key] = crop_size
             original_shapes[key] = get_spatial_shape(tensor)
             return self.crop_tensor(tensor, starts, crop_size)
 
         present_keys = self.apply_to_present_keys(bundle, apply_crop)
 
-        if crop_info["start"] is not None:
+        if crop_starts:
             self.record_transform(
                 bundle,
                 {
                     "keys": list(present_keys),
-                    "crop_start": crop_info["start"],
-                    "crop_size": crop_info["size"],
+                    "crop_start": crop_starts,
+                    "crop_size": crop_sizes,
                     "original_shapes": original_shapes,
                 },
             )
@@ -131,17 +132,17 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         if trace is None:
             return bundle
 
-        crop_start = trace["params"].get("crop_start")
+        crop_starts = trace["params"].get("crop_start", {})
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            crop_start = crop_starts.get(key)
             original_shape = original_shapes.get(key)
-            if original_shape is None:
+            if crop_start is None or original_shape is None:
                 return tensor
             return self.pad_to_original_shape(tensor, crop_start, original_shape)
 
-        self.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
+        self.apply_to_present_keys(bundle, apply_inverse_crop, keys=trace["params"].get("keys", []))
         return bundle
 
     def compute_crop_bounds(self, tensor: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:

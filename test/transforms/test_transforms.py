@@ -368,6 +368,7 @@ def test_scale_intensity_range_inverse_restores_affine_mapping():
     )
 
     forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
@@ -375,7 +376,7 @@ def test_scale_intensity_range_inverse_restores_affine_mapping():
         ops.convert_to_numpy(image),
         rtol=1e-6,
     )
-    assert forward.get_applied_transforms()[-1]["invertible"] is True
+    assert trace["invertible"] is True
 
 
 @pytest.mark.unit
@@ -410,13 +411,14 @@ def test_scale_intensity_range_inverse_is_noop_when_clipped():
     )
 
     forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
         ops.convert_to_numpy(restored["image"]),
         ops.convert_to_numpy(forward["image"]),
     )
-    assert forward.get_applied_transforms()[-1]["invertible"] is False
+    assert trace["invertible"] is False
 
 
 @pytest.mark.unit
@@ -1146,14 +1148,14 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
     image = as_tensor(image_np)
     label = as_tensor(np.zeros((6, 6, 1), dtype=np.float32))
     label_np = ops.convert_to_numpy(label)
-    label_np[1:5, 1:5, 0] = 1.0
+    label_np[3, 3, 0] = 1.0
     label = as_tensor(label_np)
 
     transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
         target_shape=(4, 4),
         pos=1,
-        neg=1,
+        neg=0,
     )
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -1162,6 +1164,14 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
 
     assert tuple(ops.shape(restored["image"])) == (6, 6, 1)
     assert tuple(ops.shape(restored["label"])) == (6, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["label"]),
+        ops.convert_to_numpy(label),
+    )
 
 
 @pytest.mark.unit
@@ -1172,14 +1182,14 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_3d():
     image = as_tensor(image_np)
     label = as_tensor(np.zeros((6, 6, 6, 1), dtype=np.float32))
     label_np = ops.convert_to_numpy(label)
-    label_np[2:5, 2:5, 2:5, 0] = 1.0
+    label_np[3, 3, 3, 0] = 1.0
     label = as_tensor(label_np)
 
     transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
         target_shape=(3, 3, 3),
         pos=1,
-        neg=1,
+        neg=0,
     )
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -1188,6 +1198,29 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_3d():
 
     assert tuple(ops.shape(restored["image"])) == (6, 6, 6, 1)
     assert tuple(ops.shape(restored["label"])) == (6, 6, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["label"]),
+        ops.convert_to_numpy(label),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_records_per_key_crop_bounds_for_mixed_shapes():
+    image = as_tensor(np.arange(36, dtype=np.float32).reshape(6, 6, 1))
+    label = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
+    transform = SpatialCrop(keys=["image", "label"], crop_size=(4, 4), crop_center=(4, 4))
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    trace = forward.get_applied_transforms()[-1]
+
+    image_start = ops.convert_to_numpy(trace["params"]["crop_start"]["image"])
+    label_start = ops.convert_to_numpy(trace["params"]["crop_start"]["label"])
+    assert image_start.tolist() == [2, 2]
+    assert label_start.tolist() == [0, 0]
 
 
 @pytest.mark.unit
