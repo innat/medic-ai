@@ -2,12 +2,12 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import ensure_spatial_tuple, get_spatial_rank, get_spatial_shape
 
 
-class SpatialCrop(KeyedTransform):
+class SpatialCrop(KeyedTransform, InvertibleTransform):
     """Deterministically crop a spatial region from selected tensors.
 
     This transform crops channel-last 2D tensors ``(H, W, C)`` and 3D tensors
@@ -74,8 +74,8 @@ class SpatialCrop(KeyedTransform):
             print(result["label"].shape)
 
     Returns:
-        ``TensorBundle``: The input bundle with cropped tensors and a
-        non-invertible transform trace entry appended when at least one
+        ``TensorBundle``: The input bundle with cropped tensors and an
+        invertible transform trace entry appended when at least one
         selected key is present.
 
     Raises:
@@ -93,7 +93,7 @@ class SpatialCrop(KeyedTransform):
         crop_center: Sequence[int] | None = None,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         if crop_start is not None and crop_center is not None:
             raise ValueError("Only one of `crop_start` or `crop_center` may be provided.")
 
@@ -103,28 +103,45 @@ class SpatialCrop(KeyedTransform):
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         crop_info = {"start": None, "size": None}
+        original_shapes = {}
 
-        def apply_crop(tensor: tf.Tensor, _: str) -> tf.Tensor:
+        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             starts, crop_size = self.compute_crop_bounds(tensor)
             crop_info["start"] = starts
             crop_info["size"] = crop_size
+            original_shapes[key] = get_spatial_shape(tensor)
             return self.crop_tensor(tensor, starts, crop_size)
 
         present_keys = self.apply_to_present_keys(bundle, apply_crop)
 
         if crop_info["start"] is not None:
-            bundle.push_transform(
-                self.build_trace_entry(
-                    params={
-                        "keys": list(present_keys),
-                        "crop_start": crop_info["start"],
-                        "crop_size": crop_info["size"],
-                    },
-                    applied=True,
-                    random=False,
-                    invertible=False,
-                )
+            self.record_transform(
+                bundle,
+                {
+                    "keys": list(present_keys),
+                    "crop_start": crop_info["start"],
+                    "crop_size": crop_info["size"],
+                    "original_shapes": original_shapes,
+                },
             )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_spatial_crop_trace(bundle)
+        if trace is None:
+            return bundle
+
+        crop_start = trace["params"].get("crop_start")
+        original_shapes = trace["params"].get("original_shapes", {})
+        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+
+        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            original_shape = original_shapes.get(key)
+            if original_shape is None:
+                return tensor
+            return self.pad_to_original_shape(tensor, crop_start, original_shape)
+
+        self.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
         return bundle
 
     def compute_crop_bounds(self, tensor: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
@@ -179,3 +196,30 @@ class SpatialCrop(KeyedTransform):
         begin = tf.concat([starts, [0]], axis=0)
         size = tf.concat([crop_size, [tf.shape(tensor)[-1]]], axis=0)
         return tf.slice(tensor, begin=begin, size=size)
+
+    def pad_to_original_shape(
+        self,
+        tensor: tf.Tensor,
+        crop_start: tf.Tensor,
+        original_shape: tf.Tensor,
+    ) -> tf.Tensor:
+        """Pad a cropped tensor back into its original spatial canvas."""
+        crop_start = tf.cast(crop_start, tf.int32)
+        original_shape = tf.cast(original_shape, tf.int32)
+        current_shape = get_spatial_shape(tensor)
+        pad_before = crop_start
+        pad_after = original_shape - crop_start - current_shape
+        paddings = tf.concat(
+            [
+                tf.stack([pad_before, pad_after], axis=1),
+                tf.constant([[0, 0]], dtype=tf.int32),
+            ],
+            axis=0,
+        )
+        return tf.pad(tensor, paddings)
+
+    def _get_last_spatial_crop_trace(self, bundle: TensorBundle):
+        for entry in reversed(bundle.get_applied_transforms()):
+            if entry.get("name") == type(self).__name__:
+                return entry
+        return None

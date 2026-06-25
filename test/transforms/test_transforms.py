@@ -563,6 +563,52 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
 
 
 @pytest.mark.unit
+def test_spatial_crop_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:4, 1:5, 0] = np.arange(12, dtype=np.float32).reshape(3, 4)
+    image = as_tensor(image_np)
+
+    transform = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((4, 5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:3, 1:4, 1:5, 0] = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
+    image = as_tensor(image_np)
+
+    transform = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), crop_start=(1, 1, 1))
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (4, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
+    transform = SpatialCrop(keys=["image"], crop_size=(2, 2))
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
+
+
+@pytest.mark.unit
 def test_spatial_crop_validates_exclusive_start_and_center():
     with pytest.raises(ValueError, match="Only one of `crop_start` or `crop_center` may be provided"):
         SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), crop_center=(1, 1))
@@ -760,6 +806,54 @@ def test_crop_foreground_channel_indices_and_k_divisible():
     shape = tuple(ops.shape(out["image"]))
     assert shape[0] % 2 == 0
     assert shape[1] % 2 == 0
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((6, 7, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[2:5, 3:6, 0] = 1.0
+    image = as_tensor(image_np)
+
+    transform = CropForeground(keys=["image"], source_key="image")
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(forward["image"])) == (3, 3, 1)
+    assert tuple(ops.shape(restored["image"])) == (6, 7, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((5, 6, 7, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:4, 2:5, 3:6, 0] = 1.0
+    image = as_tensor(image_np)
+
+    transform = CropForeground(keys=["image"], source_key="image")
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(forward["image"])) == (3, 3, 3, 1)
+    assert tuple(ops.shape(restored["image"])) == (5, 6, 7, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
+    transform = CropForeground(keys=["image"], source_key="image")
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit
