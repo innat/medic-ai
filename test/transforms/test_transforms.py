@@ -357,6 +357,116 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_inverse_restores_affine_mapping():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=-1.0,
+        output_max=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    assert trace["invertible"] is True
+
+
+@pytest.mark.unit
+def test_scale_intensity_range_inverse_restores_normalized_mapping():
+    image = as_tensor(np.array([[[0.0], [127.5], [255.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=255.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_scale_intensity_range_inverse_uses_recorded_trace_parameters():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=-1.0,
+        output_max=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+
+    transform.input_min = -10.0
+    transform.input_max = 10.0
+    transform.output_min = 5.0
+    transform.output_max = 15.0
+
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_scale_intensity_range_inverse_is_noop_when_clipped():
+    image = as_tensor(np.array([[[-1.0], [0.5], [2.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=0.0,
+        output_max=10.0,
+        clip=True,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(forward["image"]),
+    )
+    assert trace["invertible"] is False
+
+
+@pytest.mark.unit
+def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    label = as_tensor(np.array([[[1.0], [2.0], [3.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image", "label"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=-1.0,
+        output_max=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_rejects_partial_target_range():
     with pytest.raises(ValueError, match="must be provided together"):
         ScaleIntensityRange(keys=["image"], input_min=0.0, input_max=1.0, output_min=0.0)
@@ -459,6 +569,60 @@ def test_shift_intensity_records_trace():
     assert trace["name"] == "ShiftIntensity"
     assert trace["params"]["keys"] == ["image"]
     assert trace["params"]["offset"] == 2.0
+    assert trace["invertible"] is True
+
+
+@pytest.mark.unit
+def test_shift_intensity_inverse_restores_scalar_offset():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    transform = ShiftIntensity(keys=["image"], offset=2.5)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_shift_intensity_inverse_restores_broadcast_channel_offsets():
+    image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
+    offsets = as_tensor(np.array([0.5, -0.25], dtype=np.float32))
+    transform = ShiftIntensity(keys=["image"], offset=offsets)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_shift_intensity_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+    transform = ShiftIntensity(keys=["image"], offset=1.0)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
+
+
+@pytest.mark.unit
+def test_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = ShiftIntensity(keys=["image", "label"], offset=1.0)
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
 
 @pytest.mark.unit
@@ -477,8 +641,75 @@ def test_random_shift_intensity_preserves_shape_and_range():
     assert trace["name"] == "RandomShiftIntensity"
     assert bool(ops.convert_to_numpy(trace["applied"]))
     assert trace["random"] is True
-    assert trace["invertible"] is False
+    assert trace["invertible"] is True
     assert trace["kernel"] == "ShiftIntensity"
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_inverse_restores_scalar_sample():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_inverse_restores_channel_wise_sample():
+    image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_inverse_is_noop_when_not_applied():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = RandomShiftIntensity(keys=["image", "label"], offset=0.5, prob=1.0)
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
 
 @pytest.mark.unit
@@ -496,9 +727,7 @@ def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(
-        TensorBundle({"image": image})
-    )
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
@@ -563,8 +792,56 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
 
 
 @pytest.mark.unit
+def test_spatial_crop_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:4, 1:5, 0] = np.arange(12, dtype=np.float32).reshape(3, 4)
+    image = as_tensor(image_np)
+
+    transform = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((4, 5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:3, 1:4, 1:5, 0] = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
+    image = as_tensor(image_np)
+
+    transform = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), crop_start=(1, 1, 1))
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (4, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
+    transform = SpatialCrop(keys=["image"], crop_size=(2, 2))
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
+
+
+@pytest.mark.unit
 def test_spatial_crop_validates_exclusive_start_and_center():
-    with pytest.raises(ValueError, match="Only one of `crop_start` or `crop_center` may be provided"):
+    with pytest.raises(
+        ValueError, match="Only one of `crop_start` or `crop_center` may be provided"
+    ):
         SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), crop_center=(1, 1))
 
 
@@ -591,6 +868,52 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     assert tuple(ops.shape(out_2d["image"])) == (3, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 3, 4, 1)
     assert out_3d.get_applied_transforms()[-1]["kernel"] == "SpatialCrop"
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:4, 1:5, 0] = np.arange(12, dtype=np.float32).reshape(3, 4)
+    image = as_tensor(image_np)
+
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((4, 5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:3, 1:4, 1:5, 0] = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
+    image = as_tensor(image_np)
+
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), random_center=False)
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(restored["image"])) == (4, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), random_center=False)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit
@@ -763,6 +1086,54 @@ def test_crop_foreground_channel_indices_and_k_divisible():
 
 
 @pytest.mark.unit
+def test_crop_foreground_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((6, 7, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[2:5, 3:6, 0] = 1.0
+    image = as_tensor(image_np)
+
+    transform = CropForeground(keys=["image"], source_key="image")
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(forward["image"])) == (3, 3, 1)
+    assert tuple(ops.shape(restored["image"])) == (6, 7, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((5, 6, 7, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:4, 2:5, 3:6, 0] = 1.0
+    image = as_tensor(image_np)
+
+    transform = CropForeground(keys=["image"], source_key="image")
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    assert tuple(ops.shape(forward["image"])) == (3, 3, 3, 1)
+    assert tuple(ops.shape(restored["image"])) == (5, 6, 7, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
+    transform = CropForeground(keys=["image"], source_key="image")
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
+
+
+@pytest.mark.unit
 def test_crop_foreground_runs_under_tf_function_graph_mode():
     transform = CropForeground(keys=["image"], source_key="image")
     image = as_tensor(
@@ -807,6 +1178,7 @@ def test_random_crop_by_pos_neg_label_uses_spatial_crop_kernel():
     assert trace["name"] == "RandomCropByPosNegLabel"
     assert trace["kernel"] == "SpatialCrop"
     assert trace["random"] is True
+    assert trace["invertible"] is True
 
 
 @pytest.mark.unit
@@ -835,6 +1207,104 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
     assert tuple(ops.shape(out_2d["label"])) == (4, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (3, 3, 3, 1)
     assert tuple(ops.shape(out_3d["label"])) == (3, 3, 3, 1)
+
+
+@pytest.mark.unit
+def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
+    image = as_tensor(np.zeros((6, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[1:5, 1:5, 0] = np.arange(16, dtype=np.float32).reshape(4, 4)
+    image = as_tensor(image_np)
+    label = as_tensor(np.zeros((6, 6, 1), dtype=np.float32))
+    label_np = ops.convert_to_numpy(label)
+    label_np[3, 3, 0] = 1.0
+    label = as_tensor(label_np)
+
+    transform = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(4, 4),
+        pos=1,
+        neg=0,
+    )
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    restored = transform.inverse(
+        TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
+    )
+
+    assert tuple(ops.shape(restored["image"])) == (6, 6, 1)
+    assert tuple(ops.shape(restored["label"])) == (6, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["label"]),
+        ops.convert_to_numpy(label),
+    )
+
+
+@pytest.mark.unit
+def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_3d():
+    image = as_tensor(np.zeros((6, 6, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[2:5, 2:5, 2:5, 0] = np.arange(27, dtype=np.float32).reshape(3, 3, 3)
+    image = as_tensor(image_np)
+    label = as_tensor(np.zeros((6, 6, 6, 1), dtype=np.float32))
+    label_np = ops.convert_to_numpy(label)
+    label_np[3, 3, 3, 0] = 1.0
+    label = as_tensor(label_np)
+
+    transform = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(3, 3, 3),
+        pos=1,
+        neg=0,
+    )
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    restored = transform.inverse(
+        TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
+    )
+
+    assert tuple(ops.shape(restored["image"])) == (6, 6, 6, 1)
+    assert tuple(ops.shape(restored["label"])) == (6, 6, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["label"]),
+        ops.convert_to_numpy(label),
+    )
+
+
+@pytest.mark.unit
+def test_spatial_crop_records_per_key_crop_bounds_for_mixed_shapes():
+    image = as_tensor(np.arange(36, dtype=np.float32).reshape(6, 6, 1))
+    label = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
+    transform = SpatialCrop(keys=["image", "label"], crop_size=(4, 4), crop_center=(4, 4))
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    trace = forward.get_applied_transforms()[-1]
+
+    image_start = ops.convert_to_numpy(trace["params"]["crop_start"]["image"])
+    label_start = ops.convert_to_numpy(trace["params"]["crop_start"]["label"])
+    assert image_start.tolist() == [2, 2]
+    assert label_start.tolist() == [0, 0]
+
+
+@pytest.mark.unit
+def test_random_crop_by_pos_neg_label_inverse_without_trace_is_noop():
+    bundle = TensorBundle(
+        {
+            "image": as_tensor(np.ones((4, 4, 1), dtype=np.float32)),
+            "label": as_tensor(np.ones((4, 4, 1), dtype=np.float32)),
+        }
+    )
+    transform = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2), pos=1, neg=1)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit
@@ -1005,8 +1475,46 @@ def test_random_rotate90_preserves_shape():
     assert trace["name"] == "RandomRotate90"
     assert bool(ops.convert_to_numpy(trace["applied"]))
     assert trace["random"] is True
-    assert trace["invertible"] is False
+    assert trace["invertible"] is True
     assert trace["kernel"] == "Rotate90"
+
+
+@pytest.mark.unit
+def test_random_rotate90_inverse_restores_when_applied():
+    image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
+    transform = RandomRotate90(keys=["image"], prob=1.0, max_k=3)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_rotate90_inverse_is_noop_when_not_applied():
+    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    transform = RandomRotate90(keys=["image"], prob=0.0, max_k=3)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_rotate90_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+    transform = RandomRotate90(keys=["image"], prob=1.0, max_k=3)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit
@@ -1039,8 +1547,50 @@ def test_random_rotate_preserves_shape_and_records_trace():
     assert trace["name"] == "RandomRotate"
     assert bool(ops.convert_to_numpy(trace["applied"]))
     assert trace["random"] is True
-    assert trace["invertible"] is False
+    assert trace["invertible"] is True
     assert trace["kernel"] == "rotate_volume"
+
+
+@pytest.mark.unit
+def test_random_rotate_inverse_restores_when_angle_is_zero():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
+    transform = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0)
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    restored = transform.inverse(
+        TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
+    )
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image))
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["label"]), ops.convert_to_numpy(label))
+
+
+@pytest.mark.unit
+def test_random_rotate_inverse_is_noop_when_not_applied():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    transform = RandomRotate(keys=["image"], factor=0.2, prob=0.0)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image))
+
+
+@pytest.mark.unit
+def test_random_rotate_crop_mode_stays_non_invertible():
+    image = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
+    transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0, fill_mode="crop")
+
+    forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
+
+    assert trace["invertible"] is False
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(forward["image"]),
+    )
 
 
 @pytest.mark.unit
@@ -1243,8 +1793,46 @@ def test_random_flip_records_random_trace():
     assert trace["name"] == "RandomFlip"
     assert bool(ops.convert_to_numpy(trace["applied"]))
     assert trace["random"] is True
-    assert trace["invertible"] is False
+    assert trace["invertible"] is True
     assert trace["kernel"] == "Flip"
+
+
+@pytest.mark.unit
+def test_random_flip_inverse_restores_when_applied():
+    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    transform = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_flip_inverse_is_noop_when_not_applied():
+    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    transform = RandomFlip(keys=["image"], prob=0.0, spatial_axis=1)
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_flip_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+    transform = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1)
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit

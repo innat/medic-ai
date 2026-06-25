@@ -4,7 +4,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank
 
@@ -201,8 +201,11 @@ class Orientation(KeyedTransform, InvertibleTransform):
         def apply_inverse_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
             return self.inverse_orient_tensor(tensor, perm_spatial, flip_axes)
 
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
-        self.apply_to_present_keys(bundle, apply_inverse_orientation, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_orientation,
+            keys=trace["params"].get("keys", []),
+        )
         bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
         return bundle
 
@@ -375,7 +378,4 @@ class Orientation(KeyedTransform, InvertibleTransform):
         return axcodes[::-1]
 
     def _get_last_orientation_trace(self, bundle: TensorBundle) -> dict | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

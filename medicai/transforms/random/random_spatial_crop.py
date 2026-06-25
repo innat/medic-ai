@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank, get_spatial_shape
@@ -101,6 +101,10 @@ class RandomSpatialCrop(RandomTransform):
                 "to calculate the ratio of valid pixels."
             )
 
+    @property
+    def invertible(self) -> bool:
+        return True
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         sample_key = self.keys[0]
         if sample_key not in bundle.data:
@@ -133,13 +137,19 @@ class RandomSpatialCrop(RandomTransform):
             crop_size=self.crop_size,
             allow_missing_keys=self.allow_missing_keys,
         )
+        original_shapes = {}
 
         starts = tf.maximum(center - crop_size // 2, 0)
         ends = tf.minimum(starts + crop_size, spatial_shape)
         starts = tf.maximum(ends - crop_size, 0)
+
+        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            original_shapes[key] = get_spatial_shape(tensor)
+            return crop.crop_tensor(tensor, starts, crop_size)
+
         present_keys = crop.apply_to_present_keys(
             bundle,
-            lambda tensor, _: crop.crop_tensor(tensor, starts, crop_size),
+            apply_crop,
         )
         bundle.push_transform(
             self.build_trace_entry(
@@ -147,6 +157,7 @@ class RandomSpatialCrop(RandomTransform):
                     "keys": list(present_keys),
                     "crop_start": starts,
                     "crop_size": crop_size,
+                    "original_shapes": original_shapes,
                     "random_center": self.random_center,
                     "random_shape": self.random_shape,
                 },
@@ -154,6 +165,32 @@ class RandomSpatialCrop(RandomTransform):
                 random=True,
                 kernel="SpatialCrop",
             )
+        )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_random_spatial_crop_trace(bundle)
+        if trace is None:
+            return bundle
+
+        crop_start = trace["params"].get("crop_start")
+        original_shapes = trace["params"].get("original_shapes", {})
+        crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=self.crop_size,
+            allow_missing_keys=self.allow_missing_keys,
+        )
+
+        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            original_shape = original_shapes.get(key)
+            if original_shape is None:
+                return tensor
+            return crop.pad_to_original_shape(tensor, crop_start, original_shape)
+
+        crop.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 
@@ -258,3 +295,6 @@ class RandomSpatialCrop(RandomTransform):
 
         _, center = tf.while_loop(cond, body, [0, center], parallel_iterations=1)
         return center
+
+    def _get_last_random_spatial_crop_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)

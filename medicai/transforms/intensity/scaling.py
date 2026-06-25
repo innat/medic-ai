@@ -4,11 +4,11 @@ from typing import Optional, Sequence
 
 import tensorflow as tf
 
-from ..base import KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 
 
-class ScaleIntensityRange(KeyedTransform):
+class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     """Linearly map selected tensor intensities from one numeric range to another.
 
     ``ScaleIntensityRange`` applies an affine intensity transform using the
@@ -77,9 +77,22 @@ class ScaleIntensityRange(KeyedTransform):
             output = result["image"]
             print(output.shape)
 
+    ``ScaleIntensityRange`` is invertible only for pure affine range mappings.
+    In practice that means:
+
+    - `clip=False`
+    - `input_min != input_max`
+    - when a target range is provided, `output_min != output_max`
+
+    If clipping is enabled, or the mapping collapses values to a constant,
+    exact inversion is not possible and :meth:`inverse` behaves as a no-op.
+    When inversion is available, it replays only the keys recorded in the
+    transform trace, restores using the recorded range parameters, and still
+    honors ``allow_missing_keys``.
+
     Returns:
         ``TensorBundle``: The input bundle with selected tensors scaled in
-        place and a non-invertible trace entry appended.
+        place and a trace entry appended.
 
     Raises:
         KeyError: If a requested key is missing and
@@ -97,7 +110,7 @@ class ScaleIntensityRange(KeyedTransform):
         dtype: tf.DType = tf.float32,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         if (output_min is None) != (output_max is None):
             raise ValueError(
                 "`output_min` and `output_max` must be provided together or both omitted."
@@ -109,24 +122,57 @@ class ScaleIntensityRange(KeyedTransform):
         self.clip = clip
         self.dtype = dtype
 
+    @property
+    def invertible(self) -> bool:
+        if self.clip:
+            return False
+        if self.input_max == self.input_min:
+            return False
+        if self.output_min is not None and self.output_max is not None:
+            return self.output_max != self.output_min
+        return True
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
             bundle, lambda tensor, _: self.scale_tensor(tensor)
         )
-        bundle.push_transform(
-            self.build_trace_entry(
-                params={
-                    "keys": list(present_keys),
-                    "input_min": self.input_min,
-                    "input_max": self.input_max,
-                    "output_min": self.output_min,
-                    "output_max": self.output_max,
-                    "clip": self.clip,
-                },
-                applied=True,
-                random=False,
-                invertible=False,
-            )
+        self.record_transform(
+            bundle,
+            {
+                "keys": list(present_keys),
+                "input_min": self.input_min,
+                "input_max": self.input_max,
+                "output_min": self.output_min,
+                "output_max": self.output_max,
+                "clip": self.clip,
+            },
+        )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        if not self.invertible:
+            return bundle
+
+        trace = self._get_last_scaling_trace(bundle)
+        if trace is None:
+            return bundle
+
+        params = trace["params"]
+        input_min = params.get("input_min", self.input_min)
+        input_max = params.get("input_max", self.input_max)
+        output_min = params.get("output_min", self.output_min)
+        output_max = params.get("output_max", self.output_max)
+
+        self.apply_to_present_keys(
+            bundle,
+            lambda tensor, _: self.inverse_scale_tensor(
+                tensor,
+                input_min=input_min,
+                input_max=input_max,
+                output_min=output_min,
+                output_max=output_max,
+            ),
+            keys=params.get("keys", []),
         )
         return bundle
 
@@ -147,3 +193,28 @@ class ScaleIntensityRange(KeyedTransform):
         if self.clip and self.output_min is not None and self.output_max is not None:
             tensor = tf.clip_by_value(tensor, self.output_min, self.output_max)
         return tf.cast(tensor, dtype=self.dtype)
+
+    def inverse_scale_tensor(
+        self,
+        tensor: tf.Tensor,
+        input_min: float | None = None,
+        input_max: float | None = None,
+        output_min: float | None = None,
+        output_max: float | None = None,
+    ) -> tf.Tensor:
+        """Invert one tensor from target range back to source range."""
+        tensor = tf.convert_to_tensor(tensor, dtype=self.dtype)
+
+        in_min = self.input_min if input_min is None else input_min
+        in_max = self.input_max if input_max is None else input_max
+        out_min = self.output_min if output_min is None else output_min
+        out_max = self.output_max if output_max is None else output_max
+
+        if out_min is not None and out_max is not None:
+            tensor = (tensor - out_min) / (out_max - out_min)
+
+        tensor = tensor * (in_max - in_min) + in_min
+        return tf.cast(tensor, dtype=self.dtype)
+
+    def _get_last_scaling_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)

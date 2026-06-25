@@ -3,7 +3,7 @@ from typing import Mapping, Sequence
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank
 from .resize import resize_volumes
@@ -239,8 +239,11 @@ class Spacing(KeyedTransform, InvertibleTransform):
             target_shape = original_shapes[key]
             return self._resize_to_shape(tensor, target_shape, self.interpolation[key])
 
-        present_keys = [key for key in params.get("keys", []) if key in bundle.data]
-        self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_spacing,
+            keys=params.get("keys", []),
+        )
         bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
         if original_affine is not None:
             bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
@@ -293,7 +296,4 @@ class Spacing(KeyedTransform, InvertibleTransform):
         return resized[0]
 
     def _get_last_spacing_trace(self, bundle: TensorBundle) -> dict | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

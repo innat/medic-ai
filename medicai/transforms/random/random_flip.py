@@ -2,7 +2,7 @@ from typing import Sequence, Union
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
 from ..spatial.flip import Flip
 from ..tensor_bundle import TensorBundle
 
@@ -70,6 +70,10 @@ class RandomFlip(RandomTransform):
             allow_missing_keys=allow_missing_keys,
         )
 
+    @property
+    def invertible(self) -> bool:
+        return self.flip.spatial_axis is not None
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_flip = self.sample_should_apply()
 
@@ -100,3 +104,32 @@ class RandomFlip(RandomTransform):
             kernel="Flip",
         )
         return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        if self.flip.spatial_axis is None:
+            return bundle
+
+        trace = self._get_last_random_flip_trace(bundle)
+        if trace is None:
+            return bundle
+
+        applied = trace.get("applied", False)
+
+        def apply_inverse_flip(tensor: tf.Tensor, _: str) -> tf.Tensor:
+            if tf.is_tensor(applied):
+                return tf.cond(
+                    tf.cast(applied, tf.bool),
+                    lambda tensor=tensor: self.flip.flip_tensor(tensor),
+                    lambda tensor=tensor: tensor,
+                )
+            if _trace_applied_to_bool(applied):
+                return self.flip.flip_tensor(tensor)
+            return tensor
+
+        self.flip.apply_to_present_keys(
+            bundle, apply_inverse_flip, keys=trace["params"].get("keys", [])
+        )
+        return bundle
+
+    def _get_last_random_flip_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -2,7 +2,14 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.transforms import Compose, Flip, ShiftIntensity, TensorBundle
+from medicai.transforms import (
+    Compose,
+    Flip,
+    RandomShiftIntensity,
+    ScaleIntensityRange,
+    ShiftIntensity,
+    TensorBundle,
+)
 
 
 @pytest.mark.unit
@@ -91,3 +98,78 @@ def test_compose_inverse_traverses_nested_compose_blocks():
 
     expected = ops.convert_to_numpy(image) + 3.0
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
+
+
+@pytest.mark.unit
+def test_compose_inverse_handles_repeated_shift_intensity_instances():
+    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    pipeline = Compose(
+        [
+            ShiftIntensity(keys=["image"], offset=2.0),
+            ShiftIntensity(keys=["image"], offset=-0.5),
+        ]
+    )
+
+    forward = pipeline({"image": image})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    assert forward.get_applied_transforms() == []
+
+
+@pytest.mark.unit
+def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
+    image = ops.convert_to_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    pipeline = Compose(
+        [
+            ScaleIntensityRange(
+                keys=["image"],
+                input_min=0.0,
+                input_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            ),
+            ScaleIntensityRange(
+                keys=["image"],
+                input_min=-1.0,
+                input_max=1.0,
+                output_min=0.0,
+                output_max=255.0,
+            ),
+        ]
+    )
+
+    forward = pipeline({"image": image})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    assert forward.get_applied_transforms() == []
+
+
+@pytest.mark.unit
+def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
+    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    pipeline = Compose(
+        [
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0),
+            RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0),
+        ]
+    )
+
+    forward = pipeline({"image": image})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    assert forward.get_applied_transforms() == []

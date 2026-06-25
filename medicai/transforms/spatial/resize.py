@@ -4,7 +4,7 @@ from typing import Mapping, Sequence
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import ensure_spatial_tuple, get_tensor_rank
 
@@ -182,7 +182,6 @@ class Resize(KeyedTransform, InvertibleTransform):
             return bundle
 
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
 
         def apply_inverse_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
             target_shape = original_shapes.get(key)
@@ -190,7 +189,11 @@ class Resize(KeyedTransform, InvertibleTransform):
                 return tensor
             return self.resize_tensor(tensor, key, target_shape=target_shape)
 
-        self.apply_to_present_keys(bundle, apply_inverse_resize, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_resize,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def resize_tensor(
@@ -275,10 +278,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         )
 
     def _get_last_resize_trace(self, bundle: TensorBundle) -> dict | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)
 
 
 # This could be temporary: issue: https://github.com/keras-team/keras/issues/21785

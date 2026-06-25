@@ -2,13 +2,13 @@ from typing import Callable, Optional, Sequence, Union
 
 import tensorflow as tf
 
-from ..base import KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import ensure_spatial_tuple, get_spatial_rank, get_spatial_shape
 from .spatial_crop import SpatialCrop
 
 
-class CropForeground(KeyedTransform):
+class CropForeground(KeyedTransform, InvertibleTransform):
     """Crop selected tensors to the foreground region of a source tensor.
 
     This transform detects foreground in ``source_key`` using ``select_fn``,
@@ -22,8 +22,10 @@ class CropForeground(KeyedTransform):
     be expanded to be divisible by a requested factor such as a network stride.
 
     This transform records crop start and end coordinates in metadata when
-    ``start_coord_key`` and ``end_coord_key`` are provided. The transform is
-    not currently invertible.
+    ``start_coord_key`` and ``end_coord_key`` are provided. It is invertible
+    in the placement sense: :meth:`inverse` pads the cropped tensor back into
+    its original spatial canvas using the recorded crop coordinates and
+    original spatial shape.
 
     Args:
         keys: Keys of tensors to crop once the foreground bounding box has been
@@ -93,7 +95,7 @@ class CropForeground(KeyedTransform):
 
     Returns:
         ``TensorBundle``: The input bundle with cropped tensors, optional crop
-        coordinate metadata, and a non-invertible trace entry appended.
+        coordinate metadata, and an invertible trace entry appended.
 
     Raises:
         KeyError: If ``source_key`` or a requested crop key is missing and
@@ -113,7 +115,7 @@ class CropForeground(KeyedTransform):
         end_coord_key: Optional[str] = "foreground_end_coord",
         allow_missing_keys: bool = False,
     ):
-        super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.source_key = source_key
         self.select_fn = select_fn
         self.channel_indices = channel_indices
@@ -154,33 +156,59 @@ class CropForeground(KeyedTransform):
         )
 
         crop_size = max_coords - min_coords
+        original_shapes = {}
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
             allow_missing_keys=self.allow_missing_keys,
         )
-        present_keys = crop.apply_to_present_keys(
-            bundle,
-            lambda tensor, _: crop.crop_tensor(tensor, min_coords, crop_size),
-        )
+
+        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            original_shapes[key] = get_spatial_shape(tensor)
+            return crop.crop_tensor(tensor, min_coords, crop_size)
+
+        present_keys = crop.apply_to_present_keys(bundle, apply_crop)
 
         if self.start_coord_key is not None:
             bundle.meta[self.start_coord_key] = min_coords
         if self.end_coord_key is not None:
             bundle.meta[self.end_coord_key] = max_coords
 
-        bundle.push_transform(
-            self.build_trace_entry(
-                params={
-                    "keys": list(present_keys),
-                    "crop_start": min_coords,
-                    "crop_size": crop_size,
-                    "source_key": self.source_key,
-                },
-                applied=True,
-                random=False,
-                invertible=False,
-            )
+        self.record_transform(
+            bundle,
+            {
+                "keys": list(present_keys),
+                "crop_start": min_coords,
+                "crop_size": crop_size,
+                "original_shapes": original_shapes,
+                "source_key": self.source_key,
+            },
+        )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_crop_foreground_trace(bundle)
+        if trace is None:
+            return bundle
+
+        crop_start = trace["params"].get("crop_start")
+        original_shapes = trace["params"].get("original_shapes", {})
+        crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=1,
+            allow_missing_keys=self.allow_missing_keys,
+        )
+
+        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            original_shape = original_shapes.get(key)
+            if original_shape is None:
+                return tensor
+            return crop.pad_to_original_shape(tensor, crop_start, original_shape)
+
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 
@@ -253,3 +281,6 @@ class CropForeground(KeyedTransform):
         padding = tf.where(remainder != 0, k_divisible - remainder, 0)
         max_coords = tf.minimum(max_coords + padding, tf.cast(image_shape, tf.int32))
         return min_coords, max_coords
+
+    def _get_last_crop_foreground_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
 
@@ -72,6 +72,10 @@ class RandomRotate90(RandomTransform):
         self.spatial_axis = spatial_axis
         self.allow_missing_keys = allow_missing_keys
 
+    @property
+    def invertible(self) -> bool:
+        return True
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_rotate = self.sample_should_apply()
         k = tf.random.uniform([], minval=1, maxval=self.max_k + 1, dtype=tf.int32)
@@ -101,3 +105,37 @@ class RandomRotate90(RandomTransform):
             kernel="Rotate90",
         )
         return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_random_rotate90_trace(bundle)
+        if trace is None:
+            return bundle
+
+        applied = trace.get("applied", False)
+        k = trace["params"].get("k")
+        rotate = Rotate90(
+            keys=self.keys,
+            k=1,
+            spatial_axis=self.spatial_axis,
+            allow_missing_keys=self.allow_missing_keys,
+        )
+
+        def apply_inverse_rotate(tensor: tf.Tensor, _: str) -> tf.Tensor:
+            inverse_k = tf.math.floormod(-tf.cast(k, tf.int32), 4)
+            if tf.is_tensor(applied):
+                return tf.cond(
+                    tf.cast(applied, tf.bool),
+                    lambda tensor=tensor: rotate.rotate_tensor(tensor, k=inverse_k),
+                    lambda tensor=tensor: tensor,
+                )
+            if _trace_applied_to_bool(applied):
+                return rotate.rotate_tensor(tensor, k=inverse_k)
+            return tensor
+
+        rotate.apply_to_present_keys(
+            bundle, apply_inverse_rotate, keys=trace["params"].get("keys", [])
+        )
+        return bundle
+
+    def _get_last_random_rotate90_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)
