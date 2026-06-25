@@ -132,7 +132,9 @@ class RandomRotate90(RandomTransform):
                 return rotate.rotate_tensor(tensor, k=inverse_k)
             return tensor
 
-        rotate.apply_to_present_keys(bundle, apply_inverse_rotate, keys=trace["params"].get("keys", []))
+        rotate.apply_to_present_keys(
+            bundle, apply_inverse_rotate, keys=trace["params"].get("keys", [])
+        )
         return bundle
 
     def _get_last_random_rotate90_trace(self, bundle: TensorBundle):

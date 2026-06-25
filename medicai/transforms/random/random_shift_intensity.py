@@ -129,7 +129,6 @@ class RandomShiftIntensity(RandomTransform):
 
         applied = trace.get("applied", False)
         sampled_offsets = trace["params"].get("sampled_offsets", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         shift = ShiftIntensity(
             keys=self.keys, offset=0.0, allow_missing_keys=self.allow_missing_keys
         )
@@ -150,7 +149,11 @@ class RandomShiftIntensity(RandomTransform):
                 return shift.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype))
             return tensor
 
-        shift.apply_to_present_keys(bundle, apply_inverse_shift, keys=present_keys)
+        shift.apply_to_present_keys(
+            bundle,
+            apply_inverse_shift,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def _get_last_random_shift_trace(self, bundle: TensorBundle):

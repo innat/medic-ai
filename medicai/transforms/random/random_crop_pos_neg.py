@@ -152,7 +152,11 @@ class RandomCropByPosNegLabel(RandomTransform):
         ends = tf.minimum(starts + crop_size, spatial_shape)
         starts = tf.maximum(ends - crop_size, 0)
 
-        crop = SpatialCrop(keys=self.keys, crop_size=self.target_shape, allow_missing_keys=False)
+        crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=self.target_shape,
+            allow_missing_keys=self.allow_missing_keys,
+        )
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
@@ -188,8 +192,11 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
-        crop = SpatialCrop(keys=self.keys, crop_size=self.target_shape, allow_missing_keys=False)
+        crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=self.target_shape,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
@@ -197,7 +204,11 @@ class RandomCropByPosNegLabel(RandomTransform):
                 return tensor
             return crop.pad_to_original_shape(tensor, crop_start, original_shape)
 
-        crop.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
+        crop.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def sample_center(

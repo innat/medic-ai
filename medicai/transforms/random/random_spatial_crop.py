@@ -175,7 +175,6 @@ class RandomSpatialCrop(RandomTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=self.crop_size,
@@ -188,7 +187,11 @@ class RandomSpatialCrop(RandomTransform):
                 return tensor
             return crop.pad_to_original_shape(tensor, crop_start, original_shape)
 
-        crop.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
+        crop.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def _get_crop_size(self, spatial_shape: tf.Tensor, spatial_rank: int) -> tf.Tensor:

@@ -422,6 +422,24 @@ def test_scale_intensity_range_inverse_is_noop_when_clipped():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    label = as_tensor(np.array([[[1.0], [2.0], [3.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image", "label"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=-1.0,
+        output_max=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_rejects_partial_target_range():
     with pytest.raises(ValueError, match="must be provided together"):
         ScaleIntensityRange(keys=["image"], input_min=0.0, input_max=1.0, output_min=0.0)
@@ -569,6 +587,18 @@ def test_shift_intensity_inverse_without_trace_is_noop():
 
 
 @pytest.mark.unit
+def test_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = ShiftIntensity(keys=["image", "label"], offset=1.0)
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+
+@pytest.mark.unit
 def test_random_shift_intensity_preserves_shape_and_range():
     image = as_tensor(np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32))
     out = RandomShiftIntensity(keys=["image"], offset=(-0.2, 0.8), prob=1.0)(
@@ -644,6 +674,18 @@ def test_random_shift_intensity_inverse_without_trace_is_noop():
 
 
 @pytest.mark.unit
+def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    transform = RandomShiftIntensity(keys=["image", "label"], offset=0.5, prob=1.0)
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+
+    with pytest.raises(KeyError, match="label"):
+        transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+
+@pytest.mark.unit
 def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
     image = as_tensor(np.ones((4, 4, 2), dtype=np.float32))
     out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)(
@@ -658,9 +700,7 @@ def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(
-        TensorBundle({"image": image})
-    )
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
@@ -772,7 +812,9 @@ def test_spatial_crop_inverse_without_trace_is_noop():
 
 @pytest.mark.unit
 def test_spatial_crop_validates_exclusive_start_and_center():
-    with pytest.raises(ValueError, match="Only one of `crop_start` or `crop_center` may be provided"):
+    with pytest.raises(
+        ValueError, match="Only one of `crop_start` or `crop_center` may be provided"
+    ):
         SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), crop_center=(1, 1))
 
 

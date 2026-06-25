@@ -193,6 +193,7 @@ class RandomRotate(RandomTransform):
 
         applied = trace.get("applied", False)
         angle = trace["params"].get("angle")
+
         def apply_inverse_rotate(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if tf.is_tensor(applied):
                 return tf.cond(

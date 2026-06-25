@@ -239,8 +239,11 @@ class Spacing(KeyedTransform, InvertibleTransform):
             target_shape = original_shapes[key]
             return self._resize_to_shape(tensor, target_shape, self.interpolation[key])
 
-        present_keys = [key for key in params.get("keys", []) if key in bundle.data]
-        self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_spacing,
+            keys=params.get("keys", []),
+        )
         bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
         if original_affine is not None:
             bundle.meta["affine"] = tf.cast(original_affine, tf.float32)

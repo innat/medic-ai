@@ -154,9 +154,10 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         if trace is None:
             return bundle
 
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         self.apply_to_present_keys(
-            bundle, lambda tensor, _: self.inverse_scale_tensor(tensor), keys=present_keys
+            bundle,
+            lambda tensor, _: self.inverse_scale_tensor(tensor),
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 

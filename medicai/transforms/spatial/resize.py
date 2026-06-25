@@ -182,7 +182,6 @@ class Resize(KeyedTransform, InvertibleTransform):
             return bundle
 
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
 
         def apply_inverse_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
             target_shape = original_shapes.get(key)
@@ -190,7 +189,11 @@ class Resize(KeyedTransform, InvertibleTransform):
                 return tensor
             return self.resize_tensor(tensor, key, target_shape=target_shape)
 
-        self.apply_to_present_keys(bundle, apply_inverse_resize, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_resize,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def resize_tensor(

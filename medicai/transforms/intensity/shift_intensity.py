@@ -85,11 +85,10 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             return bundle
 
         offset = trace["params"].get("offset", self.offset)
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         self.apply_to_present_keys(
             bundle,
             lambda tensor, _: self.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype)),
-            keys=present_keys,
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 

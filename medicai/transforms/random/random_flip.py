@@ -114,6 +114,7 @@ class RandomFlip(RandomTransform):
             return bundle
 
         applied = trace.get("applied", False)
+
         def apply_inverse_flip(tensor: tf.Tensor, _: str) -> tf.Tensor:
             if tf.is_tensor(applied):
                 return tf.cond(
@@ -125,7 +126,9 @@ class RandomFlip(RandomTransform):
                 return self.flip.flip_tensor(tensor)
             return tensor
 
-        self.flip.apply_to_present_keys(bundle, apply_inverse_flip, keys=trace["params"].get("keys", []))
+        self.flip.apply_to_present_keys(
+            bundle, apply_inverse_flip, keys=trace["params"].get("keys", [])
+        )
         return bundle
 
     def _get_last_random_flip_trace(self, bundle: TensorBundle):

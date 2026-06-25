@@ -193,7 +193,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
@@ -206,7 +205,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 return tensor
             return crop.pad_to_original_shape(tensor, crop_start, original_shape)
 
-        self.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
     def find_bounding_box(
