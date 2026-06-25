@@ -4,7 +4,7 @@ from typing import Mapping, Sequence
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import ensure_spatial_tuple, get_tensor_rank
 
@@ -275,10 +275,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         )
 
     def _get_last_resize_trace(self, bundle: TensorBundle) -> dict | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)
 
 
 # This could be temporary: issue: https://github.com/keras-team/keras/issues/21785

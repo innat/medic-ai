@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _trace_applied_to_bool
+from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
 
@@ -137,7 +137,4 @@ class RandomRotate90(RandomTransform):
         return bundle
 
     def _get_last_random_rotate90_trace(self, bundle: TensorBundle):
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _trace_applied_to_bool
+from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank
 
@@ -267,7 +267,4 @@ class RandomRotate(RandomTransform):
         return tf.cond(width <= height, width_limited, height_limited)
 
     def _get_last_random_rotate_trace(self, bundle: TensorBundle):
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -63,6 +63,39 @@ def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
     return bool(applied)
 
 
+def _pop_last_transform_trace(
+    bundle: TensorBundle,
+    transform_name: str,
+    predicate=None,
+) -> dict[str, Any] | None:
+    """Pop the most recent matching transform trace from a bundle.
+
+    This is important for inverse execution when a pipeline contains multiple
+    instances of the same transform class. By consuming the most recent trace
+    entry during inversion, each transform instance restores against the trace
+    it produced most recently instead of repeatedly reusing the same entry.
+
+    Args:
+        bundle: Bundle containing applied transform traces.
+        transform_name: Trace ``name`` field to match.
+        predicate: Optional callable receiving the trace entry and returning
+            ``True`` only for acceptable matches.
+
+    Returns:
+        Optional[dict[str, Any]]: The popped trace entry, or ``None`` when no
+        matching trace exists.
+    """
+    applied = bundle.get_applied_transforms()
+    for index in range(len(applied) - 1, -1, -1):
+        entry = applied[index]
+        if entry.get("name") != transform_name:
+            continue
+        if predicate is not None and not predicate(entry):
+            continue
+        return applied.pop(index)
+    return None
+
+
 class Transform:
     """Base class for Medic-AI transforms.
 

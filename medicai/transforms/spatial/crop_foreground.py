@@ -2,7 +2,7 @@ from typing import Callable, Optional, Sequence, Union
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import ensure_spatial_tuple, get_spatial_rank, get_spatial_shape
 from .spatial_crop import SpatialCrop
@@ -194,12 +194,17 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
         present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+        crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=1,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
-            return self.pad_to_original_shape(tensor, crop_start, original_shape)
+            return crop.pad_to_original_shape(tensor, crop_start, original_shape)
 
         self.apply_to_present_keys(bundle, apply_inverse_crop, keys=present_keys)
         return bundle
@@ -274,29 +279,5 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         max_coords = tf.minimum(max_coords + padding, tf.cast(image_shape, tf.int32))
         return min_coords, max_coords
 
-    def pad_to_original_shape(
-        self,
-        tensor: tf.Tensor,
-        crop_start: tf.Tensor,
-        original_shape: tf.Tensor,
-    ) -> tf.Tensor:
-        """Pad a cropped tensor back into its original spatial canvas."""
-        crop_start = tf.cast(crop_start, tf.int32)
-        original_shape = tf.cast(original_shape, tf.int32)
-        current_shape = get_spatial_shape(tensor)
-        pad_before = crop_start
-        pad_after = original_shape - crop_start - current_shape
-        paddings = tf.concat(
-            [
-                tf.stack([pad_before, pad_after], axis=1),
-                tf.constant([[0, 0]], dtype=tf.int32),
-            ],
-            axis=0,
-        )
-        return tf.pad(tensor, paddings)
-
     def _get_last_crop_foreground_trace(self, bundle: TensorBundle):
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

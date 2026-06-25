@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 
 import tensorflow as tf
 
-from ..base import InvertibleTransform, KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 
 
@@ -189,7 +189,4 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         return tf.cast(tensor, dtype=self.dtype)
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)

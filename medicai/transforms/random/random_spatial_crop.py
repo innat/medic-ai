@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank, get_spatial_shape
@@ -294,7 +294,4 @@ class RandomSpatialCrop(RandomTransform):
         return center
 
     def _get_last_random_spatial_crop_trace(self, bundle: TensorBundle):
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") == type(self).__name__:
-                return entry
-        return None
+        return _pop_last_transform_trace(bundle, type(self).__name__)
