@@ -5,7 +5,15 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank
+from ..utils import (
+    SpatialResample,
+    compute_destination_affine,
+    compute_output_shape,
+    get_spatial_rank,
+    is_axis_aligned_affine,
+    round_half_up,
+    spacing_from_affine,
+)
 from .resize import resize_volumes
 
 
@@ -165,6 +173,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     f"Invalid interpolation '{resize_interpolation}' for 3D input. "
                     f"Allowed: {sorted(valid_modes)} (key='{key}')."
                 )
+        self._spatial_resample = SpatialResample()
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         self._validate_bundle_is_3d(bundle)
@@ -179,6 +188,13 @@ class Spacing(KeyedTransform, InvertibleTransform):
             )
 
         original_shapes = {}
+        destination_affine = None
+        target_pixdim = tf.constant(self.pixdim, dtype=tf.float32)
+        use_fast_resize_path = False
+        if affine is not None:
+            affine = tf.cast(affine, tf.float32)
+            destination_affine = compute_destination_affine(affine, target_pixdim)
+            use_fast_resize_path = bool(tf.get_static_value(is_axis_aligned_affine(affine)))
 
         def apply_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
             spatial_rank = get_spatial_rank(tensor)
@@ -189,25 +205,35 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     f"for shape {tensor.shape}."
                 )
             original_shapes[key] = tf.shape(tensor)[:3]
+            if destination_affine is not None and not use_fast_resize_path:
+                output_shape = compute_output_shape(
+                    input_shape=original_shapes[key],
+                    src_affine=affine,
+                    dst_affine=destination_affine,
+                    align_corners=False,
+                )
+                return self._spatial_resample(
+                    tensor=tensor,
+                    src_affine=affine,
+                    dst_affine=destination_affine,
+                    output_shape=output_shape,
+                    interpolation=self.interpolation[key],
+                    padding_mode="constant",
+                    fill_value=0.0,
+                )
             return self.spacing_resample(
                 tensor,
                 original_spacing=original_spacing,
-                desired_spacing=tf.constant(self.pixdim, dtype=tf.float32),
+                desired_spacing=target_pixdim,
                 interpolation=self.interpolation[key],
             )
 
         present_keys = self.apply_to_present_keys(bundle, apply_spacing)
-        bundle.meta["pixdim"] = tf.constant(self.pixdim, dtype=tf.float32)
+        bundle.meta["pixdim"] = target_pixdim
         original_affine = None
         if affine is not None:
             original_affine = tf.identity(tf.cast(affine, tf.float32))
-            scale_factors = tf.constant(self.pixdim, dtype=tf.float32) / tf.cast(
-                original_spacing, tf.float32
-            )
-            scaling_matrix = tf.linalg.diag(
-                tf.concat([scale_factors, tf.constant([1.0], dtype=tf.float32)], axis=0)
-            )
-            bundle.meta["affine"] = tf.linalg.matmul(original_affine, scaling_matrix)
+            bundle.meta["affine"] = tf.cast(destination_affine, tf.float32)
         self.record_transform(
             bundle,
             {
@@ -215,8 +241,12 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 "pixdim": self.pixdim,
                 "original_spacing": original_spacing,
                 "original_affine": original_affine,
+                "output_affine": (
+                    tf.identity(destination_affine) if destination_affine is not None else None
+                ),
                 "original_shapes": original_shapes,
                 "interpolation": {key: self.interpolation[key] for key in present_keys},
+                "used_fast_resize_path": use_fast_resize_path,
             },
         )
         return bundle
@@ -229,15 +259,59 @@ class Spacing(KeyedTransform, InvertibleTransform):
         params = trace["params"]
         original_spacing = params.get("original_spacing")
         original_affine = params.get("original_affine")
+        output_affine = params.get("output_affine")
         original_shapes = params.get("original_shapes", {})
+        interpolation = params.get("interpolation", self.interpolation)
+        used_fast_resize_path = params.get("used_fast_resize_path", False)
         if original_spacing is None:
             return bundle
+
+        if original_affine is not None and output_affine is not None and not used_fast_resize_path:
+            tensors_by_shape: dict[tuple[int, ...], dict[str, tf.Tensor]] = {}
+            interpolation_by_shape: dict[tuple[int, ...], dict[str, str]] = {}
+            can_group = True
+
+            for key in params.get("keys", []):
+                if key not in bundle.data:
+                    if self.allow_missing_keys:
+                        continue
+                    raise KeyError(f"Key '{key}' not found in input data.")
+                if key not in original_shapes:
+                    continue
+                target_shape = original_shapes[key]
+                static_shape = tf.get_static_value(target_shape)
+                if static_shape is None:
+                    can_group = False
+                    break
+                shape_key = tuple(int(v) for v in static_shape)
+                tensors_by_shape.setdefault(shape_key, {})[key] = bundle.data[key]
+                interpolation_by_shape.setdefault(shape_key, {})[key] = interpolation[key]
+
+            if can_group:
+                for shape_key, tensors in tensors_by_shape.items():
+                    output_shape = tf.constant(shape_key, dtype=tf.int32)
+                    restored = self._spatial_resample.resample_many(
+                        tensors=tensors,
+                        src_affine=output_affine,
+                        dst_affine=original_affine,
+                        output_shape=output_shape,
+                        interpolation=interpolation_by_shape[shape_key],
+                        padding_mode="constant",
+                        fill_value=0.0,
+                    )
+                    for key, value in restored.items():
+                        bundle.data[key] = value
+
+                bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
+                if original_affine is not None:
+                    bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
+                return bundle
 
         def apply_inverse_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if key not in original_shapes:
                 return tensor
             target_shape = original_shapes[key]
-            return self._resize_to_shape(tensor, target_shape, self.interpolation[key])
+            return self._resize_to_shape(tensor, target_shape, interpolation[key])
 
         self.apply_to_present_keys(
             bundle,
@@ -265,8 +339,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
     def get_spacing_from_affine(self, affine: tf.Tensor) -> tf.Tensor:
         """Calculate voxel spacing from a 4x4 affine matrix."""
-        affine = tf.cast(affine, tf.float32)
-        return tf.stack([tf.norm(affine[:3, i]) for i in range(3)], axis=0)
+        return spacing_from_affine(affine)
 
     def spacing_resample(
         self,
@@ -278,7 +351,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         """Resample one 3D tensor to the desired physical spacing."""
         scale = tf.cast(original_spacing, tf.float32) / tf.cast(desired_spacing, tf.float32)
         original_shape = tf.cast(tf.shape(tensor)[:3], tf.float32)
-        new_shape = tf.cast(tf.round(original_shape * scale), tf.int32)
+        new_shape = tf.cast(round_half_up(original_shape * scale), tf.int32)
         return self._resize_to_shape(tensor, new_shape, interpolation)
 
     def _resize_to_shape(
