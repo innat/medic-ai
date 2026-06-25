@@ -87,7 +87,8 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     If clipping is enabled, or the mapping collapses values to a constant,
     exact inversion is not possible and :meth:`inverse` behaves as a no-op.
     When inversion is available, it replays only the keys recorded in the
-    transform trace and still honors ``allow_missing_keys``.
+    transform trace, restores using the recorded range parameters, and still
+    honors ``allow_missing_keys``.
 
     Returns:
         ``TensorBundle``: The input bundle with selected tensors scaled in
@@ -156,10 +157,22 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         if trace is None:
             return bundle
 
+        params = trace["params"]
+        input_min = params.get("input_min", self.input_min)
+        input_max = params.get("input_max", self.input_max)
+        output_min = params.get("output_min", self.output_min)
+        output_max = params.get("output_max", self.output_max)
+
         self.apply_to_present_keys(
             bundle,
-            lambda tensor, _: self.inverse_scale_tensor(tensor),
-            keys=trace["params"].get("keys", []),
+            lambda tensor, _: self.inverse_scale_tensor(
+                tensor,
+                input_min=input_min,
+                input_max=input_max,
+                output_min=output_min,
+                output_max=output_max,
+            ),
+            keys=params.get("keys", []),
         )
         return bundle
 
@@ -181,14 +194,26 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             tensor = tf.clip_by_value(tensor, self.output_min, self.output_max)
         return tf.cast(tensor, dtype=self.dtype)
 
-    def inverse_scale_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
+    def inverse_scale_tensor(
+        self,
+        tensor: tf.Tensor,
+        input_min: float | None = None,
+        input_max: float | None = None,
+        output_min: float | None = None,
+        output_max: float | None = None,
+    ) -> tf.Tensor:
         """Invert one tensor from target range back to source range."""
         tensor = tf.convert_to_tensor(tensor, dtype=self.dtype)
 
-        if self.output_min is not None and self.output_max is not None:
-            tensor = (tensor - self.output_min) / (self.output_max - self.output_min)
+        in_min = self.input_min if input_min is None else input_min
+        in_max = self.input_max if input_max is None else input_max
+        out_min = self.output_min if output_min is None else output_min
+        out_max = self.output_max if output_max is None else output_max
 
-        tensor = tensor * (self.input_max - self.input_min) + self.input_min
+        if out_min is not None and out_max is not None:
+            tensor = (tensor - out_min) / (out_max - out_min)
+
+        tensor = tensor * (in_max - in_min) + in_min
         return tf.cast(tensor, dtype=self.dtype)
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):

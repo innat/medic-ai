@@ -399,6 +399,33 @@ def test_scale_intensity_range_inverse_restores_normalized_mapping():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_inverse_uses_recorded_trace_parameters():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    transform = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=1.0,
+        output_min=-1.0,
+        output_max=1.0,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+
+    transform.input_min = -10.0
+    transform.input_max = 10.0
+    transform.output_min = 5.0
+    transform.output_max = 15.0
+
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_inverse_is_noop_when_clipped():
     image = as_tensor(np.array([[[-1.0], [0.5], [2.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
