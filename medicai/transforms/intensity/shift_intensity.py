@@ -2,11 +2,11 @@ from typing import Sequence, Union
 
 import tensorflow as tf
 
-from ..base import KeyedTransform
+from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 
 
-class ShiftIntensity(KeyedTransform):
+class ShiftIntensity(KeyedTransform, InvertibleTransform):
     """Deterministically shift tensor intensities by an additive offset.
 
     ``ShiftIntensity`` adds a scalar or broadcastable per-channel offset to
@@ -56,7 +56,7 @@ class ShiftIntensity(KeyedTransform):
 
     Returns:
         ``TensorBundle``: The input bundle with selected tensors shifted in
-        place.
+        place and an invertible trace entry appended.
 
     Raises:
         KeyError: If a requested key is missing and
@@ -69,20 +69,27 @@ class ShiftIntensity(KeyedTransform):
         offset: Union[float, tf.Tensor],
         allow_missing_keys: bool = False,
     ):
-        super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+        KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.offset = offset
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
             bundle, lambda tensor, _: self.shift_tensor(tensor)
         )
-        bundle.push_transform(
-            self.build_trace_entry(
-                params={"keys": list(present_keys), "offset": self.offset},
-                applied=True,
-                random=False,
-                invertible=False,
-            )
+        self.record_transform(bundle, {"keys": list(present_keys), "offset": self.offset})
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_shift_trace(bundle)
+        if trace is None:
+            return bundle
+
+        offset = trace["params"].get("offset", self.offset)
+        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+        self.apply_to_present_keys(
+            bundle,
+            lambda tensor, _: self.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype)),
+            keys=present_keys,
         )
         return bundle
 
@@ -92,3 +99,9 @@ class ShiftIntensity(KeyedTransform):
         """Shift one tensor by a scalar or broadcastable offset."""
         offset_value = tf.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
         return tensor + offset_value
+
+    def _get_last_shift_trace(self, bundle: TensorBundle):
+        for entry in reversed(bundle.get_applied_transforms()):
+            if entry.get("name") == type(self).__name__:
+                return entry
+        return None

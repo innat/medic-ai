@@ -2,7 +2,7 @@ from typing import Sequence, Tuple, Union
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _trace_applied_to_bool
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
 
@@ -73,6 +73,10 @@ class RandomShiftIntensity(RandomTransform):
         self.channel_wise = channel_wise
         self.allow_missing_keys = allow_missing_keys
 
+    @property
+    def invertible(self) -> bool:
+        return True
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         should_shift = self.sample_should_apply()
         shift = ShiftIntensity(
@@ -117,3 +121,40 @@ class RandomShiftIntensity(RandomTransform):
             kernel="ShiftIntensity",
         )
         return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        trace = self._get_last_random_shift_trace(bundle)
+        if trace is None:
+            return bundle
+
+        applied = trace.get("applied", False)
+        sampled_offsets = trace["params"].get("sampled_offsets", {})
+        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+        shift = ShiftIntensity(
+            keys=self.keys, offset=0.0, allow_missing_keys=self.allow_missing_keys
+        )
+
+        def apply_inverse_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            offset = sampled_offsets.get(key)
+            if offset is None:
+                return tensor
+            if tf.is_tensor(applied):
+                return tf.cond(
+                    tf.cast(applied, tf.bool),
+                    lambda tensor=tensor, offset=offset: shift.shift_tensor(
+                        tensor, offset=-tf.cast(offset, tensor.dtype)
+                    ),
+                    lambda tensor=tensor: tensor,
+                )
+            if _trace_applied_to_bool(applied):
+                return shift.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype))
+            return tensor
+
+        shift.apply_to_present_keys(bundle, apply_inverse_shift, keys=present_keys)
+        return bundle
+
+    def _get_last_random_shift_trace(self, bundle: TensorBundle):
+        for entry in reversed(bundle.get_applied_transforms()):
+            if entry.get("name") == type(self).__name__:
+                return entry
+        return None

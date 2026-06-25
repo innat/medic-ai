@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _trace_applied_to_bool
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank
 
@@ -135,6 +135,10 @@ class RandomRotate(RandomTransform):
         self.fill_mode = fill_mode
         self.allow_missing_keys = allow_missing_keys
 
+    @property
+    def invertible(self) -> bool:
+        return self.fill_mode == "constant"
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = []
         for key in self.keys:
@@ -177,6 +181,34 @@ class RandomRotate(RandomTransform):
             applied=should_rotate,
             kernel="rotate_volume",
         )
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        if not self.invertible:
+            return bundle
+
+        trace = self._get_last_random_rotate_trace(bundle)
+        if trace is None:
+            return bundle
+
+        applied = trace.get("applied", False)
+        angle = trace["params"].get("angle")
+        present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
+
+        def apply_inverse_rotate(tensor: tf.Tensor, key: str) -> tf.Tensor:
+            if tf.is_tensor(applied):
+                return tf.cond(
+                    tf.cast(applied, tf.bool),
+                    lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, -angle),
+                    lambda tensor=tensor: tensor,
+                )
+            if _trace_applied_to_bool(applied):
+                return self.rotate_tensor(tensor, key, -angle)
+            return tensor
+
+        for key in present_keys:
+            tensor = bundle.data[key]
+            bundle.data[key] = apply_inverse_rotate(tensor, key)
         return bundle
 
     def rotate_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
@@ -233,3 +265,9 @@ class RandomRotate(RandomTransform):
             return lrr_w, lrr_h
 
         return tf.cond(width <= height, width_limited, height_limited)
+
+    def _get_last_random_rotate_trace(self, bundle: TensorBundle):
+        for entry in reversed(bundle.get_applied_transforms()):
+            if entry.get("name") == type(self).__name__:
+                return entry
+        return None
