@@ -86,6 +86,8 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
 
     If clipping is enabled, or the mapping collapses values to a constant,
     exact inversion is not possible and :meth:`inverse` behaves as a no-op.
+    When inversion is available, it replays only the keys recorded in the
+    transform trace and still honors ``allow_missing_keys``.
 
     Returns:
         ``TensorBundle``: The input bundle with selected tensors scaled in

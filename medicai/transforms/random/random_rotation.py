@@ -66,6 +66,12 @@ class RandomRotate(RandomTransform):
     bilinear interpolation, while the optional second key is treated like a
     label tensor and uses nearest-neighbor interpolation.
 
+    When ``fill_mode="constant"``, the transform exposes an inverse path that
+    rotates by the negated sampled angle using the recorded trace. This is
+    useful for geometric bookkeeping, but for non-zero arbitrary angles it is
+    still a resampling-based, best-effort inverse rather than an exact
+    round-trip reconstruction.
+
     This transform currently supports only 3D channel-last tensors shaped
     ``(D, H, W, C)``.
 

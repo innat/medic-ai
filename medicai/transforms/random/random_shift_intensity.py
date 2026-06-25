@@ -16,7 +16,9 @@ class RandomShiftIntensity(RandomTransform):
 
     The transform expects channel-last tensors such as ``(H, W, C)`` or
     ``(D, H, W, C)``. Offsets may be sampled once per tensor or separately per
-    channel depending on ``channel_wise``.
+    channel depending on ``channel_wise``. During inversion, the transform uses
+    the sampled offsets stored in the transform trace and applies the inverse
+    only to the traced keys.
 
     Args:
         keys: Keys of the tensors to shift.

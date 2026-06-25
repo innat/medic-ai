@@ -16,7 +16,8 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
 
     The transform expects channel-last tensors such as ``(H, W, C)`` or
     ``(D, H, W, C)``. The provided offset must be broadcast-compatible with the
-    selected tensor shape.
+    selected tensor shape. Its inverse subtracts the recorded offset from the
+    same traced keys and still honors ``allow_missing_keys``.
 
     Args:
         keys: Keys of the tensors to shift.
