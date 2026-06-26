@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 from typing import Sequence
 
 import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank
+from ..utils import get_spatial_rank, validate_affine_matrix
 
 
 class Orientation(KeyedTransform, InvertibleTransform):
@@ -47,7 +45,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
             must be a 3D channel-last sample with shape ``(D, H, W, C)``.
         axcodes: Target anatomical orientation code written in standard medical
             imaging convention, such as ``"RAS"``, ``"LPS"``, or ``"LAS"``.
-            The string must contain exactly three characters.
+            The string must contain exactly three characters, use only
+            ``R/L/A/P/S/I``, and specify one code from each anatomical axis
+            family.
         allow_missing_keys: If ``True``, missing keys are skipped. If ``False``,
             missing requested keys raise an error.
 
@@ -109,8 +109,10 @@ class Orientation(KeyedTransform, InvertibleTransform):
         appended to ``bundle.meta["applied_transforms"]``.
 
     Raises:
-        ValueError: If ``axcodes`` is not a 3-character string.
-        ValueError: If ``affine`` metadata is missing.
+        ValueError: If ``axcodes`` is malformed or uses invalid orientation
+            codes.
+        ValueError: If ``affine`` metadata is missing or is not shaped
+            ``(4, 4)``.
         ValueError: If any selected tensor is not 3D spatially.
         KeyError: If none of the requested keys are present and ``allow_missing_keys=False``.
     """
@@ -128,14 +130,14 @@ class Orientation(KeyedTransform, InvertibleTransform):
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         axcodes = axcodes.upper()
-        if len(axcodes) != 3:
-            raise ValueError("axcodes must be a 3-character string.")
+        self._validate_axcodes(axcodes)
         self.axcodes = axcodes
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         affine = bundle.meta.get("affine")
         if affine is None:
             raise ValueError("Affine matrix is required for orientation transformation.")
+        affine = validate_affine_matrix(affine)
 
         sample_key = None
         for key in self.keys:
@@ -190,6 +192,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         affine = bundle.meta.get("affine")
         if affine is None:
             return bundle
+        affine = validate_affine_matrix(affine)
 
         perm_spatial = trace["params"].get("perm_spatial")
         flip_axes = trace["params"].get("flip_axes")
@@ -376,6 +379,25 @@ class Orientation(KeyedTransform, InvertibleTransform):
     def _target_tensor_axcodes(self, axcodes: str) -> str:
         """Map anatomical axis-code order to Medic-AI's depth-first tensor order."""
         return axcodes[::-1]
+
+    def _validate_axcodes(self, axcodes: str) -> None:
+        """Validate orientation codes against anatomical axis families."""
+        if len(axcodes) != 3:
+            raise ValueError("axcodes must be a 3-character string.")
+
+        invalid = [code for code in axcodes if code not in self._AXIS_TO_WORLD]
+        if invalid:
+            raise ValueError(
+                "axcodes must use only anatomical orientation codes from "
+                f"R/L/A/P/S/I. Received '{axcodes}'."
+            )
+
+        world_axes = {self._AXIS_TO_WORLD[code] for code in axcodes}
+        if len(world_axes) != 3:
+            raise ValueError(
+                "axcodes must contain exactly one code from each anatomical axis family. "
+                f"Received '{axcodes}'."
+            )
 
     def _get_last_orientation_trace(self, bundle: TensorBundle) -> dict | None:
         return _pop_last_transform_trace(bundle, type(self).__name__)

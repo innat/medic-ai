@@ -143,6 +143,88 @@ def test_spacing_and_orientation_run_under_tf_function():
 
 
 @pytest.mark.unit
+def test_orientation_forward_and_inverse_run_under_tf_function():
+    orientation = Orientation(keys=["image", "label"], axcodes="RAS")
+
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
+    affine = as_tensor(
+        np.array(
+            [
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    @tf.function
+    def apply_and_inverse(x, y, a):
+        forward = orientation({"image": x, "label": y}, {"affine": a})
+        restored = orientation.inverse(forward)
+        return restored["image"], restored["label"], restored["affine"]
+
+    restored_image, restored_label, restored_affine = apply_and_inverse(image, label, affine)
+
+    assert tuple(ops.shape(restored_image)) == (4, 5, 6, 1)
+    assert tuple(ops.shape(restored_label)) == (4, 5, 6, 1)
+    np.testing.assert_allclose(ops.convert_to_numpy(restored_affine), ops.convert_to_numpy(affine))
+
+
+@pytest.mark.unit
+def test_compose_crop_orientation_spacing_pipeline_runs_forward_and_inverse_under_tf_function():
+    pipeline = Compose(
+        [
+            CropForeground(keys=["image", "label"], source_key="image"),
+            Orientation(keys=["image", "label"], axcodes="RAS"),
+            Spacing(
+                keys=["image", "label"],
+                pixdim=(1.0, 0.75, 1.5),
+                interpolation=("trilinear", "nearest"),
+            ),
+        ]
+    )
+
+    image = np.zeros((6, 8, 10, 1), dtype=np.float32)
+    image[1:5, 2:7, 3:9, 0] = 2.0
+    label = np.zeros((6, 8, 10, 1), dtype=np.float32)
+    label[2:4, 3:6, 4:8, 0] = 1.0
+    affine = np.array(
+        [
+            [0.0, 0.0, 2.0, 0.0],
+            [0.0, 1.5, 0.0, 0.0],
+            [3.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    image = as_tensor(image)
+    label = as_tensor(label)
+    affine = as_tensor(affine)
+
+    @tf.function
+    def apply_and_inverse(x, y, a):
+        forward = pipeline({"image": x, "label": y}, {"affine": a})
+        prediction = tf.cast(forward["label"] > 0.0, forward["label"].dtype)
+        bundle = TensorBundle(
+            {"image": forward["image"], "label": prediction},
+            dict(forward.meta),
+        )
+        bundle.meta["applied_transforms"] = list(forward.get_applied_transforms())
+        restored = pipeline.inverse(bundle)
+        return restored["image"], restored["label"], restored["affine"]
+
+    restored_image, restored_label, restored_affine = apply_and_inverse(image, label, affine)
+
+    assert tuple(ops.shape(restored_image)) == (6, 8, 10, 1)
+    assert tuple(ops.shape(restored_label)) == (6, 8, 10, 1)
+    np.testing.assert_allclose(ops.convert_to_numpy(restored_affine), ops.convert_to_numpy(affine))
+
+
+@pytest.mark.unit
 def test_random_rank_agnostic_transforms_run_under_tf_function():
     random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0)
     random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3)

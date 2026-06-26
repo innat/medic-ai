@@ -25,7 +25,10 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     ``start_coord_key`` and ``end_coord_key`` are provided. It is invertible
     in the placement sense: :meth:`inverse` pads the cropped tensor back into
     its original spatial canvas using the recorded crop coordinates and
-    original spatial shape.
+    original spatial shape. This is meant for postprocessing tasks such as
+    placing a cropped prediction back into the original image extent. It does
+    not reconstruct the discarded background content outside the crop; those
+    regions are zero-padded on inversion.
 
     Args:
         keys: Keys of tensors to crop once the foreground bounding box has been
