@@ -161,7 +161,7 @@ def affine_apply(affine: tf.Tensor, points: tf.Tensor) -> tf.Tensor:
     """Apply a 4x4 affine matrix to points shaped ``(..., 3)``."""
     affine = tf.cast(affine, tf.float32)
     points = tf.cast(points, tf.float32)
-    ones = tf.ones(tf.concat([tf.shape(points)[:-1], [1]], axis=0), dtype=tf.float32)
+    ones = tf.ones_like(points[..., :1])
     homogeneous = tf.concat([points, ones], axis=-1)
     transformed = tf.linalg.matvec(affine, homogeneous)
     return transformed[..., :3]
@@ -196,15 +196,45 @@ def compute_output_shape(
 ) -> tf.Tensor:
     """Compute an output shape from source and destination geometry."""
     input_shape = tf.cast(input_shape, tf.float32)
-    src_spacing = spacing_from_affine(src_affine)
-    dst_spacing = spacing_from_affine(dst_affine)
-    scale = src_spacing / dst_spacing
+    src_affine = tf.cast(src_affine, tf.float32)
+    dst_affine = tf.cast(dst_affine, tf.float32)
 
     if align_corners:
-        extent = tf.maximum(input_shape - 1.0, 0.0)
-        output_shape = round_half_up(extent * scale) + 1.0
+        max_corner = tf.maximum(input_shape - 1.0, 0.0)
+        src_corners = tf.stack(
+            tf.meshgrid(
+                tf.stack([0.0, max_corner[0]]),
+                tf.stack([0.0, max_corner[1]]),
+                tf.stack([0.0, max_corner[2]]),
+                indexing="ij",
+            ),
+            axis=-1,
+        )
+        src_corners = tf.reshape(src_corners, [-1, 3])
+        dst_corners = affine_apply(
+            tf.linalg.matmul(invert_affine(dst_affine), src_affine), src_corners
+        )
+        min_corner = tf.reduce_min(dst_corners, axis=0)
+        max_corner = tf.reduce_max(dst_corners, axis=0)
+        output_shape = round_half_up(tf.maximum(max_corner - min_corner, 0.0)) + 1.0
     else:
-        output_shape = round_half_up(input_shape * scale)
+        max_corner = tf.maximum(input_shape, 0.0)
+        src_corners = tf.stack(
+            tf.meshgrid(
+                tf.stack([0.0, max_corner[0]]),
+                tf.stack([0.0, max_corner[1]]),
+                tf.stack([0.0, max_corner[2]]),
+                indexing="ij",
+            ),
+            axis=-1,
+        )
+        src_corners = tf.reshape(src_corners, [-1, 3])
+        dst_corners = affine_apply(
+            tf.linalg.matmul(invert_affine(dst_affine), src_affine), src_corners
+        )
+        min_corner = tf.reduce_min(dst_corners, axis=0)
+        max_corner = tf.reduce_max(dst_corners, axis=0)
+        output_shape = round_half_up(tf.maximum(max_corner - min_corner, 0.0))
 
     return tf.maximum(tf.cast(output_shape, tf.int32), 1)
 
@@ -445,18 +475,15 @@ class SpatialResample:
         dst_affine = tf.cast(dst_affine, tf.float32)
         output_shape = tf.cast(output_shape, tf.int32)
         index_mapping_affine = tf.linalg.matmul(invert_affine(src_affine), dst_affine)
-
-        outputs = {}
-        for key, tensor in tensors.items():
-            outputs[key] = self._resample_from_mapping(
-                tensor=tf.convert_to_tensor(tensor),
-                index_mapping_affine=index_mapping_affine,
-                output_shape=output_shape,
-                interpolation=interpolation[key],
-                padding_mode=padding_mode,
-                fill_value=fill_value,
-            )
-        return outputs
+        tensors = {key: tf.convert_to_tensor(tensor) for key, tensor in tensors.items()}
+        return self._resample_many_from_mapping(
+            tensors=tensors,
+            index_mapping_affine=index_mapping_affine,
+            output_shape=output_shape,
+            interpolation=interpolation,
+            padding_mode=padding_mode,
+            fill_value=fill_value,
+        )
 
     def _resample_from_mapping(
         self,
@@ -499,3 +526,62 @@ class SpatialResample:
         sampled = sampled_chunks.concat()
         channels = tf.shape(tensor)[-1]
         return tf.reshape(sampled, tf.concat([output_shape, [channels]], axis=0))
+
+    def _resample_many_from_mapping(
+        self,
+        tensors: Mapping[str, tf.Tensor],
+        index_mapping_affine: tf.Tensor,
+        output_shape: tf.Tensor,
+        interpolation: Mapping[str, str],
+        padding_mode: str = "constant",
+        fill_value: float = 0.0,
+    ) -> dict[str, tf.Tensor]:
+        """Resample multiple tensors while sharing per-chunk coordinates."""
+        if not tensors:
+            return {}
+
+        tensor_items = list(tensors.items())
+        index_mapping_affine = tf.cast(index_mapping_affine, tf.float32)
+        num_points = tf.reduce_prod(output_shape)
+        chunk_size = tf.constant(self.max_points_per_chunk, dtype=tf.int32)
+        num_chunks = tf.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), tf.int32)
+
+        chunk_arrays = {
+            key: tf.TensorArray(dtype=tensor.dtype, size=num_chunks, infer_shape=False)
+            for key, tensor in tensor_items
+        }
+
+        def loop_body(
+            index: tf.Tensor,
+            *arrays: tf.TensorArray,
+        ):
+            start = index * chunk_size
+            size = tf.minimum(chunk_size, num_points - start)
+            grid_chunk = make_output_grid_chunk(output_shape, start, size)
+            src_coords = affine_apply(index_mapping_affine, grid_chunk)
+
+            updated_arrays = []
+            for array, (key, tensor) in zip(arrays, tensor_items):
+                sampled_chunk = sample_volume(
+                    tensor,
+                    src_coords,
+                    interpolation=interpolation[key],
+                    padding_mode=padding_mode,
+                    fill_value=fill_value,
+                )
+                updated_arrays.append(array.write(index, sampled_chunk))
+            return (index + 1, *updated_arrays)
+
+        _, *chunk_arrays_out = tf.while_loop(
+            lambda index, *_: index < num_chunks,
+            loop_body,
+            (tf.constant(0, dtype=tf.int32), *chunk_arrays.values()),
+            parallel_iterations=1,
+        )
+
+        outputs = {}
+        for array, (key, tensor) in zip(chunk_arrays_out, tensor_items):
+            sampled = array.concat()
+            channels = tf.shape(tensor)[-1]
+            outputs[key] = tf.reshape(sampled, tf.concat([output_shape, [channels]], axis=0))
+        return outputs

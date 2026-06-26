@@ -148,6 +148,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
             raise ValueError(
                 f"`pixdim` must be 3D for {type(self).__name__}, got {len(self.pixdim)}D."
             )
+        if any(p <= 0 for p in self.pixdim):
+            raise ValueError(
+                f"All elements of `pixdim` must be strictly positive, got {self.pixdim}."
+            )
 
         valid_modes = {"trilinear", "nearest"}
         if isinstance(interpolation, str):
@@ -307,6 +311,28 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
                 return bundle
 
+            for key in params.get("keys", []):
+                if key not in bundle.data:
+                    if self.allow_missing_keys:
+                        continue
+                    raise KeyError(f"Key '{key}' not found in input data.")
+                if key not in original_shapes:
+                    continue
+                bundle.data[key] = self._spatial_resample(
+                    tensor=bundle.data[key],
+                    src_affine=output_affine,
+                    dst_affine=original_affine,
+                    output_shape=original_shapes[key],
+                    interpolation=interpolation[key],
+                    padding_mode="constant",
+                    fill_value=0.0,
+                )
+
+            bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
+            if original_affine is not None:
+                bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
+            return bundle
+
         def apply_inverse_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if key not in original_shapes:
                 return tensor
@@ -351,7 +377,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
         """Resample one 3D tensor to the desired physical spacing."""
         scale = tf.cast(original_spacing, tf.float32) / tf.cast(desired_spacing, tf.float32)
         original_shape = tf.cast(tf.shape(tensor)[:3], tf.float32)
-        new_shape = tf.cast(round_half_up(original_shape * scale), tf.int32)
+        new_shape = tf.maximum(
+            tf.cast(round_half_up(original_shape * scale), tf.int32),
+            1,
+        )
         return self._resize_to_shape(tensor, new_shape, interpolation)
 
     def _resize_to_shape(

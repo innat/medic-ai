@@ -138,6 +138,31 @@ def test_compute_output_shape_uses_half_up_rounding_for_half_voxels():
 
 
 @pytest.mark.unit
+def test_compute_output_shape_respects_basis_change_for_diagonal_destination():
+    src_affine = as_tensor(
+        np.array(
+            [
+                [0.0, 0.0, -4.0, 10.0],
+                [0.0, 3.0, 0.0, 20.0],
+                [2.0, 0.0, 0.0, 30.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    dst_affine = as_tensor(np.diag([1.0, 1.5, 2.0, 1.0]).astype(np.float32))
+    input_shape = as_tensor([4, 5, 6], dtype="int32")
+
+    output_shape = compute_output_shape(
+        input_shape=input_shape,
+        src_affine=src_affine,
+        dst_affine=dst_affine,
+    )
+
+    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([24, 10, 4]))
+
+
+@pytest.mark.unit
 def test_compute_output_shape_align_corners_uses_shape_minus_one_extent():
     src_affine = as_tensor(np.diag([2.0, 2.0, 2.0, 1.0]).astype(np.float32))
     dst_affine = as_tensor(np.diag([1.0, 1.0, 1.0, 1.0]).astype(np.float32))

@@ -154,6 +154,9 @@ def test_spacing_validates_pixdim_and_mode():
     with pytest.raises(ValueError, match="`pixdim` must be 3D"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0))
 
+    with pytest.raises(ValueError, match="strictly positive"):
+        Spacing(keys=["image"], pixdim=(1.0, 0.0, 1.0))
+
     with pytest.raises(ValueError, match="Invalid interpolation 'bilinear' for 3D input"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), interpolation="bilinear")
 
