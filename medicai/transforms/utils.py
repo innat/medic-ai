@@ -3,6 +3,14 @@ from typing import Mapping, Sequence
 import tensorflow as tf
 
 
+def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
+    """Validate and normalize an affine matrix to float32 4x4 form."""
+    affine = tf.cast(affine, tf.float32)
+    if affine.shape.rank != 2 or affine.shape[0] != 4 or affine.shape[1] != 4:
+        raise ValueError(f"Expected a 4x4 affine matrix, got shape {affine.shape}.")
+    return affine
+
+
 def get_tensor_rank(tensor: tf.Tensor) -> int:
     """Return the static rank of a channel-last sample tensor.
 
@@ -100,14 +108,14 @@ def normalize_spatial_axes(
 
 def spacing_from_affine(affine: tf.Tensor) -> tf.Tensor:
     """Extract voxel spacing magnitudes from a 4x4 affine matrix."""
-    affine = tf.cast(affine, tf.float32)
+    affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
     return tf.norm(linear, axis=0)
 
 
 def direction_from_affine(affine: tf.Tensor) -> tf.Tensor:
     """Extract normalized direction columns from a 4x4 affine matrix."""
-    affine = tf.cast(affine, tf.float32)
+    affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
     spacing = spacing_from_affine(affine)
     safe_spacing = tf.where(spacing > 0.0, spacing, tf.ones_like(spacing))
@@ -131,13 +139,13 @@ def is_axis_aligned_affine(
 
 def origin_from_affine(affine: tf.Tensor) -> tf.Tensor:
     """Extract the world-space origin from a 4x4 affine matrix."""
-    affine = tf.cast(affine, tf.float32)
+    affine = validate_affine_matrix(affine)
     return affine[:3, 3]
 
 
 def invert_affine(affine: tf.Tensor) -> tf.Tensor:
     """Invert a 4x4 affine matrix."""
-    affine = tf.cast(affine, tf.float32)
+    affine = validate_affine_matrix(affine)
     return tf.linalg.inv(affine)
 
 
@@ -159,7 +167,7 @@ def build_affine(
 
 def affine_apply(affine: tf.Tensor, points: tf.Tensor) -> tf.Tensor:
     """Apply a 4x4 affine matrix to points shaped ``(..., 3)``."""
-    affine = tf.cast(affine, tf.float32)
+    affine = validate_affine_matrix(affine)
     points = tf.cast(points, tf.float32)
     ones = tf.ones_like(points[..., :1])
     homogeneous = tf.concat([points, ones], axis=-1)
@@ -307,8 +315,7 @@ def _gather_with_fill(
 ) -> tf.Tensor:
     safe_indices = tf.where(valid[:, tf.newaxis], indices, tf.zeros_like(indices))
     gathered = tf.gather_nd(volume, safe_indices)
-    fill = tf.fill(tf.shape(gathered), tf.cast(fill_value, output_dtype))
-    return tf.where(valid[:, tf.newaxis], gathered, fill)
+    return tf.where(valid[:, tf.newaxis], gathered, tf.cast(fill_value, output_dtype))
 
 
 def sample_nearest(
@@ -365,19 +372,13 @@ def sample_trilinear(
     one = tf.cast(1.0, output_dtype)
     shape = tf.shape(volume)[:3]
 
-    def gather(d: tf.Tensor, h: tf.Tensor, w: tf.Tensor) -> tf.Tensor:
-        indices = tf.stack([d, h, w], axis=1)
-        valid = tf.reduce_all((indices >= 0) & (indices < shape), axis=1)
-        return _gather_with_fill(volume, indices, valid, fill_value, output_dtype)
-
-    c000 = gather(d0, h0, w0)
-    c001 = gather(d0, h0, w1)
-    c010 = gather(d0, h1, w0)
-    c011 = gather(d0, h1, w1)
-    c100 = gather(d1, h0, w0)
-    c101 = gather(d1, h0, w1)
-    c110 = gather(d1, h1, w0)
-    c111 = gather(d1, h1, w1)
+    all_d = tf.concat([d0, d0, d0, d0, d1, d1, d1, d1], axis=0)
+    all_h = tf.concat([h0, h0, h1, h1, h0, h0, h1, h1], axis=0)
+    all_w = tf.concat([w0, w1, w0, w1, w0, w1, w0, w1], axis=0)
+    all_indices = tf.stack([all_d, all_h, all_w], axis=1)
+    all_valid = tf.reduce_all((all_indices >= 0) & (all_indices < shape), axis=1)
+    all_gathered = _gather_with_fill(volume, all_indices, all_valid, fill_value, output_dtype)
+    c000, c001, c010, c011, c100, c101, c110, c111 = tf.split(all_gathered, 8, axis=0)
 
     out = (
         c000 * (one - wd) * (one - wh) * (one - ww)

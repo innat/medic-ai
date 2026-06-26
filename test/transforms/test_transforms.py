@@ -228,6 +228,18 @@ def test_spacing_records_trace_and_inverse_restores_original_shape():
 
 
 @pytest.mark.unit
+def test_spacing_records_static_original_shapes_as_python_lists():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(np.eye(4, dtype=np.float32))
+
+    spacing = Spacing(keys=["image"], pixdim=(0.5, 0.5, 0.5))
+    forward = spacing(TensorBundle({"image": image}, {"affine": affine}))
+    trace = forward.get_applied_transforms()[-1]
+
+    assert trace["params"]["original_shapes"]["image"] == [4, 5, 6]
+
+
+@pytest.mark.unit
 def test_spacing_updates_affine_metadata_and_inverse_restores_it():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     affine = as_tensor(np.diag([2.0, 3.0, 4.0, 1.0]).astype(np.float32))

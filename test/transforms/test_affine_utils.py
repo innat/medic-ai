@@ -139,3 +139,11 @@ def test_is_axis_aligned_affine_accepts_diagonal_and_rejects_permuted_axes():
 
     assert bool(ops.convert_to_numpy(is_axis_aligned_affine(diagonal_affine)))
     assert not bool(ops.convert_to_numpy(is_axis_aligned_affine(permuted_affine)))
+
+
+@pytest.mark.unit
+def test_spacing_from_affine_rejects_non_4x4_matrices():
+    affine = as_tensor(np.eye(3, dtype=np.float32))
+
+    with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
+        spacing_from_affine(affine)

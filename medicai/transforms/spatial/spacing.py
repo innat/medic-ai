@@ -208,10 +208,14 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     f"{spatial_rank} "
                     f"for shape {tensor.shape}."
                 )
-            original_shapes[key] = tf.shape(tensor)[:3]
+            static_shape = tensor.shape[:3]
+            if static_shape.is_fully_defined():
+                original_shapes[key] = list(static_shape)
+            else:
+                original_shapes[key] = tf.shape(tensor)[:3]
             if destination_affine is not None and not use_fast_resize_path:
                 output_shape = compute_output_shape(
-                    input_shape=original_shapes[key],
+                    input_shape=tf.convert_to_tensor(original_shapes[key], dtype=tf.int32),
                     src_affine=affine,
                     dst_affine=destination_affine,
                     align_corners=False,
@@ -283,7 +287,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 if key not in original_shapes:
                     continue
                 target_shape = original_shapes[key]
-                static_shape = tf.get_static_value(target_shape)
+                if isinstance(target_shape, (list, tuple)):
+                    static_shape = target_shape
+                else:
+                    static_shape = tf.get_static_value(target_shape)
                 if static_shape is None:
                     can_group = False
                     break
@@ -322,7 +329,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     tensor=bundle.data[key],
                     src_affine=output_affine,
                     dst_affine=original_affine,
-                    output_shape=original_shapes[key],
+                    output_shape=tf.convert_to_tensor(original_shapes[key], dtype=tf.int32),
                     interpolation=interpolation[key],
                     padding_mode="constant",
                     fill_value=0.0,
@@ -336,7 +343,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         def apply_inverse_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if key not in original_shapes:
                 return tensor
-            target_shape = original_shapes[key]
+            target_shape = tf.convert_to_tensor(original_shapes[key], dtype=tf.int32)
             return self._resize_to_shape(tensor, target_shape, interpolation[key])
 
         self.apply_to_present_keys(
