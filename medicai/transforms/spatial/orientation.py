@@ -189,10 +189,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
         if original_affine is None:
             return bundle
 
-        affine = bundle.meta.get("affine")
-        if affine is None:
+        if bundle.meta.get("affine") is None:
             return bundle
-        affine = validate_affine_matrix(affine)
 
         perm_spatial = trace["params"].get("perm_spatial")
         flip_axes = trace["params"].get("flip_axes")
