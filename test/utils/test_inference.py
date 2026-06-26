@@ -89,3 +89,61 @@ def test_sliding_window_inference_class_wrapper_preserves_behavior():
     output = inferencer(inputs)
     expected = model.predict(inputs, verbose=0)
     np.testing.assert_allclose(output, expected, atol=1e-6)
+
+
+@pytest.mark.unit
+def test_sliding_window_inference_accepts_scalar_roi_weight_map():
+    model = DummySegmentationModel(num_classes=2)
+    inputs = np.random.randn(1, 16, 20, 1).astype(np.float32)
+
+    output = sliding_window_inference(
+        inputs=inputs,
+        model=model,
+        num_classes=2,
+        roi_size=(8, 10),
+        sw_batch_size=2,
+        overlap=0.25,
+        roi_weight_map=0.8,
+    )
+
+    expected = model.predict(inputs, verbose=0)
+    np.testing.assert_allclose(output, expected, atol=1e-6)
+
+
+@pytest.mark.unit
+def test_sliding_window_inference_accepts_spatial_only_roi_weight_map():
+    model = DummySegmentationModel(num_classes=2)
+    inputs = np.random.randn(1, 16, 20, 1).astype(np.float32)
+    roi_weight_map = np.ones((8, 10), dtype=np.float32)
+
+    output = sliding_window_inference(
+        inputs=inputs,
+        model=model,
+        num_classes=2,
+        roi_size=(8, 10),
+        sw_batch_size=2,
+        overlap=0.25,
+        roi_weight_map=roi_weight_map,
+    )
+
+    expected = model.predict(inputs, verbose=0)
+    np.testing.assert_allclose(output, expected, atol=1e-6)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("padding_mode", ["replicate", "circular"])
+def test_sliding_window_inference_supports_documented_padding_aliases(padding_mode):
+    model = DummySegmentationModel(num_classes=2)
+    inputs = np.random.randn(1, 6, 7, 1).astype(np.float32)
+
+    output = sliding_window_inference(
+        inputs=inputs,
+        model=model,
+        num_classes=2,
+        roi_size=(10, 11),
+        sw_batch_size=1,
+        overlap=0.25,
+        padding_mode=padding_mode,
+    )
+
+    assert output.shape == (1, 6, 7, 2)

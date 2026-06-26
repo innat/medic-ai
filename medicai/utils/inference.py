@@ -15,6 +15,12 @@ from .swi_utils import (
 )
 
 
+_NUMPY_PADDING_MODE_ALIASES = {
+    "replicate": "edge",
+    "circular": "wrap",
+}
+
+
 class SlidingWindowInference:
     """
     Sliding Window Inference for large-volume or high-resolution inputs. This class
@@ -191,9 +197,10 @@ def extract_patches(
         pad_size.append([half, diff - half])
     pad_size = [[0, 0]] + pad_size + [[0, 0]]
 
+    normalized_padding_mode = _normalize_padding_mode(padding_mode)
     if any(value for pair in pad_size for value in pair):
-        pad_kwargs = {"mode": padding_mode.lower()}
-        if padding_mode.lower() == "constant":
+        pad_kwargs = {"mode": normalized_padding_mode}
+        if normalized_padding_mode == "constant":
             pad_kwargs["constant_values"] = cval
         inputs = np.pad(inputs, pad_size, **pad_kwargs)
 
@@ -201,14 +208,19 @@ def extract_patches(
     slices = dense_patch_slices(padded_image_size, roi_size, scan_interval)
 
     valid_patch_size = get_valid_patch_size(padded_image_size, roi_size)
-    if valid_patch_size == roi_size and roi_weight_map is not None:
-        importance_map = roi_weight_map
+    if roi_weight_map is not None:
+        importance_map = _normalize_roi_weight_map(
+            roi_weight_map=roi_weight_map,
+            patch_size=valid_patch_size,
+            dtype=inputs.dtype,
+            num_spatial_dims=num_spatial_dims,
+        )
     else:
         importance_map = compute_importance_map(
             valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
         )
-        if len(importance_map.shape) == num_spatial_dims:
-            importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)
+    if len(importance_map.shape) == num_spatial_dims:
+        importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)
 
     info = {
         "batch_size": batch_size,
@@ -221,6 +233,46 @@ def extract_patches(
         "importance_map": importance_map,
     }
     return inputs, info
+
+
+def _normalize_padding_mode(padding_mode: str) -> str:
+    """Translate documented padding aliases to NumPy-compatible modes."""
+    normalized_mode = padding_mode.lower()
+    return _NUMPY_PADDING_MODE_ALIASES.get(normalized_mode, normalized_mode)
+
+
+def _normalize_roi_weight_map(
+    roi_weight_map,
+    patch_size: Sequence[int],
+    dtype,
+    num_spatial_dims: int,
+) -> np.ndarray:
+    """Normalize a caller-supplied ROI weight map to ``(1, *roi_size, 1)``."""
+    importance_map = np.asarray(roi_weight_map, dtype=dtype)
+
+    if importance_map.ndim == 0:
+        return np.full((1, *patch_size, 1), importance_map, dtype=dtype)
+
+    if importance_map.ndim == num_spatial_dims:
+        if tuple(importance_map.shape) != tuple(patch_size):
+            raise ValueError(
+                "roi_weight_map must match the effective ROI spatial size when "
+                "provided without batch/channel dimensions."
+            )
+        return importance_map[None, ..., None]
+
+    if importance_map.ndim != num_spatial_dims + 2:
+        raise ValueError(
+            "roi_weight_map must be a scalar, a spatial-only tensor shaped like roi_size, "
+            "or a tensor shaped (1, *roi_size, 1)."
+        )
+
+    expected_shape = (1, *patch_size, 1)
+    if tuple(importance_map.shape) != expected_shape:
+        raise ValueError(
+            f"roi_weight_map must have shape {expected_shape}, got {tuple(importance_map.shape)}."
+        )
+    return importance_map
 
 
 def _resize_importance_map(importance_map: np.ndarray, target_shape: Sequence[int]) -> np.ndarray:
