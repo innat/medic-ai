@@ -358,8 +358,8 @@ class BaseCAM(ABC):
 
 class GradCAM(BaseCAM):
     """
-    Gradient-weighted Class Activation Mapping (Grad-CAM). Grad-CAM generates coarse 
-    localization heatmaps highlighting the spatial regions that most strongly influence 
+    Gradient-weighted Class Activation Mapping (Grad-CAM). Grad-CAM generates coarse
+    localization heatmaps highlighting the spatial regions that most strongly influence
     a model’s prediction for a target class. The method works by:
 
     1. Computing gradients of the target prediction with respect to feature maps
@@ -389,8 +389,8 @@ class GradCAM(BaseCAM):
         resize_heatmap=True,
     ):
         """
-        Computes the Grad-CAM heatmap for a target class. The heatmap represents spatial 
-        importance scores indicating which regions of the input most strongly contributed 
+        Computes the Grad-CAM heatmap for a target class. The heatmap represents spatial
+        importance scores indicating which regions of the input most strongly contributed
         to the target prediction. Computation steps:
 
         1. Compute gradients of the target score with respect to feature maps.
@@ -404,7 +404,7 @@ class GradCAM(BaseCAM):
             input_tensor: The input tensor (image or volume). Supported shapes ``(B, H, W, C)``
                 for 2D and ``(B, D, H, W, C)`` for 3D.
             target_class_index (int or None, optional): Index of the target class for heatmap generation.
-                If ``None``, the predicted class may be selected automatically depending on 
+                If ``None``, the predicted class may be selected automatically depending on
                 the parent implementation.
             mask_type: Type of mask to apply during segmentation target calculation
 
@@ -493,7 +493,7 @@ class GradCAM(BaseCAM):
         Returns:
             The final normalized heatmap as a NumPy array
             ``(Batch, H, W, 1)`` or ``(Batch, [D,] H, W, 1)``.
-        
+
         References:
             - Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization.
               `arXiv:1610.02391 <https://arxiv.org/abs/1610.02391>`_

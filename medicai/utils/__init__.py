@@ -3,7 +3,13 @@ from medicai.utils.constant import keras_constants
 from medicai.utils.describe_mixin import DescribeMixin
 from medicai.utils.general import camel_to_snake
 from medicai.utils.image import resize_volumes
-from medicai.utils.inference import SlidingWindowInference, sliding_window_inference
+from medicai.utils.inference import (
+    SlidingWindowInference,
+    extract_patches,
+    merge_patches,
+    predict_patches,
+    sliding_window_inference,
+)
 from medicai.utils.loss_utils import soft_skeletonize
 from medicai.utils.model_utils import (
     get_act_layer,

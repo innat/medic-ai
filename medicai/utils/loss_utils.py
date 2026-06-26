@@ -67,7 +67,7 @@ def soft_skeletonize(inputs, iters):
             Values are typically expected to be in the range ``[0, 1]``.
 
         iters (int):
-            Number of iterative erosion steps used to construct the skeleton. Larger values produce more complete skeletons for larger objects 
+            Number of iterative erosion steps used to construct the skeleton. Larger values produce more complete skeletons for larger objects
             but increase computational cost.
 
     Returns:
