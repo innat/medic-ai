@@ -73,6 +73,12 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             print(result["image"].shape)
             print(result["label"].shape)
 
+    ``inverse()`` is a placement inverse: it pads the cropped tensor back into
+    its original spatial canvas using the recorded crop coordinates. This is
+    especially useful for mapping model predictions back to the pre-crop
+    layout. It does not reconstruct values that were discarded outside the crop
+    region; those locations are filled with zeros.
+
     Returns:
         ``TensorBundle``: The input bundle with cropped tensors and an
         invertible transform trace entry appended when at least one

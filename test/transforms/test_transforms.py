@@ -191,8 +191,24 @@ def test_orientation_requires_affine_and_valid_axcodes():
     with pytest.raises(ValueError, match="axcodes must be a 3-character string"):
         Orientation(keys=["image"], axcodes="RA")
 
+    with pytest.raises(ValueError, match="R/L/A/P/S/I"):
+        Orientation(keys=["image"], axcodes="XYZ")
+
+    with pytest.raises(ValueError, match="exactly one code from each anatomical axis family"):
+        Orientation(keys=["image"], axcodes="RRS")
+
     with pytest.raises(ValueError, match="Affine matrix is required"):
         Orientation(keys=["image"], axcodes="RAS")(TensorBundle({"image": image}))
+
+
+@pytest.mark.unit
+def test_orientation_rejects_non_4x4_affine():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(np.eye(3, dtype=np.float32))
+    orientation = Orientation(keys=["image"], axcodes="RAS")
+
+    with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
+        orientation(TensorBundle({"image": image}, {"affine": affine}))
 
 
 @pytest.mark.unit
@@ -855,6 +871,31 @@ def test_spatial_crop_inverse_restores_original_canvas_for_3d():
 
 
 @pytest.mark.unit
+def test_spatial_crop_inverse_places_prediction_back_on_original_canvas():
+    image = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
+    label = as_tensor(np.zeros((5, 6, 1), dtype=np.float32))
+    transform = SpatialCrop(keys=["image", "label"], crop_size=(3, 4), crop_start=(1, 1))
+
+    forward = transform(TensorBundle({"image": image, "label": label}))
+    prediction = tf.ones_like(forward["label"])
+    prediction_bundle = TensorBundle(
+        {"image": forward["image"], "label": prediction},
+        dict(forward.meta),
+    )
+    prediction_bundle.meta["applied_transforms"] = list(forward.get_applied_transforms())
+
+    restored = transform.inverse(prediction_bundle)
+
+    expected = np.zeros((5, 6, 1), dtype=np.float32)
+    expected[1:4, 1:5, 0] = 1.0
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["label"]), expected)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"])[1:4, 1:5, :],
+        ops.convert_to_numpy(forward["image"]),
+    )
+
+
+@pytest.mark.unit
 def test_spatial_crop_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
     transform = SpatialCrop(keys=["image"], crop_size=(2, 2))
@@ -1148,6 +1189,44 @@ def test_crop_foreground_inverse_restores_original_canvas_for_3d():
         ops.convert_to_numpy(restored["image"]),
         ops.convert_to_numpy(image),
     )
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_places_prediction_back_on_original_canvas():
+    image = np.zeros((6, 7, 1), dtype=np.float32)
+    image[2:5, 3:6, 0] = 2.0
+    label = np.zeros((6, 7, 1), dtype=np.float32)
+    transform = CropForeground(keys=["image", "label"], source_key="image")
+
+    forward = transform(TensorBundle({"image": as_tensor(image), "label": as_tensor(label)}))
+    prediction = tf.ones_like(forward["label"])
+    prediction_bundle = TensorBundle(
+        {"image": forward["image"], "label": prediction},
+        dict(forward.meta),
+    )
+    prediction_bundle.meta["applied_transforms"] = list(forward.get_applied_transforms())
+
+    restored = transform.inverse(prediction_bundle)
+
+    expected = np.zeros((6, 7, 1), dtype=np.float32)
+    expected[2:5, 3:6, 0] = 1.0
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["label"]), expected)
+
+
+@pytest.mark.unit
+def test_crop_foreground_inverse_zero_pads_discarded_context():
+    image = np.arange(42, dtype=np.float32).reshape(6, 7, 1)
+    source = np.zeros((6, 7, 1), dtype=np.float32)
+    source[2:5, 3:6, 0] = 1.0
+    transform = CropForeground(keys=["image"], source_key="source")
+
+    forward = transform(TensorBundle({"image": as_tensor(image), "source": as_tensor(source)}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    restored_np = ops.convert_to_numpy(restored["image"])
+    expected = np.zeros((6, 7, 1), dtype=np.float32)
+    expected[2:5, 3:6, :] = image[2:5, 3:6, :]
+    np.testing.assert_allclose(restored_np, expected)
 
 
 @pytest.mark.unit
@@ -1916,3 +1995,60 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     assert tuple(ops.shape(restored["image"])) == (4, 4, 1)
+
+
+@pytest.mark.unit
+def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing_pipeline():
+    image = np.zeros((6, 8, 10, 1), dtype=np.float32)
+    image[1:5, 2:7, 3:9, 0] = 2.0
+    label = np.zeros((6, 8, 10, 1), dtype=np.float32)
+    label[2:4, 3:6, 4:8, 0] = 1.0
+    affine = as_tensor(
+        np.array(
+            [
+                [0.0, 0.0, 2.0, 0.0],
+                [0.0, 1.5, 0.0, 0.0],
+                [3.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    pipeline = Compose(
+        [
+            CropForeground(keys=["image", "label"], source_key="image"),
+            Orientation(keys=["image", "label"], axcodes="RAS"),
+            Spacing(
+                keys=["image", "label"],
+                pixdim=(1.0, 0.75, 1.5),
+                interpolation=("trilinear", "nearest"),
+            ),
+        ]
+    )
+
+    forward = pipeline(
+        TensorBundle({"image": as_tensor(image), "label": as_tensor(label)}, {"affine": affine})
+    )
+
+    # Mimic model output by replacing the traced segmentation key with a fresh prediction.
+    prediction = tf.cast(forward["label"] > 0.0, forward["label"].dtype)
+    prediction_bundle = TensorBundle(
+        {"image": forward["image"], "label": prediction},
+        dict(forward.meta),
+    )
+    prediction_bundle.meta["applied_transforms"] = list(forward.get_applied_transforms())
+
+    restored = pipeline.inverse(prediction_bundle)
+
+    assert tuple(ops.shape(restored["image"])) == image.shape
+    assert tuple(ops.shape(restored["label"])) == label.shape
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["affine"]),
+        ops.convert_to_numpy(affine),
+        rtol=1e-6,
+    )
+    restored_label = ops.convert_to_numpy(restored["label"])
+    assert restored_label.dtype == label.dtype
+    assert set(np.unique(restored_label)).issubset({0.0, 1.0})
+    assert restored.get_applied_transforms() == []
