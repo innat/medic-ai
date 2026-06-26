@@ -34,8 +34,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
     ``Spacing`` is invertible in the sense that it records the original voxel
     spacing, affine, and spatial shapes so :meth:`inverse` can resample tensors
     back to their prior shape and restore the original spatial metadata.
-    Because this is a resampling operation, the restored tensor is not
-    guaranteed to be numerically identical to the original input.
+    Whenever static spatial shapes are available, they are stored in the trace
+    as plain Python lists to keep inversion more robust across eager and graph
+    execution boundaries. Because this is a resampling operation, the restored
+    tensor is not guaranteed to be numerically identical to the original input.
 
     Args:
         keys: Keys of tensors to resample.
@@ -73,7 +75,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 dtype=tf.float32,
             )
 
-            result = transform({"image": image, "label": label}, {"affine": affine})
+            result = transform(
+                {"image": image, "label": label},
+                {"affine": affine}
+            )
 
         Resample a 3D image volume using a ``TensorBundle`` and restore its
         prior spacing:
@@ -96,7 +101,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 dtype=tf.float32,
             )
 
-            bundle = TensorBundle({"image": image}, {"affine": affine})
+            bundle = TensorBundle(
+                {"image": image},
+                {"affine": affine}
+            )
             forward = transform(bundle)
             restored = transform.inverse(forward)
 
@@ -110,7 +118,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
             transform = Spacing(
                 keys=["image", "label"],
-                pixdim=(1.0, 1.0, 1.0),
+                pixdim=(2.0, 1.5, 1.5),
                 interpolation=("trilinear", "nearest"),
             )
 
@@ -118,8 +126,10 @@ class Spacing(KeyedTransform, InvertibleTransform):
             label = tf.random.uniform((12, 32, 32, 1), maxval=2, dtype=tf.int32)
             affine = tf.eye(4)
 
-            bundle = TensorBundle({"image": image, "label": label}, {"affine": affine})
-            forward = transform(bundle)
+            forward = transform(
+                {"image": image, "label": label},
+                {"affine": affine}
+            )
             restored = transform.inverse(forward)
 
     Returns:

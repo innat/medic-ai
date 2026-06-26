@@ -4,7 +4,17 @@ import tensorflow as tf
 
 
 def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
-    """Validate and normalize an affine matrix to float32 4x4 form."""
+    """Validate and normalize an affine matrix to float32 4x4 form.
+
+    Args:
+        affine: Candidate affine matrix.
+
+    Returns:
+        tf.Tensor: The affine cast to ``tf.float32``.
+
+    Raises:
+        ValueError: If ``affine`` is not statically shaped ``(4, 4)``.
+    """
     affine = tf.cast(affine, tf.float32)
     if affine.shape.rank != 2 or affine.shape[0] != 4 or affine.shape[1] != 4:
         raise ValueError(f"Expected a 4x4 affine matrix, got shape {affine.shape}.")
@@ -107,14 +117,22 @@ def normalize_spatial_axes(
 
 
 def spacing_from_affine(affine: tf.Tensor) -> tf.Tensor:
-    """Extract voxel spacing magnitudes from a 4x4 affine matrix."""
+    """Extract voxel spacing magnitudes from a 4x4 affine matrix.
+
+    The spacing is computed as the Euclidean norm of each spatial column in the
+    affine's upper-left ``3x3`` linear block.
+    """
     affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
     return tf.norm(linear, axis=0)
 
 
 def direction_from_affine(affine: tf.Tensor) -> tf.Tensor:
-    """Extract normalized direction columns from a 4x4 affine matrix."""
+    """Extract normalized direction columns from a 4x4 affine matrix.
+
+    This returns the orientation component of the affine after removing voxel
+    spacing magnitudes from the upper-left ``3x3`` linear block.
+    """
     affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
     spacing = spacing_from_affine(affine)
@@ -202,7 +220,12 @@ def compute_output_shape(
     dst_affine: tf.Tensor,
     align_corners: bool = False,
 ) -> tf.Tensor:
-    """Compute an output shape from source and destination geometry."""
+    """Compute an output shape from source and destination geometry.
+
+    The output extent is derived from source-volume corner coordinates mapped
+    into the destination index space, so it remains correct for both
+    axis-aligned and permuted affines.
+    """
     input_shape = tf.cast(input_shape, tf.float32)
     src_affine = tf.cast(src_affine, tf.float32)
     dst_affine = tf.cast(dst_affine, tf.float32)
@@ -313,6 +336,7 @@ def _gather_with_fill(
     fill_value: float,
     output_dtype: tf.DType,
 ) -> tf.Tensor:
+    """Gather volume values and replace out-of-bounds samples with a fill value."""
     safe_indices = tf.where(valid[:, tf.newaxis], indices, tf.zeros_like(indices))
     gathered = tf.gather_nd(volume, safe_indices)
     return tf.where(valid[:, tf.newaxis], gathered, tf.cast(fill_value, output_dtype))
@@ -343,7 +367,12 @@ def sample_trilinear(
     padding_mode: str = "constant",
     fill_value: float = 0.0,
 ) -> tf.Tensor:
-    """Sample a 3D volume at arbitrary coordinates using trilinear interpolation."""
+    """Sample a 3D volume at arbitrary coordinates using trilinear interpolation.
+
+    The eight neighboring voxel corners are gathered in one batched operation
+    before interpolation weights are applied, which keeps the implementation
+    graph-friendly while reducing repeated gather overhead.
+    """
     if padding_mode != "constant":
         raise ValueError(
             f"Unsupported padding_mode '{padding_mode}'. Only 'constant' is supported."
@@ -471,7 +500,13 @@ class SpatialResample:
         padding_mode: str = "constant",
         fill_value: float = 0.0,
     ) -> dict[str, tf.Tensor]:
-        """Resample multiple volumes while sharing the same coordinate mapping."""
+        """Resample multiple volumes while sharing the same coordinate mapping.
+
+        This is useful for image-label pairs that live in the same physical
+        space. The affine mapping is computed once and per-chunk coordinates are
+        shared across tensors, while each key still uses its own interpolation
+        mode.
+        """
         src_affine = tf.cast(src_affine, tf.float32)
         dst_affine = tf.cast(dst_affine, tf.float32)
         output_shape = tf.cast(output_shape, tf.int32)
