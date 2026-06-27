@@ -248,12 +248,12 @@ def extract_patches(
         importance_map = _normalize_roi_weight_map(
             roi_weight_map=roi_weight_map,
             patch_size=valid_patch_size,
-            dtype=inputs.dtype,
+            dtype=np.float32,
             num_spatial_dims=num_spatial_dims,
         )
     else:
         importance_map = compute_importance_map(
-            valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=inputs.dtype
+            valid_patch_size, mode=mode, sigma_scale=sigma_scale, dtype=np.float32
         )
     if len(importance_map.shape) == num_spatial_dims:
         importance_map = np.expand_dims(np.expand_dims(importance_map, -1), 0)

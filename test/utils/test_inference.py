@@ -171,6 +171,26 @@ def test_sliding_window_inference_requires_output_shape_to_match_roi_size():
 
 
 @pytest.mark.unit
+def test_sliding_window_inference_handles_integer_inputs_with_gaussian_blending():
+    model = DummySegmentationModel(num_classes=2)
+    x = np.random.randint(0, 10, size=(1, 16, 20, 1), dtype=np.uint8)
+
+    output = sliding_window_inference(
+        x=x,
+        model=model,
+        num_classes=2,
+        roi_size=(8, 10),
+        sw_batch_size=2,
+        overlap=0.25,
+        mode="gaussian",
+    )
+
+    expected = model.predict(x.astype(np.float32), verbose=0)
+    assert output.shape == (1, 16, 20, 2)
+    np.testing.assert_allclose(output, expected, atol=1e-5)
+
+
+@pytest.mark.unit
 def test_sliding_window_inference_class_wrapper_preserves_behavior():
     model = DummySegmentationModel(num_classes=2)
     inputs = np.random.randn(1, 20, 24, 1).astype(np.float32)
