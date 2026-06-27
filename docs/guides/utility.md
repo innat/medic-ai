@@ -2,18 +2,21 @@
 
 Utility classes and functions exported by `medicai.utils`.
 
-## GradCAM
-
-```{eval-rst}
-.. autoclass:: medicai.utils.GradCAM
-   :members: compute_heatmap
-```
-
 ## Sliding Window Inference
 
 ```{eval-rst}
 .. autoclass:: medicai.utils.SlidingWindowInference
 .. autofunction:: medicai.utils.sliding_window_inference
+.. autofunction:: medicai.utils.extract_patches
+.. autofunction:: medicai.utils.merge_patches
+.. autofunction:: medicai.utils.predict_patches
+```
+
+## GradCAM
+
+```{eval-rst}
+.. autoclass:: medicai.utils.GradCAM
+   :members: compute_heatmap
 ```
 
 ## Image Utilities

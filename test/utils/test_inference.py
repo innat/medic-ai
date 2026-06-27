@@ -157,7 +157,9 @@ def test_sliding_window_inference_requires_output_shape_to_match_roi_size():
     model = DownsamplingSegmentationModel(num_classes=2)
     x = np.random.randn(1, 16, 20, 1).astype(np.float32)
 
-    with pytest.raises(ValueError, match="requires the model output spatial shape to match roi_size"):
+    with pytest.raises(
+        ValueError, match="requires the model output spatial shape to match roi_size"
+    ):
         sliding_window_inference(
             x=x,
             model=model,

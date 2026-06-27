@@ -14,7 +14,6 @@ from .swi_utils import (
     get_valid_patch_size,
 )
 
-
 _NUMPY_PADDING_MODE_ALIASES = {
     "replicate": "edge",
     "circular": "wrap",
@@ -37,6 +36,22 @@ class SlidingWindowInference:
     2. Each patch is processed independently by the model.
     3. Predictions are aggregated back into the full spatial volume.
     4. Overlapping regions are blended using either constant or Gaussian weighting.
+
+    Note:
+        Current support is intentionally narrow:
+
+        - single-input tensors only
+        - single-output tensors only
+        - channel-last 2D inputs shaped ``(B, H, W, C)``
+        - channel-last 3D inputs shaped ``(B, D, H, W, C)``
+        - segmentation-style outputs whose spatial shape matches ``roi_size``
+
+        Not yet supported:
+
+        - classification-style outputs such as ``(B, num_classes)``
+        - multi-input models
+        - multi-output models
+        - outputs whose spatial shape differs from ``roi_size``
 
     Args:
         model: Callable that takes a patch of input and returns predictions.
@@ -84,9 +99,9 @@ class SlidingWindowInference:
             print(output.shape) # (1, 128, 128, 128, 3)
 
     Returns:
-        np.ndarray: The output tensor with the same batch size and
-            spatial dimensions as the input, and the number of channels
-            equal to ``num_classes``.
+        ``np.ndarray``: The output tensor with the same batch size and
+        spatial dimensions as the input, and the number of channels
+        equal to ``num_classes``.
     """
 
     def __init__(
@@ -165,9 +180,30 @@ def extract_patches(
         cval: Constant fill value used with ``padding_mode="constant"``.
         roi_weight_map: Optional precomputed ROI importance map.
 
+    Example:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.utils import extract_patches
+
+            x = tf.random.uniform((1, 128, 128, 128, 1))
+            padded_inputs, info = extract_patches(
+                inputs=x,
+                roi_size=(96, 96, 96),
+                overlap=0.25,
+            )
+            print(padded_inputs.shape)
+            print(len(info["slices"]))
+
     Returns:
         A tuple ``(padded_inputs, info)`` where ``info`` contains the metadata
         required to run patch prediction and merge the overlapping outputs.
+
+    Raises:
+        ValueError: If ``inputs`` does not have shape
+            ``(batch_size, *spatial_dims, channels)``.
+        ValueError: If any overlap value is outside the interval ``[0, 1)``.
+        ValueError: If ``roi_weight_map`` has an unsupported shape.
     """
     inputs = np.array(inputs) if not isinstance(inputs, np.ndarray) else inputs
     if inputs.ndim < 3:
@@ -302,9 +338,43 @@ def predict_patches(
         model: Object exposing ``predict(x, verbose=0)``.
         sw_batch_size: Number of spatial windows evaluated per call.
 
+    Example:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import UNet
+            from medicai.utils import extract_patches, predict_patches
+
+            model = UNet(
+                encoder_name="efficientnet_b1",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+            x = tf.random.uniform((1, 128, 128, 128, 1))
+            padded_inputs, info = extract_patches(
+                inputs=x,
+                roi_size=(96, 96, 96),
+                overlap=0.25,
+            )
+
+            patch_generator = predict_patches(
+                padded_inputs=padded_inputs,
+                info=info,
+                model=model,
+                sw_batch_size=2,
+            )
+            pred_batch, batch_slices, importance_map = next(patch_generator)
+            print(pred_batch.shape)
+            print(len(batch_slices))
+
     Yields:
         Tuples of ``(pred_batch, batch_slices, importance_map_resized)`` for
         each patch batch.
+
+    Raises:
+        ValueError: If ``sw_batch_size`` is not a positive integer.
+        ValueError: If the model output spatial shape does not match
+            ``info["roi_size"]``.
     """
     if sw_batch_size <= 0:
         raise ValueError(f"sw_batch_size must be a positive integer, got {sw_batch_size}.")
@@ -365,9 +435,43 @@ def merge_patches(
         num_classes: Number of output channels. If ``None``, inferred from the
             first yielded prediction batch.
 
+    Example:
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.models import UNet
+            from medicai.utils import extract_patches, merge_patches, predict_patches
+
+            model = UNet(
+                encoder_name="efficientnet_b1",
+                input_shape=(96, 96, 96, 1),
+                num_classes=2,
+            )
+            x = tf.random.uniform((1, 128, 128, 128, 1))
+            padded_inputs, info = extract_patches(
+                inputs=x,
+                roi_size=(96, 96, 96),
+                overlap=0.25,
+            )
+            patch_generator = predict_patches(
+                padded_inputs=padded_inputs,
+                info=info,
+                model=model,
+                sw_batch_size=2,
+            )
+            output = merge_patches(
+                patch_generator=patch_generator,
+                info=info,
+                num_classes=2,
+            )
+            print(output.shape)
+
     Returns:
         Reconstructed output tensor with shape
         ``(batch_size, *original_spatial_dims, num_classes)``.
+
+    Raises:
+        ValueError: If ``patch_generator`` yields no predictions.
     """
     batch_size = info["batch_size"]
     padded_image_size = info["padded_image_size"]
