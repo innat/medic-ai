@@ -335,7 +335,7 @@ def get_dropout_layer(spatial_dims, layer_type, **kwargs):
     than individual elements, which is often more effective for convolutional
     neural networks.
 
-    
+
     Args:
         spatial_dims (int):
             Number of spatial dimensions. Supported values are:

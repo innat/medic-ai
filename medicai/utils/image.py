@@ -3,8 +3,8 @@ from keras import ops
 
 def resize_volumes(volumes, depth, height, width, method="trilinear", align_corners=False):
     """
-    Resizes 5D volumetric tensors using either trilinear interpolation or nearest-neighbor sampling. This function 
-    provides a backend-agnostic implementation of ``3D`` resizing for tensors shaped as 
+    Resizes 5D volumetric tensors using either trilinear interpolation or nearest-neighbor sampling. This function
+    provides a backend-agnostic implementation of ``3D`` resizing for tensors shaped as
     ``(batch, depth, height, width, channels)``. It supports two interpolation strategies:
 
     1. **Trilinear interpolation**:
@@ -43,7 +43,7 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
                 - Generally produces smoother and more stable resizing behavior.
 
     Examples:
-        .. code-block:: python 
+        .. code-block:: python
 
             import torch
             from medicai.utils import resize_volumes
@@ -51,14 +51,15 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
             x = torch.rand(1, 96, 96, 96, 3)
             output = resize_volumes(
                 x,
-                depth=128, 
-                height=128, 
+                depth=128,
+                height=128,
                 width=128,
-                method='trilinear', 
+                method='trilinear',
                 align_corners=False
             )
             print(output.shape) # (1, 128, 128, 128, 3)
     """
+
     def trilinear_resize(volumes, depth, height, width, align_corners):
         original_dtype = volumes.dtype
         volumes = ops.cast(volumes, "float32")
