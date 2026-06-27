@@ -30,6 +30,14 @@ class RecordingSegmentationModel(DummySegmentationModel):
         return super().predict(patches, verbose=verbose)
 
 
+class DownsamplingSegmentationModel(DummySegmentationModel):
+    """Test model that changes spatial size to trigger ROI/output validation."""
+
+    def predict(self, patches: np.ndarray, verbose: int = 0) -> np.ndarray:
+        downsampled = patches[:, ::2, ::2, ...]
+        return super().predict(downsampled, verbose=verbose)
+
+
 @pytest.mark.unit
 def test_sliding_window_inference_matches_full_prediction_for_large_2d_input():
     model = DummySegmentationModel(num_classes=3)
@@ -126,6 +134,38 @@ def test_sliding_window_inference_skips_padding_for_single_patch_batch():
 
     assert output.shape == (1, 8, 10, 12, 2)
     assert model.seen_batch_sizes == [1]
+
+
+@pytest.mark.unit
+def test_sliding_window_inference_requires_positive_sw_batch_size():
+    model = DummySegmentationModel(num_classes=2)
+    x = np.random.randn(1, 8, 10, 1).astype(np.float32)
+
+    with pytest.raises(ValueError, match="sw_batch_size must be a positive integer"):
+        sliding_window_inference(
+            x=x,
+            model=model,
+            num_classes=2,
+            roi_size=(8, 10),
+            sw_batch_size=0,
+            overlap=0.25,
+        )
+
+
+@pytest.mark.unit
+def test_sliding_window_inference_requires_output_shape_to_match_roi_size():
+    model = DownsamplingSegmentationModel(num_classes=2)
+    x = np.random.randn(1, 16, 20, 1).astype(np.float32)
+
+    with pytest.raises(ValueError, match="requires the model output spatial shape to match roi_size"):
+        sliding_window_inference(
+            x=x,
+            model=model,
+            num_classes=2,
+            roi_size=(8, 10),
+            sw_batch_size=2,
+            overlap=0.25,
+        )
 
 
 @pytest.mark.unit

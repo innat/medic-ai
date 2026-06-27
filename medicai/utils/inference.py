@@ -306,11 +306,15 @@ def predict_patches(
         Tuples of ``(pred_batch, batch_slices, importance_map_resized)`` for
         each patch batch.
     """
+    if sw_batch_size <= 0:
+        raise ValueError(f"sw_batch_size must be a positive integer, got {sw_batch_size}.")
+
     slices = info["slices"]
     batch_size = info["batch_size"]
     importance_map = info["importance_map"]
     importance_map_resized = None
     has_multiple_patch_batches = len(slices) > sw_batch_size
+    roi_size = tuple(info["roi_size"])
 
     progress_desc = f"Window positions {len(slices)} | input batch {batch_size}"
     for start in tqdm(range(0, len(slices), sw_batch_size), desc=progress_desc):
@@ -333,6 +337,13 @@ def predict_patches(
 
         pred = model.predict(patches, verbose=0)
         pred = pred[:actual_patch_batch]
+
+        if tuple(pred.shape[1:-1]) != roi_size:
+            raise ValueError(
+                "sliding_window_inference requires the model output spatial shape "
+                f"to match roi_size. Got output shape {tuple(pred.shape[1:-1])} "
+                f"and roi_size {roi_size}."
+            )
 
         if importance_map_resized is None:
             importance_map_resized = _resize_importance_map(importance_map, pred.shape[1:-1])
