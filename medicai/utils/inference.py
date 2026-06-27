@@ -310,8 +310,10 @@ def predict_patches(
     batch_size = info["batch_size"]
     importance_map = info["importance_map"]
     importance_map_resized = None
+    has_multiple_patch_batches = len(slices) > sw_batch_size
 
-    for start in tqdm(range(0, len(slices), sw_batch_size), desc=f"Total patch {len(slices)}"):
+    progress_desc = f"Window positions {len(slices)} | input batch {batch_size}"
+    for start in tqdm(range(0, len(slices), sw_batch_size), desc=progress_desc):
         batch_slices = slices[start : start + sw_batch_size]
         patch_list = []
         for slice_idx in batch_slices:
@@ -319,10 +321,11 @@ def predict_patches(
             patch_list.append(padded_inputs[full_slice])
         patches = np.concatenate(patch_list, axis=0)
 
-        # Pad the final batch so XLA-compiling backends can keep a static batch size.
+        # Pad only when multiple predict calls are needed so XLA-compiling
+        # backends can keep a static batch size across calls.
         actual_patch_batch = patches.shape[0]
         target_patch_batch = sw_batch_size * batch_size
-        if actual_patch_batch < target_patch_batch:
+        if has_multiple_patch_batches and actual_patch_batch < target_patch_batch:
             batch_pad_size = ((0, target_patch_batch - actual_patch_batch),) + ((0, 0),) * (
                 patches.ndim - 1
             )
