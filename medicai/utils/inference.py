@@ -113,12 +113,12 @@ class SlidingWindowInference:
         self.cval = cval
         self.roi_weight_map = roi_weight_map
 
-    def __call__(self, inputs):
+    def __call__(self, x):
         """
         Call method to perform sliding window inference.
 
         Args:
-            inputs (np.ndarray): Input tensor with shape
+            x (np.ndarray): Input tensor with shape
                 (batch_size, *spatial_dims, channels).
 
         Returns:
@@ -127,7 +127,7 @@ class SlidingWindowInference:
                 equal to ``num_classes``.
         """
         return sliding_window_inference(
-            inputs=inputs,
+            x=x,
             model=self.model,
             num_classes=self.num_classes,
             roi_size=self.roi_size,
@@ -389,7 +389,7 @@ def merge_patches(
 
 
 def sliding_window_inference(
-    inputs,
+    x,
     model,
     num_classes: Optional[int],
     roi_size: Sequence[int],
@@ -404,7 +404,7 @@ def sliding_window_inference(
     """Run sliding-window inference over large 2D or 3D inputs.
 
     Args:
-        inputs: Input tensor with shape ``(batch_size, *spatial_dims, channels)``.
+        x: Input tensor with shape ``(batch_size, *spatial_dims, channels)``.
         model: Object exposing ``predict(x, verbose=0)``.
         num_classes: Number of output channels. If ``None``, inferred from the
             first prediction batch.
@@ -424,7 +424,7 @@ def sliding_window_inference(
         ``(batch_size, *original_spatial_dims, num_classes)``.
     """
     padded_inputs, info = extract_patches(
-        inputs=inputs,
+        inputs=x,
         roi_size=roi_size,
         overlap=overlap,
         mode=mode,

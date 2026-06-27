@@ -24,7 +24,7 @@ def test_sliding_window_inference_matches_full_prediction_for_large_2d_input():
     inputs = np.random.randn(1, 32, 48, 1).astype(np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=3,
         roi_size=(16, 20),
@@ -42,7 +42,7 @@ def test_sliding_window_inference_pads_and_crops_3d_input_smaller_than_roi():
     inputs = np.random.randn(1, 8, 10, 12, 1).astype(np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=2,
         roi_size=(12, 14, 16),
@@ -61,7 +61,7 @@ def test_sliding_window_inference_handles_multi_item_batches():
     inputs = np.random.randn(2, 18, 22, 1).astype(np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=None,
         roi_size=(9, 11),
@@ -97,7 +97,7 @@ def test_sliding_window_inference_accepts_scalar_roi_weight_map():
     inputs = np.random.randn(1, 16, 20, 1).astype(np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=2,
         roi_size=(8, 10),
@@ -117,7 +117,7 @@ def test_sliding_window_inference_accepts_spatial_only_roi_weight_map():
     roi_weight_map = np.ones((8, 10), dtype=np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=2,
         roi_size=(8, 10),
@@ -137,7 +137,7 @@ def test_sliding_window_inference_supports_documented_padding_aliases(padding_mo
     inputs = np.random.randn(1, 6, 7, 1).astype(np.float32)
 
     output = sliding_window_inference(
-        inputs=inputs,
+        x=inputs,
         model=model,
         num_classes=2,
         roi_size=(10, 11),
