@@ -1,6 +1,6 @@
 # Multimodal Brain Tumor Segmentation
 
-Brain tumor segmentation is a core task in medical image analysis, where the goal is to automatically identify and label different tumor sub-regions from ``3D`` MRI scans. Accurate segmentation helps clinicians with diagnosis, treatment planning, and disease monitoring. In this tutorial, we focus on multimodal MRI-based brain tumor segmentation using the widely adopted **BraTS** (**Brain Tumor Segmentation**) dataset.
+Brain tumor segmentation is a core task in medical image analysis, where the goal is to automatically identify and label different tumor sub-regions from ``3D`` MRI scans. Accurate segmentation helps clinicians with diagnosis, treatment planning, and disease monitoring. In this tutorial, we focus on multimodal MRI-based brain tumor segmentation using the widely adopted [**BraTS**](https://ieeexplore.ieee.org/document/6975210) (**Brain Tumor Segmentation**) dataset.
 
 ---
 ## BraTS Dataset
@@ -28,7 +28,7 @@ The data are released after preprocessing:
 - **Skull-stripped** for consistency
 
 
-**Dataset Format and TFRecord Conversion**: The original BraTS scans are provided in ``.nii`` format and can be accessed from Kaggle [here](https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation/). To enable **efficient training pipelines**, we convert the NIfTI files into **TFRecord** format:
+**Dataset Format and TFRecord Conversion**: The original BraTS scans are provided in ``.nii``. To enable **efficient training pipelines**, we convert the NIfTI files into **TFRecord** format:
 
 - The conversion process is documented [here](https://www.kaggle.com/code/ipythonx/brats-nii-to-tfrecord)
 - The preprocessed TFRecord dataset is available [here](https://www.kaggle.com/datasets/ipythonx/brats2020)
@@ -46,14 +46,19 @@ In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor
 2. **Medical Image Preprocessing**
     - Apply image transformations provided by ``medicai`` to prepare the data for model input.
 3. **Model Building**
-    - Construct a 3D segmentation model with [`SwinUNETR`](https://arxiv.org/abs/2201.01266) You can also experiment with other available 3D architectures, including [`UNETR`](https://arxiv.org/abs/2103.10504), [`SegFormer`](https://arxiv.org/abs/2404.10156), and [`UNETR++`](https://ieeexplore.ieee.org/document/10526382).
+    - Construct a 3D segmentation model with [`SwinUNETR`](https://arxiv.org/abs/2201.01266) You can also experiment with other available 3D architectures in ``medicai``, including [`UNETR`](https://arxiv.org/abs/2103.10504), [`SegFormer`](https://arxiv.org/abs/2404.10156), and [`UNETR++`](https://ieeexplore.ieee.org/document/10526382).
 4. **Loss and Metrics Definition**
-    - Using Dice-based loss functions and segmentation metrics tailored for medical imaging
+    - Using Dice-based loss functions and segmentation metrics tailored for medical imaging.
 5. **Model Evaluation**
-    - Performing inference on large ``3D`` volumes using **sliding window inference**
-    - Computing per-class evaluation metrics
+    - Performing inference on large ``3D`` volumes using **sliding window inference**.
+    - Computing per-class evaluation metrics.
 6. **Visualization of Results**
-    - Visualizing predicted segmentation masks for qualitative analysis
+    - Visualizing predicted segmentation masks for qualitative analysis.
+
+
+```{note}
+This example uses two Tesla T4 GPUs available in the Kaggle environment. You can also run it on a TPU VM. The only required change is to switch the mixed precision policy from ``mixed_float16`` to ``mixed_bfloat16``.
+```
 
 
 ## Imports
@@ -74,20 +79,26 @@ from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import ListedColormap
 
-from medicai.callbacks import SlidingWindowInferenceCallback
-from medicai.losses import BinaryDiceCELoss
-from medicai.metrics import BinaryDiceMetric
-from medicai.models import SwinUNETR
+import medicai
 from medicai.transforms import (
     Compose,
     CropForeground,
+    Resize,
+    Spacing,
+    Orientation,
+    RandomShiftIntensity,
+    RandomRotate90,
+    RandomFlip,
+    RandomSpatialCrop,
     NormalizeIntensity,
-    RandFlip,
-    RandShiftIntensity,
-    RandSpatialCrop,
-    TensorBundle,
+    RandomCropByPosNegLabel,
+    LambdaTransform
 )
+from medicai.models import SwinUNETR
+from medicai.metrics import BinaryDiceMetric
+from medicai.losses import BinaryDiceCELoss
 from medicai.utils.inference import SlidingWindowInference
+from medicai.callbacks import SlidingWindowInferenceCallback
 
 # enable mixed precision
 keras.mixed_precision.set_global_policy("mixed_float16")
@@ -109,6 +120,8 @@ tensorflow version: 2.19.0
 
 ### Distributed Settings
 
+The ``DataParallel`` class in the Keras distribution API is designed for the data parallelism strategy in distributed training.
+
 ```python
 devices = keras.distribution.list_devices()
 data_parallel = keras.distribution.DataParallel(devices=devices)
@@ -116,7 +129,7 @@ keras.distribution.set_distribution(data_parallel)
 total_device = len(devices)
 ```
 
-## Create Multi-label Brain Tumor Labels
+## Prepare Multi-label Brain Tumor Labels
 
 The BraTS segmentation task involves multiple tumor sub-regions, and it is formulated as a multi-label segmentation problem. The label combinations are used to define the following clinical regions of interest:
 
@@ -132,10 +145,9 @@ These region-wise groupings allow for evaluation across different tumor structur
 
 
 ```python
-class ConvertToMultiChannelBasedOnBratsClasses:
+def process_brats_targets(label):
     """
-    Convert labels to multi channels based on BRATS 
-    classes using TensorFlow.
+    Convert labels to multi channels based on BRATS classes using TensorFlow.
 
     Label definitions:
     - 1: necrotic and non-enhancing tumor core
@@ -147,43 +159,36 @@ class ConvertToMultiChannelBasedOnBratsClasses:
     - Channel 1 (WT): Whole tumor (labels 1, 2, or 4)
     - Channel 2 (ET): Enhancing tumor (label 4)
     """
+    label = tf.convert_to_tensor(label)
 
-    def __init__(self, keys):
-        self.keys = keys
+    if (
+        label.shape.rank is not None
+        and label.shape.rank > 0
+        and label.shape[-1] == 1
+    ):
+        label = tf.squeeze(label, axis=-1)
 
-    def __call__(self, inputs):
-        if isinstance(inputs, dict):
-            inputs = TensorBundle(inputs)
+    tc = tf.logical_or(tf.equal(label, 1), tf.equal(label, 4))
+    wt = tf.logical_or(tc, tf.equal(label, 2))
+    et = tf.equal(label, 4)
 
-        for key in self.keys:
-            data = inputs[key]
-
-            # TC: label == 1 or 4
-            tc = tf.logical_or(tf.equal(data, 1), tf.equal(data, 4))
-
-            # WT: label == 1 or 2 or 4
-            wt = tf.logical_or(tc, tf.equal(data, 2))
-
-            # ET: label == 4
-            et = tf.equal(data, 4)
-
-            stacked = tf.stack(
-                [
-                    tf.cast(tc, tf.float32),
-                    tf.cast(wt, tf.float32),
-                    tf.cast(et, tf.float32),
-                ],
-                axis=-1,
-            )
-
-            inputs[key] = stacked
-        return inputs
+    return tf.stack(
+        [
+            tf.cast(tc, tf.float32),
+            tf.cast(wt, tf.float32),
+            tf.cast(et, tf.float32),
+        ],
+        axis=-1,
+    )
 ```
 
 ## Transformation
 
 Each ``medicai`` transformation expects the input to have the shape ``(depth, height, width, channel)``. The original ``.nii`` (and converted ``.tfrecord``) format contains the input shape of ``(height, width, depth)``. To make it compatible with ``medicai``, we need to re-arrange the shape axes.
 
+```{note}
+The BraTS example does not require the ``affine`` matrix. It is included here only to demonstrate how metadata can be handled and updated during preprocessing.
+```
 
 ```python
 def rearrange_shape(sample):
@@ -210,37 +215,41 @@ Each transformation class of ``medicai`` expects input as either a dictionary or
 
 ```python
 num_classes = 3
-epochs = 4
+epochs = 25
 input_shape = (96, 96, 96, 4)
 
 def train_transformation(sample):
     meta = {"affine": sample["affine"]}
     data = {"image": sample["image"], "label": sample["label"]}
-
-    pipeline = Compose(
-        [
-            ConvertToMultiChannelBasedOnBratsClasses(keys=["label"]),
-            CropForeground(
-                keys=("image", "label"),
-                source_key="image",
-                k_divisible=input_shape[:3],
-            ),
-            RandSpatialCrop(
-                keys=["image", "label"], 
-                crop_size=input_shape[:3], 
-                random_shape=False
-            ),
-            RandFlip(keys=["image", "label"], spatial_axis=[0], prob=0.5),
-            RandFlip(keys=["image", "label"], spatial_axis=[1], prob=0.5),
-            RandFlip(keys=["image", "label"], spatial_axis=[2], prob=0.5),
-            NormalizeIntensity(
-                keys=["image"], nonzero=True, channel_wise=True
-            ),
-            RandShiftIntensity(
-                keys=["image"], offset=0.10, prob=1.0
-            ),
-        ]
-    )
+    pipeline = Compose([
+        LambdaTransform(
+            keys=["label"],
+            fn=process_brats_targets,
+            name="convert_brats_label",
+        ),
+        CropForeground(
+            keys=("image", "label"),
+            source_key="image",
+            k_divisible=[96, 96, 96],
+        ),
+        RandomSpatialCrop(
+            keys=["image", "label"],
+            crop_size=(96, 96, 96),
+        ),
+        RandomFlip(keys=["image", "label"], spatial_axis=[0], prob=0.5),
+        RandomFlip(keys=["image", "label"], spatial_axis=[1], prob=0.5),
+        RandomFlip(keys=["image", "label"], spatial_axis=[2], prob=0.5),
+        NormalizeIntensity(
+            keys=["image"],
+            nonzero=True,
+            channel_wise=True
+        ),
+        RandomShiftIntensity(
+            keys=["image"],
+            offset=0.10,
+            prob=1.0
+        )
+    ])
     result = pipeline(data, meta)
     return result["image"], result["label"]
 
@@ -248,17 +257,18 @@ def train_transformation(sample):
 def val_transformation(sample):
     meta = {"affine": sample["affine"]}
     data = {"image": sample["image"], "label": sample["label"]}
-
-    pipeline = Compose(
-        [
-            ConvertToMultiChannelBasedOnBratsClasses(keys=["label"]),
-            NormalizeIntensity(
-                keys=["image"], 
-                nonzero=True, 
-                channel_wise=True
-            ),
-        ]
-    )
+    pipeline = Compose([
+        LambdaTransform(
+            keys=["label"],
+            fn=process_brats_targets,
+            name="convert_brats_label",
+        ),
+        NormalizeIntensity(
+            keys=["image"],
+            nonzero=True,
+            channel_wise=True
+        )
+    ])
     result = pipeline(data, meta)
     return result["image"], result["label"]
 ```
@@ -545,6 +555,10 @@ Instance of SwinUNETR
   • res_block: True
   • norm_name: instance
 ```
+```python
+keras.utils.plot_model(model)
+```
+![](../../assets/examples/brain_tumor/brats_sample9.png)
 
 ## Callback
 
@@ -564,10 +578,10 @@ swi_callback = SlidingWindowInferenceCallback(
     dataset=val_ds,
     metrics=swi_callback_metric,
     num_classes=num_classes,
-    interval=2,
+    interval=5,
     overlap=0.5,
     roi_size=input_shape[:3],
-    sw_batch_size=4,
+    sw_batch_size=4 * total_device,
     mode="gaussian",
     save_path="brats.model.weights.h5",
 )
@@ -623,27 +637,7 @@ dict_keys(['dice', 'dice_et', 'dice_tc', 'dice_wt', 'loss'])
 
 ## Evaluation
 
-In this [Kaggle notebook](https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-multi-gpu/) (version 5), we trained the model on the entire dataset for approximately ``30`` epochs. The resulting weights will be used for further evaluation. Note that the validation set used in both here and Kaggle notebook are the same: ``training_shard_36.tfrec``, which contains ``8`` samples.
-
-```bash
-pip install kagglehub -qU
-```
-```python
-import kagglehub
-
-if "KAGGLE_USERNAME" not in os.environ or "KAGGLE_KEY" not in os.environ:
-    kagglehub.login()
-```
-
-```python
-model_weight = kagglehub.model_download(
-    "ipythonx/bratsmodel/keras/default", path="brats.model.weights.h5"
-)
-print("\nPath to model files:", model_weight)
-model.load_weights(model_weight)
-```
-
-In this section, we perform sliding window inference on the validation dataset and compute Dice scores for overall segmentation quality as well as specific tumor subregions:
+To evaluate the model, we perform sliding window inference on the validation dataset and compute Dice scores for overall segmentation quality as well as specific tumor subregions:
  - Tumor Core (TC)
  - Whole Tumor (WT)
  - Enhancing Tumor (ET)
@@ -653,7 +647,7 @@ swi = SlidingWindowInference(
     model,
     num_classes=num_classes,
     roi_size=input_shape[:3],
-    sw_batch_size=4,
+    sw_batch_size=4 * total_device,
     overlap=0.5,
     mode="gaussian",
 )
@@ -790,9 +784,10 @@ plt.show()
     
 
 The predicted output is a multi-channel binary map, where each channel corresponds to a specific tumor region. To visualize it against the original ground truth, we convert it into a single-channel label map. Here we assign:
-    - Label ``1`` for Tumor Core (TC)
-    - Label ``2`` for Whole Tumor (WT)
-    - Label ``4`` for Enhancing Tumor (ET)
+- Label ``1`` for Tumor Core (TC)
+- Label ``2`` for Whole Tumor (WT)
+- Label ``4`` for Enhancing Tumor (ET)
+
 The label values are chosen to match typical conventions used in medical segmentation benchmarks like BraTS.
 
 ```python
@@ -813,10 +808,11 @@ predicted  (155, 240, 240) [0. 1. 2. 4.]
 ```
 
 Let's begin by examining the original input slices from the MRI scan. The input contains four channels corresponding to different MRI modalities:
-    - FLAIR
-    - T1
-    - T1CE (T1 with contrast enhancement)
-    - T2
+- FLAIR
+- T1
+- T1CE (T1 with contrast enhancement)
+- T2
+
 We display the same slice number across all modalities for comparison.
 
 ```python
@@ -859,8 +855,9 @@ plt.show()
     
 ![](../../assets/examples/brain_tumor/brats_sample8.png)
 
+---
 
-Finally, create a clean GIF visualizer showing the input image, ground-truth label, and model prediction.
+Finally, let's create a clean GIF visualizer showing the input image, ground-truth label, and model prediction.
 
 
 ```python

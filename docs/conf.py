@@ -222,6 +222,11 @@ html_context = {
     "doc_path": "docs",
 }
 
+html_sidebars = {
+    "guides/example": [],
+    "examples/**": [],
+}
+
 myst_enable_extensions = [
     "colon_fence",
     "dollarmath",
