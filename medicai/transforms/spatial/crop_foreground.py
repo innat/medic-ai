@@ -33,7 +33,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     Args:
         keys: Keys of tensors to crop once the foreground bounding box has been
             estimated.
-        source_key: Key of the tensor used to compute the foreground mask.
+        source_key: Key of the tensor used to compute the foreground mask. If
+            omitted and ``keys`` contains exactly one item, that key is used as
+            the foreground source automatically.
         select_fn: Callable that receives the source tensor and returns a
             boolean-like mask used to define foreground.
         channel_indices: Optional subset of source channels used when
@@ -81,7 +83,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
             transform = CropForeground(
                 keys=["image"],
-                source_key="image",
                 margin=(2, 4, 4),
                 k_divisible=2,
             )
@@ -101,6 +102,8 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         coordinate metadata, and an invertible trace entry appended.
 
     Raises:
+        ValueError: If ``source_key`` is omitted while ``keys`` contains more
+            than one entry.
         KeyError: If ``source_key`` or a requested crop key is missing and
             ``allow_missing_keys=False``.
     """
@@ -108,7 +111,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     def __init__(
         self,
         keys: Sequence[str] = ("image", "label"),
-        source_key: str = "image",
+        source_key: Optional[str] = None,
         select_fn: Callable = lambda x: x > 0,
         channel_indices: Optional[Sequence[int]] = None,
         margin: Union[Sequence[int], int] = 0,
@@ -119,6 +122,13 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
+        if source_key is None:
+            if len(self.keys) == 1:
+                source_key = self.keys[0]
+            else:
+                raise ValueError(
+                    "`source_key` must be provided when `keys` contains more than one item."
+                )
         self.source_key = source_key
         self.select_fn = select_fn
         self.channel_indices = channel_indices

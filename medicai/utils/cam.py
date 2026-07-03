@@ -378,6 +378,28 @@ class GradCAM(BaseCAM):
 
     For segmentation models, different masking strategies are supported to
     control how target regions contribute to gradient computation.
+
+    Args:
+        model: The Keras model to analyze.
+        target_layer: The name of the convolutional layer whose feature maps will be used.
+        task_type: Specifies the type of task. Can be "auto", "classification", or "segmentation". 
+            If "auto", it is inferred from the model's output shape.
+
+    Raises:
+        ValueError: If an invalid task_type is provided.
+
+    .. note::
+        - For segmentation models with more than one output channel,
+          ``target_class_index`` must be provided when calling
+          :meth:`compute_heatmap`.
+        - The ``object`` mask for multi-channel segmentation uses
+          ``argmax(predictions, axis=-1)`` to determine the predicted region for
+          the requested class. This works best for mutually exclusive classes.
+          For overlapping target channels, such as region-wise BraTS labels,
+          ``mask_type="all"`` is often a better choice.
+        - For very large 3D volumes, Grad-CAM is typically applied patch-wise in
+          a notebook or user pipeline, then reconstructed with
+          ``medicai.utils.extract_patches`` and ``medicai.utils.merge_patches``.
     """
 
     def compute_heatmap(
@@ -405,15 +427,19 @@ class GradCAM(BaseCAM):
                 for 2D and ``(B, D, H, W, C)`` for 3D.
             target_class_index (int or None, optional): Index of the target class for heatmap generation.
                 If ``None``, the predicted class may be selected automatically depending on
-                the parent implementation.
+                the parent implementation. For segmentation models with more than
+                one output channel, this argument is required.
             mask_type: Type of mask to apply during segmentation target calculation
 
                 - ``object``: Focuses the gradient calculation only on the
                     **predicted pixels/voxels** belonging to the `target_class_index`.
-                    This is the standard approach to highlight the detected object.
+                    This is the standard approach to highlight the detected object
+                    when classes are mutually exclusive.
                 - ``all``: Calculates the gradient based on the **sum of all
                     predicted scores** for the `target_class_index` across the entire
-                    spatial domain. This provides a global importance map for the class.
+                    spatial domain. This provides a global importance map for the
+                    class and is often a practical choice for overlapping
+                    multi-label segmentation channels.
                 - ``single``: Calculates the gradient based only on the score of the
                     **single pixel/voxel** that has the maximum prediction value
                     for the `target_class_index`.
@@ -490,9 +516,56 @@ class GradCAM(BaseCAM):
             )
             print(heatmap.shape) # (1, 64, 128, 128, 1)
 
+        .. code-block:: python
+
+            import numpy as np
+            from medicai.models import TransUNet
+            from medicai.utils import GradCAM, extract_patches, merge_patches
+
+            model = TransUNet(
+                encoder_name="seresnext50",
+                input_shape=(96, 96, 96, 4),
+                num_classes=3,
+                classifier_activation=None,
+            )
+
+            cam = GradCAM(
+                model=model,
+                target_layer="decoder_act_1",
+            )
+
+            x = np.random.randn(1, 128, 160, 160, 4).astype("float32")
+            padded_inputs, info = extract_patches(
+                inputs=x,
+                roi_size=(96, 96, 96),
+                overlap=0.5,
+                mode="gaussian",
+            )
+
+            def cam_patch_generator():
+                for slice_idx in info["slices"]:
+                    patch = padded_inputs[(slice(None),) + slice_idx + (slice(None),)]
+                    heatmap = cam.compute_heatmap(
+                        input_tensor=patch,
+                        target_class_index=2,
+                        mask_type="all",
+                        normalize_heatmap=False,
+                        resize_heatmap=True,
+                    )
+                    yield heatmap, [slice_idx], info["importance_map"]
+
+            full_heatmap = merge_patches(
+                patch_generator=cam_patch_generator(),
+                info=info,
+                num_classes=1,
+            )
+            print(full_heatmap.shape)  # (1, 128, 160, 160, 1)
+
         Returns:
-            The final normalized heatmap as a NumPy array
-            ``(Batch, H, W, 1)`` or ``(Batch, [D,] H, W, 1)``.
+            The final heatmap as a NumPy array shaped
+            ``(Batch, H, W, 1)`` or ``(Batch, [D,] H, W, 1)``. When
+            ``normalize_heatmap=True``, each sample is scaled independently to
+            the range ``[0, 1]`` after ``ReLU``.
 
         References:
             - Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization.

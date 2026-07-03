@@ -34,14 +34,14 @@ Brain tumor, organ, and lesion segmentation on volumetric data.
 :::
 
 :::{grid-item-card} 🔄 Transformation
-:link: ../examples/transformation
+:link: ../examples/transformation/index
 :link-type: doc
 
 Data augmentation, preprocessing, and volumetric transform pipelines.
 :::
 
 :::{grid-item-card} 📦 Others
-:link: ../examples/others
+:link: ../examples/others/index
 :link-type: doc
 
 GradCAM visualizations, inference utilities, and miscellaneous notebooks.
@@ -57,6 +57,6 @@ GradCAM visualizations, inference utilities, and miscellaneous notebooks.
 ../examples/segmentation/2d
 ../examples/classification/3d
 ../examples/segmentation/3d
-../examples/transformation
-../examples/others
+../examples/transformation/index
+../examples/others/index
 ```

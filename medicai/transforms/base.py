@@ -96,6 +96,16 @@ def _pop_last_transform_trace(
     return None
 
 
+def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str, ...]:
+    """Normalize transform keys to a validated tuple of strings."""
+    normalized = (keys,) if isinstance(keys, str) else tuple(keys)
+    if not normalized:
+        raise ValueError(f"`{name}` must contain at least one key.")
+    if any(not isinstance(key, str) for key in normalized):
+        raise TypeError(f"All entries in `{name}` must be strings.")
+    return normalized
+
+
 class Transform:
     """Base class for Medic-AI transforms.
 
@@ -353,8 +363,8 @@ class KeyedTransform(Transform):
             output = Multiply(keys=["image"], factor=2.0)({"image": image})
     """
 
-    def __init__(self, keys: Sequence[str], allow_missing_keys: bool = False):
-        self.keys = tuple(keys)
+    def __init__(self, keys: Sequence[str] | str, allow_missing_keys: bool = False):
+        self.keys = _normalize_keys(keys)
         self.allow_missing_keys = allow_missing_keys
 
     def iter_present_keys(self, bundle: TensorBundle) -> list[str]:
@@ -400,7 +410,7 @@ class KeyedTransform(Transform):
             KeyError: If a requested key is missing and
                 ``allow_missing_keys=False``.
         """
-        target_keys = tuple(keys) if keys is not None else self.keys
+        target_keys = _normalize_keys(keys) if keys is not None else self.keys
         present_keys = []
         for key in target_keys:
             if key in bundle.data:

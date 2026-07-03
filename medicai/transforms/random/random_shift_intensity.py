@@ -2,7 +2,7 @@ from typing import Sequence, Tuple, Union
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace, _trace_applied_to_bool
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
 
@@ -66,7 +66,7 @@ class RandomShiftIntensity(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob)
-        self.keys = tuple(keys)
+        self.keys = _normalize_keys(keys)
         if isinstance(offset, (int, float)):
             self.offset = (-abs(offset), abs(offset))
         else:

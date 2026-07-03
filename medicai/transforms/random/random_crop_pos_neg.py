@@ -4,7 +4,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank, get_spatial_shape
@@ -95,7 +95,8 @@ class RandomCropByPosNegLabel(RandomTransform):
             raise ValueError("pos and neg must be non-negative.")
         if pos == 0 and neg == 0:
             raise ValueError("pos and neg cannot both be zero.")
-        if len(keys) != 2:
+        normalized_keys = _normalize_keys(keys)
+        if len(normalized_keys) != 2:
             class_name = type(self).__name__
             raise ValueError(
                 f"{class_name} transformation requires a pair of image and label as keys. "
@@ -104,7 +105,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             class_name = self.__class__.__name__
             raise ValueError(f"{class_name} transformation currently supports only num_samples=1.")
 
-        self.keys = tuple(keys)
+        self.keys = normalized_keys
         self.target_shape = target_shape
         self.pos = pos
         self.neg = neg
