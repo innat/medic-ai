@@ -370,58 +370,6 @@ class BaseGeneralizedDiceLoss(BaseLoss):
 
 
 class BaseCenterlineDiceLoss(BaseLoss):
-    """Centerline Dice (clDice) loss for 2D/3D segmentation tasks.
-
-    This loss measures topological agreement between predicted and ground-truth
-    structures by comparing their soft skeletons. It is particularly well-suited
-    for thin, elongated objects such as vessels, fibers, centerlines, or tubular
-    anatomical structures.
-
-    The loss is computed per class channel and averaged across the selected
-    target classes. For each channel, clDice is defined as the harmonic mean of:
-
-    - Topology Precision (T_per): how much of the predicted skeleton lies inside
-      the ground-truth volume.
-    - Topology Sensitivity (T_sens): how much of the ground-truth skeleton is
-      recovered by the predicted volume.
-
-    Skeletons are computed using differentiable morphological operations
-    ("soft skeletonization").
-
-    from_logits : bool
-        Whether the model outputs logits. If True, subclasses are expected to
-        apply the appropriate activation function (sigmoid or softmax).
-    num_classes : int
-        Number of semantic classes in the segmentation task.
-    iters : int, default=50
-        Number of iterations used for soft skeletonization. Higher values produce
-        more complete skeletons but increase computational cost.
-    target_class_ids : int or list[int], optional
-        Class indices to include in the loss computation. If None, all classes
-        are used. This is commonly used to exclude background classes.
-    ignore_class_ids : int or list[int], optional
-        Class indices to ignore entirely when computing the loss. Voxels belonging
-        to these classes are masked out before loss computation.
-    memory_efficient_skeleton : bool, default=True
-        If True, gradients are stopped through the predicted skeleton to reduce
-        memory usage and computational cost. This trades exact gradient flow
-        through skeletonization for improved training stability and lower memory
-        consumption, which is often necessary for large 3D volumes.
-    smooth : float, default=1e-7
-        Smoothing constant added to numerators and denominators to avoid division
-        by zero.
-    reduction : str, default="mean"
-        Reduction method applied by the base Keras loss class.
-
-    Notes
-    -----
-    - Ground-truth skeletons are always computed with gradients disabled.
-    - When `memory_efficient_skeleton=True`, predicted skeletons are also
-      detached from the computation graph.
-    - This loss assumes channel-last tensors with shape:
-      (batch, [depth], height, width, channels).
-    """
-
     def __init__(
         self,
         from_logits,
@@ -583,7 +531,8 @@ GDL_LOSS_DOCSTRING = """Base class for Generalized Dice Loss (GDL) functions.
 
 This class implements the core ``1.0 - GDL`` logic, designed to address class imbalance.
 
-Note:
+.. note::
+
     Unlike other losses, Generalized Dice Loss aggregates across all classes before
     applying reduction. Therefore, with ``reduction='none'``, it returns shape ``[batch]``
     instead of ``[batch, num_classes]``.
@@ -600,9 +549,61 @@ Note:
     default_name="generalized_dice_loss",
 )
 
+CLDICE_SPECIFIC_ARGS = """    iters (int, optional): Number of soft-skeletonization iterations.
+        Higher values can produce more complete skeletons but increase
+        computational cost. Defaults to ``50``.
+    memory_efficient_skeleton (bool, optional): If ``True``, gradients are
+        stopped through the predicted skeleton to reduce memory usage during
+        training. Defaults to ``True``.
+"""
+CLDICE_LOSS_DOCSTRING = """Base class for centerline Dice (clDice) loss functions.
+
+This class implements the core ``1.0 - clDice`` logic for topology-aware
+segmentation. It compares predicted and ground-truth soft skeletons and is
+especially useful for thin, elongated, or tubular anatomical structures such as
+vessels, centerlines, airways, and fibers.
+
+For each selected class channel, clDice is computed as the harmonic mean of:
+
+- **Topology Precision (T_per)**: how much of the predicted skeleton lies
+  inside the ground-truth volume.
+- **Topology Sensitivity (T_sens)**: how much of the ground-truth skeleton is
+  recovered by the predicted volume.
+
+Skeletons are computed using differentiable soft morphological operations.
+
+.. note::
+
+    - Ground-truth skeletons are always computed with gradients disabled.
+    - When ``memory_efficient_skeleton=True``, predicted skeletons are also
+      detached from the computation graph.
+    - This loss assumes channel-last tensors with shape
+      ``(batch, [depth], height, width, channels)``.
+
+.. important::
+
+    - Background is typically encoded as class ``0``. To exclude background,
+      explicitly set ``target_class_ids`` to foreground classes.
+    - If your dataset contains invalid or ignored labels, you must provide
+      ``ignore_class_ids`` so those regions are masked before skeletonization.
+    - Ignored labels must be spatially masked even when optimizing only
+      selected target classes, otherwise they can affect topology precision and
+      sensitivity.
+
+""" + BASE_COMMON_ARGS.format(
+    specific_args=CLDICE_SPECIFIC_ARGS,
+    example="""    This base class is intended to be used through a concrete
+    clDice loss variant such as ``BinaryCenterlineDiceLoss`` or
+    ``SparseCenterlineDiceLoss``.""",
+    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        type or contains invalid class IDs.""",
+    default_name="centerline_dice_loss",
+)
+
 
 BaseLoss.__doc__ = BASE_LOSS_DOCSTRING
 BaseDiceLoss.__doc__ = DICE_LOSS_DOCSTRING
 BaseIoULoss.__doc__ = IOU_LOSS_DOCSTRING
 BaseTverskyLoss.__doc__ = TVERSKY_LOSS_DOCSTRING
 BaseGeneralizedDiceLoss.__doc__ = GDL_LOSS_DOCSTRING
+BaseCenterlineDiceLoss.__doc__ = CLDICE_LOSS_DOCSTRING
