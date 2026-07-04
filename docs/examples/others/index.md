@@ -2,7 +2,7 @@
 
 Available supporting example references:
 
-- [GradCAM](large_full_volume_seg_gradcam.md)
+- [Large Full-Volume 3D Segmentation GradCAM](large_full_volume_seg_gradcam.md)
 
 ```{toctree}
 :hidden:

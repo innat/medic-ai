@@ -167,8 +167,14 @@ scale_transform = ScaleIntensityRange(
 )
 
 scaled = scale_transform(data)
-print(scaled['image'].numpy().min(), scaled['image'].numpy().max())
+print(
+    scaled['image'].numpy().min(), 
+    scaled['image'].numpy().max()
+)
 create_plot(data, scaled, title1="Original", title2="ScaleIntensityRange")
+```
+```
+0.0 1.0
 ```
 ![](../../assets/examples/transformation/sample3.png)
 
@@ -177,10 +183,16 @@ In this example the image intensities are mapped from the chosen CT range into
 
 ```python
 restored_scale = scale_transform.inverse(scaled)
-print(restored_scale['image'].numpy().min(), restored_scale['image'].numpy().max())
+print(
+    restored_scale['image'].numpy().min(), 
+    restored_scale['image'].numpy().max()
+)
 create_plot(
     data, restored_scale, title1="Original", title2="ScaleIntensityRange Inverse"
 )
+```
+```
+-1021.0 2996.0
 ```
 ![](../../assets/examples/transformation/sample4.png)
 

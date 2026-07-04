@@ -3,14 +3,14 @@
 For large 3D volumes such as BraTS MRI cases, we often cannot pass the full
 case directly through a model trained on fixed-size patches like
 ``(96, 96, 96, 4)``. In those scenarios, we can still obtain a full-volume
-Grad-CAM visualization in a notebook by reusing the existing sliding-window
+Grad-CAM visualization by reusing the existing sliding-window
 helpers:
 
 - ``medicai.utils.extract_patches(...)`` to create overlapping windows and blending metadata
 - ``medicai.utils.GradCAM.compute_heatmap(...)`` to compute CAMs for each patch batch
 - ``medicai.utils.merge_patches(...)`` to reconstruct a full-volume heatmap
 
-This example assumes that you have trained ``TransUNet`` model on BraTS dataset using `medicai` and saved the best trained weight. Now, you want to compute ``GradCAM`` on target classes. For training details, check the BraTS code example.
+This example assumes that you have trained ``TransUNet`` model (or any segmentation model) on BraTS dataset using `medicai` and saved the best trained weight. Now, you want to compute ``GradCAM`` on target classes. For training details, check the BraTS code example.
 
 ```python
 import numpy as np
