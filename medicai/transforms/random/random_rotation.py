@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace, _trace_applied_to_bool
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank
 
@@ -126,16 +126,15 @@ class RandomRotate(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob)
-        if not isinstance(keys, (list, tuple)):
-            raise TypeError("`keys` must be a list or tuple.")
-        if len(keys) not in (1, 2):
+        normalized_keys = _normalize_keys(keys)
+        if len(normalized_keys) not in (1, 2):
             raise ValueError("`keys` must have length 1 or 2.")
         if factor < 0:
             raise ValueError(f"`factor` must be non-negative. Received {factor}.")
         if fill_mode not in {"crop", "constant"}:
             raise ValueError("fill_mode must be either 'crop' or 'constant'.")
 
-        self.keys = tuple(keys)
+        self.keys = normalized_keys
         self.factor = factor
         self.fill_value = fill_value
         self.fill_mode = fill_mode

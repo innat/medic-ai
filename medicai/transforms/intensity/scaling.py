@@ -18,7 +18,8 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
 
     The transform expects channel-last image tensors such as ``(H, W, C)`` or
     ``(D, H, W, C)``. It does not infer source ranges from the data; callers
-    must provide medically meaningful source bounds.
+    must provide medically meaningful source bounds. Integer inputs such as
+    ``uint8`` are supported and are cast to ``dtype`` before scaling.
 
     Args:
         keys: Keys of the tensors to scale.
@@ -178,7 +179,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
 
     def scale_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
         """Scale one tensor from source range to target range."""
-        tensor = tf.convert_to_tensor(tensor, dtype=self.dtype)
+        tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
         if self.input_max == self.input_min:
             result = (
                 tensor - self.input_min
@@ -203,7 +204,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         output_max: float | None = None,
     ) -> tf.Tensor:
         """Invert one tensor from target range back to source range."""
-        tensor = tf.convert_to_tensor(tensor, dtype=self.dtype)
+        tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
 
         in_min = self.input_min if input_min is None else input_min
         in_max = self.input_max if input_max is None else input_max

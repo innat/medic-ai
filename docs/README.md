@@ -1,3 +1,7 @@
+---
+orphan: true
+---
+
 # Docs Layout
 
 This directory contains the source for the project documentation.

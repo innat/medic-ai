@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import get_spatial_rank, get_spatial_shape
@@ -79,9 +79,7 @@ class RandomSpatialCrop(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=1.0)
-        if not keys:
-            raise ValueError("`keys` must contain at least one key.")
-        self.keys = tuple(keys)
+        self.keys = _normalize_keys(keys)
         self.crop_size = crop_size
         self.max_crop_size = max_crop_size
         self.random_center = random_center

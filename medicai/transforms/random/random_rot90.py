@@ -2,7 +2,7 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace, _trace_applied_to_bool
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
 
@@ -67,7 +67,7 @@ class RandomRotate90(RandomTransform):
         super().__init__(prob=prob)
         if max_k < 1:
             raise ValueError(f"`max_k` must be >= 1. Received {max_k}.")
-        self.keys = tuple(keys)
+        self.keys = _normalize_keys(keys)
         self.max_k = max_k
         self.spatial_axis = spatial_axis
         self.allow_missing_keys = allow_missing_keys

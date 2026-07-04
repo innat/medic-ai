@@ -400,6 +400,26 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_accepts_uint8_tensor_inputs():
+    image = as_tensor(np.array([[[0], [128], [255]]], dtype=np.uint8))
+    out = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=255.0,
+        output_min=0.0,
+        output_max=1.0,
+        clip=True,
+    )(TensorBundle({"image": image}))
+
+    assert out["image"].dtype == tf.float32
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out["image"]),
+        np.array([[[0.0], [128.0 / 255.0], [1.0]]], dtype=np.float32),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_inverse_restores_affine_mapping():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
@@ -1133,6 +1153,52 @@ def test_crop_foreground_empty_mask_returns_full_image_and_can_disable_metadata(
     assert tuple(ops.shape(out["image"])) == (4, 5, 1)
     assert "foreground_start_coord" not in out.meta
     assert "foreground_end_coord" not in out.meta
+
+
+@pytest.mark.unit
+def test_crop_foreground_accepts_string_like_single_key_input():
+    image = as_tensor(
+        np.array(
+            [
+                [[0.0], [0.0], [0.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [0.0], [0.0], [0.0]],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    # Python evaluates ("image") as a plain string. The transform should
+    # still normalize it to a single-key collection.
+    out = CropForeground(keys=("image"), source_key="image")(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 2, 1)
+
+
+@pytest.mark.unit
+def test_crop_foreground_defaults_source_key_for_single_key_input():
+    image = as_tensor(
+        np.array(
+            [
+                [[0.0], [0.0], [0.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [1.0], [1.0], [0.0]],
+                [[0.0], [0.0], [0.0], [0.0]],
+            ],
+            dtype=np.float32,
+        )
+    )
+
+    out = CropForeground(keys=["image"])(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 2, 1)
+
+
+@pytest.mark.unit
+def test_crop_foreground_requires_source_key_for_multi_key_input():
+    with pytest.raises(ValueError, match="`source_key` must be provided"):
+        CropForeground(keys=["image", "label"])
 
 
 @pytest.mark.unit

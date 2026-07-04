@@ -1,14 +1,30 @@
 # Segmentation
 
-Available segmentation code examples:
+Browse segmentation examples by dimensionality.
 
-- [Brain Tumor Segmentation](brain_tumor.md)
-- [ISIC 2017 Melanoma Binary Segmentation](isic_2017.md)
+```{grid} 2
+:gutter: 2
+
+:::{grid-item-card} 2D Segmentation
+:link: 2d
+:link-type: doc
+
+Pixel-level lesion and region segmentation tutorials.
+:::
+
+:::{grid-item-card} 3D Segmentation
+:link: 3d
+:link-type: doc
+
+Volumetric segmentation workflows for MRI and CT.
+:::
+```
 
 ```{toctree}
 :hidden:
 :maxdepth: 1
+:titlesonly:
 
-brain_tumor
-isic_2017
+2d
+3d
 ```
