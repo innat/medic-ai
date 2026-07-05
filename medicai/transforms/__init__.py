@@ -3,6 +3,7 @@ from medicai.transforms.base import (
     InvertibleTransform,
     KeyedTransform,
     LambdaTransform,
+    RandomChoice,
     RandomTransform,
     Transform,
 )

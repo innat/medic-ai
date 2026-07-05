@@ -10,6 +10,7 @@ from medicai.transforms import (
     LambdaTransform,
     NormalizeIntensity,
     Orientation,
+    RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
     RandomFlip,
@@ -222,6 +223,51 @@ def test_compose_crop_orientation_spacing_pipeline_runs_forward_and_inverse_unde
     assert tuple(ops.shape(restored_image)) == (6, 8, 10, 1)
     assert tuple(ops.shape(restored_label)) == (6, 8, 10, 1)
     np.testing.assert_allclose(ops.convert_to_numpy(restored_affine), ops.convert_to_numpy(affine))
+
+
+@pytest.mark.unit
+def test_random_choice_runs_under_tf_function_when_num_choices_is_one():
+    choice = RandomChoice(
+        transforms=[
+            ShiftIntensity(keys=["image"], offset=1.0),
+            Flip(keys=["image"], spatial_axis=1),
+        ],
+        num_choices=1,
+        prob=1.0,
+    )
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+
+    @tf.function
+    def apply_transform(x):
+        return choice({"image": x})["image"]
+
+    output = apply_transform(image)
+    assert tuple(ops.shape(output)) == (4, 4, 1)
+
+
+@pytest.mark.unit
+def test_random_choice_runs_under_tf_function_for_multi_choice():
+    choice = RandomChoice(
+        transforms=[
+            ShiftIntensity(keys=["image"], offset=1.0),
+            ShiftIntensity(keys=["image"], offset=2.0),
+            ShiftIntensity(keys=["image"], offset=4.0),
+        ],
+        num_choices=2,
+        prob=1.0,
+    )
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+
+    @tf.function
+    def apply_transform(x):
+        return choice({"image": x})["image"]
+
+    outputs = []
+    for _ in range(10):
+        outputs.append(float(ops.convert_to_numpy(apply_transform(image))[0, 0, 0]))
+
+    assert all(value in {4.0, 6.0, 7.0} for value in outputs)
+    assert len(set(outputs)) >= 2
 
 
 @pytest.mark.unit

@@ -5,6 +5,7 @@ from keras import ops
 from medicai.transforms import (
     Compose,
     Flip,
+    RandomChoice,
     RandomShiftIntensity,
     ScaleIntensityRange,
     ShiftIntensity,
@@ -118,7 +119,8 @@ def test_compose_inverse_handles_repeated_shift_intensity_instances():
         ops.convert_to_numpy(image),
         rtol=1e-6,
     )
-    assert forward.get_applied_transforms() == []
+    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
+    assert "RandomChoice" not in remaining_trace_names
 
 
 @pytest.mark.unit
@@ -151,7 +153,8 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
         ops.convert_to_numpy(image),
         rtol=1e-6,
     )
-    assert forward.get_applied_transforms() == []
+    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
+    assert "RandomChoice" not in remaining_trace_names
 
 
 @pytest.mark.unit
@@ -173,3 +176,92 @@ def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
         rtol=1e-6,
     )
     assert forward.get_applied_transforms() == []
+
+
+@pytest.mark.unit
+def test_random_choice_applies_exact_number_without_replacement():
+    class AppendTag:
+        def __init__(self, tag):
+            self.tag = tag
+
+        def __call__(self, bundle):
+            bundle.meta.setdefault("order", []).append(self.tag)
+            bundle["image"] = bundle["image"] + 1.0
+            return bundle
+
+    transform = RandomChoice(
+        transforms=[AppendTag("a"), AppendTag("b"), AppendTag("c")],
+        num_choices=2,
+        prob=1.0,
+    )
+    image = ops.convert_to_tensor(np.zeros((2, 2, 1), dtype=np.float32))
+
+    forward = transform({"image": image})
+    trace = forward.get_applied_transforms()[-1]
+
+    assert float(ops.convert_to_numpy(forward["image"])[0, 0, 0]) == 2.0
+    assert len(trace["params"]["selected_indices"]) == 2
+    assert len(set(trace["params"]["selected_indices"])) == 2
+    assert len(forward.meta["order"]) == 2
+    assert trace["params"]["num_selected"] == 2
+
+
+@pytest.mark.unit
+def test_random_choice_respects_prob_zero():
+    transform = RandomChoice(
+        transforms=[ShiftIntensity(keys=["image"], offset=2.0)],
+        num_choices=1,
+        prob=0.0,
+    )
+    image = ops.convert_to_tensor(np.ones((2, 2, 1), dtype=np.float32))
+
+    forward = transform({"image": image})
+    trace = forward.get_applied_transforms()[-1]
+
+    np.testing.assert_allclose(ops.convert_to_numpy(forward["image"]), 1.0)
+    assert trace["applied"] is False
+    assert trace["params"]["selected_indices"] == []
+
+
+@pytest.mark.unit
+def test_random_choice_inverse_reverses_selected_invertible_transforms():
+    transform = RandomChoice(
+        transforms=[
+            Flip(keys=["image"], spatial_axis=1),
+            ShiftIntensity(keys=["image"], offset=3.0),
+        ],
+        num_choices=2,
+        prob=1.0,
+    )
+    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+
+    forward = transform({"image": image})
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
+    assert "RandomChoice" not in remaining_trace_names
+
+
+@pytest.mark.unit
+def test_random_choice_weights_can_force_selection():
+    transform = RandomChoice(
+        transforms=[
+            ShiftIntensity(keys=["image"], offset=5.0),
+            ShiftIntensity(keys=["image"], offset=100.0),
+        ],
+        num_choices=1,
+        prob=1.0,
+        weights=[1.0, 0.0],
+    )
+    image = ops.convert_to_tensor(np.ones((2, 2, 1), dtype=np.float32))
+
+    forward = transform({"image": image})
+    trace = forward.get_applied_transforms()[-1]
+
+    np.testing.assert_allclose(ops.convert_to_numpy(forward["image"]), 6.0)
+    assert trace["params"]["selected_indices"] == [0]

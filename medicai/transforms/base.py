@@ -106,6 +106,26 @@ def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str,
     return normalized
 
 
+def _require_static_value(value: Any, name: str) -> Any:
+    """Convert a TensorFlow scalar/tensor to a Python-visible value when possible."""
+    if tf.is_tensor(value):
+        static_value = tf.get_static_value(value)
+        if static_value is None:
+            raise ValueError(
+                f"`{name}` must be statically knowable when used in this transform. "
+                "This usually means the transform is being executed under graph mode "
+                "with symbolic control flow that cannot be resolved to Python."
+            )
+        value = static_value
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return value.item()
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 class Transform:
     """Base class for Medic-AI transforms.
 
@@ -319,6 +339,297 @@ class RandomTransform(Transform):
             )
         )
         return bundle
+
+
+class RandomChoice(RandomTransform):
+    """Randomly choose and apply a subset of transforms without replacement.
+
+    ``RandomChoice`` is a transform orchestration utility. On each call it
+    optionally selects one or more child transforms, applies them sequentially
+    in sampled order, and records which transforms were chosen so ``inverse()``
+    can walk back through the selected invertible transforms in reverse order.
+
+    Selection is always performed without replacement. If users need the same
+    transform to be eligible multiple times, they can include multiple
+    instances of that transform in ``transforms``.
+
+    For eager execution, ``RandomChoice`` supports the full API including
+    multi-transform sampling and inverse bookkeeping. Under symbolic graph
+    execution such as ``tf.data`` pipelines, ``RandomChoice`` uses a
+    graph-safe forward path that statically unrolls up to ``max_choices``
+    sequential dispatch steps with ``tf.switch_case``.
+
+    This graph-safe path focuses on forward tensor transformation and assumes
+    that every candidate transform preserves the same key structure, shape, and
+    dtype per key across branches. It does not preserve eager-style wrapper
+    trace bookkeeping used for ``inverse()``.
+
+    .. note::
+
+        ``RandomChoice`` currently has two important limitations:
+
+        1. Graph-mode support is intended for forward execution only. Bundles
+           produced through the graph-safe path do not preserve the eager-style
+           wrapper trace bookkeeping needed for reliable ``inverse()`` support.
+        2. Graph-mode transform pools should contain shape-preserving
+           transforms. If candidate transforms return different key
+           structures, dtypes, ranks, or static shapes, TensorFlow branch
+           dispatch may fail under ``tf.function`` / ``tf.data`` tracing.
+
+    When to use this:
+        Use ``RandomChoice`` when an augmentation pipeline should sample from a
+        pool of candidate transforms rather than always applying the same
+        sequence. It is a good fit for "pick one of these" or "pick a few of
+        these" style augmentation blocks.
+
+    Args:
+        transforms: Candidate transform objects to sample from.
+        num_choices: Either one integer for an exact number of transforms to
+            apply, or a ``(min, max)`` tuple specifying an inclusive range.
+        prob: Probability of applying any sampled transforms at all. When the
+            probability gate is not passed, the input is returned unchanged and
+            no candidate transform is executed.
+        weights: Optional relative sampling weights aligned with
+            ``transforms``. Larger values increase the chance that a transform
+            is selected. Weights are interpreted as relative preferences, not
+            normalized probabilities, and sampling is still performed without
+            replacement. A weight of ``0`` means that transform is never
+            selected, and at least one weight must be positive when
+            ``weights`` is provided. For example, ``weights=[0.7, 0.2, 0.1]``
+            means the first transform is preferred over the second, and the
+            second is preferred over the third; it does not mean the exact
+            per-call probabilities are 70%, 20%, and 10%. Weights only affect
+            behavior when ``RandomChoice`` has an actual choice to make, such
+            as when ``num_choices < len(transforms)``. If all transforms are
+            guaranteed to be selected, for example when
+            ``num_choices == len(transforms)``, the weights do not materially
+            change the outcome.
+
+    Example:
+        Pick exactly one geometric transform:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomChoice, RandomRotate, RandomRotate90
+
+            transform = RandomChoice(
+                transforms=[
+                    RandomRotate90(keys=["image"], prob=1.0),
+                    RandomRotate(keys=["image"], factor=0.2, prob=1.0),
+                ],
+                num_choices=1,
+                prob=1.0,
+            )
+
+            image = tf.random.normal((32, 64, 64, 1))
+            result = transform({"image": image})
+
+        Pick between one and two transforms from a pool:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import Flip, RandomChoice, ShiftIntensity
+
+            transform = RandomChoice(
+                transforms=[
+                    Flip(keys=["image"], spatial_axis=0),
+                    Flip(keys=["image"], spatial_axis=1),
+                    ShiftIntensity(keys=["image"], offset=0.1),
+                ],
+                num_choices=(1, 2),
+                weights=[1.0, 1.0, 0.5],
+            )
+
+            image = tf.random.normal((64, 64, 1))
+            result = transform({"image": image})
+    """
+
+    def __init__(
+        self,
+        transforms: Sequence[Transform],
+        num_choices: int | tuple[int, int] = 1,
+        prob: float = 1.0,
+        weights: Sequence[float] | None = None,
+    ):
+        super().__init__(prob=prob)
+        self.transforms = tuple(transforms)
+        if not self.transforms:
+            raise ValueError("`transforms` must contain at least one transform.")
+        if any(not callable(transform) for transform in self.transforms):
+            raise TypeError("Every entry in `transforms` must be callable.")
+
+        self.min_choices, self.max_choices = self._normalize_num_choices(num_choices)
+        if self.max_choices > len(self.transforms):
+            raise ValueError(
+                f"`num_choices` cannot request more than {len(self.transforms)} transforms."
+            )
+
+        self.weights = self._normalize_weights(weights)
+        if self.weights is not None:
+            positive_count = sum(weight > 0.0 for weight in self.weights)
+            if self.max_choices > positive_count:
+                raise ValueError(
+                    "`num_choices` cannot exceed the number of transforms with positive weight."
+                )
+
+    @property
+    def invertible(self) -> bool:
+        """Whether any candidate layer supports inverse execution."""
+        return any(getattr(transform, "invertible", False) for transform in self.transforms)
+
+    def apply(self, bundle: TensorBundle) -> TensorBundle:
+        if not tf.executing_eagerly():
+            return self._apply_graph_choice(bundle)
+
+        should_apply = self.sample_should_apply()
+        should_apply_bool = _trace_applied_to_bool(should_apply)
+
+        selected_indices: list[int] = []
+        selected_names: list[str] = []
+
+        if should_apply_bool:
+            num_to_apply = self._sample_num_choices()
+            num_to_apply = int(_require_static_value(num_to_apply, "num_choices"))
+
+            if num_to_apply > 0:
+                selected_indices = self._sample_indices(num_to_apply)
+                selected_names = [
+                    type(self.transforms[index]).__name__ for index in selected_indices
+                ]
+                for index in selected_indices:
+                    bundle = self.transforms[index](bundle)
+
+        self.record_random_transform(
+            bundle,
+            params={
+                "selected_indices": list(selected_indices),
+                "selected_names": list(selected_names),
+                "num_selected": len(selected_indices),
+                "num_choices": (self.min_choices, self.max_choices),
+            },
+            applied=bool(selected_indices),
+            kernel="RandomChoice",
+        )
+        return bundle
+
+    def _apply_graph_choice(self, bundle: TensorBundle) -> TensorBundle:
+        data_keys = tuple(bundle.data.keys())
+        if not data_keys:
+            return bundle
+
+        should_apply = self.sample_should_apply()
+        permutation = self._sample_permutation_graph()
+        num_to_apply = self._sample_num_choices()
+
+        def apply_step(current_outputs, step: int):
+            selected_index = permutation[step]
+
+            def make_branch(index: int, current_outputs=current_outputs):
+                def branch():
+                    local_data = {
+                        key: value for key, value in zip(data_keys, current_outputs, strict=True)
+                    }
+                    local_bundle = TensorBundle(local_data, dict(bundle.meta))
+                    output = self.transforms[index](local_bundle)
+                    return tuple(output.data[key] for key in data_keys)
+
+                return branch
+
+            branch_fns = {index: make_branch(index) for index in range(len(self.transforms))}
+            return tf.switch_case(selected_index, branch_fns=branch_fns)
+
+        current_outputs = tuple(bundle.data[key] for key in data_keys)
+        for step in range(self.max_choices):
+            current_outputs = tf.cond(
+                tf.logical_and(should_apply, tf.constant(step, dtype=tf.int32) < num_to_apply),
+                lambda current_outputs=current_outputs, step=step: apply_step(
+                    current_outputs, step
+                ),
+                lambda current_outputs=current_outputs: current_outputs,
+            )
+
+        bundle.data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
+        return bundle
+
+    def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        if not self.invertible:
+            return bundle
+
+        trace = self._get_last_random_choice_trace(bundle)
+        if trace is None:
+            return bundle
+
+        for index in reversed(trace["params"].get("selected_indices", [])):
+            transform = self.transforms[index]
+            if getattr(transform, "invertible", False):
+                bundle = transform.inverse(bundle)
+        return bundle
+
+    def _sample_num_choices(self) -> tf.Tensor:
+        if self.min_choices == self.max_choices:
+            return tf.constant(self.min_choices, dtype=tf.int32)
+        return tf.random.uniform(
+            shape=(),
+            minval=self.min_choices,
+            maxval=self.max_choices + 1,
+            dtype=tf.int32,
+        )
+
+    def _sample_indices(self, num_to_apply: int) -> list[int]:
+        if num_to_apply == 0:
+            return []
+
+        permutation = self._sample_permutation_graph()
+        permutation = _require_static_value(permutation[:num_to_apply], "selected_indices")
+        return [int(index) for index in permutation]
+
+    def _sample_permutation_graph(self) -> tf.Tensor:
+        """Graph-safe unique permutation of transform indices."""
+        num_transforms = len(self.transforms)
+        if self.weights is None:
+            return tf.random.shuffle(tf.range(num_transforms, dtype=tf.int32))
+
+        weights = tf.convert_to_tensor(self.weights, dtype=tf.float32)
+        uniforms = tf.random.uniform(shape=(num_transforms,), minval=1e-6, maxval=1.0)
+        gumbels = -tf.math.log(-tf.math.log(uniforms))
+        valid = weights > 0.0
+        safe_weights = tf.where(valid, weights, 1e-9)
+        scores = tf.math.log(safe_weights) + gumbels
+        scores = tf.where(valid, scores, -1e9)
+        return tf.argsort(scores, direction="DESCENDING")
+
+    def _normalize_num_choices(self, num_choices: int | tuple[int, int]) -> tuple[int, int]:
+        if isinstance(num_choices, int):
+            if num_choices < 0:
+                raise ValueError("`num_choices` must be >= 0.")
+            return num_choices, num_choices
+
+        if not isinstance(num_choices, tuple) or len(num_choices) != 2:
+            raise TypeError("`num_choices` must be an int or a `(min, max)` tuple.")
+
+        min_choices, max_choices = num_choices
+        if min_choices < 0 or max_choices < 0:
+            raise ValueError("`num_choices` bounds must be >= 0.")
+        if min_choices > max_choices:
+            raise ValueError("`num_choices` requires `min <= max`.")
+        return min_choices, max_choices
+
+    def _normalize_weights(self, weights: Sequence[float] | None) -> tuple[float, ...] | None:
+        if weights is None:
+            return None
+        normalized = tuple(float(weight) for weight in weights)
+        if len(normalized) != len(self.transforms):
+            raise ValueError("`weights` must have the same length as `transforms`.")
+        if any(weight < 0.0 for weight in normalized):
+            raise ValueError("`weights` must be non-negative.")
+        if not any(weight > 0.0 for weight in normalized):
+            raise ValueError("`weights` must contain at least one positive value.")
+        return normalized
+
+    def _get_last_random_choice_trace(self, bundle: TensorBundle):
+        return _pop_last_transform_trace(bundle, type(self).__name__)
 
 
 class KeyedTransform(Transform):

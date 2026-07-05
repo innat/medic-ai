@@ -2,7 +2,12 @@ from typing import Sequence
 
 import tensorflow as tf
 
-from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace, _trace_applied_to_bool
+from ..base import (
+    RandomTransform,
+    _normalize_keys,
+    _pop_last_transform_trace,
+    _trace_applied_to_bool,
+)
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
 
