@@ -175,8 +175,7 @@ def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
         ops.convert_to_numpy(image),
         rtol=1e-6,
     )
-    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
-    assert "RandomChoice" not in remaining_trace_names
+    assert forward.get_applied_transforms() == []
 
 
 @pytest.mark.unit

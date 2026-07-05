@@ -387,7 +387,12 @@ class RandomChoice(RandomTransform):
             ``weights`` is provided. For example, ``weights=[0.7, 0.2, 0.1]``
             means the first transform is preferred over the second, and the
             second is preferred over the third; it does not mean the exact
-            per-call probabilities are 70%, 20%, and 10%.
+            per-call probabilities are 70%, 20%, and 10%. Weights only affect
+            behavior when ``RandomChoice`` has an actual choice to make, such
+            as when ``num_choices < len(transforms)``. If all transforms are
+            guaranteed to be selected, for example when
+            ``num_choices == len(transforms)``, the weights do not materially
+            change the outcome.
 
     Example:
         Pick exactly one geometric transform:
@@ -512,7 +517,9 @@ class RandomChoice(RandomTransform):
 
             def make_branch(index: int, current_outputs=current_outputs):
                 def branch():
-                    local_data = {key: value for key, value in zip(data_keys, current_outputs)}
+                    local_data = {
+                        key: value for key, value in zip(data_keys, current_outputs, strict=True)
+                    }
                     local_bundle = TensorBundle(local_data, dict(bundle.meta))
                     output = self.transforms[index](local_bundle)
                     return tuple(output.data[key] for key in data_keys)
@@ -532,7 +539,7 @@ class RandomChoice(RandomTransform):
                 lambda current_outputs=current_outputs: current_outputs,
             )
 
-        bundle.data = {key: value for key, value in zip(data_keys, current_outputs)}
+        bundle.data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -585,9 +592,9 @@ class RandomChoice(RandomTransform):
         uniforms = tf.random.uniform(shape=(num_transforms,), minval=1e-6, maxval=1.0)
         gumbels = -tf.math.log(-tf.math.log(uniforms))
         valid = weights > 0.0
-        safe_weights = tf.where(valid, weights, tf.ones_like(weights) * 1e-9)
+        safe_weights = tf.where(valid, weights, 1e-9)
         scores = tf.math.log(safe_weights) + gumbels
-        scores = tf.where(valid, scores, tf.fill(tf.shape(weights), -1e9))
+        scores = tf.where(valid, scores, -1e9)
         return tf.argsort(scores, direction="DESCENDING")
 
     def _normalize_num_choices(self, num_choices: int | tuple[int, int]) -> tuple[int, int]:
