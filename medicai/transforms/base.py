@@ -364,6 +364,18 @@ class RandomChoice(RandomTransform):
     dtype per key across branches. It does not preserve eager-style wrapper
     trace bookkeeping used for ``inverse()``.
 
+    .. note::
+
+        ``RandomChoice`` currently has two important limitations:
+
+        1. Graph-mode support is intended for forward execution only. Bundles
+           produced through the graph-safe path do not preserve the eager-style
+           wrapper trace bookkeeping needed for reliable ``inverse()`` support.
+        2. Graph-mode transform pools should contain shape-preserving
+           transforms. If candidate transforms return different key
+           structures, dtypes, ranks, or static shapes, TensorFlow branch
+           dispatch may fail under ``tf.function`` / ``tf.data`` tracing.
+
     When to use this:
         Use ``RandomChoice`` when an augmentation pipeline should sample from a
         pool of candidate transforms rather than always applying the same
