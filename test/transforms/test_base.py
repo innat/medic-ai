@@ -7,6 +7,7 @@ from medicai.transforms import (
     InvertibleTransform,
     KeyedTransform,
     LambdaTransform,
+    RandomChoice,
     RandomTransform,
     TensorBundle,
     Transform,
@@ -180,6 +181,24 @@ def test_random_transform_builds_standardized_trace_entries():
     assert trace["random"] is True
     assert trace["invertible"] is False
     assert trace["kernel"] == "DummyKernel"
+
+
+@pytest.mark.unit
+def test_random_choice_validates_configuration():
+    with pytest.raises(ValueError, match="at least one transform"):
+        RandomChoice(transforms=[], num_choices=1)
+
+    with pytest.raises(ValueError, match="cannot request more than 1 transforms"):
+        RandomChoice(transforms=[lambda bundle: bundle], num_choices=2)
+
+    with pytest.raises(ValueError, match="same length as `transforms`"):
+        RandomChoice(transforms=[lambda bundle: bundle], num_choices=1, weights=[1.0, 2.0])
+
+    with pytest.raises(ValueError, match="non-negative"):
+        RandomChoice(transforms=[lambda bundle: bundle], num_choices=1, weights=[-1.0])
+
+    with pytest.raises(ValueError, match="positive value"):
+        RandomChoice(transforms=[lambda bundle: bundle], num_choices=0, weights=[0.0])
 
 
 @pytest.mark.unit

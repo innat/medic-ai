@@ -95,6 +95,7 @@ Common examples:
 - `RandomSpatialCrop`
 - `RandomCropByPosNegLabel`
 - `RandomCutOut`
+- `RandomChoice`
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomFlip
@@ -110,6 +111,8 @@ Common examples:
 .. autoclass:: medicai.transforms.RandomCutOut
 
 .. autoclass:: medicai.transforms.RandomShiftIntensity
+
+.. autoclass:: medicai.transforms.RandomChoice
 ```
 
 ## Compose
