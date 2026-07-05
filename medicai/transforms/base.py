@@ -344,11 +344,10 @@ class RandomTransform(Transform):
 class RandomChoice(RandomTransform):
     """Randomly choose and apply a subset of transforms without replacement.
 
-    ``RandomChoice`` is a transform orchestration utility similar in spirit to
-    Albumentations ``OneOf`` and ``SomeOf``. On each call it optionally selects
-    one or more child transforms, applies them sequentially in sampled order,
-    and records which transforms were chosen so ``inverse()`` can walk back
-    through the selected invertible transforms in reverse order.
+    ``RandomChoice`` is a transform orchestration utility. On each call it
+    optionally selects one or more child transforms, applies them sequentially
+    in sampled order, and records which transforms were chosen so ``inverse()``
+    can walk back through the selected invertible transforms in reverse order.
 
     Selection is always performed without replacement. If users need the same
     transform to be eligible multiple times, they can include multiple
@@ -570,15 +569,7 @@ class RandomChoice(RandomTransform):
         if num_to_apply == 0:
             return []
 
-        if self.weights is None:
-            permutation = tf.random.shuffle(tf.range(len(self.transforms), dtype=tf.int32))
-        else:
-            weights = tf.convert_to_tensor(self.weights, dtype=tf.float32)
-            uniforms = tf.random.uniform(shape=(len(self.transforms),), minval=1e-6, maxval=1.0)
-            gumbels = -tf.math.log(-tf.math.log(uniforms))
-            scores = tf.math.log(weights) + gumbels
-            permutation = tf.argsort(scores, direction="DESCENDING")
-
+        permutation = self._sample_permutation_graph()
         permutation = _require_static_value(permutation[:num_to_apply], "selected_indices")
         return [int(index) for index in permutation]
 
