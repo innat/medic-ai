@@ -2,7 +2,7 @@
 
 [![Palestine](https://img.shields.io/badge/Free-Palestine-white?labelColor=green)](https://twitter.com/search?q=%23FreePalestine&src=typed_query) 
 
-![Static Badge](https://img.shields.io/badge/keras-3.9.0-darkred?style=flat) ![Static Badge](https://img.shields.io/badge/tensorflow-2.19.0-orange?style=flat) ![Static Badge](https://img.shields.io/badge/torch-2.6.0-red?style=flat) ![Static Badge](https://img.shields.io/badge/jax-0.4.23-%233399ff)
+![Static Badge](https://img.shields.io/badge/keras-3.15.0-darkred?style=flat) ![Static Badge](https://img.shields.io/badge/tensorflow-2.21.0-orange?style=flat) ![Static Badge](https://img.shields.io/badge/torch-2.5.1-red?style=flat) ![Static Badge](https://img.shields.io/badge/jax-0.1-blue?style=flat)
 
 **Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical 2D and 3D image analysis using machine learning techniques. Its core strengths include:
 
