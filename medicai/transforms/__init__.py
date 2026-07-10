@@ -27,3 +27,4 @@ from medicai.transforms.spatial.rotate90 import Rotate90
 from medicai.transforms.spatial.spacing import Spacing
 from medicai.transforms.spatial.spatial_crop import SpatialCrop
 from medicai.transforms.tensor_bundle import TensorBundle
+from medicai.utils import largest_component_mask

@@ -1,6 +1,44 @@
 from typing import Mapping, Sequence
-
+import numpy as np
+from scipy import ndimage
 import tensorflow as tf
+
+
+def largest_component_mask(mask: np.ndarray, closing_iterations: int = 2) -> np.ndarray:
+    """Keep only the largest connected foreground component of a binary mask.
+
+    Dilates the mask by `closing_iterations` steps before labeling to bridge
+    thin/faint gaps (e.g. soft tissue edges, skin folds) that could otherwise
+    fragment a single region into multiple components, then intersects the
+    result back with the original mask so no pixels are added beyond the
+    true foreground boundary.
+
+    Args:
+        mask: Boolean-like array, (H, W) for 2D or (D, H, W) for 3D.
+        closing_iterations: Dilation steps used to bridge gaps before
+            labeling. Increase if a real region is getting fragmented/
+            truncated; decrease if disconnected artifacts (e.g. text)
+            start merging into the kept region. Set to 0 to disable bridging.
+
+    Returns:
+        Boolean array, same shape as `mask`, True only where the largest
+        connected component is.
+    """
+    mask = np.asarray(mask).astype(bool)
+    if not mask.any():
+        return mask
+    structure = np.ones((3,) * mask.ndim, dtype=bool)
+    bridged = (
+        ndimage.binary_dilation(mask, structure=structure, iterations=closing_iterations)
+        if closing_iterations > 0
+        else mask
+    )
+    labeled, num_components = ndimage.label(bridged, structure=structure)
+    if num_components <= 1:
+        return mask
+    sizes = ndimage.sum(bridged, labeled, index=range(1, num_components + 1))
+    largest_label = 1 + int(np.argmax(sizes))
+    return np.logical_and(mask, labeled == largest_label)
 
 
 def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
