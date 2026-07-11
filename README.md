@@ -56,7 +56,7 @@ pip install "medicai[dev]"
 
 # Quick Overview
 
-For details end-to-end training workflow, please check the [guide](#-guides) section.
+For details end-to-end training workflow, please check the [code-example](https://medicai.readthedocs.io/en/latest/guides/example.html) section.
 
 ```python
 from medicai.models import SwinUNETR, UNet
