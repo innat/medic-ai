@@ -67,6 +67,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             ``None`` to skip storing them.
         end_coord_key: Metadata key used to store crop end coordinates, or
             ``None`` to skip storing them.
+        allow_missing_keys: If ``True``, missing keys are skipped.
         mask_postprocess: Optional cleanup step applied to the foreground mask
             (after ``select_fn``, before the bounding box is computed). Accepts
             either a preset name (``"largest_component"``) or a custom callable
@@ -105,8 +106,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 sample of your own data, since the right amount of bridging
                 differs by modality (thin gaps at soft tissue edges in 2D
                 mammography vs. tighter anatomy-to-artifact spacing in 3D CT).
-
-        allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
         Crop a 2D image-label pair using a raw Python dictionary:
