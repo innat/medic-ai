@@ -11,6 +11,7 @@ from medicai.transforms import (
     Orientation,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -1809,6 +1810,72 @@ def test_random_rotate_allow_missing_keys_and_prob_zero():
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_preserves_shape_and_records_trace():
+    image = as_tensor(np.random.randn(8, 9, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 3, (8, 9, 1)).astype(np.int32))
+
+    out = RandomElasticTransform(keys=["image", "label"], alpha=4.0, sigma=2.0, prob=1.0)(
+        TensorBundle({"image": image, "label": label})
+    )
+
+    assert tuple(ops.shape(out["image"])) == (8, 9, 1)
+    assert tuple(ops.shape(out["label"])) == (8, 9, 1)
+    trace = out.get_applied_transforms()[-1]
+    assert trace["name"] == "RandomElasticTransform"
+    assert bool(ops.convert_to_numpy(trace["applied"]))
+    assert trace["random"] is True
+    assert trace["invertible"] is False
+    assert trace["kernel"] == "elastic_deformation"
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_supports_3d_and_preserves_label_dtype():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 4, (4, 5, 6, 1)).astype(np.int32))
+
+    out = RandomElasticTransform(keys=["image", "label"], alpha=3.0, sigma=1.5, prob=1.0)(
+        TensorBundle({"image": image, "label": label})
+    )
+
+    assert tuple(ops.shape(out["image"])) == (4, 5, 6, 1)
+    assert tuple(ops.shape(out["label"])) == (4, 5, 6, 1)
+    assert out["label"].dtype == label.dtype
+    output_labels = np.unique(ops.convert_to_numpy(out["label"]))
+    source_labels = np.unique(ops.convert_to_numpy(label))
+    assert set(output_labels.tolist()).issubset(set(source_labels.tolist()))
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_prob_zero_is_noop():
+    image = as_tensor(np.random.randn(6, 7, 1).astype(np.float32))
+    transform = RandomElasticTransform(keys=["image"], alpha=4.0, sigma=2.0, prob=0.0)
+
+    out = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
+    assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_validates_arguments():
+    with pytest.raises(ValueError, match="non-negative"):
+        RandomElasticTransform(keys=["image"], alpha=-1.0)
+
+    with pytest.raises(ValueError, match="strictly positive"):
+        RandomElasticTransform(keys=["image"], sigma=0.0)
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_validates_spatial_shape_consistency():
+    image = as_tensor(np.random.randn(8, 9, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (7, 9, 1)).astype(np.int32))
+    transform = RandomElasticTransform(keys=["image", "label"], alpha=4.0, sigma=2.0, prob=1.0)
+
+    with pytest.raises(tf.errors.InvalidArgumentError, match="same spatial shape"):
+        transform(TensorBundle({"image": image, "label": label}))
 
 
 @pytest.mark.unit

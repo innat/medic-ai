@@ -13,6 +13,7 @@ from medicai.transforms import (
     RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -364,6 +365,29 @@ def test_random_rotate_and_cutout_run_under_tf_function():
     assert tuple(ops.shape(rotated_label)) == (4, 5, 6, 1)
     assert tuple(ops.shape(cutout_2d)) == (8, 8, 1)
     assert tuple(ops.shape(cutout_3d)) == (4, 5, 6, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_deformation_runs_under_tf_function():
+    random_elastic = RandomElasticTransform(
+        keys=["image", "label"],
+        alpha=3.0,
+        sigma=1.5,
+        prob=1.0,
+    )
+
+    image = as_tensor(np.random.randn(6, 7, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (6, 7, 1)).astype(np.int32))
+
+    @tf.function
+    def apply_transform(x, y):
+        result = random_elastic({"image": x, "label": y})
+        return result["image"], result["label"]
+
+    out_image, out_label = apply_transform(image, label)
+
+    assert tuple(ops.shape(out_image)) == (6, 7, 1)
+    assert tuple(ops.shape(out_label)) == (6, 7, 1)
 
 
 @pytest.mark.unit
