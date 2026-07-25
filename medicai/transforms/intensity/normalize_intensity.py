@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
+from ..utils import custom_tf_boolean_mask
 
 
 class NormalizeIntensity(KeyedTransform):
@@ -134,7 +135,7 @@ class NormalizeIntensity(KeyedTransform):
 
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask = channel_and_mask
-            channel_masked = tf.boolean_mask(channel, channel_mask)
+            channel_masked = custom_tf_boolean_mask(channel, channel_mask, mode="extract")
             has_valid = tf.size(channel_masked) > 0
 
             def normalize_nonempty():
@@ -172,7 +173,7 @@ class NormalizeIntensity(KeyedTransform):
         num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
 
         def normalize():
-            vals = tf.boolean_mask(tensor, mask)
+            vals = custom_tf_boolean_mask(tensor, mask, mode="extract")
             mean = tf.reduce_mean(vals)
             std = tf.math.reduce_std(vals)
             std = tf.where(std == 0.0, 1.0, std)

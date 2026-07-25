@@ -4,6 +4,45 @@ from scipy import ndimage
 import tensorflow as tf
 
 
+def custom_tf_boolean_mask(
+    tensor: tf.Tensor,
+    mask: tf.Tensor,
+    mode: str = "extract",
+    fill_value=0,
+) -> tf.Tensor:
+    """Apply boolean-style masking using low-level TensorFlow ops.
+
+    This helper exists because ``tf.boolean_mask`` has shown nondeterministic
+    failures in some multi-threaded GPU data pipeline contexts. See TensorFlow
+    issue ``#123980`` for background.
+
+    Args:
+        tensor: Input tensor to mask.
+        mask: Boolean or numeric mask aligned with ``tensor``.
+        mode: Masking strategy. ``"extract"`` gathers only the selected
+            elements, ``"where"`` preserves the original shape and fills
+            masked-out entries with ``fill_value``, and ``"multiply"`` applies
+            elementwise masking after casting the mask to ``tensor.dtype``.
+        fill_value: Scalar fill value used only when ``mode="where"``.
+
+    Returns:
+        tf.Tensor: Masked tensor according to the requested mode.
+
+    Raises:
+        ValueError: If ``mode`` is unsupported.
+    """
+    bool_mask = tf.cast(mask, tf.bool) if mask.dtype != tf.bool else mask
+
+    if mode == "extract":
+        indices = tf.where(bool_mask)
+        return tf.gather_nd(tensor, indices)
+    if mode == "where":
+        return tf.where(bool_mask, tensor, tf.cast(fill_value, tensor.dtype))
+    if mode == "multiply":
+        return tf.multiply(tensor, tf.cast(mask, tensor.dtype))
+    raise ValueError(f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'.")
+
+
 def largest_component_mask(mask: np.ndarray, closing_iterations: int = 2) -> np.ndarray:
     """Keep only the largest connected foreground component of a binary mask.
 
