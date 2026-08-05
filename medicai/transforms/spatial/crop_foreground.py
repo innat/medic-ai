@@ -8,21 +8,8 @@ from ..utils import (
     ensure_spatial_tuple,
     get_spatial_rank,
     get_spatial_shape,
-    largest_component_mask,
 )
 from .spatial_crop import SpatialCrop
-
-
-def largest_component_mask_tf(mask: tf.Tensor) -> tf.Tensor:
-    """tf.py_function bridge so the pure-numpy algorithm can run inside
-    CropForeground's tf.cond/tf.where graph-mode bounding-box path."""
-
-    def _np_fn(mask_t):
-        return largest_component_mask(mask_t.numpy()).astype(bool)
-
-    cleaned = tf.py_function(func=_np_fn, inp=[mask], Tout=tf.bool)
-    cleaned.set_shape(mask.shape)
-    return cleaned
 
 
 class CropForeground(KeyedTransform, InvertibleTransform):
@@ -68,15 +55,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         end_coord_key: Metadata key used to store crop end coordinates, or
             ``None`` to skip storing them.
         allow_missing_keys: If ``True``, missing keys are skipped.
-        mask_postprocess: Optional cleanup step applied to the foreground mask
-            (after ``select_fn``, before the bounding box is computed). Accepts
-            either a preset name (``"largest_component"``) or a custom callable
-            that takes a boolean mask and returns a boolean mask of the same
-            shape. Use this when ``select_fn`` alone over- or under-segments the
-            foreground because it can only see pixel values, not spatial
-            structure; for example when non-anatomical content (scanner text,
-            laterality labels, markers) shares intensity with real foreground
-            and gets pulled into the bounding box, inflating the crop.
 
         .. note::
 
@@ -174,7 +152,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         k_divisible: Union[Sequence[int], int] = 1,
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
-        mask_postprocess: Optional[Union[str, Callable]] = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -193,14 +170,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         self.k_divisible = k_divisible
         self.start_coord_key = start_coord_key
         self.end_coord_key = end_coord_key
-        self.mask_postprocess_fn = self._resolve_postprocess(mask_postprocess)
-
-    def _resolve_postprocess(self, spec):
-        if spec is None or callable(spec):
-            return spec
-        if spec == "keep_largest_connected_component":
-            return largest_component_mask_tf
-        raise ValueError(f"Unknown mask_postprocess preset: {spec!r}")
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:
@@ -297,10 +266,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Find the bounding box of the foreground in the image."""
         mask = tf.reduce_any(select_fn(image), axis=-1)
-
-        if self.mask_postprocess_fn is not None:
-            mask = self.mask_postprocess_fn(mask)
-
         coords = tf.where(mask)
         coord_dtype = coords.dtype
 
