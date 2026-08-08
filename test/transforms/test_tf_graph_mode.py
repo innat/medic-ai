@@ -853,6 +853,49 @@ def test_random_crop_by_pos_neg_label_forward_and_inverse_run_under_tf_function_
 
 
 @pytest.mark.unit
+def test_compose_random_crop_by_pos_neg_label_inverse_supports_batch_mode_under_tf_function():
+    pipeline = Compose(
+        [
+            RandomCropByPosNegLabel(
+                keys=["image", "label"],
+                target_shape=(3, 3),
+                pos=1,
+                neg=0,
+                input_mode="batch",
+            ),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+        ]
+    )
+
+    image = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[:, 2:5, 2:5, 0] = np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3)
+    image = as_tensor(image_np)
+
+    label = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
+    label_np = ops.convert_to_numpy(label)
+    label_np[:, 3, 3, 0] = 1.0
+    label = as_tensor(label_np)
+
+    @tf.function
+    def apply_and_inverse(x, y):
+        forward = pipeline({"image": x, "label": y})
+        restored = pipeline.inverse(forward)
+        return restored["image"], restored["label"]
+
+    restored_image, restored_label = apply_and_inverse(image, label)
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_image),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_label),
+        ops.convert_to_numpy(label),
+    )
+
+
+@pytest.mark.unit
 def test_random_rotate_and_cutout_run_under_tf_function():
     random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)
     random_cutout_2d = RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0)
