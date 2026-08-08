@@ -619,6 +619,12 @@ class RandomChoice(RandomTransform):
         if not tf.executing_eagerly():
             return self._apply_graph_choice(bundle)
 
+        params = self.get_random_params(bundle)
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, Any]:
+        """Sample eager-mode child-transform selection parameters."""
+        del bundle
         should_apply = self.sample_should_apply()
         should_apply_bool = _trace_applied_to_bool(should_apply)
 
@@ -634,21 +640,34 @@ class RandomChoice(RandomTransform):
                 selected_names = [
                     type(self.transforms[index]).__name__ for index in selected_indices
                 ]
-                for index in selected_indices:
-                    bundle = self.transforms[index](bundle)
+
+        return {
+            "selected_indices": list(selected_indices),
+            "selected_names": list(selected_names),
+            "num_choices": (self.min_choices, self.max_choices),
+        }
+
+    def apply_with_params(self, bundle: TensorBundle, params: Mapping[str, Any]) -> TensorBundle:
+        """Apply the sampled eager-mode child-transform sequence."""
+        for index in params["selected_indices"]:
+            bundle = self.transforms[index](bundle)
 
         self.record_random_transform(
             bundle,
-            params={
-                "selected_indices": list(selected_indices),
-                "selected_names": list(selected_names),
-                "num_selected": len(selected_indices),
-                "num_choices": (self.min_choices, self.max_choices),
-            },
-            applied=bool(selected_indices),
+            params=self.build_trace_params(params),
+            applied=bool(params["selected_indices"]),
             kernel="RandomChoice",
         )
         return bundle
+
+    def build_trace_params(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Build random trace metadata for the current choice selection."""
+        return {
+            "selected_indices": list(params["selected_indices"]),
+            "selected_names": list(params["selected_names"]),
+            "num_selected": len(params["selected_indices"]),
+            "num_choices": params["num_choices"],
+        }
 
     def _apply_graph_choice(self, bundle: TensorBundle) -> TensorBundle:
         data_keys = tuple(bundle.data.keys())
