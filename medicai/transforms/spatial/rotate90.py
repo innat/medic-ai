@@ -42,7 +42,12 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         spatial_axis: Two axes defining the rotation plane. If ``None``, the
             transform rotates in the last two spatial dimensions. In batch
             mode, axes are still expressed relative to the spatial dimensions
-            only, so the batch axis is never included.
+            only, so the batch axis is never included. For 2D tensors, the
+            only meaningful plane is ``(0, 1)``, which corresponds to the
+            vertical-height and horizontal-width image axes. For 3D tensors,
+            the valid spatial planes are ``(1, 2)`` for the axial plane,
+            ``(0, 2)`` for the coronal plane, and ``(0, 1)`` for the
+            sagittal plane when using sample-space axis numbering ``(D, H, W)``.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
             tensors.

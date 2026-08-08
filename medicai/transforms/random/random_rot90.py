@@ -36,7 +36,12 @@ class RandomRotate90(RandomTransform):
         prob: Probability of applying the rotation.
         max_k: Maximum number of quarter turns sampled per call.
         spatial_axis: Two axes defining the rotation plane. If ``None``, the
-            last two spatial dimensions are used.
+            last two spatial dimensions are used. For 2D tensors, the only
+            meaningful plane is ``(0, 1)``, which corresponds to the
+            vertical-height and horizontal-width image axes. For 3D tensors,
+            the valid spatial planes are ``(1, 2)`` for the axial plane,
+            ``(0, 2)`` for the coronal plane, and ``(0, 1)`` for the
+            sagittal plane when using sample-space axis numbering ``(D, H, W)``.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
             tensors.
