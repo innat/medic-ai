@@ -6,6 +6,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
+from ..utils import validate_input_mode, validate_layout
 
 
 class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
@@ -16,10 +17,16 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     ``[output_min, output_max]``. This is useful for bringing image intensities into a
     stable range such as ``[0, 1]`` or ``[-1, 1]`` before training.
 
-    The transform expects channel-last image tensors such as ``(H, W, C)`` or
-    ``(D, H, W, C)``. It does not infer source ranges from the data; callers
-    must provide medically meaningful source bounds. Integer inputs such as
-    ``uint8`` are supported and are cast to ``dtype`` before scaling.
+    Depending on ``input_mode``, this transform supports:
+
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
+
+    It does not infer source ranges from the data; callers must provide
+    medically meaningful source bounds. Integer inputs such as ``uint8`` are
+    supported and are cast to ``dtype`` before scaling.
 
     Args:
         keys: Keys of the tensors to scale.
@@ -31,6 +38,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: If ``True`` and both ``output_min`` and ``output_max`` are provided, clip
             the output to the target interval after scaling.
         dtype: Output dtype used for computation and returned tensors.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -109,6 +119,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         output_max: Optional[float] = None,
         clip: bool = False,
         dtype: tf.DType = tf.float32,
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -122,6 +133,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         self.output_max = output_max
         self.clip = clip
         self.dtype = dtype
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
     @property
     def invertible(self) -> bool:
@@ -134,20 +146,11 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         return True
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_transform_params(bundle)
         present_keys = self.apply_to_present_keys(
-            bundle, lambda tensor, _: self.scale_tensor(tensor)
+            bundle, lambda tensor, _: self.transform_tensor(tensor, params)
         )
-        self.record_transform(
-            bundle,
-            {
-                "keys": list(present_keys),
-                "input_min": self.input_min,
-                "input_max": self.input_max,
-                "output_min": self.output_min,
-                "output_max": self.output_max,
-                "clip": self.clip,
-            },
-        )
+        self.record_transform(bundle, self.build_trace_params(params, present_keys))
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -177,22 +180,99 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         )
         return bundle
 
-    def scale_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
-        """Scale one tensor from source range to target range."""
+    def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Prepare forward-pass parameters for this range scaling."""
+        del bundle
+        return {
+            "input_min": self.input_min,
+            "input_max": self.input_max,
+            "output_min": self.output_min,
+            "output_max": self.output_max,
+            "clip": self.clip,
+            "input_mode": self.input_mode,
+        }
+
+    def transform_tensor(
+        self,
+        tensor: tf.Tensor,
+        params: dict[str, object],
+    ) -> tf.Tensor:
+        """Scale one tensor using prepared transform parameters."""
+        self._validate_tensor_layout(tensor)
+        return self.scale_tensor(
+            tensor,
+            input_min=params["input_min"],
+            input_max=params["input_max"],
+            output_min=params["output_min"],
+            output_max=params["output_max"],
+            clip=params["clip"],
+        )
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+    ) -> dict[str, object]:
+        """Build invertible trace metadata for the current range scaling."""
+        return {
+            "keys": list(present_keys),
+            "input_min": params["input_min"],
+            "input_max": params["input_max"],
+            "output_min": params["output_min"],
+            "output_max": params["output_max"],
+            "clip": params["clip"],
+            "input_mode": params["input_mode"],
+        }
+
+    def scale_tensor(
+        self,
+        tensor: tf.Tensor,
+        input_min: float | None = None,
+        input_max: float | None = None,
+        output_min: float | None = None,
+        output_max: float | None = None,
+        clip: bool | None = None,
+    ) -> tf.Tensor:
+        """Scale one sample or batch tensor from source range to target range."""
         tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
-        if self.input_max == self.input_min:
+        return self.scale_batch_tensor(
+            tensor,
+            input_min=input_min,
+            input_max=input_max,
+            output_min=output_min,
+            output_max=output_max,
+            clip=clip,
+        )
+
+    def scale_batch_tensor(
+        self,
+        tensor: tf.Tensor,
+        input_min: float | None = None,
+        input_max: float | None = None,
+        output_min: float | None = None,
+        output_max: float | None = None,
+        clip: bool | None = None,
+    ) -> tf.Tensor:
+        """Scale a tensor with a kernel that is agnostic to sample vs batch layout."""
+        in_min = self.input_min if input_min is None else input_min
+        in_max = self.input_max if input_max is None else input_max
+        out_min = self.output_min if output_min is None else output_min
+        out_max = self.output_max if output_max is None else output_max
+        should_clip = self.clip if clip is None else clip
+
+        if in_max == in_min:
             result = (
-                tensor - self.input_min
-                if self.output_min is None
-                else tensor - self.input_min + self.output_min
+                tensor - in_min
+                if out_min is None
+                else tensor - in_min + out_min
             )
             return tf.cast(result, dtype=self.dtype)
 
-        tensor = (tensor - self.input_min) / (self.input_max - self.input_min)
-        if self.output_min is not None and self.output_max is not None:
-            tensor = tensor * (self.output_max - self.output_min) + self.output_min
-        if self.clip and self.output_min is not None and self.output_max is not None:
-            tensor = tf.clip_by_value(tensor, self.output_min, self.output_max)
+        tensor = (tensor - in_min) / (in_max - in_min)
+        if out_min is not None and out_max is not None:
+            tensor = tensor * (out_max - out_min) + out_min
+        if should_clip and out_min is not None and out_max is not None:
+            tensor = tf.clip_by_value(tensor, out_min, out_max)
         return tf.cast(tensor, dtype=self.dtype)
 
     def inverse_scale_tensor(
@@ -203,7 +283,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         output_min: float | None = None,
         output_max: float | None = None,
     ) -> tf.Tensor:
-        """Invert one tensor from target range back to source range."""
+        """Invert one sample or batch tensor from target range back to source range."""
         tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
 
         in_min = self.input_min if input_min is None else input_min
@@ -216,6 +296,15 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
 
         tensor = tensor * (in_max - in_min) + in_min
         return tf.cast(tensor, dtype=self.dtype)
+
+    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+        """Validate sample or batch channel-last layout for intensity scaling."""
+        validate_layout(
+            tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

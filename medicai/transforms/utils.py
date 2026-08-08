@@ -1,6 +1,28 @@
+from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 import tensorflow as tf
+
+
+@dataclass(frozen=True)
+class LayoutInfo:
+    """Static layout description for a channel-last transform tensor.
+
+    Args:
+        tensor_rank: Total tensor rank.
+        spatial_rank: Number of spatial axes.
+        batched: Whether the leading axis is interpreted as batch.
+        batch_axis: Batch-axis index when ``batched=True``; otherwise ``None``.
+        channel_axis: Channel-axis index.
+        spatial_axes: Spatial-axis indices in tensor order.
+    """
+
+    tensor_rank: int
+    spatial_rank: int
+    batched: bool
+    batch_axis: int | None
+    channel_axis: int
+    spatial_axes: tuple[int, ...]
 
 
 def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
@@ -39,15 +61,158 @@ def get_tensor_rank(tensor: tf.Tensor) -> int:
     return rank
 
 
+def resolve_layout(
+    tensor: tf.Tensor,
+    *,
+    input_mode: str = "sample",
+    allowed_spatial_ranks: Sequence[int] = (2, 3),
+) -> LayoutInfo:
+    """Resolve static channel-last layout information for a transform tensor.
+
+    Args:
+        tensor: Tensor in Medic-AI channel-last layout.
+        input_mode: Either ``"sample"`` or ``"batch"``.
+        allowed_spatial_ranks: Allowed spatial ranks after interpreting the
+            tensor according to ``input_mode``.
+
+    Returns:
+        LayoutInfo: Resolved static layout metadata.
+
+    Raises:
+        ValueError: If ``input_mode`` is invalid, the tensor rank is too low,
+            or the resolved spatial rank is unsupported.
+    """
+    if input_mode not in {"sample", "batch"}:
+        raise ValueError(
+            f"`input_mode` must be either 'sample' or 'batch'. Received {input_mode!r}."
+        )
+
+    tensor_rank = get_tensor_rank(tensor)
+    minimum_rank = 3 if input_mode == "sample" else 4
+    if tensor_rank < minimum_rank:
+        expected = "(H, W, C) / (D, H, W, C)" if input_mode == "sample" else (
+            "(B, H, W, C) / (B, D, H, W, C)"
+        )
+        raise ValueError(
+            f"Expected a channel-last {input_mode} tensor shaped like {expected}. "
+            f"Received rank {tensor_rank} with shape {tensor.shape}."
+        )
+
+    spatial_rank = tensor_rank - 1 if input_mode == "sample" else tensor_rank - 2
+    if spatial_rank not in allowed_spatial_ranks:
+        allowed = ", ".join(str(rank) for rank in allowed_spatial_ranks)
+        raise ValueError(
+            f"Expected spatial rank in ({allowed}) for input_mode={input_mode!r}, "
+            f"received {spatial_rank} for shape {tensor.shape}."
+        )
+
+    batch_axis = 0 if input_mode == "batch" else None
+    channel_axis = tensor_rank - 1
+    spatial_start = 1 if input_mode == "batch" else 0
+    spatial_axes = tuple(range(spatial_start, channel_axis))
+
+    return LayoutInfo(
+        tensor_rank=tensor_rank,
+        spatial_rank=spatial_rank,
+        batched=input_mode == "batch",
+        batch_axis=batch_axis,
+        channel_axis=channel_axis,
+        spatial_axes=spatial_axes,
+    )
+
+
+def custom_tf_boolean_mask(
+    tensor: tf.Tensor,
+    mask: tf.Tensor,
+    mode: str = "extract",
+    fill_value: float | int = 0,
+) -> tf.Tensor:
+    """Apply a TensorFlow-native boolean mask without calling ``tf.boolean_mask``.
+
+    Args:
+        tensor: Input tensor.
+        mask: Boolean-like mask tensor broadcastable to ``tensor``.
+        mode: One of ``"extract"``, ``"where"``, or ``"multiply"``.
+        fill_value: Fill value used when ``mode="where"``.
+
+    Returns:
+        tf.Tensor: Masked tensor according to ``mode``.
+    """
+    bool_mask = tf.cast(mask, tf.bool) if mask.dtype != tf.bool else mask
+
+    if mode == "extract":
+        indices = tf.where(bool_mask)
+        return tf.gather_nd(tensor, indices)
+    if mode == "where":
+        fill_tensor = tf.cast(fill_value, tensor.dtype)
+        return tf.where(bool_mask, tensor, fill_tensor)
+    if mode == "multiply":
+        numeric_mask = tf.cast(mask, tensor.dtype)
+        return tf.multiply(tensor, numeric_mask)
+    raise ValueError(
+        f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."
+    )
+
+
+def validate_input_mode(
+    input_mode: str,
+    *,
+    supported_modes: Sequence[str] = ("sample", "batch"),
+    transform_name: str | None = None,
+) -> str:
+    """Validate and normalize a transform ``input_mode`` string.
+
+    Args:
+        input_mode: Candidate execution mode.
+        supported_modes: Modes accepted by the calling transform.
+        transform_name: Optional transform name for clearer error messages.
+
+    Returns:
+        str: The validated ``input_mode``.
+
+    Raises:
+        ValueError: If ``input_mode`` is unsupported.
+    """
+    normalized = str(input_mode)
+    if normalized not in supported_modes:
+        label = transform_name or "Transform"
+        supported = ", ".join(repr(mode) for mode in supported_modes)
+        raise ValueError(
+            f"{label} supports only input_mode values ({supported}). Received {normalized!r}."
+        )
+    return normalized
+
+
+def validate_layout(
+    tensor: tf.Tensor,
+    *,
+    input_mode: str,
+    allowed_spatial_ranks: Sequence[int] = (2, 3),
+    transform_name: str | None = None,
+) -> LayoutInfo:
+    """Resolve and validate tensor layout for one transform call.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        input_mode: Either ``"sample"`` or ``"batch"``.
+        allowed_spatial_ranks: Accepted spatial ranks for the transform.
+        transform_name: Optional transform name for clearer error messages.
+
+    Returns:
+        LayoutInfo: Resolved static layout metadata.
+    """
+    del transform_name
+    input_mode = validate_input_mode(input_mode)
+    return resolve_layout(
+        tensor,
+        input_mode=input_mode,
+        allowed_spatial_ranks=allowed_spatial_ranks,
+    )
+
+
 def get_spatial_rank(tensor: tf.Tensor) -> int:
     """Return the number of spatial dimensions in a channel-last sample tensor."""
-    rank = get_tensor_rank(tensor)
-    if rank < 2:
-        raise ValueError(
-            "Expected a channel-last sample tensor with at least one spatial axis and one "
-            f"channel axis. Received rank {rank}."
-        )
-    return rank - 1
+    return resolve_layout(tensor, input_mode="sample").spatial_rank
 
 
 def validate_spatial_rank(
@@ -55,20 +220,53 @@ def validate_spatial_rank(
     allowed_ranks: Sequence[int] = (2, 3),
 ) -> int:
     """Validate the spatial rank of a channel-last sample tensor."""
-    spatial_rank = get_spatial_rank(tensor)
-    if spatial_rank not in allowed_ranks:
-        allowed = ", ".join(str(rank) for rank in allowed_ranks)
-        raise ValueError(
-            f"Expected spatial rank in ({allowed}), received {spatial_rank} "
-            f"for shape {tensor.shape}."
-        )
-    return spatial_rank
+    return resolve_layout(
+        tensor,
+        input_mode="sample",
+        allowed_spatial_ranks=allowed_ranks,
+    ).spatial_rank
 
 
-def get_spatial_shape(tensor: tf.Tensor) -> tf.Tensor:
-    """Return the dynamic spatial shape of a channel-last sample tensor."""
-    spatial_rank = get_spatial_rank(tensor)
-    return tf.shape(tensor)[:spatial_rank]
+def get_spatial_shape(tensor: tf.Tensor, *, input_mode: str = "sample") -> tf.Tensor:
+    """Return the dynamic spatial shape of a channel-last tensor.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        input_mode: Either ``"sample"`` or ``"batch"``.
+
+    Returns:
+        tf.Tensor: Dynamic spatial shape.
+    """
+    layout = resolve_layout(tensor, input_mode=input_mode)
+    return tf.gather(tf.shape(tensor), layout.spatial_axes)
+
+
+def ensure_batch_axis(
+    tensor: tf.Tensor,
+    *,
+    input_mode: str,
+) -> tuple[tf.Tensor, bool]:
+    """Normalize a sample or batch tensor to a batched view.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        input_mode: Either ``"sample"`` or ``"batch"``.
+
+    Returns:
+        tuple[tf.Tensor, bool]: A pair ``(batched_tensor, added_batch_axis)``
+        where ``added_batch_axis`` is ``True`` only when a leading singleton
+        batch axis was inserted for sample-mode input.
+    """
+    if input_mode == "sample":
+        return tensor[None, ...], True
+    return tensor, False
+
+
+def restore_from_batch_axis(tensor: tf.Tensor, added_batch_axis: bool) -> tf.Tensor:
+    """Remove a temporary singleton batch axis added by :func:`ensure_batch_axis`."""
+    if added_batch_axis:
+        return tensor[0]
+    return tensor
 
 
 def ensure_spatial_tuple(
@@ -111,6 +309,35 @@ def normalize_spatial_axes(
 ) -> tuple[int, ...]:
     """Normalize axes expressed relative to spatial dimensions only."""
     return normalize_axes(axes, spatial_rank, name=name)
+
+
+def resolve_spatial_axes(
+    tensor: tf.Tensor,
+    axes: Sequence[int],
+    *,
+    input_mode: str = "sample",
+    allowed_spatial_ranks: Sequence[int] = (2, 3),
+    name: str = "spatial_axes",
+) -> tuple[int, ...]:
+    """Resolve spatial-relative axes against a channel-last tensor layout.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        axes: Axes expressed relative to the spatial dimensions only.
+        input_mode: Either ``"sample"`` or ``"batch"``.
+        allowed_spatial_ranks: Accepted spatial ranks for layout validation.
+        name: Axis-group name used in error messages.
+
+    Returns:
+        tuple[int, ...]: Tensor-axis indices corresponding to ``axes``.
+    """
+    layout = validate_layout(
+        tensor,
+        input_mode=input_mode,
+        allowed_spatial_ranks=allowed_spatial_ranks,
+    )
+    normalized = normalize_spatial_axes(axes, layout.spatial_rank, name=name)
+    return tuple(layout.spatial_axes[axis] for axis in normalized)
 
 
 # Affine Utility
@@ -191,6 +418,120 @@ def affine_apply(affine: tf.Tensor, points: tf.Tensor) -> tf.Tensor:
     homogeneous = tf.concat([points, ones], axis=-1)
     transformed = tf.linalg.matvec(affine, homogeneous)
     return transformed[..., :3]
+
+
+def orientation_from_affine(affine: tf.Tensor) -> tf.Tensor:
+    """Infer a three-letter orientation code from a 4x4 affine matrix."""
+    matrix = tf.cast(validate_affine_matrix(affine)[:3, :3], tf.float32)
+    current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
+    gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
+    signs = tf.gather_nd(matrix, gather_indices) >= 0
+
+    def axis_code(axis_index: tf.Tensor, sign: tf.Tensor) -> tf.Tensor:
+        return tf.case(
+            [
+                (tf.equal(axis_index, 0), lambda: tf.where(sign, "R", "L")),
+                (tf.equal(axis_index, 1), lambda: tf.where(sign, "A", "P")),
+            ],
+            default=lambda: tf.where(sign, "S", "I"),
+            exclusive=True,
+        )
+
+    codes = tf.map_fn(
+        lambda pair: axis_code(pair[0], tf.cast(pair[1], tf.bool)),
+        (current_axes, tf.cast(signs, tf.int32)),
+        fn_output_signature=tf.string,
+    )
+    return tf.strings.reduce_join(codes)
+
+
+def compute_orientation_transform(
+    affine: tf.Tensor,
+    target_tensor_axcodes: str,
+) -> dict[str, tf.Tensor]:
+    """Compute spatial permutation and flips for a target tensor orientation."""
+    axis_to_world = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
+    axis_to_sign = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
+
+    matrix = tf.cast(validate_affine_matrix(affine)[:3, :3], tf.float32)
+    current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
+    gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
+    current_signs = tf.sign(tf.gather_nd(matrix, gather_indices))
+    current_signs = tf.where(current_signs == 0, tf.ones_like(current_signs), current_signs)
+
+    target_axes = [axis_to_world[code] for code in target_tensor_axcodes]
+    perm_spatial = tf.stack(
+        [
+            tf.argmax(
+                tf.cast(tf.equal(current_axes, target_axis), tf.int32),
+                output_type=tf.int32,
+            )
+            for target_axis in target_axes
+        ]
+    )
+    current_signs_for_output = tf.gather(current_signs, perm_spatial)
+    target_signs = tf.constant(
+        [axis_to_sign[code] for code in target_tensor_axcodes],
+        dtype=tf.float32,
+    )
+    flip_axes = tf.reshape(
+        tf.where(tf.not_equal(current_signs_for_output, target_signs)),
+        [-1],
+    )
+    return {"perm_spatial": perm_spatial, "flip_axes": flip_axes}
+
+
+def reoriented_affine(
+    affine: tf.Tensor,
+    input_spatial_shape: tf.Tensor,
+    perm_spatial: tuple[int, int, int] | tf.Tensor,
+    flip_axes: tuple[int, ...] | tf.Tensor,
+) -> tf.Tensor:
+    """Update affine metadata for a spatial permutation and flips."""
+    affine = tf.cast(validate_affine_matrix(affine), tf.float32)
+    input_spatial_shape = tf.cast(input_spatial_shape, tf.float32)
+    perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
+    flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
+
+    flipped_output_mask = tf.scatter_nd(
+        indices=tf.expand_dims(flip_axes, axis=1),
+        updates=tf.ones_like(flip_axes, dtype=tf.float32),
+        shape=(3,),
+    )
+    signs = 1.0 - 2.0 * flipped_output_mask
+
+    transform = tf.eye(4, dtype=tf.float32)
+    spatial_block = tf.transpose(
+        tf.one_hot(perm_spatial, depth=3, dtype=tf.float32) * signs[:, None]
+    )
+    transform = tf.tensor_scatter_nd_update(
+        transform,
+        indices=[
+            [0, 0],
+            [0, 1],
+            [0, 2],
+            [1, 0],
+            [1, 1],
+            [1, 2],
+            [2, 0],
+            [2, 1],
+            [2, 2],
+        ],
+        updates=tf.reshape(spatial_block, [-1]),
+    )
+
+    flipped_input_mask = tf.scatter_nd(
+        indices=tf.expand_dims(perm_spatial, axis=1),
+        updates=flipped_output_mask,
+        shape=(3,),
+    )
+    translations = flipped_input_mask * (input_spatial_shape - 1.0)
+    transform = tf.tensor_scatter_nd_update(
+        transform,
+        indices=[[0, 3], [1, 3], [2, 3]],
+        updates=translations,
+    )
+    return tf.linalg.matmul(affine, transform)
 
 
 # Resampling Utility
@@ -448,6 +789,125 @@ def sample_volume(
     raise ValueError(
         f"Unsupported interpolation '{interpolation}'. Allowed values are 'nearest' and 'trilinear'."
     )
+
+
+def resize_volumes(
+    volumes: tf.Tensor,
+    depth: int | tf.Tensor,
+    height: int | tf.Tensor,
+    width: int | tf.Tensor,
+    method: str = "trilinear",
+    align_corners: bool = False,
+) -> tf.Tensor:
+    """Resize batched 3D channel-last volumes with TensorFlow-native kernels.
+
+    Args:
+        volumes: 5D tensor shaped ``(B, D, H, W, C)``.
+        depth: Output depth.
+        height: Output height.
+        width: Output width.
+        method: Either ``"trilinear"`` or ``"nearest"``.
+        align_corners: Whether to align the extreme input/output corners for
+            trilinear interpolation.
+
+    Returns:
+        tf.Tensor: Resized tensor shaped ``(B, depth, height, width, C)``.
+    """
+    # Keep this TensorFlow-native fallback localized here until Keras exposes
+    # an equivalent backend-agnostic 3D resize primitive.
+
+    def trilinear_resize(
+        volumes: tf.Tensor,
+        depth: int | tf.Tensor,
+        height: int | tf.Tensor,
+        width: int | tf.Tensor,
+        align_corners: bool,
+    ) -> tf.Tensor:
+        original_dtype = volumes.dtype
+        volumes = tf.cast(volumes, "float32")
+        in_d = tf.shape(volumes)[1]
+        in_h = tf.shape(volumes)[2]
+        in_w = tf.shape(volumes)[3]
+
+        if align_corners:
+            z_coords = tf.linspace(0.0, tf.cast(in_d - 1, "float32"), depth)
+            y_coords = tf.linspace(0.0, tf.cast(in_h - 1, "float32"), height)
+            x_coords = tf.linspace(0.0, tf.cast(in_w - 1, "float32"), width)
+        else:
+            scale_d = tf.cast(in_d, "float32") / tf.cast(depth, "float32")
+            scale_h = tf.cast(in_h, "float32") / tf.cast(height, "float32")
+            scale_w = tf.cast(in_w, "float32") / tf.cast(width, "float32")
+
+            z_coords = (tf.range(depth, dtype="float32") + 0.5) * scale_d - 0.5
+            y_coords = (tf.range(height, dtype="float32") + 0.5) * scale_h - 0.5
+            x_coords = (tf.range(width, dtype="float32") + 0.5) * scale_w - 0.5
+
+            z_coords = tf.clip_by_value(z_coords, 0.0, tf.cast(in_d - 1, "float32"))
+            y_coords = tf.clip_by_value(y_coords, 0.0, tf.cast(in_h - 1, "float32"))
+            x_coords = tf.clip_by_value(x_coords, 0.0, tf.cast(in_w - 1, "float32"))
+
+        def interpolate_1d(input_vol: tf.Tensor, coords: tf.Tensor, axis: int) -> tf.Tensor:
+            idx0 = tf.cast(tf.floor(coords), "int32")
+            idx1 = tf.minimum(idx0 + 1, tf.shape(input_vol)[axis] - 1)
+
+            values0 = tf.gather(input_vol, idx0, axis=axis)
+            values1 = tf.gather(input_vol, idx1, axis=axis)
+
+            weight1 = coords - tf.cast(idx0, "float32")
+            weight0 = 1.0 - weight1
+
+            new_shape = [1] * 5
+            new_shape[axis] = tf.shape(coords)[0]
+            weight0 = tf.reshape(weight0, new_shape)
+            weight1 = tf.reshape(weight1, new_shape)
+            return weight0 * values0 + weight1 * values1
+
+        interp_d = interpolate_1d(volumes, z_coords, axis=1)
+        interp_h = interpolate_1d(interp_d, y_coords, axis=2)
+        interp_w = interpolate_1d(interp_h, x_coords, axis=3)
+        return tf.cast(interp_w, original_dtype)
+
+    def nearest(
+        volumes: tf.Tensor,
+        depth: int | tf.Tensor,
+        height: int | tf.Tensor,
+        width: int | tf.Tensor,
+    ) -> tf.Tensor:
+        shape = tf.shape(volumes)
+        bs, d, h, w, c = shape[0], shape[1], shape[2], shape[3], shape[4]
+
+        z = tf.linspace(0.0, tf.cast(d - 1, "float32"), depth)
+        z = tf.cast(tf.round(z), "int32")
+        z = tf.clip_by_value(z, 0, d - 1)
+
+        y = tf.linspace(0.0, tf.cast(h - 1, "float32"), height)
+        y = tf.cast(tf.round(y), "int32")
+        y = tf.clip_by_value(y, 0, h - 1)
+
+        x = tf.linspace(0.0, tf.cast(w - 1, "float32"), width)
+        x = tf.cast(tf.round(x), "int32")
+        x = tf.clip_by_value(x, 0, w - 1)
+
+        z_grid, y_grid, x_grid = tf.meshgrid(z, y, x, indexing="ij")
+        z_grid = tf.reshape(z_grid, (-1,))
+        y_grid = tf.reshape(y_grid, (-1,))
+        x_grid = tf.reshape(x_grid, (-1,))
+
+        batch_idx = tf.repeat(tf.range(bs), tf.shape(z_grid)[0])
+        z_grid = tf.tile(z_grid, [bs])
+        y_grid = tf.tile(y_grid, [bs])
+        x_grid = tf.tile(x_grid, [bs])
+
+        flat = tf.reshape(volumes, (bs * d * h * w, c))
+        indices = (batch_idx * d * h * w) + (z_grid * h * w) + (y_grid * w) + x_grid
+        result = tf.gather(flat, indices, axis=0)
+        return tf.reshape(result, (bs, depth, height, width, c))
+
+    if method == "trilinear":
+        return trilinear_resize(volumes, depth, height, width, align_corners)
+    if method == "nearest":
+        return nearest(volumes, depth, height, width)
+    raise ValueError(f"Unsupported resize method: {method}")
 
 
 class SpatialResample:

@@ -1,10 +1,11 @@
 from typing import Sequence
 
+import keras
 import tensorflow as tf
 
 from ..base import RandomTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank
+from ..utils import validate_input_mode, validate_layout
 
 
 class RandomCutOut(RandomTransform):
@@ -12,9 +13,17 @@ class RandomCutOut(RandomTransform):
 
     ``RandomCutOut`` samples one or more rectangular masks and replaces the
     corresponding image regions with either a constant value or Gaussian
-    noise. It supports channel-last samples shaped ``(H, W, C)`` and
-    ``(D, H, W, C)`` and uses the paired label tensor to optionally avoid
-    masking invalid regions.
+    noise.
+
+    Depending on ``input_mode``, it supports:
+
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
+
+    The paired label tensor can optionally be used to avoid masking invalid
+    regions.
 
     Args:
         keys: Two keys containing the image tensor and label tensor.
@@ -24,6 +33,12 @@ class RandomCutOut(RandomTransform):
         fill_mode: Either ``"constant"`` or ``"gaussian"``.
         fill_value: Constant fill value used when ``fill_mode="constant"``.
         gaussian_std: Standard deviation for Gaussian fill noise.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors. In batch mode, one Bernoulli apply decision is sampled
+            for the full batch, while cutout masks are generated per sample.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``.
         invalid_label: Optional label value marking invalid regions.
         cutout_mode: Either ``"slice"`` for slice-wise masks or ``"volume"``
             for the same mask across all depth slices. For 2D inputs, both
@@ -84,11 +99,13 @@ class RandomCutOut(RandomTransform):
         fill_mode: str = "constant",
         fill_value: float = 0.0,
         gaussian_std: float = 0.1,
+        input_mode: str = "sample",
+        seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         cutout_mode: str = "volume",
         allow_missing_keys: bool = False,
     ):
-        super().__init__(prob=prob)
+        super().__init__(prob=prob, seed=seed)
         if len(keys) != 2:
             raise ValueError(
                 "`keys` must have length 2 and should contain image and label keys. "
@@ -116,6 +133,7 @@ class RandomCutOut(RandomTransform):
         self.fill_mode = fill_mode
         self.fill_value = fill_value
         self.gaussian_std = gaussian_std
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
@@ -129,21 +147,33 @@ class RandomCutOut(RandomTransform):
 
         image = bundle.data[self.image_key]
         label = bundle.data[self.label_key]
-        spatial_rank = get_spatial_rank(image)
-        if spatial_rank not in (2, 3):
-            raise ValueError(
-                f"{type(self).__name__} currently supports only 2D or 3D inputs; got spatial rank "
-                f"{spatial_rank} for shape {image.shape}."
-            )
+        layout = validate_layout(
+            image,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )
+        validate_layout(
+            label,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(layout.spatial_rank,),
+            transform_name=type(self).__name__,
+        )
+        spatial_rank = layout.spatial_rank
 
         should_apply = self.sample_should_apply()
-        mask = self.generate_cutout_mask(image, label, spatial_rank)
-
-        bundle.data[self.image_key] = tf.cond(
-            should_apply,
-            lambda: self.apply_cutout(image, mask),
-            lambda: image,
-        )
+        if self.input_mode == "batch":
+            bundle.data[self.image_key] = tf.cond(
+                should_apply,
+                lambda: self.apply_batch_cutout(image, label, spatial_rank),
+                lambda: image,
+            )
+        else:
+            bundle.data[self.image_key] = tf.cond(
+                should_apply,
+                lambda: self.apply_sample_cutout(image, label, spatial_rank),
+                lambda: image,
+            )
         self.record_random_transform(
             bundle,
             params={
@@ -152,17 +182,45 @@ class RandomCutOut(RandomTransform):
                 "num_cuts": self.num_cuts,
                 "fill_mode": self.fill_mode,
                 "cutout_mode": self.cutout_mode,
+                "input_mode": self.input_mode,
             },
             applied=should_apply,
             kernel="cutout_mask",
         )
         return bundle
 
+    def apply_sample_cutout(
+        self,
+        image: tf.Tensor,
+        label: tf.Tensor,
+        spatial_rank: int,
+    ) -> tf.Tensor:
+        """Apply cutout to one sample tensor using a freshly generated mask."""
+        mask = self.generate_cutout_mask(image, label, spatial_rank)
+        return self.apply_cutout(image, mask)
+
+    def apply_batch_cutout(
+        self,
+        images: tf.Tensor,
+        labels: tf.Tensor,
+        spatial_rank: int,
+    ) -> tf.Tensor:
+        """Apply cutout independently to each sample of a batch."""
+        return tf.map_fn(
+            lambda elems: self.apply_sample_cutout(elems[0], elems[1], spatial_rank),
+            (images, labels),
+            fn_output_signature=tf.TensorSpec(shape=images.shape[1:], dtype=images.dtype),
+        )
+
     def apply_cutout(self, image: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
         """Apply a generated cutout mask to the image tensor."""
         mask_bool = tf.cast(mask, tf.bool)
         if self.fill_mode == "gaussian":
-            noise = tf.random.normal(tf.shape(image), stddev=self.gaussian_std, dtype=image.dtype)
+            noise = self.random_normal(
+                shape=tf.shape(image),
+                stddev=self.gaussian_std,
+                dtype=image.dtype,
+            )
             im_min = tf.reduce_min(image)
             im_max = tf.reduce_max(image)
             nz_min = tf.reduce_min(noise)
@@ -208,8 +266,8 @@ class RandomCutOut(RandomTransform):
         x = tf.range(width)
 
         for _ in range(self.num_cuts):
-            cy = tf.random.uniform([], 0, height, tf.int32)
-            cx = tf.random.uniform([], 0, width, tf.int32)
+            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype=tf.int32)
+            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype=tf.int32)
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32) * valid_mask
@@ -235,8 +293,8 @@ class RandomCutOut(RandomTransform):
         x = tf.range(width)[None, :]
 
         for _ in range(self.num_cuts):
-            cy = tf.random.uniform([depth], 0, height, tf.int32)
-            cx = tf.random.uniform([depth], 0, width, tf.int32)
+            cy = self.random_integers(shape=[depth], minval=0, maxval=height, dtype=tf.int32)
+            cx = self.random_integers(shape=[depth], minval=0, maxval=width, dtype=tf.int32)
             y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
             x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
             rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32) * valid_mask
@@ -262,8 +320,8 @@ class RandomCutOut(RandomTransform):
         x = tf.range(width)
 
         for _ in range(self.num_cuts):
-            cy = tf.random.uniform([], 0, height, tf.int32)
-            cx = tf.random.uniform([], 0, width, tf.int32)
+            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype=tf.int32)
+            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype=tf.int32)
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
             rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)

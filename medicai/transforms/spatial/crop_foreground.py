@@ -8,6 +8,7 @@ from ..utils import (
     ensure_spatial_tuple,
     get_spatial_rank,
     get_spatial_shape,
+    validate_input_mode,
 )
 from .spatial_crop import SpatialCrop
 
@@ -19,6 +20,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     builds a bounding box around that region, and applies the same crop to all
     selected tensors. It supports both 2D channel-last tensors ``(H, W, C)``
     and 3D channel-last tensors ``(D, H, W, C)``.
+    This transform is sample-only. It does not support batched inputs.
 
     Foreground is computed by reducing the source tensor across the channel
     dimension and selecting spatial locations where ``select_fn`` evaluates to
@@ -54,6 +56,8 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             ``None`` to skip storing them.
         end_coord_key: Metadata key used to store crop end coordinates, or
             ``None`` to skip storing them.
+        input_mode: Execution mode for the transform. Only ``"sample"`` is
+            supported because foreground detection is defined per sample.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
         .. note::
@@ -71,12 +75,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 the rest of ``CropForeground`` (``margin``, ``allow_smaller``,
                 ``k_divisible``) exactly like the unmodified mask would.
             * **Limitations**: it only sees the mask, not the source image's
-                pixel values or any other tensor in ``keys``. Tt cannot make
+                pixel values or any other tensor in ``keys``. It cannot make
                 decisions based on intensity, texture, or content elsewhere in
                 the sample. It also cannot recover information that
                 ``select_fn`` already discarded. Built-in presets requiring
-                ``scipy`` are eager, host-side operations (bridged internally
-                via ``tf.py_function`` on the TensorFlow backend), so they run
+                ``scipy`` are eager, host-side operations, so they run
                 per-sample rather than as traceable ops; fine for a
                 ``tf.data`` input pipeline, not intended for use inside a
                 model's forward pass. Preset defaults (e.g. bridging/closing
@@ -152,6 +155,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         k_divisible: Union[Sequence[int], int] = 1,
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -170,6 +174,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         self.k_divisible = k_divisible
         self.start_coord_key = start_coord_key
         self.end_coord_key = end_coord_key
+        self.input_mode = validate_input_mode(
+            input_mode,
+            supported_modes=("sample",),
+            transform_name=type(self).__name__,
+        )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:

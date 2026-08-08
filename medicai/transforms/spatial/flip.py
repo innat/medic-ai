@@ -4,18 +4,26 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, normalize_spatial_axes
+from ..utils import (
+    ensure_batch_axis,
+    resolve_spatial_axes,
+    restore_from_batch_axis,
+    validate_input_mode,
+)
 
 
 class Flip(KeyedTransform, InvertibleTransform):
     """Flip selected tensors along one or more spatial axes.
 
-    ``Flip`` deterministically reverses channel-last sample tensors using
+    ``Flip`` deterministically reverses channel-last tensors using
     TensorFlow's ``tf.reverse``. It can be applied to common Medic-AI
-    dictionary-style samples such as image-label pairs and supports both:
+    dictionary-style samples such as image-label pairs. Depending on
+    ``input_mode``, it supports:
 
-    - 2D tensors shaped ``(H, W, C)``
-    - 3D tensors shaped ``(D, H, W, C)``
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     The transform is invertible because applying the same flip twice restores
     the original orientation. During :meth:`apply`, the normalized axes are
@@ -26,7 +34,12 @@ class Flip(KeyedTransform, InvertibleTransform):
         keys: Keys of the tensors to flip.
         spatial_axis: Spatial axis or axes to reverse. Axes follow the tensor's
             sample layout, so ``0`` refers to ``H`` for 2D tensors and ``D``
-            for 3D tensors. If ``None``, the transform is a no-op.
+            for 3D tensors. In batch mode, axes are still expressed relative to
+            the spatial dimensions only, so the batch axis is never included.
+            If ``None``, the transform is a no-op.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -91,59 +104,123 @@ class Flip(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str],
         spatial_axis: Union[int, Sequence[int], None] = None,
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.spatial_axis = spatial_axis
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        if self.spatial_axis is None:
+        params = self.get_transform_params(bundle)
+        if not params["applied"]:
             return bundle
 
-        normalized_axes = {"value": None}
-
-        def apply_flip(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            normalized_axes["value"] = self._resolve_axes(tensor)
-            return self.flip_tensor(tensor)
-
-        present_keys = self.apply_to_present_keys(bundle, apply_flip)
-
-        if normalized_axes["value"] is not None:
-            self.record_transform(
-                bundle,
-                {
-                    "keys": list(present_keys),
-                    "spatial_axis": normalized_axes["value"],
-                },
-            )
+        present_keys = self.apply_to_present_keys(
+            bundle,
+            lambda tensor, key: self.transform_tensor(tensor, key, params),
+        )
+        self.record_transform(bundle, self.build_trace_params(params, present_keys))
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         if self.spatial_axis is None:
             return bundle
 
-        self.apply_to_present_keys(bundle, lambda tensor, _: self.flip_tensor(tensor))
+        params = {
+            "applied": True,
+            "spatial_axis": self.spatial_axis,
+            "input_mode": self.input_mode,
+        }
+        self.apply_to_present_keys(
+            bundle,
+            lambda tensor, key: self.transform_tensor(tensor, key, params),
+        )
         return bundle
 
-    def flip_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
-        """Flip one tensor using the configured spatial axes.
+    def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Prepare forward-pass parameters for this flip."""
+        del bundle
+        return {
+            "applied": self.spatial_axis is not None,
+            "spatial_axis": self.spatial_axis,
+            "input_mode": self.input_mode,
+        }
+
+    def transform_tensor(
+        self,
+        tensor: tf.Tensor,
+        key: str,
+        params: dict[str, object],
+    ) -> tf.Tensor:
+        """Apply the configured flip kernel to one tensor."""
+        del key
+        return self.flip_tensor(tensor, spatial_axis=params["spatial_axis"])
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+    ) -> dict[str, object]:
+        """Build invertible trace metadata for the current flip."""
+        return {
+            "keys": list(present_keys),
+            "spatial_axis": params["spatial_axis"],
+            "input_mode": params["input_mode"],
+        }
+
+    def flip_tensor(
+        self,
+        tensor: tf.Tensor,
+        spatial_axis: Union[int, Sequence[int], None] = None,
+    ) -> tf.Tensor:
+        """Flip one tensor using explicit spatial axes.
 
         Args:
             tensor: Channel-last 2D or 3D sample tensor to reverse.
+            spatial_axis: Spatial axis or axes to flip. When omitted, the
+                transform's configured ``spatial_axis`` is used. When the
+                effective value is ``None``, the input tensor is returned
+                unchanged.
 
         Returns:
-            ``tf.Tensor``: The flipped tensor. If ``spatial_axis`` is
-            ``None``, the input tensor is returned unchanged.
+            ``tf.Tensor``: The flipped tensor.
         """
-        if self.spatial_axis is None:
+        effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
+        if effective_axis is None:
             return tensor
-        return tf.reverse(tensor, axis=self._resolve_axes(tensor))
+        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        flipped = self.flip_batch_tensor(batched_tensor, spatial_axis=effective_axis)
+        return restore_from_batch_axis(flipped, added_batch_axis)
 
-    def _resolve_axes(self, tensor: tf.Tensor) -> tuple[int, ...]:
-        axes = self.spatial_axis
+    def flip_batch_tensor(
+        self,
+        tensor: tf.Tensor,
+        spatial_axis: Union[int, Sequence[int], None] = None,
+    ) -> tf.Tensor:
+        """Flip a batched tensor using spatial axes expressed without the batch axis."""
+        effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
+        if effective_axis is None:
+            return tensor
+        return tf.reverse(
+            tensor,
+            axis=self._resolve_axes(tensor, spatial_axis=effective_axis, input_mode="batch"),
+        )
+
+    def _resolve_axes(
+        self,
+        tensor: tf.Tensor,
+        spatial_axis: Union[int, Sequence[int], None] = None,
+        input_mode: str | None = None,
+    ) -> tuple[int, ...]:
+        axes = self.spatial_axis if spatial_axis is None else spatial_axis
         if isinstance(axes, int):
             axes = (axes,)
         if axes is None:
             return ()
-        spatial_rank = get_spatial_rank(tensor)
-        return normalize_spatial_axes(tuple(axes), spatial_rank, name="spatial_axis")
+        return resolve_spatial_axes(
+            tensor,
+            tuple(axes),
+            input_mode=self.input_mode if input_mode is None else input_mode,
+            name="spatial_axis",
+        )

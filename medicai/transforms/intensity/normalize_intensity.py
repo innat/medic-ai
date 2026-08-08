@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
+from ..utils import custom_tf_boolean_mask, validate_input_mode, validate_layout
 
 
 class NormalizeIntensity(KeyedTransform):
@@ -15,10 +16,15 @@ class NormalizeIntensity(KeyedTransform):
     restricted to nonzero voxels or pixels when background values should be
     excluded from normalization.
 
-    This transform operates on channel-last tensors and is commonly used for
-    medical images shaped like ``(H, W, C)`` or ``(D, H, W, C)``. Label tensors
-    are usually not appropriate inputs unless a workflow explicitly requires
-    intensity-style normalization on them.
+    Depending on ``input_mode``, this transform supports:
+
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
+
+    Label tensors are usually not appropriate inputs unless a workflow
+    explicitly requires intensity-style normalization on them.
 
     Args:
         keys: Keys of the tensors to normalize.
@@ -34,6 +40,9 @@ class NormalizeIntensity(KeyedTransform):
             channel-specific statistics. If ``False``, normalize using one set
             of statistics over the full tensor.
         dtype: Output dtype used for computation and returned tensors.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -91,6 +100,7 @@ class NormalizeIntensity(KeyedTransform):
         nonzero: bool = False,
         channel_wise: bool = False,
         dtype=tf.float32,
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
@@ -99,6 +109,7 @@ class NormalizeIntensity(KeyedTransform):
         self.nonzero = nonzero
         self.channel_wise = channel_wise
         self.dtype = dtype
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -110,6 +121,7 @@ class NormalizeIntensity(KeyedTransform):
                     "keys": list(present_keys),
                     "nonzero": self.nonzero,
                     "channel_wise": self.channel_wise,
+                    "input_mode": self.input_mode,
                 },
                 applied=True,
                 random=False,
@@ -120,6 +132,7 @@ class NormalizeIntensity(KeyedTransform):
 
     def normalize_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
         """Normalize one tensor with the configured statistics policy."""
+        self._validate_tensor_layout(tensor)
         tensor = tf.cast(tensor, dtype=self.dtype or tensor.dtype)
         if self.channel_wise:
             normalized = self._normalize_channel_wise(tensor)
@@ -129,50 +142,49 @@ class NormalizeIntensity(KeyedTransform):
 
     def _normalize_channel_wise(self, tensor: tf.Tensor) -> tf.Tensor:
         mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        num_dims = tf.rank(tensor)
-        channel_axis = num_dims - 1
+        reduce_axes = tuple(range(tensor.shape.rank - 1))
+        mask_f = tf.cast(mask, tensor.dtype)
+        valid_counts = tf.reduce_sum(mask_f, axis=reduce_axes)
 
-        def normalize_single_channel(channel_and_mask):
-            channel, channel_mask = channel_and_mask
-            channel_masked = tf.boolean_mask(channel, channel_mask)
-            has_valid = tf.size(channel_masked) > 0
-
-            def normalize_nonempty():
-                mean = tf.reduce_mean(channel_masked)
-                std = tf.math.reduce_std(channel_masked)
-                sub = self.offset if self.offset is not None else mean
-                div = self.scale if self.scale is not None else std
-                sub = tf.cast(sub, channel.dtype)
-                div = tf.cast(div, channel.dtype)
-                div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-                normalized = (channel - sub) / div
-                if self.nonzero:
-                    return tf.where(channel_mask, normalized, channel)
-                return normalized
-
-            return tf.cond(has_valid, normalize_nonempty, lambda: channel)
-
-        permutation = tf.concat(
-            [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0
+        broadcast_shape = tf.concat(
+            [tf.ones([tensor.shape.rank - 1], dtype=tf.int32), [tf.shape(tensor)[-1]]],
+            axis=0,
         )
-        transposed_tensor = tf.transpose(tensor, perm=permutation)
-        transposed_mask = tf.transpose(mask, perm=permutation)
-        normalized_transposed = tf.map_fn(
-            normalize_single_channel,
-            (transposed_tensor, transposed_mask),
-            dtype=tensor.dtype,
+        valid_counts_b = tf.reshape(valid_counts, broadcast_shape)
+
+        masked_tensor = tf.where(mask, tensor, tf.zeros_like(tensor))
+        mean = tf.reduce_sum(masked_tensor, axis=reduce_axes) / tf.where(
+            valid_counts > 0,
+            valid_counts,
+            tf.ones_like(valid_counts),
         )
-        inverse_permutation = tf.concat(
-            [tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0
-        )
-        return tf.transpose(normalized_transposed, perm=inverse_permutation)
+        mean_b = tf.reshape(mean, broadcast_shape)
+
+        sq_diff = tf.where(mask, tf.square(tensor - mean_b), tf.zeros_like(tensor))
+        std = tf.sqrt(tf.reduce_sum(sq_diff, axis=reduce_axes) / tf.where(
+            valid_counts > 0,
+            valid_counts,
+            tf.ones_like(valid_counts),
+        ))
+        std_b = tf.reshape(std, broadcast_shape)
+
+        sub = mean_b if self.offset is None else tf.cast(self.offset, tensor.dtype)
+        div = std_b if self.scale is None else tf.cast(self.scale, tensor.dtype)
+        div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
+
+        normalized = (tensor - sub) / div
+        if self.nonzero:
+            normalized = tf.where(mask, normalized, tensor)
+
+        has_valid = valid_counts_b > 0
+        return tf.where(has_valid, normalized, tensor)
 
     def _normalize_global(self, tensor: tf.Tensor) -> tf.Tensor:
         mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
         num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
 
         def normalize():
-            vals = tf.boolean_mask(tensor, mask)
+            vals = custom_tf_boolean_mask(tensor, mask, mode="extract")
             mean = tf.reduce_mean(vals)
             std = tf.math.reduce_std(vals)
             std = tf.where(std == 0.0, 1.0, std)
@@ -184,3 +196,12 @@ class NormalizeIntensity(KeyedTransform):
             return (tensor - sub) / div
 
         return tf.cond(num_valid > 0, normalize, lambda: tensor)
+
+    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+        """Validate sample or batch channel-last layout for normalization."""
+        validate_layout(
+            tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )

@@ -2,7 +2,10 @@
 
 `medicai.transforms` provides TensorFlow-native preprocessing and augmentation
 utilities for medical imaging workflows. The transforms are designed to work
-cleanly inside `tf.data.Dataset` pipelines, or, ``keras.utils.PyDataset`` and, ``torch.utils.data.Dataset`` by converting samples to ``numpy``. Most of transformation are rank-agnostic across 2D and 3D channel-last tensors.
+cleanly inside `tf.data.Dataset` pipelines. They can also be used from
+`keras.utils.PyDataset` or `torch.utils.data.Dataset` by converting returned
+tensors to `numpy` when needed. Most transforms are rank-agnostic across 2D
+and 3D channel-last tensors.
 
 Most transforms accept either:
 
@@ -18,6 +21,44 @@ available under the same keys.
 
 - 2D tensors use `(H, W, C)`
 - 3D tensors use `(D, H, W, C)`
+- batched 2D tensors use `(B, H, W, C)`
+- batched 3D tensors use `(B, D, H, W, C)`
+
+The new transform API makes execution mode explicit through `input_mode`:
+
+- `input_mode="sample"` means the transform expects one sample tensor at a time
+- `input_mode="batch"` means the transform expects one batched tensor bundle
+
+Not every transform supports both modes.
+
+## Capability Split
+
+### Sample-only transforms
+
+These transforms operate on one sample at a time because they depend on
+sample-specific metadata or sample-specific spatial decisions:
+
+- `CropForeground`
+- `Spacing`
+- `Orientation`
+
+They accept `input_mode="sample"` only and raise a clear error if
+`input_mode="batch"` is requested.
+
+### Dual-mode transforms
+
+These transforms can operate on either one sample or one already-batched
+tensor bundle, depending on `input_mode`:
+
+- `Flip`
+- `Rotate90`
+- `Resize`
+- `SpatialCrop`
+- `RandomFlip`
+- `RandomRotate90`
+- `RandomShiftIntensity`
+- `RandomSpatialCrop`
+- `RandomCropByPosNegLabel`
 
 Most transforms are intentionally 2D/3D agnostic, so callers should provide
 rank-appropriate spatial arguments explicitly instead of relying on implicit
@@ -35,6 +76,14 @@ Two spatial transforms are intentionally 3D-only:
 Spatial transforms change geometry, layout, orientation, or spatial extent.
 Most of them are designed to work for both 2D and 3D tensors as long as the
 caller provides spatial arguments with the correct rank.
+
+For dual-mode spatial transforms, the same class can be used either:
+
+- in dataloaders with `input_mode="sample"`
+- on already batched tensors with `input_mode="batch"`
+
+For metadata-aware transforms such as `Spacing` and `Orientation`, keep them in
+sample pipelines because affine metadata is tracked per sample.
 
 Common examples:
 
@@ -86,6 +135,18 @@ Common examples:
 
 Random transforms introduce stochastic augmentation.
 
+All random public transforms inherit the shared `RandomTransform` seed
+contract. The `seed` argument accepts:
+
+- `None` for ordinary non-deterministic randomness
+- an integer seed for reproducible replay
+- `keras.random.SeedGenerator` for stateful seeded sampling
+
+For the currently migrated dual-mode random transforms, when
+`input_mode="batch"` is used, one random decision or one sampled parameter set
+is shared across the whole incoming batch tensor. This keeps inversion and
+trace behavior simple and predictable.
+
 Common examples:
 
 - `RandomFlip`
@@ -116,6 +177,10 @@ Common examples:
 ```
 
 ## Compose
+
+`Compose` chains transforms in order and returns one final `TensorBundle`.
+This is the usual way to define a preprocessing or augmentation pipeline for a
+dataset loader.
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.Compose

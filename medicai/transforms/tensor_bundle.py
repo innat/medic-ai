@@ -1,6 +1,4 @@
-from typing import Any, Dict, Optional
-
-import tensorflow as tf
+from typing import Any, Mapping
 
 
 class TensorBundle:
@@ -12,11 +10,10 @@ class TensorBundle:
     through the pipeline.
 
     Args:
-        data (Dict[str, tf.Tensor]): Mapping from keys such as ``"image"`` or
-            ``"label"`` to TensorFlow tensors.
-        meta (Dict[str, Any], optional): Mapping of metadata values associated
-            with the tensors. If ``None``, an empty metadata dictionary is
-            created.
+        data: Mapping from keys such as ``"image"`` or ``"label"`` to
+            tensor-like values already prepared for transform execution.
+        meta: Optional metadata mapping associated with the tensors. If
+            ``None``, an empty metadata dictionary is created.
 
     Example:
         Create a bundle with image data and affine metadata::
@@ -36,11 +33,11 @@ class TensorBundle:
             print(affine.shape) # (4, 4)
 
     Returns:
-        ``TensorBundle``: A container that stores tensors in ``data`` and metadata
-        in ``meta``.
+        ``TensorBundle``: A container that stores transform payloads in
+        ``data`` and metadata in ``meta``.
     """
 
-    def __init__(self, data: Dict[str, tf.Tensor], meta: Dict[str, Any] = None):
+    def __init__(self, data: Mapping[str, Any], meta: Mapping[str, Any] | None = None):
         self.data = data
         self.meta = meta or {}
 
@@ -76,19 +73,19 @@ class TensorBundle:
         else:
             self.meta[key] = value
 
-    def get_data(self, key: str) -> Optional[tf.Tensor]:
+    def get_data(self, key: str) -> Any | None:
         """Retrieve a tensor from the data mapping.
 
         Args:
             key (str): The key of the tensor to retrieve.
 
         Returns:
-            Optional[tf.Tensor]: The tensor associated with ``key``, or
-            ``None`` if the key is not present in ``data``.
+            Optional[Any]: The value associated with ``key``, or ``None`` if
+            the key is not present in ``data``.
         """
         return self.data.get(key)
 
-    def get_meta(self, key: str) -> Optional[Any]:
+    def get_meta(self, key: str) -> Any | None:
         """Retrieve a metadata value from the metadata mapping.
 
         Args:
@@ -100,12 +97,12 @@ class TensorBundle:
         """
         return self.meta.get(key)
 
-    def set_data(self, key: str, value: tf.Tensor):
-        """Store a tensor in the data mapping.
+    def set_data(self, key: str, value: Any):
+        """Store a tensor-like value in the data mapping.
 
         Args:
-            key (str): The key to associate with the tensor.
-            value (tf.Tensor): The TensorFlow tensor to store.
+            key (str): The key to associate with the value.
+            value (Any): The tensor-like value to store.
         """
         self.data[key] = value
 
@@ -132,11 +129,17 @@ class TensorBundle:
         """Append one transform trace entry to metadata."""
         self.get_applied_transforms().append(trace_entry)
 
+    def __contains__(self, key: str) -> bool:
+        """Return whether a key exists in either data or metadata."""
+        return key in self.data or key in self.meta
+
     def __repr__(self) -> str:
         """Provides a string representation of the TensorBundle.
 
         Returns:
-            str: A string showing the shapes of the tensors in the data dictionary
-            and the contents of the metadata dictionary.
+            str: A string showing data shapes when available and metadata keys.
         """
-        return f"MetaTensor(data={ {k: v.shape for k, v in self.data.items()} }, meta={self.meta})"
+        data_summary = {
+            key: getattr(value, "shape", type(value).__name__) for key, value in self.data.items()
+        }
+        return f"TensorBundle(data={data_summary}, meta_keys={list(self.meta.keys())})"

@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
+from ..utils import validate_input_mode, validate_layout
 
 
 class SignalFillEmpty(KeyedTransform):
@@ -14,14 +15,21 @@ class SignalFillEmpty(KeyedTransform):
     downstream normalization, resampling, or batching steps that assume valid
     numeric inputs.
 
-    The transform is intended for image-like tensors in channel-last layout,
-    such as ``(H, W, C)`` or ``(D, H, W, C)``.
+    Depending on ``input_mode``, this transform supports:
+
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     Args:
         keys: Keys of the tensors to sanitize.
         fill_value: Value used for ``NaN`` entries. Positive and negative
             infinity values default to the largest and smallest finite
             ``float32`` values unless overridden in :meth:`nan_to_num`.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -73,22 +81,35 @@ class SignalFillEmpty(KeyedTransform):
         self,
         keys: Sequence[str],
         fill_value: float = 0.0,
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         self.fill_value = fill_value
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        present_keys = self.apply_to_present_keys(bundle, lambda tensor, _: self.nan_to_num(tensor))
+        present_keys = self.apply_to_present_keys(
+            bundle, lambda tensor, _: self.transform_tensor(tensor)
+        )
         bundle.push_transform(
             self.build_trace_entry(
-                params={"keys": list(present_keys), "fill_value": self.fill_value},
+                params={
+                    "keys": list(present_keys),
+                    "fill_value": self.fill_value,
+                    "input_mode": self.input_mode,
+                },
                 applied=True,
                 random=False,
                 invertible=False,
             )
         )
         return bundle
+
+    def transform_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
+        """Sanitize one tensor after validating its channel-last layout."""
+        self._validate_tensor_layout(tensor)
+        return self.nan_to_num(tensor)
 
     def nan_to_num(
         self,
@@ -99,6 +120,16 @@ class SignalFillEmpty(KeyedTransform):
     ) -> tf.Tensor:
         """Replace NaN, positive infinity, and negative infinity values in a tensor."""
         tensor = tf.cast(tf.convert_to_tensor(tensor), tf.float32)
+        return self.nan_to_num_batch(tensor, nan=nan, posinf=posinf, neginf=neginf)
+
+    def nan_to_num_batch(
+        self,
+        tensor: tf.Tensor,
+        nan: float | None = None,
+        posinf: float | None = None,
+        neginf: float | None = None,
+    ) -> tf.Tensor:
+        """Sanitize a tensor with a kernel that is agnostic to sample vs batch layout."""
 
         nan = self.fill_value if nan is None else nan
         posinf = tf.float32.max if posinf is None else posinf
@@ -116,3 +147,12 @@ class SignalFillEmpty(KeyedTransform):
             tensor,
         )
         return tensor
+
+    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+        """Validate sample or batch channel-last layout for signal sanitization."""
+        validate_layout(
+            tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )

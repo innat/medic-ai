@@ -1,5 +1,6 @@
 from typing import Sequence
 
+import keras
 import tensorflow as tf
 
 from ..base import (
@@ -9,7 +10,12 @@ from ..base import (
     _trace_applied_to_bool,
 )
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank
+from ..utils import (
+    ensure_batch_axis,
+    restore_from_batch_axis,
+    validate_input_mode,
+    validate_layout,
+)
 
 
 def get_rotation_matrix(angle: tf.Tensor, h: tf.Tensor, w: tf.Tensor) -> tf.Tensor:
@@ -44,7 +50,7 @@ def rotate_volume(
     interpolation: str = "BILINEAR",
     fill_value: float = 0.0,
 ) -> tf.Tensor:
-    """Rotate a 4D ``(D, H, W, C)`` tensor slice-wise over the height-width plane."""
+    """Rotate a 4D ``(N, H, W, C)`` tensor slice-wise over the height-width plane."""
     original_dtype = image.dtype
     image = tf.cast(image, tf.float32)
     img_shape = tf.shape(image)
@@ -77,8 +83,10 @@ class RandomRotate(RandomTransform):
     still a resampling-based, best-effort inverse rather than an exact
     round-trip reconstruction.
 
-    This transform currently supports only 3D channel-last tensors shaped
-    ``(D, H, W, C)``.
+    Depending on ``input_mode``, this transform supports:
+
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     Args:
         keys: One or two keys. When two keys are provided, they are typically
@@ -88,6 +96,10 @@ class RandomRotate(RandomTransform):
         fill_value: Constant fill value for the primary image key when
             ``fill_mode="constant"``.
         fill_mode: Either ``"constant"`` or ``"crop"``.
+        input_mode: Either ``"sample"`` for ``(D, H, W, C)`` tensors or
+            ``"batch"`` for ``(B, D, H, W, C)`` tensors.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -128,9 +140,11 @@ class RandomRotate(RandomTransform):
         prob: float = 0.8,
         fill_value: float = 0.0,
         fill_mode: str = "constant",
+        input_mode: str = "sample",
+        seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(prob=prob)
+        super().__init__(prob=prob, seed=seed)
         normalized_keys = _normalize_keys(keys)
         if len(normalized_keys) not in (1, 2):
             raise ValueError("`keys` must have length 1 or 2.")
@@ -143,6 +157,7 @@ class RandomRotate(RandomTransform):
         self.factor = factor
         self.fill_value = fill_value
         self.fill_mode = fill_mode
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.allow_missing_keys = allow_missing_keys
 
     @property
@@ -161,16 +176,21 @@ class RandomRotate(RandomTransform):
             return bundle
 
         sample_tensor = bundle.data[present_keys[0]]
-        spatial_rank = get_spatial_rank(sample_tensor)
-        if spatial_rank != 3:
-            raise ValueError(
-                f"{type(self).__name__} currently supports only 3D tensors; got spatial rank "
-                f"{spatial_rank} "
-                f"for shape {sample_tensor.shape}."
-            )
+        layout = validate_layout(
+            sample_tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(3,),
+            transform_name=type(self).__name__,
+        )
+        del layout
 
         should_rotate = self.sample_should_apply()
-        angle = tf.random.uniform([], -self.factor, self.factor)
+        angle = self.random_uniform(
+            shape=(),
+            minval=-self.factor,
+            maxval=self.factor,
+            dtype=tf.float32,
+        )
 
         for key in present_keys:
             tensor = bundle.data[key]
@@ -187,6 +207,7 @@ class RandomRotate(RandomTransform):
                 "factor": self.factor,
                 "angle": angle,
                 "fill_mode": self.fill_mode,
+                "input_mode": self.input_mode,
             },
             applied=should_rotate,
             kernel="rotate_volume",
@@ -226,9 +247,38 @@ class RandomRotate(RandomTransform):
 
     def rotate_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
         """Rotate one tensor and apply optional center crop cleanup."""
+        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
+        return restore_from_batch_axis(rotated, added_batch_axis)
+
+    def rotate_batch_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
+        """Rotate one batch-layout tensor and apply optional center crop cleanup."""
         interpolation = "BILINEAR" if key == self.keys[0] else "NEAREST"
         fill_value = self.fill_value if key == self.keys[0] else 0.0
-        rotated = rotate_volume(tensor, angle, interpolation=interpolation, fill_value=fill_value)
+
+        layout = validate_layout(
+            tensor,
+            input_mode="batch",
+            allowed_spatial_ranks=(3,),
+            transform_name=type(self).__name__,
+        )
+        del layout
+
+        shape = tf.shape(tensor)
+        batch_size = shape[0]
+        depth = shape[1]
+        height = shape[2]
+        width = shape[3]
+        channels = shape[4]
+
+        flat_tensor = tf.reshape(tensor, [batch_size * depth, height, width, channels])
+        flat_rotated = rotate_volume(
+            flat_tensor,
+            angle,
+            interpolation=interpolation,
+            fill_value=fill_value,
+        )
+        rotated = tf.reshape(flat_rotated, [batch_size, depth, height, width, channels])
 
         if self.fill_mode == "crop":
             rotated = self._crop_after_rotation(rotated, angle, interpolation)
@@ -242,7 +292,11 @@ class RandomRotate(RandomTransform):
     ) -> tf.Tensor:
         """Apply a Largest Rectangle Rotation style center crop after rotation."""
         shape = tf.shape(tensor)
-        height, width = shape[1], shape[2]
+        batch_size = shape[0]
+        depth = shape[1]
+        height = shape[2]
+        width = shape[3]
+        channels = shape[4]
         lrr_w, lrr_h = self._get_lrr_size(width, height, angle)
         crop_fraction = (
             tf.minimum(
@@ -251,12 +305,17 @@ class RandomRotate(RandomTransform):
             )
             * 0.98
         )
+        crop_fraction = tf.clip_by_value(crop_fraction, 1e-6, 1.0 - 1e-6)
         method = "bilinear" if interpolation == "BILINEAR" else "nearest"
-        return tf.image.resize(
-            tf.image.central_crop(tensor, crop_fraction),
+
+        flat_tensor = tf.reshape(tensor, [batch_size * depth, height, width, channels])
+        cropped = tf.image.central_crop(flat_tensor, crop_fraction)
+        resized = tf.image.resize(
+            cropped,
             [height, width],
             method=method,
         )
+        return tf.reshape(resized, [batch_size, depth, height, width, channels])
 
     def _get_lrr_size(
         self, width: tf.Tensor, height: tf.Tensor, angle: tf.Tensor

@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import tensorflow as tf
+import keras
 from keras import ops
 
 from medicai.transforms import (
@@ -14,10 +15,18 @@ from medicai.transforms import (
 )
 from medicai.transforms.base import ensure_tensor_bundle
 from medicai.transforms.utils import (
+    LayoutInfo,
+    ensure_batch_axis,
     ensure_spatial_tuple,
     get_spatial_rank,
+    get_spatial_shape,
     normalize_axes,
     normalize_spatial_axes,
+    restore_from_batch_axis,
+    resolve_layout,
+    resolve_spatial_axes,
+    validate_input_mode,
+    validate_layout,
     validate_spatial_rank,
 )
 
@@ -64,6 +73,18 @@ def test_tensorbundle_setitem_routes_to_data_or_meta():
 
 
 @pytest.mark.unit
+def test_tensorbundle_contains_checks_data_and_meta():
+    bundle = TensorBundle(
+        {"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))},
+        {"affine": np.eye(4, dtype=np.float32).tolist()},
+    )
+
+    assert "image" in bundle
+    assert "affine" in bundle
+    assert "missing" not in bundle
+
+
+@pytest.mark.unit
 def test_tensorbundle_missing_key_raises_keyerror():
     bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
     with pytest.raises(KeyError):
@@ -80,6 +101,17 @@ def test_ensure_tensor_bundle_converts_numpy_inputs():
     assert isinstance(bundle, TensorBundle)
     assert hasattr(bundle["image"], "shape")
     assert hasattr(bundle["affine"], "shape")
+
+
+@pytest.mark.unit
+def test_ensure_tensor_bundle_converts_numpy_scalars():
+    bundle = ensure_tensor_bundle(
+        {"value": np.float32(3.5)},
+        {"index": np.int32(2)},
+    )
+
+    assert hasattr(bundle["value"], "shape")
+    assert hasattr(bundle["index"], "shape")
 
 
 @pytest.mark.unit
@@ -181,6 +213,60 @@ def test_random_transform_builds_standardized_trace_entries():
     assert trace["random"] is True
     assert trace["invertible"] is False
     assert trace["kernel"] == "DummyKernel"
+
+
+@pytest.mark.unit
+def test_random_transform_accepts_integer_seed_contract():
+    class SeedAwareRandomTransform(RandomTransform):
+        def apply(self, bundle):
+            bundle["should_apply"] = self.sample_should_apply()
+            return bundle
+
+    transform = SeedAwareRandomTransform(prob=0.5, seed=13)
+    out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
+
+    assert "should_apply" in out.data
+
+
+@pytest.mark.unit
+def test_random_transform_accepts_seed_generator_contract():
+    class SeedAwareRandomTransform(RandomTransform):
+        def apply(self, bundle):
+            bundle["should_apply"] = self.sample_should_apply()
+            return bundle
+
+    seed = keras.random.SeedGenerator(13)
+    transform = SeedAwareRandomTransform(prob=0.5, seed=seed)
+    out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
+
+    assert "should_apply" in out.data
+
+
+@pytest.mark.unit
+def test_random_transform_replays_deterministically_with_same_integer_seed():
+    class SeedAwareRandomTransform(RandomTransform):
+        def apply(self, bundle):
+            bundle["should_apply"] = self.sample_should_apply()
+            return bundle
+
+    image = as_tensor(np.zeros((2, 2, 1), dtype=np.float32))
+    first = SeedAwareRandomTransform(prob=0.5, seed=7)(TensorBundle({"image": image}))
+    second = SeedAwareRandomTransform(prob=0.5, seed=7)(TensorBundle({"image": image}))
+
+    assert bool(ops.convert_to_numpy(first["should_apply"])) == bool(
+        ops.convert_to_numpy(second["should_apply"])
+    )
+
+
+@pytest.mark.unit
+def test_random_transform_rejects_unsupported_seed_type():
+    class SeedAwareRandomTransform(RandomTransform):
+        def apply(self, bundle):
+            bundle["should_apply"] = self.sample_should_apply()
+            return bundle
+
+    with pytest.raises(TypeError, match="`seed` must be None, an integer, or keras.random.SeedGenerator"):
+        SeedAwareRandomTransform(prob=0.5, seed="bad-seed")
 
 
 @pytest.mark.unit
@@ -375,6 +461,116 @@ def test_spatial_helpers_handle_2d_and_3d_channel_last_tensors():
     assert ensure_spatial_tuple((4, 5), 2, "roi_size") == (4, 5)
     assert normalize_axes((-1, 0), rank=3) == (2, 0)
     assert normalize_spatial_axes((-1, 0), spatial_rank=3) == (2, 0)
+    np.testing.assert_array_equal(ops.convert_to_numpy(get_spatial_shape(image_2d)), [16, 12])
+    np.testing.assert_array_equal(ops.convert_to_numpy(get_spatial_shape(image_3d)), [8, 16, 12])
+
+
+@pytest.mark.unit
+def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
+    sample_2d = as_tensor(np.zeros((16, 12, 1), dtype=np.float32))
+    sample_3d = as_tensor(np.zeros((8, 16, 12, 1), dtype=np.float32))
+    batch_2d = as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32))
+    batch_3d = as_tensor(np.zeros((2, 8, 16, 12, 1), dtype=np.float32))
+
+    layout_sample_2d = resolve_layout(sample_2d, input_mode="sample")
+    layout_sample_3d = resolve_layout(sample_3d, input_mode="sample")
+    layout_batch_2d = resolve_layout(batch_2d, input_mode="batch")
+    layout_batch_3d = resolve_layout(batch_3d, input_mode="batch")
+
+    assert isinstance(layout_sample_2d, LayoutInfo)
+    assert layout_sample_2d == LayoutInfo(
+        tensor_rank=3,
+        spatial_rank=2,
+        batched=False,
+        batch_axis=None,
+        channel_axis=2,
+        spatial_axes=(0, 1),
+    )
+    assert layout_sample_3d == LayoutInfo(
+        tensor_rank=4,
+        spatial_rank=3,
+        batched=False,
+        batch_axis=None,
+        channel_axis=3,
+        spatial_axes=(0, 1, 2),
+    )
+    assert layout_batch_2d == LayoutInfo(
+        tensor_rank=4,
+        spatial_rank=2,
+        batched=True,
+        batch_axis=0,
+        channel_axis=3,
+        spatial_axes=(1, 2),
+    )
+    assert layout_batch_3d == LayoutInfo(
+        tensor_rank=5,
+        spatial_rank=3,
+        batched=True,
+        batch_axis=0,
+        channel_axis=4,
+        spatial_axes=(1, 2, 3),
+    )
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(get_spatial_shape(batch_2d, input_mode="batch")),
+        [16, 12],
+    )
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(get_spatial_shape(batch_3d, input_mode="batch")),
+        [8, 16, 12],
+    )
+
+
+@pytest.mark.unit
+def test_validate_input_mode_and_layout_helpers_cover_sample_and_batch_contracts():
+    sample_3d = as_tensor(np.zeros((8, 16, 12, 1), dtype=np.float32))
+    batch_2d = as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32))
+
+    assert validate_input_mode("sample") == "sample"
+    assert validate_input_mode("batch") == "batch"
+    assert validate_input_mode(
+        "sample",
+        supported_modes=("sample",),
+        transform_name="Spacing",
+    ) == "sample"
+
+    sample_layout = validate_layout(
+        sample_3d,
+        input_mode="sample",
+        allowed_spatial_ranks=(3,),
+    )
+    batch_layout = validate_layout(
+        batch_2d,
+        input_mode="batch",
+        allowed_spatial_ranks=(2,),
+    )
+
+    assert sample_layout.spatial_axes == (0, 1, 2)
+    assert batch_layout.spatial_axes == (1, 2)
+    assert resolve_spatial_axes(sample_3d, (0, -1), input_mode="sample") == (0, 2)
+    assert resolve_spatial_axes(batch_2d, (0, -1), input_mode="batch") == (1, 2)
+
+
+@pytest.mark.unit
+def test_batch_axis_helpers_normalize_sample_and_batch_inputs():
+    sample_2d = as_tensor(np.zeros((4, 5, 1), dtype=np.float32))
+    batch_2d = as_tensor(np.zeros((2, 4, 5, 1), dtype=np.float32))
+
+    sample_batched, sample_added = ensure_batch_axis(sample_2d, input_mode="sample")
+    batch_batched, batch_added = ensure_batch_axis(batch_2d, input_mode="batch")
+
+    assert sample_added is True
+    assert batch_added is False
+    assert tuple(ops.shape(sample_batched)) == (1, 4, 5, 1)
+    assert tuple(ops.shape(batch_batched)) == (2, 4, 5, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restore_from_batch_axis(sample_batched, sample_added)),
+        ops.convert_to_numpy(sample_2d),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restore_from_batch_axis(batch_batched, batch_added)),
+        ops.convert_to_numpy(batch_2d),
+    )
 
 
 @pytest.mark.unit
@@ -392,3 +588,19 @@ def test_spatial_helpers_validate_invalid_inputs():
 
     with pytest.raises(ValueError):
         normalize_axes((0, 0), rank=3)
+
+    with pytest.raises(ValueError, match="input_mode"):
+        resolve_layout(as_tensor(np.zeros((4, 4, 1), dtype=np.float32)), input_mode="unknown")
+
+    with pytest.raises(ValueError, match="channel-last batch tensor"):
+        resolve_layout(as_tensor(np.zeros((4, 4, 1), dtype=np.float32)), input_mode="batch")
+
+    with pytest.raises(ValueError, match="supports only input_mode values"):
+        validate_input_mode("batch", supported_modes=("sample",), transform_name="Spacing")
+
+    with pytest.raises(ValueError, match="Expected spatial rank in"):
+        validate_layout(
+            as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32)),
+            input_mode="batch",
+            allowed_spatial_ranks=(3,),
+        )

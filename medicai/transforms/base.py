@@ -4,21 +4,28 @@ import inspect
 import itertools
 from typing import Any, Mapping, Sequence
 
+import keras
 import numpy as np
 import tensorflow as tf
 
 from .tensor_bundle import TensorBundle
 
 
+def _as_tensor_like(value: Any) -> Any:
+    """Convert NumPy tensor-like values to backend-aware tensors when practical."""
+    if isinstance(value, (np.ndarray, np.generic)):
+        return keras.ops.convert_to_tensor(value)
+    return value
+
+
 def _convert_numpy_mapping(mapping: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Convert top-level NumPy arrays in a mapping to TensorFlow tensors."""
+    """Convert top-level NumPy tensor-like values in a mapping to tensors."""
     if mapping is None:
         return {}
 
     converted = dict(mapping)
     for key, value in converted.items():
-        if isinstance(value, np.ndarray):
-            converted[key] = tf.convert_to_tensor(value)
+        converted[key] = _as_tensor_like(value)
     return converted
 
 
@@ -54,7 +61,7 @@ def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
     if isinstance(applied, bool):
         return applied
     if tf.is_tensor(applied):
-        static_value = tf.get_static_value(tf.cast(applied, tf.bool))
+        static_value = _get_static_tensor_value(tf.cast(applied, tf.bool))
         if static_value is None:
             raise ValueError(
                 "Cannot evaluate a symbolic `applied` trace flag outside eager execution."
@@ -106,10 +113,19 @@ def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str,
     return normalized
 
 
+def _get_static_tensor_value(value: tf.Tensor) -> Any:
+    """Return a Python-visible static value for a TensorFlow tensor when available.
+
+    This intentionally stays TensorFlow-specific because ``keras.ops`` does not
+    expose an equivalent utility for symbolic static-value extraction.
+    """
+    return tf.get_static_value(value)
+
+
 def _require_static_value(value: Any, name: str) -> Any:
     """Convert a TensorFlow scalar/tensor to a Python-visible value when possible."""
     if tf.is_tensor(value):
-        static_value = tf.get_static_value(value)
+        static_value = _get_static_tensor_value(value)
         if static_value is None:
             raise ValueError(
                 f"`{name}` must be statically knowable when used in this transform. "
@@ -137,6 +153,12 @@ class Transform:
     This keeps input normalization, trace helpers, and inversion-related
     conventions in one place while allowing concrete transforms to focus on
     their transformation logic.
+
+    Reusability:
+        ``Transform`` is bundle-oriented rather than sample-rank-oriented. It
+        can be used for sample-only transforms, dual-mode transforms, or
+        orchestration helpers as long as the subclass explicitly validates the
+        tensor layout it expects.
 
     When to use this:
         Use ``Transform`` when a custom transform needs to inspect or update
@@ -259,6 +281,10 @@ class RandomTransform(Transform):
     Args:
         prob: Probability of applying the random transform. Must be in
             ``[0, 1]``.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``. Integer seeds are normalized to a
+            private seed generator so repeated draws from one transform
+            instance advance deterministically.
 
     When to use this:
         Use ``RandomTransform`` when a transform needs probabilistic behavior
@@ -266,6 +292,15 @@ class RandomTransform(Transform):
         ``tf.function`` and ``tf.data``. It is most useful as a base for
         random augmentations that decide whether to apply themselves per
         sample.
+
+    Current batch semantics:
+        ``RandomTransform`` itself does not enforce per-item or per-batch
+        randomness for batched tensors. Each concrete transform defines that
+        policy. In the current migrated dual-mode wrappers, when
+        ``input_mode="batch"`` is supported, one random decision / parameter
+        set is typically sampled for the whole input bundle and then applied
+        consistently across the batch. Per-item batched randomness is planned
+        as a later design step rather than the default today.
 
     Example:
         Build a tiny random transform that adds a bias to ``"image"``:
@@ -294,12 +329,42 @@ class RandomTransform(Transform):
             image = tf.zeros((32, 32, 1), dtype=tf.float32)
             output = RandomAddOne(prob=0.5)({"image": image})
             result = output['image']
+
+        Use a fixed integer seed for deterministic replay across fresh
+        transform instances:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomTransform, TensorBundle
+
+            class RandomBias(RandomTransform):
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    bias = self.random_uniform(
+                        shape=(),
+                        minval=-1.0,
+                        maxval=1.0,
+                        dtype=tf.float32,
+                    )
+                    bundle["bias"] = bias
+                    return bundle
+
+            image = tf.zeros((8, 8, 1), dtype=tf.float32)
+            first = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
+            second = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
+            print(first["bias"].numpy() == second["bias"].numpy())
     """
 
-    def __init__(self, prob: float = 0.1):
+    def __init__(
+        self,
+        prob: float = 0.1,
+        seed: int | keras.random.SeedGenerator | None = None,
+    ):
         if not 0.0 <= prob <= 1.0:
             raise ValueError(f"`prob` must be in the range [0, 1]. Received {prob}.")
         self.prob = prob
+        self.seed = seed
+        self.seed_generator = self._normalize_seed(seed)
 
     def sample_should_apply(self) -> tf.Tensor:
         """Sample whether the random transform should be applied.
@@ -308,7 +373,74 @@ class RandomTransform(Transform):
             tf.Tensor: A scalar boolean tensor indicating whether the random
             transform should execute for the current sample.
         """
-        return tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
+        return self.random_uniform(shape=(), minval=0.0, maxval=1.0, dtype=tf.float32) < self.prob
+
+    def random_uniform(
+        self,
+        *,
+        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        minval: float | int = 0.0,
+        maxval: float | int = 1.0,
+        dtype: tf.dtypes.DType = tf.float32,
+    ) -> tf.Tensor:
+        """Sample from a uniform distribution using the transform seed stream."""
+        return keras.random.uniform(
+            shape=shape,
+            minval=minval,
+            maxval=maxval,
+            dtype=dtype,
+            seed=self.seed_generator,
+        )
+
+    def random_normal(
+        self,
+        *,
+        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        mean: float = 0.0,
+        stddev: float = 1.0,
+        dtype: tf.dtypes.DType = tf.float32,
+    ) -> tf.Tensor:
+        """Sample from a normal distribution using the transform seed stream."""
+        return keras.random.normal(
+            shape=shape,
+            mean=mean,
+            stddev=stddev,
+            dtype=dtype,
+            seed=self.seed_generator,
+        )
+
+    def random_integers(
+        self,
+        *,
+        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        minval: int,
+        maxval: int,
+        dtype: tf.dtypes.DType = tf.int32,
+    ) -> tf.Tensor:
+        """Sample integer values using the transform seed stream."""
+        return keras.random.randint(
+            shape=shape,
+            minval=minval,
+            maxval=maxval,
+            dtype=dtype,
+            seed=self.seed_generator,
+        )
+
+    @staticmethod
+    def _normalize_seed(
+        seed: int | keras.random.SeedGenerator | None,
+    ) -> keras.random.SeedGenerator | None:
+        """Normalize supported random seed inputs to a Keras seed generator."""
+        if seed is None:
+            return None
+        if isinstance(seed, keras.random.SeedGenerator):
+            return seed
+        if isinstance(seed, int):
+            return keras.random.SeedGenerator(seed)
+        raise TypeError(
+            "`seed` must be None, an integer, or keras.random.SeedGenerator. "
+            f"Received {type(seed).__name__}."
+        )
 
     def record_random_transform(
         self,
@@ -389,6 +521,9 @@ class RandomChoice(RandomTransform):
         prob: Probability of applying any sampled transforms at all. When the
             probability gate is not passed, the input is returned unchanged and
             no candidate transform is executed.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``. The seed controls transform-count
+            sampling, transform-order sampling, and weighted selection.
         weights: Optional relative sampling weights aligned with
             ``transforms``. Larger values increase the chance that a transform
             is selected. Weights are interpreted as relative preferences, not
@@ -452,8 +587,9 @@ class RandomChoice(RandomTransform):
         num_choices: int | tuple[int, int] = 1,
         prob: float = 1.0,
         weights: Sequence[float] | None = None,
+        seed: int | keras.random.SeedGenerator | None = None,
     ):
-        super().__init__(prob=prob)
+        super().__init__(prob=prob, seed=seed)
         self.transforms = tuple(transforms)
         if not self.transforms:
             raise ValueError("`transforms` must contain at least one transform.")
@@ -570,7 +706,7 @@ class RandomChoice(RandomTransform):
     def _sample_num_choices(self) -> tf.Tensor:
         if self.min_choices == self.max_choices:
             return tf.constant(self.min_choices, dtype=tf.int32)
-        return tf.random.uniform(
+        return self.random_integers(
             shape=(),
             minval=self.min_choices,
             maxval=self.max_choices + 1,
@@ -589,10 +725,21 @@ class RandomChoice(RandomTransform):
         """Graph-safe unique permutation of transform indices."""
         num_transforms = len(self.transforms)
         if self.weights is None:
-            return tf.random.shuffle(tf.range(num_transforms, dtype=tf.int32))
+            scores = self.random_uniform(
+                shape=(num_transforms,),
+                minval=0.0,
+                maxval=1.0,
+                dtype=tf.float32,
+            )
+            return tf.argsort(scores, direction="DESCENDING")
 
         weights = tf.convert_to_tensor(self.weights, dtype=tf.float32)
-        uniforms = tf.random.uniform(shape=(num_transforms,), minval=1e-6, maxval=1.0)
+        uniforms = self.random_uniform(
+            shape=(num_transforms,),
+            minval=1e-6,
+            maxval=1.0,
+            dtype=tf.float32,
+        )
         gumbels = -tf.math.log(-tf.math.log(uniforms))
         valid = weights > 0.0
         safe_weights = tf.where(valid, weights, 1e-9)
@@ -643,6 +790,12 @@ class KeyedTransform(Transform):
         keys: Keys of tensors this transform should process.
         allow_missing_keys: If ``True``, missing keys are skipped. If
             ``False``, missing keys raise ``KeyError``.
+
+    Reusability:
+        ``KeyedTransform`` is also not inherently sample-only. It works for
+        both sample-level and batch-level transforms, provided subclasses make
+        their expected layout explicit through validation such as
+        ``input_mode`` checks.
 
     When to use this:
         Use ``KeyedTransform`` when a transform acts on one or more known data

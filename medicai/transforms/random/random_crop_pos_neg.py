@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from typing import Sequence
 
+import keras
 import tensorflow as tf
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, get_spatial_shape
+from ..utils import (
+    ensure_batch_axis,
+    get_spatial_shape,
+    restore_from_batch_axis,
+    validate_input_mode,
+    validate_layout,
+)
 
 
 class RandomCropByPosNegLabel(RandomTransform):
@@ -17,10 +24,12 @@ class RandomCropByPosNegLabel(RandomTransform):
     voxels according to the ``pos:neg`` ratio, then the same patch is cropped
     from both image and label tensors.
 
-    This transform supports:
+    Depending on ``input_mode``, this transform supports:
 
-    - 2D tensors shaped ``(H, W, C)``
-    - 3D tensors shaped ``(D, H, W, C)``
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     Args:
         keys: Two keys containing the image tensor and label tensor.
@@ -30,10 +39,16 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: Relative weight for negative-center sampling.
         num_samples: Number of samples to return. Currently only ``1`` is
             supported.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors. In batch mode, one sampled crop is shared across the full
+            batch.
         image_reference_key: Optional key for an intensity reference tensor
             used to constrain negative sampling.
         image_threshold: Threshold applied to ``image_reference_key`` during
             negative sampling.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -86,11 +101,13 @@ class RandomCropByPosNegLabel(RandomTransform):
         pos: int,
         neg: int,
         num_samples: int = 1,
+        input_mode: str = "sample",
         image_reference_key: str = None,
         image_threshold: float = 0.0,
+        seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(prob=1.0)
+        super().__init__(prob=1.0, seed=seed)
         if pos < 0 or neg < 0:
             raise ValueError("pos and neg must be non-negative.")
         if pos == 0 and neg == 0:
@@ -111,6 +128,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.neg = neg
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
@@ -120,71 +138,121 @@ class RandomCropByPosNegLabel(RandomTransform):
         return True
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_random_params(bundle)
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Sample one crop configuration shared across selected keys."""
         image_key, label_key = self.keys
         if image_key not in bundle.data or label_key not in bundle.data:
             if self.allow_missing_keys:
-                return bundle
+                return {"skip": True}
             missing = image_key if image_key not in bundle.data else label_key
             raise KeyError(f"Key '{missing}' not found in input data.")
 
         image = bundle.data[image_key]
         label = bundle.data[label_key]
-        spatial_rank = get_spatial_rank(image)
-        if spatial_rank not in (2, 3):
-            raise ValueError(
-                f"{type(self).__name__} currently supports only 2D or 3D inputs; got spatial rank "
-                f"{spatial_rank} for shape {image.shape}."
-            )
+        layout = validate_layout(
+            image,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )
+        spatial_rank = layout.spatial_rank
+        image_batched, _ = ensure_batch_axis(image, input_mode=self.input_mode)
+        label_batched, _ = ensure_batch_axis(label, input_mode=self.input_mode)
 
         image_reference = None
         if self.image_reference_key is not None:
             if self.image_reference_key not in bundle.data:
                 raise KeyError(f"Key '{self.image_reference_key}' not found in input data.")
             image_reference = bundle.data[self.image_reference_key]
-        center = self.sample_center(image, label, image_reference, spatial_rank)
+        image_reference_batched = None
+        if image_reference is not None:
+            image_reference_batched, _ = ensure_batch_axis(
+                image_reference,
+                input_mode=self.input_mode,
+            )
+        center = self.sample_center(
+            image_batched,
+            label_batched,
+            image_reference_batched,
+            spatial_rank,
+        )
         crop_size = tf.convert_to_tensor(self.target_shape, dtype=tf.int32)
         if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
             raise ValueError(
                 f"`target_shape` must contain exactly {spatial_rank} values for input shape "
                 f"{image.shape}; received {self.target_shape}."
             )
-        spatial_shape = get_spatial_shape(image)
+        spatial_shape = get_spatial_shape(image_batched, input_mode="batch")
         starts = tf.maximum(center - crop_size // 2, 0)
         ends = tf.minimum(starts + crop_size, spatial_shape)
         starts = tf.maximum(ends - crop_size, 0)
+        return {
+            "skip": False,
+            "crop_start": starts,
+            "crop_size": crop_size,
+            "pos": self.pos,
+            "neg": self.neg,
+            "image_reference_key": self.image_reference_key,
+            "input_mode": self.input_mode,
+        }
 
-        crop = SpatialCrop(
-            keys=self.keys,
-            crop_size=self.target_shape,
-            allow_missing_keys=self.allow_missing_keys,
-        )
+    def apply_with_params(
+        self,
+        bundle: TensorBundle,
+        params: dict[str, object],
+    ) -> TensorBundle:
+        """Apply the sampled crop configuration to all selected keys."""
+        if params["skip"]:
+            return bundle
+
+        crop = self._build_crop_kernel()
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor)
-            return crop.crop_tensor(tensor, starts, crop_size)
+            original_shapes[key] = get_spatial_shape(tensor, input_mode=self.input_mode)
+            batched_tensor, added_batch_axis = ensure_batch_axis(
+                tensor,
+                input_mode=self.input_mode,
+            )
+            cropped = crop.crop_tensor(
+                batched_tensor,
+                params["crop_start"],
+                params["crop_size"],
+            )
+            return restore_from_batch_axis(cropped, added_batch_axis)
 
         present_keys = crop.apply_to_present_keys(
             bundle,
             apply_crop,
         )
-        bundle.push_transform(
-            self.build_trace_entry(
-                params={
-                    "keys": list(present_keys),
-                    "crop_start": starts,
-                    "crop_size": crop_size,
-                    "original_shapes": original_shapes,
-                    "pos": self.pos,
-                    "neg": self.neg,
-                    "image_reference_key": self.image_reference_key,
-                },
-                applied=True,
-                random=True,
-                kernel="SpatialCrop",
-            )
+        self.record_random_transform(
+            bundle,
+            params=self.build_trace_params(params, present_keys, original_shapes),
+            applied=True,
+            kernel="SpatialCrop",
         )
         return bundle
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+        original_shapes: dict[str, tf.Tensor],
+    ) -> dict[str, object]:
+        """Build random trace metadata for the current positive/negative crop."""
+        return {
+            "keys": list(present_keys),
+            "crop_start": params["crop_start"],
+            "crop_size": params["crop_size"],
+            "original_shapes": original_shapes,
+            "pos": params["pos"],
+            "neg": params["neg"],
+            "image_reference_key": params["image_reference_key"],
+            "input_mode": params["input_mode"],
+        }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         trace = self._get_last_random_crop_trace(bundle)
@@ -193,17 +261,16 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        crop = SpatialCrop(
-            keys=self.keys,
-            crop_size=self.target_shape,
-            allow_missing_keys=self.allow_missing_keys,
-        )
+        input_mode = trace["params"].get("input_mode", self.input_mode)
+        crop = self._build_crop_kernel()
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
-            return crop.pad_to_original_shape(tensor, crop_start, original_shape)
+            batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=input_mode)
+            restored = crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
+            return restore_from_batch_axis(restored, added_batch_axis)
 
         crop.apply_to_present_keys(
             bundle,
@@ -211,6 +278,15 @@ class RandomCropByPosNegLabel(RandomTransform):
             keys=trace["params"].get("keys", []),
         )
         return bundle
+
+    def _build_crop_kernel(self) -> SpatialCrop:
+        """Construct the deterministic batch-first crop kernel reused by this transform."""
+        return SpatialCrop(
+            keys=self.keys,
+            crop_size=self.target_shape,
+            input_mode="batch",
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     def sample_center(
         self,
@@ -220,7 +296,12 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ) -> tf.Tensor:
         """Sample one crop center using positive/negative label sampling."""
-        positive = tf.random.uniform(shape=[], minval=0.0, maxval=1.0) < self.pos_ratio
+        positive = self.random_uniform(
+            shape=(),
+            minval=0.0,
+            maxval=1.0,
+            dtype=tf.float32,
+        ) < self.pos_ratio
         return tf.cond(
             positive,
             lambda: self._sample_positive_center(label, spatial_rank),
@@ -228,10 +309,10 @@ class RandomCropByPosNegLabel(RandomTransform):
         )
 
     def _sample_positive_center(self, label: tf.Tensor, spatial_rank: int) -> tf.Tensor:
-        coords = tf.where(label > 0)
+        coords = tf.where(tf.reduce_any(label > 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
-            fallback_shape=get_spatial_shape(label),
+            fallback_shape=get_spatial_shape(label, input_mode="batch"),
             spatial_rank=spatial_rank,
         )
 
@@ -243,15 +324,15 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ) -> tf.Tensor:
         if image_reference is not None and self.image_threshold is not None:
-            max_intensity_ref = tf.reduce_max(image_reference, axis=-1, keepdims=True)
-            label_is_zero = tf.reduce_any(label == 0, axis=-1, keepdims=True)
+            max_intensity_ref = tf.reduce_max(image_reference, axis=(0, -1))
+            label_is_zero = tf.reduce_any(label == 0, axis=(0, -1))
             valid_mask = label_is_zero & (max_intensity_ref > self.image_threshold)
             coords = tf.where(valid_mask)
         else:
-            coords = tf.where(tf.reduce_any(label == 0, axis=-1))
+            coords = tf.where(tf.reduce_any(label == 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
-            fallback_shape=get_spatial_shape(image),
+            fallback_shape=get_spatial_shape(image, input_mode="batch"),
             spatial_rank=spatial_rank,
         )
 
@@ -265,10 +346,11 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         def fallback_coords():
             num_cols = coords.shape[1] if coords.shape[1] is not None else tf.shape(coords)[1]
-            random_unit = tf.random.uniform(
+            random_unit = self.random_uniform(
                 shape=(spatial_rank,),
                 minval=0.0,
                 maxval=1.0,
+                dtype=tf.float32,
             )
             random_coord = tf.cast(
                 tf.floor(random_unit * tf.cast(fallback_shape[:spatial_rank], tf.float32)),
@@ -279,7 +361,12 @@ class RandomCropByPosNegLabel(RandomTransform):
             return tf.expand_dims(tf.cast(full_coord, coords.dtype), axis=0)
 
         coords = tf.cond(tf.shape(coords)[0] > 0, lambda: coords, fallback_coords)
-        idx = tf.random.uniform(shape=[], minval=0, maxval=tf.shape(coords)[0], dtype=tf.int32)
+        idx = self.random_integers(
+            shape=(),
+            minval=0,
+            maxval=tf.shape(coords)[0],
+            dtype=tf.int32,
+        )
         return tf.cast(coords[idx][:spatial_rank], tf.int32)
 
     def _get_last_random_crop_trace(self, bundle: TensorBundle):

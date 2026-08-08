@@ -6,7 +6,15 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import ensure_spatial_tuple, get_tensor_rank
+from ..utils import (
+    ensure_batch_axis,
+    ensure_spatial_tuple,
+    get_spatial_shape,
+    restore_from_batch_axis,
+    resize_volumes,
+    validate_input_mode,
+    validate_layout,
+)
 
 
 class Resize(KeyedTransform, InvertibleTransform):
@@ -18,10 +26,12 @@ class Resize(KeyedTransform, InvertibleTransform):
     continuous images can use linear interpolation while discrete labels can
     use nearest-neighbor interpolation.
 
-    This transform supports:
+    Depending on ``input_mode``, this transform supports:
 
-    - 2D tensors shaped ``(H, W, C)``
-    - 3D tensors shaped ``(D, H, W, C)``
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     ``Resize`` is invertible in the limited sense that it records the original
     spatial shape and can resize the transformed result back to that shape via
@@ -38,6 +48,9 @@ class Resize(KeyedTransform, InvertibleTransform):
         target_shape: Target spatial shape. Must be length 2 for 2D resizing
             or length 3 for 3D resizing. This argument is required so callers
             explicitly define the intended output rank.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -125,10 +138,12 @@ class Resize(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         interpolation: str | Sequence[str] | Mapping[str, str],
         target_shape: Sequence[int],
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.target_shape = tuple(target_shape)
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
         ndim = len(self.target_shape)
         if ndim not in (2, 3):
@@ -158,22 +173,15 @@ class Resize(KeyedTransform, InvertibleTransform):
                 )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_transform_params(bundle)
         original_shapes = {}
 
         def apply_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shapes[key] = self._get_original_spatial_shape(tensor)
-            return self.resize_tensor(tensor, key, target_shape=self.target_shape)
+            return self.transform_tensor(tensor, key, params)
 
         present_keys = self.apply_to_present_keys(bundle, apply_resize)
-        self.record_transform(
-            bundle,
-            {
-                "keys": list(present_keys),
-                "target_shape": self.target_shape,
-                "original_shapes": original_shapes,
-                "interpolation": {key: self.interpolation[key] for key in present_keys},
-            },
-        )
+        self.record_transform(bundle, self.build_trace_params(params, present_keys, original_shapes))
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -196,6 +204,38 @@ class Resize(KeyedTransform, InvertibleTransform):
         )
         return bundle
 
+    def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Prepare forward-pass parameters for this resize."""
+        del bundle
+        return {
+            "target_shape": self.target_shape,
+            "input_mode": self.input_mode,
+        }
+
+    def transform_tensor(
+        self,
+        tensor: tf.Tensor,
+        key: str,
+        params: dict[str, object],
+    ) -> tf.Tensor:
+        """Resize one tensor with the configured target shape."""
+        return self.resize_tensor(tensor, key, target_shape=params["target_shape"])
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+        original_shapes: Mapping[str, tf.Tensor],
+    ) -> dict[str, object]:
+        """Build invertible trace metadata for the current resize."""
+        return {
+            "keys": list(present_keys),
+            "target_shape": params["target_shape"],
+            "input_mode": params["input_mode"],
+            "original_shapes": original_shapes,
+            "interpolation": {key: self.interpolation[key] for key in present_keys},
+        }
+
     def resize_tensor(
         self,
         tensor: tf.Tensor,
@@ -215,23 +255,47 @@ class Resize(KeyedTransform, InvertibleTransform):
                 dtype=tf.int32,
             )
 
-        spatial_rank = self._resolve_spatial_rank(tensor, target_rank)
-        if spatial_rank == 2:
-            return self._resize_2d(tensor, key, target_shape_tensor)
-        if spatial_rank == 3:
-            return self._resize_3d(tensor, key, target_shape_tensor)
+        layout = self._resolve_layout(tensor, target_rank)
+        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        resized = self.resize_batch_tensor(
+            batched_tensor,
+            key,
+            target_shape=target_shape_tensor,
+            spatial_rank=layout.spatial_rank,
+        )
+        return restore_from_batch_axis(resized, added_batch_axis)
+
+    def resize_batch_tensor(
+        self,
+        tensor: tf.Tensor,
+        key: str,
+        target_shape: tf.Tensor,
+        spatial_rank: int | None = None,
+    ) -> tf.Tensor:
+        """Resize one batch-layout tensor to the requested spatial shape."""
+        effective_spatial_rank = spatial_rank
+        if effective_spatial_rank is None:
+            layout = validate_layout(
+                tensor,
+                input_mode="batch",
+                allowed_spatial_ranks=(2, 3),
+                transform_name=type(self).__name__,
+            )
+            effective_spatial_rank = layout.spatial_rank
+
+        if effective_spatial_rank == 2:
+            return self._resize_2d(tensor, key, target_shape)
+        if effective_spatial_rank == 3:
+            return self._resize_3d(tensor, key, target_shape)
         raise ValueError(
             f"{type(self).__name__} supports only 2D or 3D tensors, got spatial rank "
-            f"{spatial_rank}."
+            f"{effective_spatial_rank}."
         )
 
     def _resize_2d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
         return tf.image.resize(tensor, target_shape, method=self.interpolation.get(key))
 
     def _resize_3d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
-        added_batch = tensor.shape.rank == 4
-        if added_batch:
-            tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,
             target_shape[0],
@@ -240,127 +304,21 @@ class Resize(KeyedTransform, InvertibleTransform):
             method=self.interpolation.get(key),
             align_corners=False,
         )
-        return resized[0] if added_batch else resized
+        return resized
 
-    def _resolve_spatial_rank(self, tensor: tf.Tensor, target_rank: int) -> int:
-        """Resolve whether a tensor is unbatched or batched for the requested target rank."""
-        tensor_rank = get_tensor_rank(tensor)
-        if target_rank not in (2, 3):
-            raise ValueError(f"`target_shape` must be 2D or 3D, got {target_rank}D.")
-
-        if tensor_rank == target_rank + 1:
-            return target_rank
-        if tensor_rank == target_rank + 2:
-            return target_rank
-
-        raise ValueError(
-            f"{type(self).__name__} expects a channel-last tensor shaped either as an unbatched "
-            "sample "
-            f"or batched sample compatible with target spatial rank {target_rank}. "
-            f"Received shape {tensor.shape}."
+    def _resolve_layout(self, tensor: tf.Tensor, target_rank: int):
+        """Validate the current tensor layout against ``input_mode`` and ``target_shape``."""
+        return validate_layout(
+            tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(target_rank,),
+            transform_name=type(self).__name__,
         )
 
     def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
         """Extract the original spatial shape using the configured target rank."""
-        target_rank = len(self.target_shape)
-        tensor_rank = get_tensor_rank(tensor)
-
-        if tensor_rank == target_rank + 1:
-            return tf.shape(tensor)[:target_rank]
-        if tensor_rank == target_rank + 2:
-            return tf.shape(tensor)[1 : 1 + target_rank]
-
-        raise ValueError(
-            f"{type(self).__name__} expects a channel-last tensor shaped either as an unbatched "
-            "sample "
-            f"or batched sample compatible with target spatial rank {target_rank}. "
-            f"Received shape {tensor.shape}."
-        )
+        self._resolve_layout(tensor, len(self.target_shape))
+        return get_spatial_shape(tensor, input_mode=self.input_mode)
 
     def _get_last_resize_trace(self, bundle: TensorBundle) -> dict | None:
         return _pop_last_transform_trace(bundle, type(self).__name__)
-
-
-# This could be temporary: issue: https://github.com/keras-team/keras/issues/21785
-def resize_volumes(volumes, depth, height, width, method="trilinear", align_corners=False):
-    def trilinear_resize(volumes, depth, height, width, align_corners):
-        original_dtype = volumes.dtype
-        volumes = tf.cast(volumes, "float32")
-        in_d = tf.shape(volumes)[1]
-        in_h = tf.shape(volumes)[2]
-        in_w = tf.shape(volumes)[3]
-
-        if align_corners:
-            z_coords = tf.linspace(0.0, tf.cast(in_d - 1, "float32"), depth)
-            y_coords = tf.linspace(0.0, tf.cast(in_h - 1, "float32"), height)
-            x_coords = tf.linspace(0.0, tf.cast(in_w - 1, "float32"), width)
-        else:
-            scale_d = tf.cast(in_d, "float32") / tf.cast(depth, "float32")
-            scale_h = tf.cast(in_h, "float32") / tf.cast(height, "float32")
-            scale_w = tf.cast(in_w, "float32") / tf.cast(width, "float32")
-
-            z_coords = (tf.range(depth, dtype="float32") + 0.5) * scale_d - 0.5
-            y_coords = (tf.range(height, dtype="float32") + 0.5) * scale_h - 0.5
-            x_coords = (tf.range(width, dtype="float32") + 0.5) * scale_w - 0.5
-
-            z_coords = tf.clip_by_value(z_coords, 0.0, tf.cast(in_d - 1, "float32"))
-            y_coords = tf.clip_by_value(y_coords, 0.0, tf.cast(in_h - 1, "float32"))
-            x_coords = tf.clip_by_value(x_coords, 0.0, tf.cast(in_w - 1, "float32"))
-
-        def interpolate_1d(input_vol, coords, axis):
-            idx0 = tf.cast(tf.floor(coords), "int32")
-            idx1 = tf.minimum(idx0 + 1, tf.shape(input_vol)[axis] - 1)
-
-            values0 = tf.gather(input_vol, idx0, axis=axis)
-            values1 = tf.gather(input_vol, idx1, axis=axis)
-
-            weight1 = coords - tf.cast(idx0, "float32")
-            weight0 = 1.0 - weight1
-
-            new_shape = [1] * 5
-            new_shape[axis] = tf.shape(coords)[0]
-            weight0 = tf.reshape(weight0, new_shape)
-            weight1 = tf.reshape(weight1, new_shape)
-            return weight0 * values0 + weight1 * values1
-
-        interp_d = interpolate_1d(volumes, z_coords, axis=1)
-        interp_h = interpolate_1d(interp_d, y_coords, axis=2)
-        interp_w = interpolate_1d(interp_h, x_coords, axis=3)
-        return tf.cast(interp_w, original_dtype)
-
-    def nearest(volumes, depth, height, width):
-        shape = tf.shape(volumes)
-        bs, d, h, w, c = shape[0], shape[1], shape[2], shape[3], shape[4]
-
-        z = tf.linspace(0.0, tf.cast(d - 1, "float32"), depth)
-        z = tf.cast(tf.round(z), "int32")
-        z = tf.clip_by_value(z, 0, d - 1)
-
-        y = tf.linspace(0.0, tf.cast(h - 1, "float32"), height)
-        y = tf.cast(tf.round(y), "int32")
-        y = tf.clip_by_value(y, 0, h - 1)
-
-        x = tf.linspace(0.0, tf.cast(w - 1, "float32"), width)
-        x = tf.cast(tf.round(x), "int32")
-        x = tf.clip_by_value(x, 0, w - 1)
-
-        z_grid, y_grid, x_grid = tf.meshgrid(z, y, x, indexing="ij")
-        z_grid = tf.reshape(z_grid, (-1,))
-        y_grid = tf.reshape(y_grid, (-1,))
-        x_grid = tf.reshape(x_grid, (-1,))
-
-        batch_idx = tf.repeat(tf.range(bs), tf.shape(z_grid)[0])
-        z_grid = tf.tile(z_grid, [bs])
-        y_grid = tf.tile(y_grid, [bs])
-        x_grid = tf.tile(x_grid, [bs])
-
-        flat = tf.reshape(volumes, (bs * d * h * w, c))
-        indices = (batch_idx * d * h * w) + (z_grid * h * w) + (y_grid * w) + x_grid
-        result = tf.gather(flat, indices, axis=0)
-        return tf.reshape(result, (bs, depth, height, width, c))
-
-    if method == "trilinear":
-        return trilinear_resize(volumes, depth, height, width, align_corners)
-    if method == "nearest":
-        return nearest(volumes, depth, height, width)
-    raise ValueError(f"Unsupported resize method: {method}")

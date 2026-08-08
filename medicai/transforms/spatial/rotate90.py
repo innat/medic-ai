@@ -6,22 +6,31 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, normalize_spatial_axes
+from ..utils import (
+    ensure_batch_axis,
+    resolve_spatial_axes,
+    restore_from_batch_axis,
+    validate_input_mode,
+    validate_layout,
+)
 
 
 class Rotate90(KeyedTransform, InvertibleTransform):
     """Rotate selected tensors by quarter turns in a spatial plane.
 
-    ``Rotate90`` deterministically rotates channel-last sample tensors by
+    ``Rotate90`` deterministically rotates channel-last tensors by
     multiples of 90 degrees. The rotation plane is selected through
-    ``spatial_axis`` and can be used for:
+    ``spatial_axis``. Depending on ``input_mode``, it can be used for:
 
-    - 2D tensors shaped ``(H, W, C)``
-    - 3D tensors shaped ``(D, H, W, C)``
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     For 2D tensors, leaving ``spatial_axis=None`` rotates in the image plane.
     For 3D tensors, the default also rotates within the last two spatial
-    dimensions, preserving the leading depth axis.
+    dimensions, preserving the leading depth axis in sample mode or the
+    leading batch-plus-depth structure in batch mode.
 
     The transform is invertible because the inverse is another quarter-turn
     rotation with ``(-k) % 4``. Applied parameters are recorded in the
@@ -31,7 +40,12 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         keys: Keys of the tensors to rotate.
         k: Number of 90-degree counterclockwise quarter turns.
         spatial_axis: Two axes defining the rotation plane. If ``None``, the
-            transform rotates in the last two spatial dimensions.
+            transform rotates in the last two spatial dimensions. In batch
+            mode, axes are still expressed relative to the spatial dimensions
+            only, so the batch axis is never included.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -97,64 +111,124 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         k: int = 1,
         spatial_axis: Sequence[int] | None = None,
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.k = k
         self.spatial_axis = spatial_axis
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        effective_k = self.k % 4
-
-        if effective_k == 0:
+        params = self.get_transform_params(bundle)
+        if not params["applied"]:
             return bundle
 
-        normalized_axes = {"value": None}
-
-        def apply_rotate(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            normalized_axes["value"] = self._resolve_axes(tensor)
-            return self.rotate_tensor(tensor)
-
-        present_keys = self.apply_to_present_keys(bundle, apply_rotate)
-
-        if normalized_axes["value"] is not None:
-            self.record_transform(
-                bundle,
-                {
-                    "keys": list(present_keys),
-                    "k": effective_k,
-                    "spatial_axis": normalized_axes["value"],
-                },
-            )
+        present_keys = self.apply_to_present_keys(
+            bundle,
+            lambda tensor, key: self.transform_tensor(tensor, key, params),
+        )
+        self.record_transform(bundle, self.build_trace_params(params, present_keys))
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
-        effective_k = self.k % 4
-        if effective_k == 0:
+        params = self.get_transform_params(bundle)
+        if not params["applied"]:
             return bundle
 
-        inverse_k = (-effective_k) % 4
+        inverse_k = (-params["k"]) % 4
         self.apply_to_present_keys(
-            bundle, lambda tensor, _: self.rotate_tensor(tensor, k=inverse_k)
+            bundle,
+            lambda tensor, key: self.transform_tensor(
+                tensor,
+                key,
+                {
+                    "applied": True,
+                    "k": inverse_k,
+                    "spatial_axis": params["spatial_axis"],
+                    "input_mode": params["input_mode"],
+                },
+            ),
         )
         return bundle
 
-    def rotate_tensor(self, tensor: tf.Tensor, k: int | tf.Tensor | None = None) -> tf.Tensor:
+    def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Prepare forward-pass parameters for this rotation."""
+        del bundle
+        return {
+            "applied": self.k % 4 != 0,
+            "k": self.k % 4,
+            "spatial_axis": self.spatial_axis,
+            "input_mode": self.input_mode,
+        }
+
+    def transform_tensor(
+        self,
+        tensor: tf.Tensor,
+        key: str,
+        params: dict[str, object],
+    ) -> tf.Tensor:
+        """Apply the configured quarter-turn kernel to one tensor."""
+        del key
+        return self.rotate_tensor(
+            tensor,
+            k=params["k"],
+            spatial_axis=params["spatial_axis"],
+        )
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+    ) -> dict[str, object]:
+        """Build invertible trace metadata for the current rotation."""
+        return {
+            "keys": list(present_keys),
+            "k": params["k"],
+            "spatial_axis": params["spatial_axis"],
+            "input_mode": params["input_mode"],
+        }
+
+    def rotate_tensor(
+        self,
+        tensor: tf.Tensor,
+        k: int | tf.Tensor | None = None,
+        spatial_axis: Sequence[int] | None = None,
+    ) -> tf.Tensor:
         """Rotate one tensor by multiples of 90 degrees.
 
         Args:
-            tensor: Channel-last 2D or 3D sample tensor.
+            tensor: Channel-last 2D or 3D tensor in sample or batch layout,
+                depending on ``self.input_mode``.
             k: Optional quarter-turn override. When ``None``, ``self.k`` is
                 used.
+            spatial_axis: Optional rotation plane override. When ``None``,
+                ``self.spatial_axis`` is used.
 
         Returns:
             ``tf.Tensor``: The rotated tensor.
         """
-        axes = self._resolve_axes(tensor)
-        effective_k = tf.math.floormod(
-            tf.cast(self.k if k is None else k, tf.int32),
-            4,
+        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        rotated = self.rotate_batch_tensor(
+            batched_tensor,
+            k=k,
+            spatial_axis=spatial_axis,
         )
+        return restore_from_batch_axis(rotated, added_batch_axis)
+
+    def rotate_batch_tensor(
+        self,
+        tensor: tf.Tensor,
+        k: int | tf.Tensor | None = None,
+        spatial_axis: Sequence[int] | None = None,
+    ) -> tf.Tensor:
+        """Rotate a batch-layout tensor by multiples of 90 degrees."""
+        axes = self._resolve_axes(
+            tensor,
+            spatial_axis=spatial_axis,
+            input_mode="batch",
+        )
+        effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
 
         return tf.switch_case(
             effective_k,
@@ -182,21 +256,32 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             inverse_perm[axis] = index
         return tf.transpose(rotated, perm=inverse_perm)
 
-    def _resolve_axes(self, tensor: tf.Tensor) -> tuple[int, int]:
-        if tensor.shape.rank is None or tensor.shape.rank < 3:
-            raise ValueError(
-                f"{type(self).__name__} expects a channel-last sample tensor with shape (H, W, C) or "
-                f"(D, H, W, C). Received shape {tensor.shape}."
-            )
+    def _resolve_axes(
+        self,
+        tensor: tf.Tensor,
+        spatial_axis: Sequence[int] | None = None,
+        input_mode: str | None = None,
+    ) -> tuple[int, int]:
+        effective_input_mode = self.input_mode if input_mode is None else input_mode
+        layout = validate_layout(
+            tensor,
+            input_mode=effective_input_mode,
+            allowed_spatial_ranks=(2, 3),
+        )
 
-        if self.spatial_axis is None:
-            spatial_rank = get_spatial_rank(tensor)
-            if spatial_rank < 2:
+        effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
+        if effective_axis is None:
+            if layout.spatial_rank < 2:
                 raise ValueError(f"{type(self).__name__} requires at least two spatial dimensions.")
-            return (spatial_rank - 2, spatial_rank - 1)
+            return tuple(layout.spatial_axes[-2:])
 
-        spatial_rank = get_spatial_rank(tensor)
-        axes = normalize_spatial_axes(tuple(self.spatial_axis), spatial_rank, name="spatial_axis")
+        axes = resolve_spatial_axes(
+            tensor,
+            tuple(effective_axis),
+            input_mode=effective_input_mode,
+            allowed_spatial_ranks=(2, 3),
+            name="spatial_axis",
+        )
         if len(axes) != 2:
             raise ValueError("`spatial_axis` must contain exactly two axes.")
         return axes

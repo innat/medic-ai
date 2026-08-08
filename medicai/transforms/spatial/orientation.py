@@ -6,7 +6,14 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, validate_affine_matrix
+from ..utils import (
+    compute_orientation_transform,
+    get_spatial_rank,
+    orientation_from_affine,
+    reoriented_affine,
+    validate_affine_matrix,
+    validate_input_mode,
+)
 
 
 class Orientation(KeyedTransform, InvertibleTransform):
@@ -41,6 +48,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
     This transform is invertible. During ``apply()``, it records the original
     affine and axis mapping into the ``TensorBundle`` transform trace so
     ``inverse()`` can restore both the tensor layout and affine metadata.
+    This transform is sample-only and expects one 3D volume at a time.
 
     Args:
         keys: Keys of tensors in the bundle to reorient. Each selected tensor
@@ -50,6 +58,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
             The string must contain exactly three characters, use only
             ``R/L/A/P/S/I``, and specify one code from each anatomical axis
             family.
+        input_mode: Execution mode for the transform. Only ``"sample"`` is
+            supported because orientation is defined per sample affine.
         allow_missing_keys: If ``True``, missing keys are skipped. If ``False``,
             missing requested keys raise an error.
 
@@ -120,20 +130,23 @@ class Orientation(KeyedTransform, InvertibleTransform):
     """
 
     _AXIS_TO_WORLD = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
-    _AXIS_TO_SIGN = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
-    _POSITIVE_CODES = ("R", "A", "S")
-    _NEGATIVE_CODES = ("L", "P", "I")
 
     def __init__(
         self,
         keys: Sequence[str] = ("image", "label"),
         axcodes: str = "RAS",
+        input_mode: str = "sample",
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         axcodes = axcodes.upper()
         self._validate_axcodes(axcodes)
         self.axcodes = axcodes
+        self.input_mode = validate_input_mode(
+            input_mode,
+            supported_modes=("sample",),
+            transform_name=type(self).__name__,
+        )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         affine = bundle.meta.get("affine")
@@ -154,7 +167,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self._validate_bundle_is_3d(bundle)
         sample_tensor = bundle.data[sample_key]
         target_tensor_axcodes = self._target_tensor_axcodes(self.axcodes)
-        transform_info = self._compute_orientation_transform(affine, target_tensor_axcodes)
+        transform_info = compute_orientation_transform(affine, target_tensor_axcodes)
 
         def apply_orientation(tensor: tf.Tensor, _: str) -> tf.Tensor:
             return self.orient_tensor(
@@ -162,7 +175,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
             )
 
         present_keys = self.apply_to_present_keys(bundle, apply_orientation)
-        bundle.meta["affine"] = self.reoriented_affine(
+        bundle.meta["affine"] = reoriented_affine(
             affine,
             tf.shape(sample_tensor)[:3],
             transform_info["perm_spatial"],
@@ -173,7 +186,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
             {
                 "keys": list(present_keys),
                 "original_affine": tf.identity(tf.cast(affine, tf.float32)),
-                "original_axcodes": self.get_orientation_from_affine(affine),
+                "original_axcodes": orientation_from_affine(affine),
                 "target_axcodes": self.axcodes,
                 "target_tensor_axcodes": target_tensor_axcodes,
                 "perm_spatial": transform_info["perm_spatial"],
@@ -265,116 +278,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
         )
         inverse_perm = tf.concat([inverse_perm_spatial, tf.constant([3], dtype=tf.int32)], axis=0)
         return tf.transpose(restored, perm=inverse_perm)
-
-    def get_orientation_from_affine(self, affine: tf.Tensor) -> tf.Tensor:
-        """Infer a three-letter orientation code from a 4x4 affine matrix."""
-        matrix = tf.cast(affine[:3, :3], tf.float32)
-        current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
-        gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
-        signs = tf.gather_nd(matrix, gather_indices) >= 0
-
-        def axis_code(axis_index: tf.Tensor, sign: tf.Tensor) -> tf.Tensor:
-            return tf.case(
-                [
-                    (tf.equal(axis_index, 0), lambda: tf.where(sign, "R", "L")),
-                    (tf.equal(axis_index, 1), lambda: tf.where(sign, "A", "P")),
-                ],
-                default=lambda: tf.where(sign, "S", "I"),
-                exclusive=True,
-            )
-
-        codes = tf.map_fn(
-            lambda pair: axis_code(pair[0], tf.cast(pair[1], tf.bool)),
-            (current_axes, tf.cast(signs, tf.int32)),
-            fn_output_signature=tf.string,
-        )
-        return tf.strings.reduce_join(codes)
-
-    def reoriented_affine(
-        self,
-        affine: tf.Tensor,
-        input_spatial_shape: tf.Tensor,
-        perm_spatial: tuple[int, int, int] | tf.Tensor,
-        flip_axes: tuple[int, ...] | tf.Tensor,
-    ) -> tf.Tensor:
-        """Update affine metadata for a spatial permutation and flips."""
-        affine = tf.cast(affine, tf.float32)
-        input_spatial_shape = tf.cast(input_spatial_shape, tf.float32)
-        perm_spatial = tf.cast(tf.convert_to_tensor(perm_spatial), tf.int32)
-        flip_axes = tf.cast(tf.convert_to_tensor(flip_axes), tf.int32)
-
-        flipped_output_mask = tf.scatter_nd(
-            indices=tf.expand_dims(flip_axes, axis=1),
-            updates=tf.ones_like(flip_axes, dtype=tf.float32),
-            shape=(3,),
-        )
-        signs = 1.0 - 2.0 * flipped_output_mask
-
-        transform = tf.eye(4, dtype=tf.float32)
-        spatial_block = tf.transpose(
-            tf.one_hot(perm_spatial, depth=3, dtype=tf.float32) * signs[:, None]
-        )
-        transform = tf.tensor_scatter_nd_update(
-            transform,
-            indices=[
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [1, 0],
-                [1, 1],
-                [1, 2],
-                [2, 0],
-                [2, 1],
-                [2, 2],
-            ],
-            updates=tf.reshape(spatial_block, [-1]),
-        )
-
-        flipped_input_mask = tf.scatter_nd(
-            indices=tf.expand_dims(perm_spatial, axis=1),
-            updates=flipped_output_mask,
-            shape=(3,),
-        )
-        translations = flipped_input_mask * (input_spatial_shape - 1.0)
-        transform = tf.tensor_scatter_nd_update(
-            transform,
-            indices=[[0, 3], [1, 3], [2, 3]],
-            updates=translations,
-        )
-        return tf.linalg.matmul(affine, transform)
-
-    def _compute_orientation_transform(
-        self,
-        affine: tf.Tensor,
-        target_tensor_axcodes: str,
-    ) -> dict[str, tf.Tensor]:
-        matrix = tf.cast(affine[:3, :3], tf.float32)
-        current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
-        gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
-        current_signs = tf.sign(tf.gather_nd(matrix, gather_indices))
-        current_signs = tf.where(current_signs == 0, tf.ones_like(current_signs), current_signs)
-
-        target_axes = [self._AXIS_TO_WORLD[c] for c in target_tensor_axcodes]
-        perm_spatial = tf.stack(
-            [
-                tf.argmax(
-                    tf.cast(tf.equal(current_axes, target_axis), tf.int32), output_type=tf.int32
-                )
-                for target_axis in target_axes
-            ]
-        )
-        current_signs_for_output = tf.gather(
-            current_signs,
-            perm_spatial,
-        )
-        target_signs = tf.constant(
-            [self._AXIS_TO_SIGN[c] for c in target_tensor_axcodes], dtype=tf.float32
-        )
-        flip_axes = tf.reshape(
-            tf.where(tf.not_equal(current_signs_for_output, target_signs)),
-            [-1],
-        )
-        return {"perm_spatial": perm_spatial, "flip_axes": flip_axes}
 
     def _target_tensor_axcodes(self, axcodes: str) -> str:
         """Map anatomical axis-code order to Medic-AI's depth-first tensor order."""

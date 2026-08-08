@@ -1,11 +1,12 @@
 from typing import Sequence
 
+import keras
 import tensorflow as tf
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_rank, get_spatial_shape
+from ..utils import get_spatial_shape, validate_input_mode, validate_layout
 
 
 class RandomSpatialCrop(RandomTransform):
@@ -15,10 +16,12 @@ class RandomSpatialCrop(RandomTransform):
     before extracting a spatial patch with the deterministic
     :class:`~medicai.transforms.SpatialCrop` kernel.
 
-    This transform supports:
+    Depending on ``input_mode``, this transform supports:
 
-    - 2D tensors shaped ``(H, W, C)``
-    - 3D tensors shaped ``(D, H, W, C)``
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     When ``invalid_label`` is provided, the crop center can be sampled using
     the ``"label"`` tensor to favor valid regions.
@@ -30,6 +33,12 @@ class RandomSpatialCrop(RandomTransform):
         random_center: If ``True``, sample crop centers randomly.
         random_shape: If ``True``, sample crop sizes between ``crop_size`` and
             ``max_crop_size``.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors. In batch mode, one sampled crop is shared across the full
+            batch.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``.
         invalid_label: Label value treated as invalid when enforcing valid
             crop regions.
         min_valid_ratio: Minimum fraction of valid labels required in a crop.
@@ -73,17 +82,20 @@ class RandomSpatialCrop(RandomTransform):
         max_crop_size=None,
         random_center: bool = True,
         random_shape: bool = False,
+        input_mode: str = "sample",
+        seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         min_valid_ratio: float = 0.0,
         max_attempts: int = 1,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(prob=1.0)
+        super().__init__(prob=1.0, seed=seed)
         self.keys = _normalize_keys(keys)
         self.crop_size = crop_size
         self.max_crop_size = max_crop_size
         self.random_center = random_center
         self.random_shape = random_shape
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
@@ -104,20 +116,26 @@ class RandomSpatialCrop(RandomTransform):
         return True
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_random_params(bundle)
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Sample one crop configuration shared across selected keys."""
         sample_key = self.keys[0]
         if sample_key not in bundle.data:
             if self.allow_missing_keys:
-                return bundle
+                return {"skip": True}
             raise KeyError(f"Key '{sample_key}' not found in input data.")
 
         sample_tensor = bundle.data[sample_key]
-        spatial_rank = get_spatial_rank(sample_tensor)
-        if spatial_rank not in (2, 3):
-            raise ValueError(
-                f"{type(self).__name__} currently supports only 2D or 3D inputs; got spatial "
-                f"rank {spatial_rank} for shape {sample_tensor.shape}."
-            )
-        spatial_shape = get_spatial_shape(sample_tensor)
+        layout = validate_layout(
+            sample_tensor,
+            input_mode=self.input_mode,
+            allowed_spatial_ranks=(2, 3),
+            transform_name=type(self).__name__,
+        )
+        spatial_rank = layout.spatial_rank
+        spatial_shape = get_spatial_shape(sample_tensor, input_mode=self.input_mode)
         crop_size = self._get_crop_size(spatial_shape, spatial_rank)
 
         if self.invalid_label is None:
@@ -130,39 +148,43 @@ class RandomSpatialCrop(RandomTransform):
                 spatial_shape, crop_size, bundle[label_key], spatial_rank
             )
 
-        crop = SpatialCrop(
-            keys=self.keys,
-            crop_size=self.crop_size,
-            allow_missing_keys=self.allow_missing_keys,
-        )
-        original_shapes = {}
-
         starts = tf.maximum(center - crop_size // 2, 0)
         ends = tf.minimum(starts + crop_size, spatial_shape)
         starts = tf.maximum(ends - crop_size, 0)
+        return {
+            "skip": False,
+            "crop_start": starts,
+            "crop_size": crop_size,
+            "random_center": self.random_center,
+            "random_shape": self.random_shape,
+            "input_mode": self.input_mode,
+        }
+
+    def apply_with_params(
+        self,
+        bundle: TensorBundle,
+        params: dict[str, object],
+    ) -> TensorBundle:
+        """Apply the sampled crop configuration to all selected keys."""
+        if params["skip"]:
+            return bundle
+
+        crop = self._build_crop_kernel()
+        original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor)
-            return crop.crop_tensor(tensor, starts, crop_size)
+            original_shapes[key] = get_spatial_shape(tensor, input_mode=self.input_mode)
+            return crop.crop_tensor(tensor, params["crop_start"], params["crop_size"])
 
         present_keys = crop.apply_to_present_keys(
             bundle,
             apply_crop,
         )
-        bundle.push_transform(
-            self.build_trace_entry(
-                params={
-                    "keys": list(present_keys),
-                    "crop_start": starts,
-                    "crop_size": crop_size,
-                    "original_shapes": original_shapes,
-                    "random_center": self.random_center,
-                    "random_shape": self.random_shape,
-                },
-                applied=True,
-                random=True,
-                kernel="SpatialCrop",
-            )
+        self.record_random_transform(
+            bundle,
+            params=self.build_trace_params(params, present_keys, original_shapes),
+            applied=True,
+            kernel="SpatialCrop",
         )
         return bundle
 
@@ -173,11 +195,7 @@ class RandomSpatialCrop(RandomTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        crop = SpatialCrop(
-            keys=self.keys,
-            crop_size=self.crop_size,
-            allow_missing_keys=self.allow_missing_keys,
-        )
+        crop = self._build_crop_kernel()
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
@@ -191,6 +209,32 @@ class RandomSpatialCrop(RandomTransform):
             keys=trace["params"].get("keys", []),
         )
         return bundle
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+        original_shapes: dict[str, tf.Tensor],
+    ) -> dict[str, object]:
+        """Build random trace metadata for the current spatial crop."""
+        return {
+            "keys": list(present_keys),
+            "crop_start": params["crop_start"],
+            "crop_size": params["crop_size"],
+            "original_shapes": original_shapes,
+            "random_center": params["random_center"],
+            "random_shape": params["random_shape"],
+            "input_mode": params["input_mode"],
+        }
+
+    def _build_crop_kernel(self) -> SpatialCrop:
+        """Construct the deterministic crop kernel reused by this wrapper."""
+        return SpatialCrop(
+            keys=self.keys,
+            crop_size=self.crop_size,
+            input_mode=self.input_mode,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     def _get_crop_size(self, spatial_shape: tf.Tensor, spatial_rank: int) -> tf.Tensor:
         if isinstance(self.crop_size, int):
@@ -214,7 +258,12 @@ class RandomSpatialCrop(RandomTransform):
             max_s = tf.minimum(max_s, spatial_shape)
             min_s = tf.minimum(min_s, max_s)
             span = max_s - min_s + 1
-            random_unit = tf.random.uniform(shape=[spatial_rank], minval=0.0, maxval=1.0)
+            random_unit = self.random_uniform(
+                shape=[spatial_rank],
+                minval=0.0,
+                maxval=1.0,
+                dtype=tf.float32,
+            )
             crop_size = min_s + tf.cast(tf.floor(random_unit * tf.cast(span, tf.float32)), tf.int32)
         else:
             crop_size = tf.where(crop_size > 0, crop_size, spatial_shape)
@@ -228,12 +277,13 @@ class RandomSpatialCrop(RandomTransform):
             return spatial_shape // 2
 
         max_start = tf.maximum(spatial_shape - crop_size, 0)
-        random_start = tf.stack(
-            [
-                tf.random.uniform([], maxval=max_start[i] + 1, dtype=tf.int32)
-                for i in range(spatial_rank)
-            ]
+        random_start = self.random_integers(
+            shape=[spatial_rank],
+            minval=0,
+            maxval=tf.reduce_max(max_start) + 1,
+            dtype=tf.int32,
         )
+        random_start = tf.minimum(random_start, max_start)
         return random_start + crop_size // 2
 
     def _get_label_aware_center(
@@ -249,7 +299,12 @@ class RandomSpatialCrop(RandomTransform):
             return self._get_random_center(spatial_shape, crop_size, spatial_rank)
 
         def sample_valid_center():
-            idx = tf.random.uniform([], 0, tf.shape(valid_coords)[0], dtype=tf.int32)
+            idx = self.random_integers(
+                shape=(),
+                minval=0,
+                maxval=tf.shape(valid_coords)[0],
+                dtype=tf.int32,
+            )
             return tf.cast(valid_coords[idx][:spatial_rank], tf.int32)
 
         center = tf.cond(tf.shape(valid_coords)[0] > 0, sample_valid_center, fallback)

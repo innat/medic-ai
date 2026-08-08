@@ -1,5 +1,6 @@
 from typing import Sequence, Tuple, Union
 
+import keras
 import tensorflow as tf
 
 from ..base import (
@@ -10,6 +11,7 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
+from ..utils import validate_input_mode
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -20,10 +22,22 @@ class RandomShiftIntensity(RandomTransform):
     :class:`~medicai.transforms.ShiftIntensity` kernel.
 
     The transform expects channel-last tensors such as ``(H, W, C)`` or
-    ``(D, H, W, C)``. Offsets may be sampled once per tensor or separately per
-    channel depending on ``channel_wise``. During inversion, the transform uses
-    the sampled offsets stored in the transform trace and applies the inverse
-    only to the traced keys.
+    ``(D, H, W, C)``. Depending on ``input_mode``, it supports:
+
+    - sample 2D tensors shaped ``(H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)``
+    - batch 2D tensors shaped ``(B, H, W, C)``
+    - batch 3D tensors shaped ``(B, D, H, W, C)``
+
+    Offsets may be sampled once per tensor or separately per channel depending
+    on ``channel_wise``. During inversion, the transform uses the sampled
+    offsets stored in the transform trace and applies the inverse only to the
+    traced keys.
+
+    In the current migrated dual-mode path, if this transform is used on a
+    batched tensor through a batch-capable wrapper setup, the sampled offset
+    values are shared across the full batch rather than drawn independently
+    per batch item.
 
     Args:
         keys: Keys of the tensors to shift.
@@ -31,6 +45,11 @@ class RandomShiftIntensity(RandomTransform):
             range to sample from.
         prob: Probability of applying the shift.
         channel_wise: If ``True``, sample independent per-channel offsets.
+        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
+            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
+            tensors.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -68,9 +87,11 @@ class RandomShiftIntensity(RandomTransform):
         offset: Union[float, Tuple[float, float]],
         prob: float = 0.1,
         channel_wise: bool = False,
+        input_mode: str = "sample",
+        seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
-        super().__init__(prob=prob)
+        super().__init__(prob=prob, seed=seed)
         self.keys = _normalize_keys(keys)
         if isinstance(offset, (int, float)):
             self.offset = (-abs(offset), abs(offset))
@@ -78,6 +99,7 @@ class RandomShiftIntensity(RandomTransform):
             self.offset = (min(offset), max(offset))
 
         self.channel_wise = channel_wise
+        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.allow_missing_keys = allow_missing_keys
 
     @property
@@ -85,32 +107,48 @@ class RandomShiftIntensity(RandomTransform):
         return True
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        should_shift = self.sample_should_apply()
-        shift = ShiftIntensity(
-            keys=self.keys, offset=0.0, allow_missing_keys=self.allow_missing_keys
-        )
+        params = self.get_random_params(bundle)
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Sample the Bernoulli decision shared across selected keys."""
+        del bundle
+        return {
+            "should_apply": self.sample_should_apply(),
+            "channel_wise": self.channel_wise,
+            "offset": self.offset,
+            "input_mode": self.input_mode,
+        }
+
+    def apply_with_params(
+        self,
+        bundle: TensorBundle,
+        params: dict[str, object],
+    ) -> TensorBundle:
+        """Apply the sampled shift configuration to all selected keys."""
+        shift = self._build_shift_kernel()
         sampled_offsets = {}
         present_keys = shift.iter_present_keys(bundle)
 
         def apply_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            if self.channel_wise:
+            if params["channel_wise"]:
                 offset_shape = [1] * (tensor.shape.rank - 1) + [tensor.shape[-1]]
-                offsets = tf.random.uniform(
+                offsets = self.random_uniform(
                     shape=offset_shape,
-                    minval=self.offset[0],
-                    maxval=self.offset[1],
+                    minval=params["offset"][0],
+                    maxval=params["offset"][1],
                     dtype=tensor.dtype,
                 )
             else:
-                offsets = tf.random.uniform(
+                offsets = self.random_uniform(
                     shape=(),
-                    minval=self.offset[0],
-                    maxval=self.offset[1],
+                    minval=params["offset"][0],
+                    maxval=params["offset"][1],
                     dtype=tensor.dtype,
                 )
             sampled_offsets[key] = offsets
             return tf.cond(
-                should_shift,
+                params["should_apply"],
                 lambda tensor=tensor, offsets=offsets: shift.shift_tensor(tensor, offset=offsets),
                 lambda tensor=tensor: tensor,
             )
@@ -118,13 +156,8 @@ class RandomShiftIntensity(RandomTransform):
         shift.apply_to_present_keys(bundle, apply_shift, keys=present_keys)
         self.record_random_transform(
             bundle,
-            params={
-                "keys": list(sampled_offsets.keys()),
-                "channel_wise": self.channel_wise,
-                "offset": self.offset,
-                "sampled_offsets": sampled_offsets,
-            },
-            applied=should_shift,
+            params=self.build_trace_params(params, sampled_offsets),
+            applied=params["should_apply"],
             kernel="ShiftIntensity",
         )
         return bundle
@@ -136,9 +169,7 @@ class RandomShiftIntensity(RandomTransform):
 
         applied = trace.get("applied", False)
         sampled_offsets = trace["params"].get("sampled_offsets", {})
-        shift = ShiftIntensity(
-            keys=self.keys, offset=0.0, allow_missing_keys=self.allow_missing_keys
-        )
+        shift = self._build_shift_kernel()
 
         def apply_inverse_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
             offset = sampled_offsets.get(key)
@@ -162,6 +193,29 @@ class RandomShiftIntensity(RandomTransform):
             keys=trace["params"].get("keys", []),
         )
         return bundle
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        sampled_offsets: dict[str, tf.Tensor],
+    ) -> dict[str, object]:
+        """Build random trace metadata for the current intensity shift."""
+        return {
+            "keys": list(sampled_offsets.keys()),
+            "channel_wise": params["channel_wise"],
+            "offset": params["offset"],
+            "input_mode": params["input_mode"],
+            "sampled_offsets": sampled_offsets,
+        }
+
+    def _build_shift_kernel(self) -> ShiftIntensity:
+        """Construct the deterministic shift kernel reused by this wrapper."""
+        return ShiftIntensity(
+            keys=self.keys,
+            offset=0.0,
+            input_mode=self.input_mode,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     def _get_last_random_shift_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

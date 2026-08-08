@@ -56,7 +56,7 @@ def test_tensorbundle_missing_key_raises():
 def test_tensorbundle_repr_contains_data_and_meta():
     bundle = TensorBundle({"image": ops.zeros((2, 2, 1), dtype="float32")}, {"spacing": [1.0, 1.0]})
     value = repr(bundle)
-    assert "MetaTensor" in value
+    assert "TensorBundle" in value
     assert "spacing" in value
 
 
