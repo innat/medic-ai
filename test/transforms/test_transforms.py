@@ -953,6 +953,26 @@ def test_shift_intensity_inverse_without_trace_is_noop():
 
 
 @pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            ShiftIntensity(keys=["image"], offset=1.0),
+            ShiftIntensity(keys=["image"], offset=-2.0),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
