@@ -363,6 +363,42 @@ def test_compose_inverse_restores_pipeline_with_random_choice():
 
 
 @pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_random_choice_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            RandomChoice(
+                transforms=[
+                    Flip(keys=["image"], spatial_axis=1),
+                    ShiftIntensity(keys=["image"], offset=1.0),
+                ],
+                num_choices=1,
+                prob=1.0,
+                seed=3,
+            ),
+            RandomChoice(
+                transforms=[
+                    ShiftIntensity(keys=["image"], offset=2.0),
+                    Flip(keys=["image"], spatial_axis=0),
+                ],
+                num_choices=1,
+                prob=1.0,
+                seed=7,
+            ),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_lambda_transform_applies_deterministic_callable_and_records_trace():
     bundle = TensorBundle({"image": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
     transform = LambdaTransform(
