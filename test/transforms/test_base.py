@@ -288,6 +288,31 @@ def test_random_choice_validates_configuration():
 
 
 @pytest.mark.unit
+def test_random_choice_records_eager_trace_metadata():
+    image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
+    choice = RandomChoice(
+        transforms=[
+            ShiftIntensity(keys=["image"], offset=1.0),
+            Flip(keys=["image"], spatial_axis=1),
+        ],
+        num_choices=1,
+        prob=1.0,
+        seed=5,
+    )
+
+    output = choice(TensorBundle({"image": image}))
+    trace = output.get_applied_transforms()[-1]
+
+    assert trace["name"] == "RandomChoice"
+    assert trace["random"] is True
+    assert trace["kernel"] == "RandomChoice"
+    assert trace["params"]["num_selected"] == 1
+    assert trace["params"]["num_choices"] == (1, 1)
+    assert len(trace["params"]["selected_indices"]) == 1
+    assert len(trace["params"]["selected_names"]) == 1
+
+
+@pytest.mark.unit
 def test_lambda_transform_applies_deterministic_callable_and_records_trace():
     bundle = TensorBundle({"image": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
     transform = LambdaTransform(
