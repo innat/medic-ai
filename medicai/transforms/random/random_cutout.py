@@ -3,7 +3,7 @@ from typing import Sequence
 import keras
 import tensorflow as tf
 
-from ..base import RandomTransform
+from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
 from ..utils import validate_input_mode, validate_layout
 
@@ -185,7 +185,7 @@ class RandomCutOut(RandomTransform):
     ) -> TensorBundle:
         """Apply the sampled cutout configuration to the selected image key."""
         if self.input_mode == "batch":
-            bundle.data[self.image_key] = tf.cond(
+            bundle.data[self.image_key] = _apply_if_applied(
                 params["should_apply"],
                 lambda: self.apply_batch_cutout(
                     params["image"],
@@ -195,7 +195,7 @@ class RandomCutOut(RandomTransform):
                 lambda: params["image"],
             )
         else:
-            bundle.data[self.image_key] = tf.cond(
+            bundle.data[self.image_key] = _apply_if_applied(
                 params["should_apply"],
                 lambda: self.apply_sample_cutout(
                     params["image"],
