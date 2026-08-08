@@ -165,8 +165,8 @@ class RandomFlip(RandomTransform):
     ) -> tf.Tensor:
         """Apply the sampled flip decision to one tensor."""
         del key
-        return tf.cond(
-            tf.cast(params["should_apply"], tf.bool),
+        return _apply_if_applied(
+            params["should_apply"],
             lambda tensor=tensor: self.flip.flip_tensor(
                 tensor,
                 spatial_axis=params["spatial_axis"],

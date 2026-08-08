@@ -1152,7 +1152,7 @@ class LambdaTransform(KeyedTransform):
             if self.prob is None:
                 bundle.data[key] = self._call_tensor_fn(self.fn, tensor, key)
             else:
-                bundle.data[key] = tf.cond(
+                bundle.data[key] = _apply_if_applied(
                     should_apply,
                     lambda tensor=tensor, key=key: self._call_tensor_fn(self.fn, tensor, key),
                     lambda tensor=tensor: tensor,

@@ -216,7 +216,7 @@ class RandomRotate(RandomTransform):
         """Apply the sampled rotation configuration to all selected keys."""
         for key in params["keys"]:
             tensor = bundle.data[key]
-            bundle.data[key] = tf.cond(
+            bundle.data[key] = _apply_if_applied(
                 params["should_apply"],
                 lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, params["angle"]),
                 lambda tensor=tensor: tensor,

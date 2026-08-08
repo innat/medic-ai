@@ -164,8 +164,8 @@ class RandomRotate90(RandomTransform):
     ) -> tf.Tensor:
         """Apply the sampled rotation conditionally to one tensor."""
         del key
-        return tf.cond(
-            tf.cast(params["should_apply"], tf.bool),
+        return _apply_if_applied(
+            params["should_apply"],
             lambda tensor=tensor: self.rotate.rotate_tensor(
                 tensor,
                 k=params["k"],

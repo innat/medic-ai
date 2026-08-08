@@ -152,7 +152,7 @@ class RandomShiftIntensity(RandomTransform):
                     dtype=tensor.dtype,
                 )
             sampled_offsets[key] = offsets
-            return tf.cond(
+            return _apply_if_applied(
                 params["should_apply"],
                 lambda tensor=tensor, offsets=offsets: self.shift.shift_tensor(
                     tensor, offset=offsets
