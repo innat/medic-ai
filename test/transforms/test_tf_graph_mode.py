@@ -902,6 +902,36 @@ def test_random_rotate_inverse_supports_batch_mode_under_tf_function():
 
 
 @pytest.mark.unit
+def test_compose_random_rotate_inverse_supports_batch_mode_under_tf_function():
+    pipeline = Compose(
+        [
+            RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_mode="batch"),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+        ]
+    )
+
+    image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
+
+    @tf.function
+    def apply_and_inverse(x, y):
+        forward = pipeline({"image": x, "label": y})
+        restored = pipeline.inverse(forward)
+        return restored["image"], restored["label"]
+
+    restored_image, restored_label = apply_and_inverse(image, label)
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_image),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_label),
+        ops.convert_to_numpy(label),
+    )
+
+
+@pytest.mark.unit
 def test_random_cutout_supports_batch_mode_under_tf_function():
     random_cutout_2d = RandomCutOut(
         keys=["image", "label"],
