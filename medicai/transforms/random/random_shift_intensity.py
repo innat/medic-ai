@@ -5,9 +5,9 @@ import tensorflow as tf
 
 from ..base import (
     RandomTransform,
+    _apply_if_applied,
     _normalize_keys,
     _pop_last_transform_trace,
-    _trace_applied_to_bool,
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
@@ -175,17 +175,13 @@ class RandomShiftIntensity(RandomTransform):
             offset = sampled_offsets.get(key)
             if offset is None:
                 return tensor
-            if tf.is_tensor(applied):
-                return tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor, offset=offset: shift.shift_tensor(
-                        tensor, offset=-tf.cast(offset, tensor.dtype)
-                    ),
-                    lambda tensor=tensor: tensor,
-                )
-            if _trace_applied_to_bool(applied):
-                return shift.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype))
-            return tensor
+            return _apply_if_applied(
+                applied,
+                lambda tensor=tensor, offset=offset: shift.shift_tensor(
+                    tensor, offset=-tf.cast(offset, tensor.dtype)
+                ),
+                lambda tensor=tensor: tensor,
+            )
 
         shift.apply_to_present_keys(
             bundle,

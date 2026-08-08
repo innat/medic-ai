@@ -5,9 +5,9 @@ import tensorflow as tf
 
 from ..base import (
     RandomTransform,
+    _apply_if_applied,
     _normalize_keys,
     _pop_last_transform_trace,
-    _trace_applied_to_bool,
 )
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
@@ -140,15 +140,11 @@ class RandomRotate90(RandomTransform):
 
         def apply_inverse_rotate(tensor: tf.Tensor, _: str) -> tf.Tensor:
             inverse_k = tf.math.floormod(-tf.cast(k, tf.int32), 4)
-            if tf.is_tensor(applied):
-                return tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor: rotate.rotate_tensor(tensor, k=inverse_k),
-                    lambda tensor=tensor: tensor,
-                )
-            if _trace_applied_to_bool(applied):
-                return rotate.rotate_tensor(tensor, k=inverse_k)
-            return tensor
+            return _apply_if_applied(
+                applied,
+                lambda tensor=tensor: rotate.rotate_tensor(tensor, k=inverse_k),
+                lambda tensor=tensor: tensor,
+            )
 
         rotate.apply_to_present_keys(
             bundle, apply_inverse_rotate, keys=trace["params"].get("keys", [])

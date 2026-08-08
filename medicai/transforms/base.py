@@ -70,6 +70,29 @@ def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
     return bool(applied)
 
 
+def _apply_if_applied(
+    applied: tf.Tensor | bool,
+    true_fn,
+    false_fn,
+):
+    """Run one of two callbacks based on an eager or symbolic `applied` flag.
+
+    Args:
+        applied: Boolean-like trace flag, either a Python bool or TensorFlow
+            scalar tensor.
+        true_fn: Callback executed when the flag evaluates to ``True``.
+        false_fn: Callback executed when the flag evaluates to ``False``.
+
+    Returns:
+        The value returned by whichever callback is selected.
+    """
+    if tf.is_tensor(applied):
+        return tf.cond(tf.cast(applied, tf.bool), true_fn, false_fn)
+    if _trace_applied_to_bool(applied):
+        return true_fn()
+    return false_fn()
+
+
 def _pop_last_transform_trace(
     bundle: TensorBundle,
     transform_name: str,
@@ -1172,16 +1195,11 @@ class LambdaTransform(KeyedTransform):
         present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         for key in present_keys:
             tensor = bundle.data[key]
-            if tf.is_tensor(applied):
-                bundle.data[key] = tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor, key=key: self._call_tensor_fn(
-                        self.inverse_fn, tensor, key
-                    ),
-                    lambda tensor=tensor: tensor,
-                )
-            elif _trace_applied_to_bool(applied):
-                bundle.data[key] = self._call_tensor_fn(self.inverse_fn, tensor, key)
+            bundle.data[key] = _apply_if_applied(
+                applied,
+                lambda tensor=tensor, key=key: self._call_tensor_fn(self.inverse_fn, tensor, key),
+                lambda tensor=tensor: tensor,
+            )
 
         if self.inverse_meta_fn is not None:
             try:

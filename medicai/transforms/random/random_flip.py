@@ -3,7 +3,7 @@ from typing import Sequence, Union
 import keras
 import tensorflow as tf
 
-from ..base import RandomTransform, _pop_last_transform_trace, _trace_applied_to_bool
+from ..base import RandomTransform, _apply_if_applied, _pop_last_transform_trace
 from ..spatial.flip import Flip
 from ..tensor_bundle import TensorBundle
 
@@ -104,15 +104,11 @@ class RandomFlip(RandomTransform):
         applied = trace.get("applied", False)
 
         def apply_inverse_flip(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            if tf.is_tensor(applied):
-                return tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor: self.flip.flip_tensor(tensor),
-                    lambda tensor=tensor: tensor,
-                )
-            if _trace_applied_to_bool(applied):
-                return self.flip.flip_tensor(tensor)
-            return tensor
+            return _apply_if_applied(
+                applied,
+                lambda tensor=tensor: self.flip.flip_tensor(tensor),
+                lambda tensor=tensor: tensor,
+            )
 
         self.flip.apply_to_present_keys(
             bundle, apply_inverse_flip, keys=trace["params"].get("keys", [])

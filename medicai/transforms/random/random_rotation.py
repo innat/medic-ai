@@ -5,9 +5,9 @@ import tensorflow as tf
 
 from ..base import (
     RandomTransform,
+    _apply_if_applied,
     _normalize_keys,
     _pop_last_transform_trace,
-    _trace_applied_to_bool,
 )
 from ..tensor_bundle import TensorBundle
 from ..utils import (
@@ -252,15 +252,11 @@ class RandomRotate(RandomTransform):
         angle = trace["params"].get("angle")
 
         def apply_inverse_rotate(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            if tf.is_tensor(applied):
-                return tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, -angle),
-                    lambda tensor=tensor: tensor,
-                )
-            if _trace_applied_to_bool(applied):
-                return self.rotate_tensor(tensor, key, -angle)
-            return tensor
+            return _apply_if_applied(
+                applied,
+                lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, -angle),
+                lambda tensor=tensor: tensor,
+            )
 
         for key in trace["params"].get("keys", []):
             if key not in bundle.data:
