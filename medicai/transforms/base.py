@@ -701,35 +701,55 @@ class RandomChoice(RandomTransform):
         permutation = self._sample_permutation_graph()
         num_to_apply = self._sample_num_choices()
 
-        def apply_step(current_outputs, step: int):
-            selected_index = permutation[step]
-
-            def make_branch(index: int, current_outputs=current_outputs):
-                def branch():
-                    local_data = {
-                        key: value for key, value in zip(data_keys, current_outputs, strict=True)
-                    }
-                    local_bundle = TensorBundle(local_data, dict(bundle.meta))
-                    output = self.transforms[index](local_bundle)
-                    return tuple(output.data[key] for key in data_keys)
-
-                return branch
-
-            branch_fns = {index: make_branch(index) for index in range(len(self.transforms))}
-            return tf.switch_case(selected_index, branch_fns=branch_fns)
-
         current_outputs = tuple(bundle.data[key] for key in data_keys)
         for step in range(self.max_choices):
             current_outputs = tf.cond(
                 tf.logical_and(should_apply, tf.constant(step, dtype=tf.int32) < num_to_apply),
-                lambda current_outputs=current_outputs, step=step: apply_step(
-                    current_outputs, step
+                lambda current_outputs=current_outputs, step=step: self._apply_graph_step(
+                    current_outputs,
+                    step,
+                    permutation,
+                    data_keys,
+                    bundle.meta,
                 ),
                 lambda current_outputs=current_outputs: current_outputs,
             )
 
         bundle.data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
         return bundle
+
+    def _apply_graph_step(
+        self,
+        current_outputs: tuple[tf.Tensor, ...],
+        step: int,
+        permutation: tf.Tensor,
+        data_keys: tuple[str, ...],
+        meta: Mapping[str, Any],
+    ) -> tuple[tf.Tensor, ...]:
+        """Apply one graph-safe selection step for ``RandomChoice``."""
+        selected_index = permutation[step]
+        branch_fns = {
+            index: self._make_graph_branch(index, current_outputs, data_keys, meta)
+            for index in range(len(self.transforms))
+        }
+        return tf.switch_case(selected_index, branch_fns=branch_fns)
+
+    def _make_graph_branch(
+        self,
+        index: int,
+        current_outputs: tuple[tf.Tensor, ...],
+        data_keys: tuple[str, ...],
+        meta: Mapping[str, Any],
+    ):
+        """Build one graph-safe transform branch for ``RandomChoice``."""
+
+        def branch():
+            local_data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
+            local_bundle = TensorBundle(local_data, dict(meta))
+            output = self.transforms[index](local_bundle)
+            return tuple(output.data[key] for key in data_keys)
+
+        return branch
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         if not self.invertible:
