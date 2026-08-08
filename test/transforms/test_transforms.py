@@ -2279,6 +2279,26 @@ def test_flip_none_axis_is_noop_and_invalid_axis_raises():
 
 
 @pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            Flip(keys=["image"], spatial_axis=0),
+            Flip(keys=["image"], spatial_axis=1),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_flip_negative_axis_resolves_against_spatial_rank_only():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     out = Flip(keys=["image"], spatial_axis=-1)(TensorBundle({"image": image}))
