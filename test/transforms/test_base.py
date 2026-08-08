@@ -313,6 +313,28 @@ def test_random_choice_records_eager_trace_metadata():
 
 
 @pytest.mark.unit
+def test_random_choice_inverse_replays_selected_invertible_transforms():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    choice = RandomChoice(
+        transforms=[
+            Flip(keys=["image"], spatial_axis=1),
+            ShiftIntensity(keys=["image"], offset=2.0),
+        ],
+        num_choices=2,
+        prob=1.0,
+        seed=7,
+    )
+
+    forward = choice(TensorBundle({"image": image}))
+    restored = choice.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_lambda_transform_applies_deterministic_callable_and_records_trace():
     bundle = TensorBundle({"image": as_tensor(np.ones((2, 2, 1), dtype=np.float32))})
     transform = LambdaTransform(
