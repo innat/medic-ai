@@ -1,3 +1,4 @@
+import keras
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -155,6 +156,51 @@ def test_random_choice_multi_choice_can_run_inside_custom_train_step():
             return super().train_step((x, y))
 
     model = MultiChoiceAugmentedModel()
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss=keras.losses.MeanSquaredError(),
+        jit_compile=False,
+    )
+
+    x = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
+    y = as_tensor(np.random.randn(4, 1).astype(np.float32))
+
+    logs = model.train_on_batch(x, y, return_dict=True)
+
+    assert "loss" in logs
+
+
+@pytest.mark.unit
+def test_random_cutout_can_run_inside_custom_train_step():
+    class CutOutAugmentedModel(keras.Model):
+        def __init__(self):
+            super().__init__()
+            self.transforms = RandomCutOut(
+                keys=["image", "label"],
+                mask_size=(2, 2),
+                num_cuts=1,
+                prob=1.0,
+                input_mode="batch",
+                seed=19,
+            )
+            self.backbone = keras.Sequential(
+                [
+                    keras.layers.Input(shape=(8, 8, 1)),
+                    keras.layers.Conv2D(4, 3, padding="same", activation="relu"),
+                    keras.layers.GlobalAveragePooling2D(),
+                    keras.layers.Dense(1),
+                ]
+            )
+
+        def call(self, inputs, training=False):
+            return self.backbone(inputs, training=training)
+
+        def train_step(self, data):
+            x, y = data
+            x = self.transforms({"image": x, "label": tf.zeros_like(x)})["image"]
+            return super().train_step((x, y))
+
+    model = CutOutAugmentedModel()
     model.compile(
         optimizer=keras.optimizers.Adam(1e-3),
         loss=keras.losses.MeanSquaredError(),

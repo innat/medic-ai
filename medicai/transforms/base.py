@@ -165,6 +165,11 @@ def _require_static_value(value: Any, name: str) -> Any:
     return value
 
 
+def _is_tensorflow_eager_execution() -> bool:
+    """Return whether TensorFlow is currently executing eagerly."""
+    return tf.executing_eagerly()
+
+
 class Transform:
     """Base class for Medic-AI transforms.
 
@@ -639,7 +644,7 @@ class RandomChoice(RandomTransform):
         return any(getattr(transform, "invertible", False) for transform in self.transforms)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        if not tf.executing_eagerly():
+        if not _is_tensorflow_eager_execution():
             return self._apply_graph_choice(bundle)
 
         params = self.get_random_params(bundle)

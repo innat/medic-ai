@@ -13,7 +13,7 @@ from medicai.transforms import (
     TensorBundle,
     Transform,
 )
-from medicai.transforms.base import ensure_tensor_bundle
+from medicai.transforms.base import _apply_if_applied, _is_tensorflow_eager_execution, ensure_tensor_bundle
 from medicai.transforms.utils import (
     LayoutInfo,
     ensure_batch_axis,
@@ -112,6 +112,31 @@ def test_ensure_tensor_bundle_converts_numpy_scalars():
 
     assert hasattr(bundle["value"], "shape")
     assert hasattr(bundle["index"], "shape")
+
+
+@pytest.mark.unit
+def test_apply_if_applied_handles_python_bools():
+    assert _apply_if_applied(True, lambda: "applied", lambda: "skipped") == "applied"
+    assert _apply_if_applied(False, lambda: "applied", lambda: "skipped") == "skipped"
+
+
+@pytest.mark.unit
+def test_apply_if_applied_handles_tensor_flags_under_tf_function():
+    @tf.function
+    def apply(flag):
+        return _apply_if_applied(
+            flag,
+            lambda: tf.constant(1, dtype=tf.int32),
+            lambda: tf.constant(0, dtype=tf.int32),
+        )
+
+    assert int(ops.convert_to_numpy(apply(tf.constant(True)))) == 1
+    assert int(ops.convert_to_numpy(apply(tf.constant(False)))) == 0
+
+
+@pytest.mark.unit
+def test_is_tensorflow_eager_execution_reports_eager_state():
+    assert _is_tensorflow_eager_execution() is True
 
 
 @pytest.mark.unit
