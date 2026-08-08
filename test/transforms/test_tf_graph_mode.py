@@ -34,6 +34,49 @@ def as_tensor(array, dtype=None):
 
 
 @pytest.mark.unit
+def test_dual_mode_transforms_can_run_inside_custom_train_step():
+    class AugmentedModel(keras.Model):
+        def __init__(self):
+            super().__init__()
+            self.transforms = Compose(
+                [
+                    ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
+                    RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch"),
+                ]
+            )
+            self.backbone = keras.Sequential(
+                [
+                    keras.layers.Input(shape=(8, 8, 1)),
+                    keras.layers.Conv2D(4, 3, padding="same", activation="relu"),
+                    keras.layers.GlobalAveragePooling2D(),
+                    keras.layers.Dense(1),
+                ]
+            )
+
+        def call(self, inputs, training=False):
+            return self.backbone(inputs, training=training)
+
+        def train_step(self, data):
+            x, y = data
+            x = self.transforms({"image": x})["image"]
+            return super().train_step((x, y))
+
+    model = AugmentedModel()
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss=keras.losses.MeanSquaredError(),
+        jit_compile=False,
+    )
+
+    x = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
+    y = as_tensor(np.random.randn(4, 1).astype(np.float32))
+
+    logs = model.train_on_batch(x, y, return_dict=True)
+
+    assert "loss" in logs
+
+
+@pytest.mark.unit
 def test_intensity_transforms_run_under_tf_function():
     normalize = NormalizeIntensity(keys=["image"], nonzero=True)
     scale = ScaleIntensityRange(
