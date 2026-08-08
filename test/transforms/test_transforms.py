@@ -624,6 +624,39 @@ def test_scale_intensity_range_inverse_restores_normalized_mapping():
 
 
 @pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_instances():
+    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
+    pipeline = Compose(
+        [
+            ScaleIntensityRange(
+                keys=["image"],
+                input_min=0.0,
+                input_max=1.0,
+                output_min=-1.0,
+                output_max=1.0,
+            ),
+            ScaleIntensityRange(
+                keys=["image"],
+                input_min=-1.0,
+                input_max=1.0,
+                output_min=0.0,
+                output_max=2.0,
+            ),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+        rtol=1e-6,
+    )
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_inverse_uses_recorded_trace_parameters():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
