@@ -590,6 +590,37 @@ def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function()
 
 
 @pytest.mark.unit
+def test_compose_random_flip_and_rotate90_inverse_supports_batch_mode_under_tf_function():
+    pipeline = Compose(
+        [
+            RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch"),
+            RandomRotate90(
+                keys=["image"],
+                prob=1.0,
+                max_k=3,
+                spatial_axis=(0, 1),
+                input_mode="batch",
+                seed=13,
+            ),
+        ]
+    )
+    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+
+    @tf.function
+    def apply_and_inverse(x):
+        forward = pipeline({"image": x})
+        restored = pipeline.inverse(forward)
+        return restored["image"]
+
+    restored = apply_and_inverse(image)
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_shift_intensity_supports_batch_mode_under_tf_function():
     shift_2d = ShiftIntensity(keys=["image"], offset=0.5, input_mode="batch")
     shift_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_mode="batch")
