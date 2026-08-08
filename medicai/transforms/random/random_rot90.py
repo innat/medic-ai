@@ -91,6 +91,13 @@ class RandomRotate90(RandomTransform):
         self.spatial_axis = spatial_axis
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.allow_missing_keys = allow_missing_keys
+        self.rotate = Rotate90(
+            keys=self.keys,
+            k=1,
+            spatial_axis=self.spatial_axis,
+            input_mode=self.input_mode,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     @property
     def invertible(self) -> bool:
@@ -116,10 +123,9 @@ class RandomRotate90(RandomTransform):
         params: dict[str, object],
     ) -> TensorBundle:
         """Apply the sampled quarter-turn rotation to all selected keys."""
-        rotate = self._build_rotate_kernel()
-        present_keys = rotate.apply_to_present_keys(
+        present_keys = self.rotate.apply_to_present_keys(
             bundle,
-            lambda tensor, key: self.transform_tensor(tensor, key, params, rotate),
+            lambda tensor, key: self.transform_tensor(tensor, key, params),
         )
         self.record_random_transform(
             bundle,
@@ -136,17 +142,16 @@ class RandomRotate90(RandomTransform):
 
         applied = trace.get("applied", False)
         k = trace["params"].get("k")
-        rotate = self._build_rotate_kernel()
 
         def apply_inverse_rotate(tensor: tf.Tensor, _: str) -> tf.Tensor:
             inverse_k = tf.math.floormod(-tf.cast(k, tf.int32), 4)
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor: rotate.rotate_tensor(tensor, k=inverse_k),
+                lambda tensor=tensor: self.rotate.rotate_tensor(tensor, k=inverse_k),
                 lambda tensor=tensor: tensor,
             )
 
-        rotate.apply_to_present_keys(
+        self.rotate.apply_to_present_keys(
             bundle, apply_inverse_rotate, keys=trace["params"].get("keys", [])
         )
         return bundle
@@ -156,13 +161,12 @@ class RandomRotate90(RandomTransform):
         tensor: tf.Tensor,
         key: str,
         params: dict[str, object],
-        rotate: Rotate90,
     ) -> tf.Tensor:
         """Apply the sampled rotation conditionally to one tensor."""
         del key
         return tf.cond(
             tf.cast(params["should_apply"], tf.bool),
-            lambda tensor=tensor: rotate.rotate_tensor(
+            lambda tensor=tensor: self.rotate.rotate_tensor(
                 tensor,
                 k=params["k"],
                 spatial_axis=params["spatial_axis"],
@@ -182,16 +186,6 @@ class RandomRotate90(RandomTransform):
             "spatial_axis": params["spatial_axis"],
             "input_mode": params["input_mode"],
         }
-
-    def _build_rotate_kernel(self) -> Rotate90:
-        """Construct the deterministic rotation kernel reused by this wrapper."""
-        return Rotate90(
-            keys=self.keys,
-            k=1,
-            spatial_axis=self.spatial_axis,
-            input_mode=self.input_mode,
-            allow_missing_keys=self.allow_missing_keys,
-        )
 
     def _get_last_random_rotate90_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -101,6 +101,12 @@ class RandomShiftIntensity(RandomTransform):
         self.channel_wise = channel_wise
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.allow_missing_keys = allow_missing_keys
+        self.shift = ShiftIntensity(
+            keys=self.keys,
+            offset=0.0,
+            input_mode=self.input_mode,
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     @property
     def invertible(self) -> bool:
@@ -126,9 +132,8 @@ class RandomShiftIntensity(RandomTransform):
         params: dict[str, object],
     ) -> TensorBundle:
         """Apply the sampled shift configuration to all selected keys."""
-        shift = self._build_shift_kernel()
         sampled_offsets = {}
-        present_keys = shift.iter_present_keys(bundle)
+        present_keys = self.shift.iter_present_keys(bundle)
 
         def apply_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
             if params["channel_wise"]:
@@ -149,11 +154,13 @@ class RandomShiftIntensity(RandomTransform):
             sampled_offsets[key] = offsets
             return tf.cond(
                 params["should_apply"],
-                lambda tensor=tensor, offsets=offsets: shift.shift_tensor(tensor, offset=offsets),
+                lambda tensor=tensor, offsets=offsets: self.shift.shift_tensor(
+                    tensor, offset=offsets
+                ),
                 lambda tensor=tensor: tensor,
             )
 
-        shift.apply_to_present_keys(bundle, apply_shift, keys=present_keys)
+        self.shift.apply_to_present_keys(bundle, apply_shift, keys=present_keys)
         self.record_random_transform(
             bundle,
             params=self.build_trace_params(params, sampled_offsets),
@@ -169,7 +176,6 @@ class RandomShiftIntensity(RandomTransform):
 
         applied = trace.get("applied", False)
         sampled_offsets = trace["params"].get("sampled_offsets", {})
-        shift = self._build_shift_kernel()
 
         def apply_inverse_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
             offset = sampled_offsets.get(key)
@@ -177,13 +183,13 @@ class RandomShiftIntensity(RandomTransform):
                 return tensor
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor, offset=offset: shift.shift_tensor(
+                lambda tensor=tensor, offset=offset: self.shift.shift_tensor(
                     tensor, offset=-tf.cast(offset, tensor.dtype)
                 ),
                 lambda tensor=tensor: tensor,
             )
 
-        shift.apply_to_present_keys(
+        self.shift.apply_to_present_keys(
             bundle,
             apply_inverse_shift,
             keys=trace["params"].get("keys", []),
@@ -203,15 +209,6 @@ class RandomShiftIntensity(RandomTransform):
             "input_mode": params["input_mode"],
             "sampled_offsets": sampled_offsets,
         }
-
-    def _build_shift_kernel(self) -> ShiftIntensity:
-        """Construct the deterministic shift kernel reused by this wrapper."""
-        return ShiftIntensity(
-            keys=self.keys,
-            offset=0.0,
-            input_mode=self.input_mode,
-            allow_missing_keys=self.allow_missing_keys,
-        )
 
     def _get_last_random_shift_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -132,6 +132,12 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
+        self.crop = SpatialCrop(
+            keys=self.keys,
+            crop_size=self.target_shape,
+            input_mode="batch",
+            allow_missing_keys=self.allow_missing_keys,
+        )
 
     @property
     def invertible(self) -> bool:
@@ -208,7 +214,6 @@ class RandomCropByPosNegLabel(RandomTransform):
         if params["skip"]:
             return bundle
 
-        crop = self._build_crop_kernel()
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
@@ -217,14 +222,14 @@ class RandomCropByPosNegLabel(RandomTransform):
                 tensor,
                 input_mode=self.input_mode,
             )
-            cropped = crop.crop_tensor(
+            cropped = self.crop.crop_tensor(
                 batched_tensor,
                 params["crop_start"],
                 params["crop_size"],
             )
             return restore_from_batch_axis(cropped, added_batch_axis)
 
-        present_keys = crop.apply_to_present_keys(
+        present_keys = self.crop.apply_to_present_keys(
             bundle,
             apply_crop,
         )
@@ -262,31 +267,21 @@ class RandomCropByPosNegLabel(RandomTransform):
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
         input_mode = trace["params"].get("input_mode", self.input_mode)
-        crop = self._build_crop_kernel()
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
             batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=input_mode)
-            restored = crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
+            restored = self.crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
             return restore_from_batch_axis(restored, added_batch_axis)
 
-        crop.apply_to_present_keys(
+        self.crop.apply_to_present_keys(
             bundle,
             apply_inverse_crop,
             keys=trace["params"].get("keys", []),
         )
         return bundle
-
-    def _build_crop_kernel(self) -> SpatialCrop:
-        """Construct the deterministic batch-first crop kernel reused by this transform."""
-        return SpatialCrop(
-            keys=self.keys,
-            crop_size=self.target_shape,
-            input_mode="batch",
-            allow_missing_keys=self.allow_missing_keys,
-        )
 
     def sample_center(
         self,
