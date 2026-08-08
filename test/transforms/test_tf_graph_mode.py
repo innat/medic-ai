@@ -704,6 +704,39 @@ def test_random_spatial_crop_forward_and_inverse_run_under_tf_function_in_batch_
 
 
 @pytest.mark.unit
+def test_compose_random_spatial_crop_inverse_supports_batch_mode_under_tf_function():
+    pipeline = Compose(
+        [
+            RandomSpatialCrop(
+                keys=["image"],
+                crop_size=(3, 4),
+                random_center=False,
+                input_mode="batch",
+            ),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+        ]
+    )
+
+    image = as_tensor(np.zeros((2, 5, 6, 1), dtype=np.float32))
+    image_np = ops.convert_to_numpy(image)
+    image_np[:, 1:4, 1:5, 0] = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    image = as_tensor(image_np)
+
+    @tf.function
+    def apply_and_inverse(x):
+        forward = pipeline({"image": x})
+        restored = pipeline.inverse(forward)
+        return restored["image"]
+
+    restored = apply_and_inverse(image)
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_random_crop_by_pos_neg_label_runs_under_tf_function_for_2d_and_3d():
     crop_2d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(4, 4), pos=1, neg=1)
     crop_3d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(3, 3, 3), pos=1, neg=1)
