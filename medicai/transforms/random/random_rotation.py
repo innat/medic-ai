@@ -165,6 +165,13 @@ class RandomRotate(RandomTransform):
         return self.fill_mode == "constant"
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_random_params(bundle)
+        if params["skip"]:
+            return bundle
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Sample one rotation configuration shared across selected keys."""
         present_keys = []
         for key in self.keys:
             if key in bundle.data:
@@ -173,7 +180,7 @@ class RandomRotate(RandomTransform):
                 raise KeyError(f"Key '{key}' not found in input data.")
 
         if not present_keys:
-            return bundle
+            return {"skip": True}
 
         sample_tensor = bundle.data[present_keys[0]]
         layout = validate_layout(
@@ -191,28 +198,47 @@ class RandomRotate(RandomTransform):
             maxval=self.factor,
             dtype=tf.float32,
         )
+        return {
+            "skip": False,
+            "keys": list(present_keys),
+            "should_apply": should_rotate,
+            "angle": angle,
+            "factor": self.factor,
+            "fill_mode": self.fill_mode,
+            "input_mode": self.input_mode,
+        }
 
-        for key in present_keys:
+    def apply_with_params(
+        self,
+        bundle: TensorBundle,
+        params: dict[str, object],
+    ) -> TensorBundle:
+        """Apply the sampled rotation configuration to all selected keys."""
+        for key in params["keys"]:
             tensor = bundle.data[key]
             bundle.data[key] = tf.cond(
-                should_rotate,
-                lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, angle),
+                params["should_apply"],
+                lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, params["angle"]),
                 lambda tensor=tensor: tensor,
             )
 
         self.record_random_transform(
             bundle,
-            params={
-                "keys": list(present_keys),
-                "factor": self.factor,
-                "angle": angle,
-                "fill_mode": self.fill_mode,
-                "input_mode": self.input_mode,
-            },
-            applied=should_rotate,
+            params=self.build_trace_params(params),
+            applied=params["should_apply"],
             kernel="rotate_volume",
         )
         return bundle
+
+    def build_trace_params(self, params: dict[str, object]) -> dict[str, object]:
+        """Build random trace metadata for the current rotation."""
+        return {
+            "keys": params["keys"],
+            "factor": params["factor"],
+            "angle": params["angle"],
+            "fill_mode": params["fill_mode"],
+            "input_mode": params["input_mode"],
+        }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         if not self.invertible:
