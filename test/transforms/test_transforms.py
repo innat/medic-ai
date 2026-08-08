@@ -2406,6 +2406,26 @@ def test_rotate90_k_zero_is_noop_and_invalid_axes_raise():
 
 
 @pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_rotate90_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            Rotate90(keys=["image"], k=1),
+            Rotate90(keys=["image"], k=3),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_rotate90_negative_axes_resolve_against_spatial_rank_only():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     out = Rotate90(keys=["image"], k=1, spatial_axis=(0, -1))(TensorBundle({"image": image}))
