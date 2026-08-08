@@ -26,8 +26,14 @@ class RandomFlip(RandomTransform):
     Args:
         keys: Keys of the tensors to flip.
         prob: Probability of applying the flip.
-        spatial_axis: Spatial axis or axes to reverse. If ``None``, the
-            transform behaves as a no-op.
+        spatial_axis: Spatial axis or axes to reverse. For 2D tensors, ``0``
+            refers to the vertical-height axis and ``1`` refers to the
+            horizontal-width axis. For 3D tensors using sample-space axis
+            numbering ``(D, H, W)``, axis ``0`` is the depth direction, axis
+            ``1`` is the height direction, and axis ``2`` is the width
+            direction; these correspond to the sagittal, coronal, and axial
+            viewing orientations depending on which axis is being mirrored. If
+            ``None``, the transform behaves as a no-op.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
             tensors.

@@ -36,7 +36,13 @@ class Flip(KeyedTransform, InvertibleTransform):
             sample layout, so ``0`` refers to ``H`` for 2D tensors and ``D``
             for 3D tensors. In batch mode, axes are still expressed relative to
             the spatial dimensions only, so the batch axis is never included.
-            If ``None``, the transform is a no-op.
+            For 2D tensors, ``0`` refers to the vertical-height axis and ``1``
+            refers to the horizontal-width axis. For 3D tensors using
+            sample-space axis numbering ``(D, H, W)``, axis ``0`` is the depth
+            direction, axis ``1`` is the height direction, and axis ``2`` is
+            the width direction; these correspond to the sagittal, coronal,
+            and axial viewing orientations depending on which axis is being
+            mirrored. If ``None``, the transform is a no-op.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
             tensors.
