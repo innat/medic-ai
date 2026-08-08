@@ -557,6 +557,39 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
 
 
 @pytest.mark.unit
+def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function():
+    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch")
+    random_rotate90 = RandomRotate90(
+        keys=["image"],
+        prob=1.0,
+        max_k=3,
+        spatial_axis=(0, 1),
+        input_mode="batch",
+    )
+    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+
+    @tf.function
+    def apply_and_inverse(x):
+        flipped = random_flip({"image": x})
+        restored_flip = random_flip.inverse(flipped)
+
+        rotated = random_rotate90({"image": x})
+        restored_rotate = random_rotate90.inverse(rotated)
+        return restored_flip["image"], restored_rotate["image"]
+
+    restored_flip, restored_rotate = apply_and_inverse(image)
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_flip),
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored_rotate),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_shift_intensity_supports_batch_mode_under_tf_function():
     shift_2d = ShiftIntensity(keys=["image"], offset=0.5, input_mode="batch")
     shift_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_mode="batch")
