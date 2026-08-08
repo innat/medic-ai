@@ -139,9 +139,16 @@ class RandomCutOut(RandomTransform):
         self.allow_missing_keys = allow_missing_keys
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_random_params(bundle)
+        if params["skip"]:
+            return bundle
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Sample one Bernoulli decision shared across the selected keys."""
         if self.image_key not in bundle.data or self.label_key not in bundle.data:
             if self.allow_missing_keys:
-                return bundle
+                return {"skip": True}
             missing = self.image_key if self.image_key not in bundle.data else self.label_key
             raise KeyError(f"Key '{missing}' not found in input data.")
 
@@ -162,32 +169,59 @@ class RandomCutOut(RandomTransform):
         spatial_rank = layout.spatial_rank
 
         should_apply = self.sample_should_apply()
+        return {
+            "skip": False,
+            "image": image,
+            "label": label,
+            "spatial_rank": spatial_rank,
+            "should_apply": should_apply,
+            "input_mode": self.input_mode,
+        }
+
+    def apply_with_params(
+        self,
+        bundle: TensorBundle,
+        params: dict[str, object],
+    ) -> TensorBundle:
+        """Apply the sampled cutout configuration to the selected image key."""
         if self.input_mode == "batch":
             bundle.data[self.image_key] = tf.cond(
-                should_apply,
-                lambda: self.apply_batch_cutout(image, label, spatial_rank),
-                lambda: image,
+                params["should_apply"],
+                lambda: self.apply_batch_cutout(
+                    params["image"],
+                    params["label"],
+                    params["spatial_rank"],
+                ),
+                lambda: params["image"],
             )
         else:
             bundle.data[self.image_key] = tf.cond(
-                should_apply,
-                lambda: self.apply_sample_cutout(image, label, spatial_rank),
-                lambda: image,
+                params["should_apply"],
+                lambda: self.apply_sample_cutout(
+                    params["image"],
+                    params["label"],
+                    params["spatial_rank"],
+                ),
+                lambda: params["image"],
             )
         self.record_random_transform(
             bundle,
-            params={
-                "keys": [self.image_key, self.label_key],
-                "mask_size": self.mask_size,
-                "num_cuts": self.num_cuts,
-                "fill_mode": self.fill_mode,
-                "cutout_mode": self.cutout_mode,
-                "input_mode": self.input_mode,
-            },
-            applied=should_apply,
+            params=self.build_trace_params(params),
+            applied=params["should_apply"],
             kernel="cutout_mask",
         )
         return bundle
+
+    def build_trace_params(self, params: dict[str, object]) -> dict[str, object]:
+        """Build random trace metadata for the current cutout operation."""
+        return {
+            "keys": [self.image_key, self.label_key],
+            "mask_size": self.mask_size,
+            "num_cuts": self.num_cuts,
+            "fill_mode": self.fill_mode,
+            "cutout_mode": self.cutout_mode,
+            "input_mode": params["input_mode"],
+        }
 
     def apply_sample_cutout(
         self,
