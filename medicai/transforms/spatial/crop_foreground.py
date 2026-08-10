@@ -9,6 +9,7 @@ from ..utils import (
     get_spatial_rank,
     get_spatial_shape,
     validate_input_mode,
+    validate_spatial_dims,
 )
 from .spatial_crop import SpatialCrop
 
@@ -156,6 +157,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -179,6 +181,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             supported_modes=("sample",),
             transform_name=type(self).__name__,
         )
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:
@@ -188,6 +191,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
         source_data = bundle.data[self.source_key]
         spatial_rank = get_spatial_rank(source_data)
+        if self.spatial_dims is not None and spatial_rank != self.spatial_dims:
+            raise ValueError(
+                f"Expected spatial_dims={self.spatial_dims} for shape {source_data.shape}, "
+                f"but resolved spatial rank {spatial_rank}."
+            )
         image_shape = get_spatial_shape(source_data)
 
         if self.channel_indices is not None:
@@ -215,6 +223,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
+            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -237,6 +246,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 "crop_size": crop_size,
                 "original_shapes": original_shapes,
                 "source_key": self.source_key,
+                "spatial_dims": self.spatial_dims,
             },
         )
         return bundle
@@ -251,6 +261,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
+            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 

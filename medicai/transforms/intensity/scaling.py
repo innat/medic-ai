@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout
+from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
@@ -120,6 +120,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: bool = False,
         dtype: tf.DType = tf.float32,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -134,6 +135,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         self.clip = clip
         self.dtype = dtype
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     @property
     def invertible(self) -> bool:
@@ -190,6 +192,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_max": self.output_max,
             "clip": self.clip,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -222,6 +225,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_max": params["output_max"],
             "clip": params["clip"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def scale_tensor(
@@ -303,6 +307,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
 

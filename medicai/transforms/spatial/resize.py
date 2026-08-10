@@ -14,6 +14,7 @@ from ..utils import (
     resize_volumes,
     validate_input_mode,
     validate_layout,
+    validate_spatial_dims,
 )
 
 
@@ -139,11 +140,13 @@ class Resize(KeyedTransform, InvertibleTransform):
         interpolation: str | Sequence[str] | Mapping[str, str],
         target_shape: Sequence[int],
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.target_shape = tuple(target_shape)
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
         ndim = len(self.target_shape)
         if ndim not in (2, 3):
@@ -210,6 +213,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         return {
             "target_shape": self.target_shape,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -232,6 +236,7 @@ class Resize(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "target_shape": params["target_shape"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
             "original_shapes": original_shapes,
             "interpolation": {key: self.interpolation[key] for key in present_keys},
         }
@@ -256,7 +261,12 @@ class Resize(KeyedTransform, InvertibleTransform):
             )
 
         layout = self._resolve_layout(tensor, target_rank)
-        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        batched_tensor, added_batch_axis = ensure_batch_axis(
+            tensor,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+            allowed_spatial_ranks=(target_rank,),
+        )
         resized = self.resize_batch_tensor(
             batched_tensor,
             key,
@@ -312,6 +322,7 @@ class Resize(KeyedTransform, InvertibleTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(target_rank,),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
 

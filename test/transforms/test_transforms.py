@@ -2350,6 +2350,28 @@ def test_flip_validates_input_mode():
 
 
 @pytest.mark.unit
+def test_flip_spatial_dims_disambiguates_rank4_sample_vs_batch_inputs():
+    batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    sample_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+
+    with pytest.raises(ValueError, match="Expected spatial_dims=2"):
+        Flip(
+            keys=["image"],
+            spatial_axis=1,
+            input_mode="sample",
+            spatial_dims=2,
+        )(TensorBundle({"image": batch_2d}))
+
+    out = Flip(
+        keys=["image"],
+        spatial_axis=1,
+        input_mode="sample",
+        spatial_dims=3,
+    )(TensorBundle({"image": sample_3d}))
+    assert tuple(out["image"].shape) == (2, 3, 4, 1)
+
+
+@pytest.mark.unit
 def test_rotate90_supports_2d_and_3d_and_records_inverse_trace():
     image_2d = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     image_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))

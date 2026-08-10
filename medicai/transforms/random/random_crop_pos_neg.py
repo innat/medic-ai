@@ -14,6 +14,7 @@ from ..utils import (
     restore_from_batch_axis,
     validate_input_mode,
     validate_layout,
+    validate_spatial_dims,
 )
 
 
@@ -102,6 +103,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: int,
         num_samples: int = 1,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         image_reference_key: str = None,
         image_threshold: float = 0.0,
         seed: int | keras.random.SeedGenerator | None = None,
@@ -129,6 +131,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
@@ -136,6 +139,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             keys=self.keys,
             crop_size=self.target_shape,
             input_mode="batch",
+            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -162,11 +166,20 @@ class RandomCropByPosNegLabel(RandomTransform):
             image,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
-        image_batched, _ = ensure_batch_axis(image, input_mode=self.input_mode)
-        label_batched, _ = ensure_batch_axis(label, input_mode=self.input_mode)
+        image_batched, _ = ensure_batch_axis(
+            image,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+        )
+        label_batched, _ = ensure_batch_axis(
+            label,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+        )
 
         image_reference = None
         if self.image_reference_key is not None:
@@ -178,6 +191,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             image_reference_batched, _ = ensure_batch_axis(
                 image_reference,
                 input_mode=self.input_mode,
+                spatial_dims=self.spatial_dims,
             )
         center = self.sample_center(
             image_batched,
@@ -203,6 +217,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             "neg": self.neg,
             "image_reference_key": self.image_reference_key,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -221,6 +236,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             batched_tensor, added_batch_axis = ensure_batch_axis(
                 tensor,
                 input_mode=self.input_mode,
+                spatial_dims=self.spatial_dims,
             )
             cropped = self.crop.crop_tensor(
                 batched_tensor,
@@ -257,6 +273,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             "neg": params["neg"],
             "image_reference_key": params["image_reference_key"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -267,12 +284,17 @@ class RandomCropByPosNegLabel(RandomTransform):
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
         input_mode = trace["params"].get("input_mode", self.input_mode)
+        spatial_dims = trace["params"].get("spatial_dims", self.spatial_dims)
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
-            batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=input_mode)
+            batched_tensor, added_batch_axis = ensure_batch_axis(
+                tensor,
+                input_mode=input_mode,
+                spatial_dims=spatial_dims,
+            )
             restored = self.crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
             return restore_from_batch_axis(restored, added_batch_axis)
 

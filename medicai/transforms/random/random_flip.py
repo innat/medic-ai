@@ -81,6 +81,7 @@ class RandomFlip(RandomTransform):
         prob: float = 0.1,
         spatial_axis: Union[int, Sequence[int], None] = None,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -89,6 +90,7 @@ class RandomFlip(RandomTransform):
             keys=keys,
             spatial_axis=spatial_axis,
             input_mode=input_mode,
+            spatial_dims=spatial_dims,
             allow_missing_keys=allow_missing_keys,
         )
 
@@ -134,6 +136,7 @@ class RandomFlip(RandomTransform):
             "should_apply": self.sample_should_apply(),
             "spatial_axis": self.flip.spatial_axis,
             "input_mode": self.flip.input_mode,
+            "spatial_dims": self.flip.spatial_dims,
         }
 
     def apply_with_params(
@@ -195,6 +198,7 @@ class RandomFlip(RandomTransform):
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def _get_last_random_flip_trace(self, bundle: TensorBundle):

@@ -88,6 +88,7 @@ class RandomShiftIntensity(RandomTransform):
         prob: float = 0.1,
         channel_wise: bool = False,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -105,6 +106,7 @@ class RandomShiftIntensity(RandomTransform):
             keys=self.keys,
             offset=0.0,
             input_mode=self.input_mode,
+            spatial_dims=spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -124,6 +126,7 @@ class RandomShiftIntensity(RandomTransform):
             "channel_wise": self.channel_wise,
             "offset": self.offset,
             "input_mode": self.input_mode,
+            "spatial_dims": self.shift.spatial_dims,
         }
 
     def apply_with_params(
@@ -207,6 +210,7 @@ class RandomShiftIntensity(RandomTransform):
             "channel_wise": params["channel_wise"],
             "offset": params["offset"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
             "sampled_offsets": sampled_offsets,
         }
 

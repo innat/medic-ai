@@ -12,6 +12,7 @@ from ..utils import (
     restore_from_batch_axis,
     validate_input_mode,
     validate_layout,
+    validate_spatial_dims,
 )
 
 
@@ -120,12 +121,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         k: int = 1,
         spatial_axis: Sequence[int] | None = None,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.k = k
         self.spatial_axis = spatial_axis
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -155,6 +158,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                     "k": inverse_k,
                     "spatial_axis": params["spatial_axis"],
                     "input_mode": params["input_mode"],
+                    "spatial_dims": params["spatial_dims"],
                 },
             ),
         )
@@ -168,6 +172,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             "k": self.k % 4,
             "spatial_axis": self.spatial_axis,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -195,6 +200,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             "k": params["k"],
             "spatial_axis": params["spatial_axis"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def rotate_tensor(
@@ -216,7 +222,11 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         Returns:
             ``tf.Tensor``: The rotated tensor.
         """
-        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        batched_tensor, added_batch_axis = ensure_batch_axis(
+            tensor,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+        )
         rotated = self.rotate_batch_tensor(
             batched_tensor,
             k=k,
@@ -275,6 +285,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             tensor,
             input_mode=effective_input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
         )
 
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
@@ -288,6 +299,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             tuple(effective_axis),
             input_mode=effective_input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             name="spatial_axis",
         )
         if len(axes) != 2:

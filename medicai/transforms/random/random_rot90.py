@@ -85,6 +85,7 @@ class RandomRotate90(RandomTransform):
         max_k: int = 3,
         spatial_axis: Sequence[int] | None = None,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -101,6 +102,7 @@ class RandomRotate90(RandomTransform):
             k=1,
             spatial_axis=self.spatial_axis,
             input_mode=self.input_mode,
+            spatial_dims=spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -120,6 +122,7 @@ class RandomRotate90(RandomTransform):
             "k": self.random_integers(shape=(), minval=1, maxval=self.max_k + 1, dtype=tf.int32),
             "spatial_axis": self.spatial_axis,
             "input_mode": self.input_mode,
+            "spatial_dims": self.rotate.spatial_dims,
         }
 
     def apply_with_params(
@@ -190,6 +193,7 @@ class RandomRotate90(RandomTransform):
             "k": params["k"],
             "spatial_axis": params["spatial_axis"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def _get_last_random_rotate90_trace(self, bundle: TensorBundle):

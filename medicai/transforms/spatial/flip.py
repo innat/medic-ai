@@ -9,6 +9,7 @@ from ..utils import (
     resolve_spatial_axes,
     restore_from_batch_axis,
     validate_input_mode,
+    validate_spatial_dims,
 )
 
 
@@ -114,6 +115,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         spatial_axis: Union[int, Sequence[int], None] = None,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -124,6 +126,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             )
         self.spatial_axis = spatial_axis
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -159,6 +162,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             "applied": self.spatial_axis is not None,
             "spatial_axis": self.spatial_axis,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -181,6 +185,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def flip_tensor(
@@ -203,7 +208,11 @@ class Flip(KeyedTransform, InvertibleTransform):
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor
-        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        batched_tensor, added_batch_axis = ensure_batch_axis(
+            tensor,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+        )
         flipped = self.flip_batch_tensor(batched_tensor, spatial_axis=effective_axis)
         return restore_from_batch_axis(flipped, added_batch_axis)
 
@@ -236,5 +245,6 @@ class Flip(KeyedTransform, InvertibleTransform):
             tensor,
             tuple(axes),
             input_mode=self.input_mode if input_mode is None else input_mode,
+            spatial_dims=self.spatial_dims,
             name="spatial_axis",
         )

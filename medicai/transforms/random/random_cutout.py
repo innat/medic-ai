@@ -5,7 +5,7 @@ import tensorflow as tf
 
 from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout
+from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class RandomCutOut(RandomTransform):
@@ -100,6 +100,7 @@ class RandomCutOut(RandomTransform):
         fill_value: float = 0.0,
         gaussian_std: float = 0.1,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         cutout_mode: str = "volume",
@@ -134,6 +135,7 @@ class RandomCutOut(RandomTransform):
         self.fill_value = fill_value
         self.gaussian_std = gaussian_std
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
@@ -158,12 +160,14 @@ class RandomCutOut(RandomTransform):
             image,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         validate_layout(
             label,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(layout.spatial_rank,),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
@@ -176,6 +180,7 @@ class RandomCutOut(RandomTransform):
             "spatial_rank": spatial_rank,
             "should_apply": should_apply,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -221,6 +226,7 @@ class RandomCutOut(RandomTransform):
             "fill_mode": self.fill_mode,
             "cutout_mode": self.cutout_mode,
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def apply_sample_cutout(

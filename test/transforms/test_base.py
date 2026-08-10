@@ -686,6 +686,22 @@ def test_validate_input_mode_and_layout_helpers_cover_sample_and_batch_contracts
     assert resolve_spatial_axes(sample_3d, (0, -1), input_mode="sample") == (0, 2)
     assert resolve_spatial_axes(batch_2d, (0, -1), input_mode="batch") == (1, 2)
 
+    with pytest.raises(ValueError, match="Expected spatial_dims=2"):
+        validate_layout(
+            batch_2d,
+            input_mode="sample",
+            allowed_spatial_ranks=(2, 3),
+            spatial_dims=2,
+        )
+
+    strict_batch_layout = validate_layout(
+        batch_2d,
+        input_mode="batch",
+        allowed_spatial_ranks=(2,),
+        spatial_dims=2,
+    )
+    assert strict_batch_layout.spatial_rank == 2
+
 
 @pytest.mark.unit
 def test_batch_axis_helpers_normalize_sample_and_batch_inputs():

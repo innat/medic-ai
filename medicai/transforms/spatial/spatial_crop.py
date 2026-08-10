@@ -4,7 +4,13 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import ensure_spatial_tuple, get_spatial_shape, validate_input_mode, validate_layout
+from ..utils import (
+    ensure_spatial_tuple,
+    get_spatial_shape,
+    validate_input_mode,
+    validate_layout,
+    validate_spatial_dims,
+)
 
 
 class SpatialCrop(KeyedTransform, InvertibleTransform):
@@ -107,6 +113,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         crop_start: Sequence[int] | None = None,
         crop_center: Sequence[int] | None = None,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -117,6 +124,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         self.crop_start = tuple(crop_start) if crop_start is not None else None
         self.crop_center = tuple(crop_center) if crop_center is not None else None
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         crop_starts = {}
@@ -141,6 +149,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                     "crop_size": crop_sizes,
                     "original_shapes": original_shapes,
                     "input_mode": self.input_mode,
+                    "spatial_dims": self.spatial_dims,
                 },
             )
         return bundle
@@ -177,6 +186,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank

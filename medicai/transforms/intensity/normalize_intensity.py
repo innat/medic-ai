@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import custom_tf_boolean_mask, validate_input_mode, validate_layout
+from ..utils import custom_tf_boolean_mask, validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class NormalizeIntensity(KeyedTransform):
@@ -101,6 +101,7 @@ class NormalizeIntensity(KeyedTransform):
         channel_wise: bool = False,
         dtype=tf.float32,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
@@ -110,6 +111,7 @@ class NormalizeIntensity(KeyedTransform):
         self.channel_wise = channel_wise
         self.dtype = dtype
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -122,6 +124,7 @@ class NormalizeIntensity(KeyedTransform):
                     "nonzero": self.nonzero,
                     "channel_wise": self.channel_wise,
                     "input_mode": self.input_mode,
+                    "spatial_dims": self.spatial_dims,
                 },
                 applied=True,
                 random=False,
@@ -203,5 +206,6 @@ class NormalizeIntensity(KeyedTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )

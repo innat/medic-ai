@@ -6,7 +6,7 @@ import tensorflow as tf
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_shape, validate_input_mode, validate_layout
+from ..utils import get_spatial_shape, validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class RandomSpatialCrop(RandomTransform):
@@ -83,6 +83,7 @@ class RandomSpatialCrop(RandomTransform):
         random_center: bool = True,
         random_shape: bool = False,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         min_valid_ratio: float = 0.0,
@@ -96,6 +97,7 @@ class RandomSpatialCrop(RandomTransform):
         self.random_center = random_center
         self.random_shape = random_shape
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
@@ -104,6 +106,7 @@ class RandomSpatialCrop(RandomTransform):
             keys=self.keys,
             crop_size=self.crop_size,
             input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -138,6 +141,7 @@ class RandomSpatialCrop(RandomTransform):
             sample_tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
@@ -164,6 +168,7 @@ class RandomSpatialCrop(RandomTransform):
             "random_center": self.random_center,
             "random_shape": self.random_shape,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -229,6 +234,7 @@ class RandomSpatialCrop(RandomTransform):
             "random_center": params["random_center"],
             "random_shape": params["random_shape"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def _get_crop_size(self, spatial_shape: tf.Tensor, spatial_rank: int) -> tf.Tensor:

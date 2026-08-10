@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout
+from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class SignalFillEmpty(KeyedTransform):
@@ -82,11 +82,13 @@ class SignalFillEmpty(KeyedTransform):
         keys: Sequence[str],
         fill_value: float = 0.0,
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         self.fill_value = fill_value
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -98,6 +100,7 @@ class SignalFillEmpty(KeyedTransform):
                     "keys": list(present_keys),
                     "fill_value": self.fill_value,
                     "input_mode": self.input_mode,
+                    "spatial_dims": self.spatial_dims,
                 },
                 applied=True,
                 random=False,
@@ -154,5 +157,6 @@ class SignalFillEmpty(KeyedTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )

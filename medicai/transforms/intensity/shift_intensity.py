@@ -4,7 +4,7 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout
+from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
 
 
 class ShiftIntensity(KeyedTransform, InvertibleTransform):
@@ -79,11 +79,13 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         offset: Union[float, tf.Tensor],
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.offset = offset
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -109,7 +111,11 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
     def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
         """Prepare forward-pass parameters for this intensity shift."""
         del bundle
-        return {"offset": self.offset, "input_mode": self.input_mode}
+        return {
+            "offset": self.offset,
+            "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
+        }
 
     def transform_tensor(self, tensor: tf.Tensor, params: dict[str, object]) -> tf.Tensor:
         """Shift one tensor using the prepared transform parameters."""
@@ -126,6 +132,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "offset": params["offset"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def shift_tensor(
@@ -145,6 +152,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(2, 3),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
 

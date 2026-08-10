@@ -15,6 +15,7 @@ from ..utils import (
     restore_from_batch_axis,
     validate_input_mode,
     validate_layout,
+    validate_spatial_dims,
 )
 
 
@@ -141,6 +142,7 @@ class RandomRotate(RandomTransform):
         fill_value: float = 0.0,
         fill_mode: str = "constant",
         input_mode: str = "sample",
+        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -158,6 +160,11 @@ class RandomRotate(RandomTransform):
         self.fill_value = fill_value
         self.fill_mode = fill_mode
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(
+            spatial_dims,
+            supported_dims=(3,),
+            transform_name=type(self).__name__,
+        )
         self.allow_missing_keys = allow_missing_keys
 
     @property
@@ -187,6 +194,7 @@ class RandomRotate(RandomTransform):
             sample_tensor,
             input_mode=self.input_mode,
             allowed_spatial_ranks=(3,),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         del layout
@@ -206,6 +214,7 @@ class RandomRotate(RandomTransform):
             "factor": self.factor,
             "fill_mode": self.fill_mode,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -238,6 +247,7 @@ class RandomRotate(RandomTransform):
             "angle": params["angle"],
             "fill_mode": params["fill_mode"],
             "input_mode": params["input_mode"],
+            "spatial_dims": params["spatial_dims"],
         }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -269,7 +279,12 @@ class RandomRotate(RandomTransform):
 
     def rotate_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
         """Rotate one tensor and apply optional center crop cleanup."""
-        batched_tensor, added_batch_axis = ensure_batch_axis(tensor, input_mode=self.input_mode)
+        batched_tensor, added_batch_axis = ensure_batch_axis(
+            tensor,
+            input_mode=self.input_mode,
+            spatial_dims=self.spatial_dims,
+            allowed_spatial_ranks=(3,),
+        )
         rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
         return restore_from_batch_axis(rotated, added_batch_axis)
 
@@ -282,6 +297,7 @@ class RandomRotate(RandomTransform):
             tensor,
             input_mode="batch",
             allowed_spatial_ranks=(3,),
+            spatial_dims=self.spatial_dims,
             transform_name=type(self).__name__,
         )
         del layout
