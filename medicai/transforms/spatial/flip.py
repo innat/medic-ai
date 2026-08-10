@@ -42,10 +42,13 @@ class Flip(KeyedTransform, InvertibleTransform):
             direction, axis ``1`` is the height direction, and axis ``2`` is
             the width direction; these correspond to the sagittal, coronal,
             and axial viewing orientations depending on which axis is being
-            mirrored. If ``None``, the transform is a no-op.
+            mirrored.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+            tensors. Note that rank-4 tensors are inherently ambiguous:
+            ``(D, H, W, C)`` in sample mode and ``(B, H, W, C)`` in batch mode
+            have the same rank. Medic-AI does not infer intent from shape
+            alone, so choose ``input_mode`` explicitly.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -114,6 +117,11 @@ class Flip(KeyedTransform, InvertibleTransform):
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
+        if spatial_axis is None:
+            raise ValueError(
+                f"{type(self).__name__} requires `spatial_axis`. "
+                "Use an explicit identity path instead of a no-op flip."
+            )
         self.spatial_axis = spatial_axis
         self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
 

@@ -32,13 +32,18 @@ class RandomFlip(RandomTransform):
             numbering ``(D, H, W)``, axis ``0`` is the depth direction, axis
             ``1`` is the height direction, and axis ``2`` is the width
             direction; these correspond to the sagittal, coronal, and axial
-            viewing orientations depending on which axis is being mirrored. If
-            ``None``, the transform behaves as a no-op.
+            viewing orientations depending on which axis is being mirrored.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+            tensors. Note that rank-4 tensors are inherently ambiguous:
+            ``(D, H, W, C)`` in sample mode and ``(B, H, W, C)`` in batch mode
+            have the same rank. Medic-AI does not infer intent from shape
+            alone, so choose ``input_mode`` explicitly.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
-            ``keras.random.SeedGenerator``.
+            ``keras.random.SeedGenerator``. The seed controls the Bernoulli
+            apply/skip draw for each call. A fresh transform instance created
+            with the same integer seed replays the same random sequence, while
+            repeated calls on one instance advance its internal seed stream.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:

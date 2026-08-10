@@ -2302,10 +2302,11 @@ def test_flip_uses_same_batch_kernel_for_sample_and_batch_modes():
 
 
 @pytest.mark.unit
-def test_flip_none_axis_is_noop_and_invalid_axis_raises():
+def test_flip_requires_spatial_axis_and_invalid_axis_raises():
     image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-    no_op = Flip(keys=["image"], spatial_axis=None)(TensorBundle({"image": image}))
-    np.testing.assert_allclose(ops.convert_to_numpy(no_op["image"]), ops.convert_to_numpy(image))
+
+    with pytest.raises(ValueError, match="requires `spatial_axis`"):
+        Flip(keys=["image"], spatial_axis=None)
 
     with pytest.raises(ValueError):
         Flip(keys=["image"], spatial_axis=5)(TensorBundle({"image": image}))
@@ -3088,13 +3089,11 @@ def test_random_flip_prob_zero_and_allow_missing_keys():
 
 
 @pytest.mark.unit
-def test_random_flip_none_axis_records_noop_trace():
+def test_random_flip_requires_spatial_axis():
     image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-    out = RandomFlip(keys=["image"], prob=1.0, spatial_axis=None)(TensorBundle({"image": image}))
 
-    trace = out.get_applied_transforms()[-1]
-    assert trace["params"]["spatial_axis"] is None
-    assert trace["applied"] is False
+    with pytest.raises(ValueError, match="requires `spatial_axis`"):
+        RandomFlip(keys=["image"], prob=1.0, spatial_axis=None)
 
     with pytest.raises(ValueError, match="supports only input_mode values"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="unknown")

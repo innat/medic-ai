@@ -50,7 +50,10 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             sagittal plane when using sample-space axis numbering ``(D, H, W)``.
         input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
             tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+            tensors. Note that rank-4 tensors are inherently ambiguous:
+            ``(D, H, W, C)`` in sample mode and ``(B, H, W, C)`` in batch mode
+            have the same rank. Medic-AI does not infer intent from shape
+            alone, so choose ``input_mode`` explicitly.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
