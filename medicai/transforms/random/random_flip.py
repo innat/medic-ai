@@ -80,8 +80,9 @@ class RandomFlip(RandomTransform):
         keys: Sequence[str],
         prob: float = 0.1,
         spatial_axis: Union[int, Sequence[int], None] = None,
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):

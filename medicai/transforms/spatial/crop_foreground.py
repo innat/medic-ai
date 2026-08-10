@@ -156,8 +156,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         k_divisible: Union[Sequence[int], int] = 1,
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)

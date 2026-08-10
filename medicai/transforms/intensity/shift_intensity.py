@@ -78,8 +78,9 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str],
         offset: Union[float, tf.Tensor],
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)

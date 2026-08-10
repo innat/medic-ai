@@ -141,8 +141,9 @@ class RandomRotate(RandomTransform):
         prob: float = 0.8,
         fill_value: float = 0.0,
         fill_mode: str = "constant",
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):

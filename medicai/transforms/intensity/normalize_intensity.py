@@ -100,8 +100,9 @@ class NormalizeIntensity(KeyedTransform):
         nonzero: bool = False,
         channel_wise: bool = False,
         dtype=tf.float32,
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)

@@ -114,8 +114,9 @@ class Flip(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str],
         spatial_axis: Union[int, Sequence[int], None] = None,
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)

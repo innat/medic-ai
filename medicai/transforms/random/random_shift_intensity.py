@@ -87,8 +87,9 @@ class RandomShiftIntensity(RandomTransform):
         offset: Union[float, Tuple[float, float]],
         prob: float = 0.1,
         channel_wise: bool = False,
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):

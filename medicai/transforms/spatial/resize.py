@@ -139,8 +139,9 @@ class Resize(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         interpolation: str | Sequence[str] | Mapping[str, str],
         target_shape: Sequence[int],
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)

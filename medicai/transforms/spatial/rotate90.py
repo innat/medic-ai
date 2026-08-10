@@ -120,8 +120,9 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         k: int = 1,
         spatial_axis: Sequence[int] | None = None,
+        *,
+        spatial_dims: int,
         input_mode: str = "sample",
-        spatial_dims: int | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
