@@ -199,16 +199,15 @@ def validate_spatial_dims(
     *,
     supported_dims: Sequence[int] = (2, 3),
     transform_name: str | None = None,
-) -> int | None:
-    """Validate an optional transform ``spatial_dims`` contract."""
+) -> int:
+    """Validate a required transform ``spatial_dims`` contract."""
+    label = transform_name or "Transform"
+    supported = ", ".join(str(dim) for dim in supported_dims)
     if spatial_dims is None:
-        return None
+        raise ValueError(f"{label} requires `spatial_dims` and it must be one of ({supported}).")
     if spatial_dims not in supported_dims:
-        label = transform_name or "Transform"
-        supported = ", ".join(str(dim) for dim in supported_dims)
         raise ValueError(
-            f"{label} supports only spatial_dims values ({supported}) or None. "
-            f"Received {spatial_dims!r}."
+            f"{label} supports only spatial_dims values ({supported}). Received {spatial_dims!r}."
         )
     return spatial_dims
 
