@@ -2,12 +2,14 @@
 
 Available transformation-oriented example references:
 
-- [Walk Through Transformation](transformation_in_action.md)
+- [Walk Through Built-in Transformation](built_in_transformation.md)
+- [Walk Through Custom Transformation](custom_transformation.md)
 
 ```{toctree}
 :hidden:
 :maxdepth: 1
 :titlesonly:
 
-transformation_in_action
+built_in_transformation
+custom_transformation
 ```
