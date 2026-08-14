@@ -9,6 +9,7 @@ class LayoutInfo:
     """Static layout description for a channel-last transform tensor.
 
     Args:
+        input_layout: Canonical layout string such as ``"HWC"`` or ``"BDHWC"``.
         tensor_rank: Total tensor rank.
         spatial_rank: Number of spatial axes.
         batched: Whether the leading axis is interpreted as batch.
@@ -17,12 +18,49 @@ class LayoutInfo:
         spatial_axes: Spatial-axis indices in tensor order.
     """
 
+    input_layout: str
     tensor_rank: int
     spatial_rank: int
     batched: bool
     batch_axis: int | None
     channel_axis: int
     spatial_axes: tuple[int, ...]
+
+
+_INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | None]] = {
+    "HWC": {
+        "tensor_rank": 3,
+        "spatial_rank": 2,
+        "batched": False,
+        "batch_axis": None,
+        "channel_axis": 2,
+        "spatial_axes": (0, 1),
+    },
+    "DHWC": {
+        "tensor_rank": 4,
+        "spatial_rank": 3,
+        "batched": False,
+        "batch_axis": None,
+        "channel_axis": 3,
+        "spatial_axes": (0, 1, 2),
+    },
+    "BHWC": {
+        "tensor_rank": 4,
+        "spatial_rank": 2,
+        "batched": True,
+        "batch_axis": 0,
+        "channel_axis": 3,
+        "spatial_axes": (1, 2),
+    },
+    "BDHWC": {
+        "tensor_rank": 5,
+        "spatial_rank": 3,
+        "batched": True,
+        "batch_axis": 0,
+        "channel_axis": 4,
+        "spatial_axes": (1, 2, 3),
+    },
+}
 
 
 def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
@@ -59,6 +97,169 @@ def get_tensor_rank(tensor: tf.Tensor) -> int:
     if rank is None:
         raise ValueError("Tensor rank must be statically known.")
     return rank
+
+
+def normalize_input_layout(input_layout: str) -> str:
+    """Normalize a public transform ``input_layout`` string.
+
+    Args:
+        input_layout: Layout string such as ``"hwc"`` or ``"BDHWC"``.
+
+    Returns:
+        str: Uppercase layout string.
+
+    Raises:
+        TypeError: If ``input_layout`` is not a string.
+        ValueError: If the normalized layout is empty.
+    """
+    if not isinstance(input_layout, str):
+        raise TypeError("`input_layout` must be a string.")
+    normalized = input_layout.strip().upper()
+    if not normalized:
+        raise ValueError("`input_layout` cannot be empty.")
+    return normalized
+
+
+def validate_input_layout(
+    input_layout: str,
+    *,
+    allowed_layouts: Sequence[str] = ("HWC", "DHWC", "BHWC", "BDHWC"),
+    transform_name: str | None = None,
+) -> str:
+    """Validate and normalize a transform ``input_layout`` string.
+
+    Args:
+        input_layout: Candidate public layout string.
+        allowed_layouts: Layouts accepted by the calling transform.
+        transform_name: Optional transform name for clearer error messages.
+
+    Returns:
+        str: Canonical uppercase input layout.
+
+    Raises:
+        ValueError: If the layout is unsupported.
+    """
+    normalized = normalize_input_layout(input_layout)
+    normalized_allowed = tuple(normalize_input_layout(layout) for layout in allowed_layouts)
+    if normalized not in normalized_allowed:
+        label = transform_name or "Transform"
+        supported = ", ".join(repr(layout) for layout in normalized_allowed)
+        raise ValueError(
+            f"{label} supports only input_layout values ({supported}). Received {normalized!r}."
+        )
+    return normalized
+
+
+def get_input_layout_info(input_layout: str) -> LayoutInfo:
+    """Return canonical static metadata for a public ``input_layout`` string.
+
+    Args:
+        input_layout: Public layout string such as ``"HWC"`` or ``"BDHWC"``.
+
+    Returns:
+        LayoutInfo: Canonical layout metadata derived from ``input_layout``.
+    """
+    normalized = validate_input_layout(input_layout)
+    info = _INPUT_LAYOUT_TO_INFO[normalized]
+    return LayoutInfo(
+        input_layout=normalized,
+        tensor_rank=int(info["tensor_rank"]),
+        spatial_rank=int(info["spatial_rank"]),
+        batched=bool(info["batched"]),
+        batch_axis=info["batch_axis"],
+        channel_axis=int(info["channel_axis"]),
+        spatial_axes=tuple(info["spatial_axes"]),
+    )
+
+
+def get_legacy_layout_components(input_layout: str) -> tuple[str, int]:
+    """Return legacy ``(input_mode, spatial_dims)`` for one canonical layout.
+
+    Args:
+        input_layout: Public layout string such as ``"HWC"`` or ``"BDHWC"``.
+
+    Returns:
+        tuple[str, int]: Legacy execution mode and spatial dimensionality.
+    """
+    layout = get_input_layout_info(input_layout)
+    return ("batch" if layout.batched else "sample", layout.spatial_rank)
+
+
+def resolve_input_layout(
+    *,
+    input_layout: str | None = None,
+    input_mode: str | None = None,
+    spatial_dims: int | None = None,
+    allowed_layouts: Sequence[str] = ("HWC", "DHWC", "BHWC", "BDHWC"),
+    transform_name: str | None = None,
+) -> str:
+    """Resolve one canonical public ``input_layout`` from new or legacy args.
+
+    During migration, transforms may temporarily accept either the new
+    ``input_layout`` argument or the older ``input_mode`` / ``spatial_dims``
+    pair. This helper makes the new layout string the single stored contract.
+
+    Args:
+        input_layout: New explicit layout string.
+        input_mode: Legacy execution mode.
+        spatial_dims: Legacy spatial dimensionality.
+        allowed_layouts: Layouts accepted by the calling transform.
+        transform_name: Optional transform name for clearer error messages.
+
+    Returns:
+        str: Canonical uppercase input layout.
+    """
+    if input_layout is not None:
+        return validate_input_layout(
+            input_layout,
+            allowed_layouts=allowed_layouts,
+            transform_name=transform_name,
+        )
+
+    legacy_mode = validate_input_mode(
+        "sample" if input_mode is None else input_mode,
+        transform_name=transform_name,
+    )
+    legacy_dims = validate_spatial_dims(
+        3 if spatial_dims is None else spatial_dims,
+        transform_name=transform_name,
+    )
+    derived = f"{'B' if legacy_mode == 'batch' else ''}{'D' if legacy_dims == 3 else ''}HWC"
+    return validate_input_layout(
+        derived,
+        allowed_layouts=allowed_layouts,
+        transform_name=transform_name,
+    )
+
+
+def validate_tensor_matches_layout(
+    tensor: tf.Tensor,
+    input_layout: str,
+    *,
+    transform_name: str | None = None,
+) -> LayoutInfo:
+    """Validate that a tensor matches a declared public ``input_layout``.
+
+    Args:
+        tensor: Tensor to validate.
+        input_layout: Public layout string such as ``"HWC"`` or ``"BDHWC"``.
+        transform_name: Optional transform name for clearer error messages.
+
+    Returns:
+        LayoutInfo: Layout metadata for the validated ``input_layout``.
+
+    Raises:
+        ValueError: If the tensor rank does not match the declared layout.
+    """
+    layout = get_input_layout_info(input_layout)
+    tensor_rank = get_tensor_rank(tensor)
+    if tensor_rank != layout.tensor_rank:
+        label = transform_name or "Transform"
+        raise ValueError(
+            f"{label} expects input_layout={layout.input_layout!r} with rank "
+            f"{layout.tensor_rank}, but received rank {tensor_rank} for shape {tensor.shape}."
+        )
+    return layout
 
 
 def resolve_layout(
@@ -123,6 +324,7 @@ def resolve_layout(
     spatial_axes = tuple(range(spatial_start, channel_axis))
 
     return LayoutInfo(
+        input_layout=f"{'B' if input_mode == 'batch' else ''}{'D' if spatial_rank == 3 else ''}HWC",
         tensor_rank=tensor_rank,
         spatial_rank=spatial_rank,
         batched=input_mode == "batch",

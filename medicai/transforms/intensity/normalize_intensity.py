@@ -4,7 +4,12 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import custom_tf_boolean_mask, validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    custom_tf_boolean_mask,
+    get_legacy_layout_components,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class NormalizeIntensity(KeyedTransform):
@@ -16,7 +21,7 @@ class NormalizeIntensity(KeyedTransform):
     restricted to nonzero voxels or pixels when background values should be
     excluded from normalization.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -40,9 +45,8 @@ class NormalizeIntensity(KeyedTransform):
             channel-specific statistics. If ``False``, normalize using one set
             of statistics over the full tensor.
         dtype: Output dtype used for computation and returned tensors.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -101,8 +105,9 @@ class NormalizeIntensity(KeyedTransform):
         channel_wise: bool = False,
         dtype=tf.float32,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
@@ -111,8 +116,13 @@ class NormalizeIntensity(KeyedTransform):
         self.nonzero = nonzero
         self.channel_wise = channel_wise
         self.dtype = dtype
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -124,6 +134,7 @@ class NormalizeIntensity(KeyedTransform):
                     "keys": list(present_keys),
                     "nonzero": self.nonzero,
                     "channel_wise": self.channel_wise,
+                    "input_layout": self.input_layout,
                     "input_mode": self.input_mode,
                     "spatial_dims": self.spatial_dims,
                 },
@@ -203,10 +214,8 @@ class NormalizeIntensity(KeyedTransform):
 
     def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
         """Validate sample or batch channel-last layout for normalization."""
-        validate_layout(
+        validate_tensor_matches_layout(
             tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
             transform_name=type(self).__name__,
         )

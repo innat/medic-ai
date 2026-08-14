@@ -6,7 +6,11 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    get_legacy_layout_components,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
@@ -17,7 +21,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     ``[output_min, output_max]``. This is useful for bringing image intensities into a
     stable range such as ``[0, 1]`` or ``[-1, 1]`` before training.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -38,9 +42,8 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: If ``True`` and both ``output_min`` and ``output_max`` are provided, clip
             the output to the target interval after scaling.
         dtype: Output dtype used for computation and returned tensors.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -120,8 +123,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: bool = False,
         dtype: tf.DType = tf.float32,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -135,8 +139,13 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         self.output_max = output_max
         self.clip = clip
         self.dtype = dtype
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     @property
     def invertible(self) -> bool:
@@ -192,6 +201,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_min": self.output_min,
             "output_max": self.output_max,
             "clip": self.clip,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -225,6 +235,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_min": params["output_min"],
             "output_max": params["output_max"],
             "clip": params["clip"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }
@@ -304,11 +315,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
 
     def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
         """Validate sample or batch channel-last layout for intensity scaling."""
-        validate_layout(
+        validate_tensor_matches_layout(
             tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
             transform_name=type(self).__name__,
         )
 

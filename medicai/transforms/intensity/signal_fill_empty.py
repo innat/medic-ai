@@ -4,7 +4,11 @@ import tensorflow as tf
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    get_legacy_layout_components,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class SignalFillEmpty(KeyedTransform):
@@ -15,7 +19,7 @@ class SignalFillEmpty(KeyedTransform):
     downstream normalization, resampling, or batching steps that assume valid
     numeric inputs.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -27,9 +31,8 @@ class SignalFillEmpty(KeyedTransform):
         fill_value: Value used for ``NaN`` entries. Positive and negative
             infinity values default to the largest and smallest finite
             ``float32`` values unless overridden in :meth:`nan_to_num`.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -82,14 +85,20 @@ class SignalFillEmpty(KeyedTransform):
         keys: Sequence[str],
         fill_value: float = 0.0,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         self.fill_value = fill_value
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -100,6 +109,7 @@ class SignalFillEmpty(KeyedTransform):
                 params={
                     "keys": list(present_keys),
                     "fill_value": self.fill_value,
+                    "input_layout": self.input_layout,
                     "input_mode": self.input_mode,
                     "spatial_dims": self.spatial_dims,
                 },
@@ -154,10 +164,8 @@ class SignalFillEmpty(KeyedTransform):
 
     def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
         """Validate sample or batch channel-last layout for signal sanitization."""
-        validate_layout(
+        validate_tensor_matches_layout(
             tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
             transform_name=type(self).__name__,
         )

@@ -521,6 +521,23 @@ def test_scale_intensity_range_supports_batch_mode():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_accepts_input_layout():
+    image = as_tensor(np.full((2, 3, 4, 1), 128.0, dtype=np.float32))
+
+    out = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=255.0,
+        output_min=0.0,
+        output_max=1.0,
+        input_layout="BHWC",
+    )(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_uses_same_pixel_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.array([[[0.0], [127.5], [255.0]]], dtype=np.float32))
     batch = as_tensor(
@@ -815,6 +832,16 @@ def test_normalize_intensity_supports_batch_mode():
 
 
 @pytest.mark.unit
+def test_normalize_intensity_accepts_input_layout():
+    image = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
+
+    out = NormalizeIntensity(keys=["image"], input_layout="bhwc")(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
     out = SignalFillEmpty(keys=["image"], fill_value=0.0)(TensorBundle({"image": image}))
@@ -858,6 +885,20 @@ def test_signal_fill_empty_supports_batch_mode():
     assert tuple(ops.shape(out_3d["image"])) == (2, 2, 1, 1, 1)
     assert np.isfinite(ops.convert_to_numpy(out_2d["image"])).all()
     assert np.isfinite(ops.convert_to_numpy(out_3d["image"])).all()
+
+
+@pytest.mark.unit
+def test_signal_fill_empty_accepts_input_layout():
+    image = as_tensor(
+        np.array([[[[np.nan]], [[1.0]]], [[[np.inf]], [[-np.inf]]]], dtype=np.float32)
+    )
+
+    out = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="BHWC")(
+        TensorBundle({"image": image})
+    )
+
+    assert tuple(ops.shape(out["image"])) == (2, 2, 1, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -933,6 +974,18 @@ def test_shift_intensity_supports_batch_mode():
 
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), 1.5, rtol=1e-6)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d["image"]), 0.75, rtol=1e-6)
+
+
+@pytest.mark.unit
+def test_shift_intensity_accepts_input_layout():
+    image = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
+
+    out = ShiftIntensity(keys=["image"], offset=0.5, input_layout="BHWC")(
+        TensorBundle({"image": image})
+    )
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 1.5, rtol=1e-6)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -1241,6 +1294,23 @@ def test_random_shift_intensity_accepts_batch_mode():
     assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
     trace = out.get_applied_transforms()[-1]
     assert trace["params"]["input_mode"] == "batch"
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_accepts_input_layout():
+    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    transform = RandomShiftIntensity(
+        keys=["image"],
+        offset=0.5,
+        prob=1.0,
+        input_layout="BHWC",
+        seed=17,
+    )
+
+    out = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit

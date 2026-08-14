@@ -18,13 +18,17 @@ from medicai.transforms.utils import (
     LayoutInfo,
     ensure_batch_axis,
     ensure_spatial_tuple,
+    get_input_layout_info,
     get_spatial_rank,
     get_spatial_shape,
+    normalize_input_layout,
     normalize_axes,
     normalize_spatial_axes,
     restore_from_batch_axis,
     resolve_layout,
     resolve_spatial_axes,
+    validate_input_layout,
+    validate_tensor_matches_layout,
     validate_input_mode,
     validate_layout,
     validate_spatial_rank,
@@ -118,6 +122,47 @@ def test_ensure_tensor_bundle_converts_numpy_scalars():
 def test_apply_if_applied_handles_python_bools():
     assert _apply_if_applied(True, lambda: "applied", lambda: "skipped") == "applied"
     assert _apply_if_applied(False, lambda: "applied", lambda: "skipped") == "skipped"
+
+
+@pytest.mark.unit
+def test_normalize_input_layout_uppercases_and_strips():
+    assert normalize_input_layout(" bhwc ") == "BHWC"
+
+
+@pytest.mark.unit
+def test_validate_input_layout_rejects_unsupported_layout():
+    with pytest.raises(ValueError, match="supports only input_layout values"):
+        validate_input_layout("BCHW", transform_name="Flip")
+
+
+@pytest.mark.unit
+def test_get_input_layout_info_returns_expected_metadata():
+    layout = get_input_layout_info("bdhwc")
+
+    assert isinstance(layout, LayoutInfo)
+    assert layout.input_layout == "BDHWC"
+    assert layout.tensor_rank == 5
+    assert layout.spatial_rank == 3
+    assert layout.batched is True
+    assert layout.batch_axis == 0
+    assert layout.channel_axis == 4
+    assert layout.spatial_axes == (1, 2, 3)
+
+
+@pytest.mark.unit
+def test_validate_tensor_matches_layout_accepts_matching_rank():
+    tensor = as_tensor(np.zeros((2, 16, 16, 1), dtype=np.float32))
+    layout = validate_tensor_matches_layout(tensor, "BHWC", transform_name="Flip")
+
+    assert layout.input_layout == "BHWC"
+
+
+@pytest.mark.unit
+def test_validate_tensor_matches_layout_rejects_mismatched_rank():
+    tensor = as_tensor(np.zeros((16, 16, 1), dtype=np.float32))
+
+    with pytest.raises(ValueError, match="expects input_layout='BDHWC' with rank 5"):
+        validate_tensor_matches_layout(tensor, "BDHWC", transform_name="Rotate90")
 
 
 @pytest.mark.unit

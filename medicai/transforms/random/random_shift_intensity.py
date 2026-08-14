@@ -11,7 +11,7 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode
+from ..utils import get_legacy_layout_components, resolve_input_layout
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -22,7 +22,7 @@ class RandomShiftIntensity(RandomTransform):
     :class:`~medicai.transforms.ShiftIntensity` kernel.
 
     The transform expects channel-last tensors such as ``(H, W, C)`` or
-    ``(D, H, W, C)``. Depending on ``input_mode``, it supports:
+    ``(D, H, W, C)``. Depending on ``input_layout``, it supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -45,9 +45,8 @@ class RandomShiftIntensity(RandomTransform):
             range to sample from.
         prob: Probability of applying the shift.
         channel_wise: If ``True``, sample independent per-channel offsets.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -88,8 +87,9 @@ class RandomShiftIntensity(RandomTransform):
         prob: float = 0.1,
         channel_wise: bool = False,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -101,13 +101,20 @@ class RandomShiftIntensity(RandomTransform):
             self.offset = (min(offset), max(offset))
 
         self.channel_wise = channel_wise
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         self.shift = ShiftIntensity(
             keys=self.keys,
             offset=0.0,
+            input_layout=self.input_layout,
             input_mode=self.input_mode,
-            spatial_dims=spatial_dims,
+            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -126,8 +133,9 @@ class RandomShiftIntensity(RandomTransform):
             "should_apply": self.sample_should_apply(),
             "channel_wise": self.channel_wise,
             "offset": self.offset,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
-            "spatial_dims": self.shift.spatial_dims,
+            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -210,6 +218,7 @@ class RandomShiftIntensity(RandomTransform):
             "keys": list(sampled_offsets.keys()),
             "channel_wise": params["channel_wise"],
             "offset": params["offset"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
             "sampled_offsets": sampled_offsets,

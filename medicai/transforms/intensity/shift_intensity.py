@@ -4,7 +4,11 @@ import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    get_legacy_layout_components,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class ShiftIntensity(KeyedTransform, InvertibleTransform):
@@ -15,7 +19,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
     random intensity-shift augmentations and can also be used directly for
     fixed preprocessing adjustments.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -30,9 +34,8 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         keys: Keys of the tensors to shift.
         offset: Scalar offset or per-channel offset tensor broadcastable to
             the selected tensors.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -79,14 +82,20 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         offset: Union[float, tf.Tensor],
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.offset = offset
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -114,6 +123,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         del bundle
         return {
             "offset": self.offset,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -132,6 +142,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         return {
             "keys": list(present_keys),
             "offset": params["offset"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }
@@ -149,11 +160,9 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
 
     def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
         """Validate sample or batch channel-last layout for intensity shifting."""
-        validate_layout(
+        validate_tensor_matches_layout(
             tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
             transform_name=type(self).__name__,
         )
 
