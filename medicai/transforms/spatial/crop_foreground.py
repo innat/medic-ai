@@ -6,10 +6,12 @@ from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trac
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_spatial_tuple,
+    get_input_layout_info,
+    get_legacy_layout_components,
     get_spatial_rank,
     get_spatial_shape,
-    validate_input_mode,
-    validate_spatial_dims,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
 )
 from .spatial_crop import SpatialCrop
 
@@ -57,8 +59,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             ``None`` to skip storing them.
         end_coord_key: Metadata key used to store crop end coordinates, or
             ``None`` to skip storing them.
-        input_mode: Execution mode for the transform. Only ``"sample"`` is
-            supported because foreground detection is defined per sample.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"`` and ``"DHWC"``. Batched layouts are intentionally
+            rejected because foreground detection is defined per sample.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
         .. note::
@@ -157,8 +160,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -177,12 +181,17 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         self.k_divisible = k_divisible
         self.start_coord_key = start_coord_key
         self.end_coord_key = end_coord_key
-        self.input_mode = validate_input_mode(
-            input_mode,
-            supported_modes=("sample",),
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            allowed_layouts=("HWC", "DHWC"),
             transform_name=type(self).__name__,
         )
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        layout_info = get_input_layout_info(self.input_layout)
+        if layout_info.batched:
+            raise ValueError(f"{type(self).__name__} supports only sample layouts 'HWC' and 'DHWC'.")
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:
@@ -191,12 +200,12 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             raise KeyError(f"Key '{self.source_key}' not found in input data.")
 
         source_data = bundle.data[self.source_key]
+        validate_tensor_matches_layout(
+            source_data,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = get_spatial_rank(source_data)
-        if self.spatial_dims is not None and spatial_rank != self.spatial_dims:
-            raise ValueError(
-                f"Expected spatial_dims={self.spatial_dims} for shape {source_data.shape}, "
-                f"but resolved spatial rank {spatial_rank}."
-            )
         image_shape = get_spatial_shape(source_data)
 
         if self.channel_indices is not None:
@@ -247,6 +256,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 "crop_size": crop_size,
                 "original_shapes": original_shapes,
                 "source_key": self.source_key,
+                "input_layout": self.input_layout,
                 "spatial_dims": self.spatial_dims,
             },
         )

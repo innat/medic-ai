@@ -227,6 +227,23 @@ def test_resize_inverse_without_trace_is_noop():
 
 
 @pytest.mark.unit
+def test_spatial_crop_accepts_input_layout():
+    image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (2, 8, 8, 1)).astype(np.float32))
+
+    out = SpatialCrop(
+        keys=["image", "label"],
+        crop_size=(3, 4),
+        crop_start=(1, 1),
+        input_layout="BHWC",
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
+    assert tuple(ops.shape(out["label"])) == (2, 3, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_spacing_rejects_2d_inputs_with_clear_error():
     image = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
     spacing = Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0))
@@ -1788,6 +1805,20 @@ def test_crop_foreground_supports_2d_and_3d_channel_last_tensors():
     assert tuple(ops.shape(out_2d["image"])) == (2, 2, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 2, 2, 1)
     assert out_2d.get_applied_transforms()[-1]["name"] == "CropForeground"
+
+
+@pytest.mark.unit
+def test_crop_foreground_accepts_input_layout_and_rejects_batch_layout():
+    image = tf.pad(tf.ones((4, 4, 1)), paddings=[[2, 2], [2, 2], [0, 0]])
+    out = CropForeground(keys=["image"], source_key="image", input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
+
+    assert tuple(ops.shape(out["image"])) == (4, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "HWC"
+
+    with pytest.raises(ValueError, match="supports only sample layouts 'HWC' and 'DHWC'"):
+        CropForeground(keys=["image"], source_key="image", input_layout="BHWC")
 
 
 @pytest.mark.unit

@@ -134,6 +134,9 @@ def test_validate_input_layout_rejects_unsupported_layout():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         validate_input_layout("BCHW", transform_name="Flip")
 
+    with pytest.raises(ValueError, match="supports only input_layout values"):
+        validate_input_layout("DCHW", transform_name="Resize")
+
 
 @pytest.mark.unit
 def test_get_input_layout_info_returns_expected_metadata():
