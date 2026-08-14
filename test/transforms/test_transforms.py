@@ -274,9 +274,9 @@ def test_spacing_rejects_2d_inputs_with_clear_error():
 
 
 @pytest.mark.unit
-def test_sample_only_spatial_transforms_reject_batch_input_mode():
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        CropForeground(keys=["image"], input_mode="batch")
+def test_sample_only_spatial_transforms_reject_batch_layouts_or_input_mode():
+    with pytest.raises(ValueError, match="supports only sample layouts 'HWC' and 'DHWC'"):
+        CropForeground(keys=["image"], input_layout="BHWC")
 
     with pytest.raises(ValueError, match="supports only input_mode values"):
         Orientation(keys=["image"], input_mode="batch")
@@ -1910,8 +1910,12 @@ def test_crop_foreground_supports_2d_and_3d_channel_last_tensors():
         np.pad(np.ones((2, 2, 2, 1), dtype=np.float32), ((1, 1), (1, 1), (1, 1), (0, 0)))
     )
 
-    out_2d = CropForeground(keys=["image"], source_key="image")(TensorBundle({"image": image_2d}))
-    out_3d = CropForeground(keys=["image"], source_key="image")(TensorBundle({"image": image_3d}))
+    out_2d = CropForeground(keys=["image"], source_key="image", input_layout="HWC")(
+        TensorBundle({"image": image_2d})
+    )
+    out_3d = CropForeground(keys=["image"], source_key="image", input_layout="DHWC")(
+        TensorBundle({"image": image_3d})
+    )
 
     assert tuple(ops.shape(out_2d["image"])) == (2, 2, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 2, 2, 1)
@@ -1941,6 +1945,7 @@ def test_crop_foreground_empty_mask_returns_full_image_and_can_disable_metadata(
         select_fn=lambda x: x > 10,
         start_coord_key=None,
         end_coord_key=None,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(out["image"])) == (4, 5, 1)
@@ -1964,7 +1969,9 @@ def test_crop_foreground_accepts_string_like_single_key_input():
 
     # Python evaluates ("image") as a plain string. The transform should
     # still normalize it to a single-key collection.
-    out = CropForeground(keys=("image"), source_key="image")(TensorBundle({"image": image}))
+    out = CropForeground(keys=("image"), source_key="image", input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
 
@@ -1983,7 +1990,7 @@ def test_crop_foreground_defaults_source_key_for_single_key_input():
         )
     )
 
-    out = CropForeground(keys=["image"])(TensorBundle({"image": image}))
+    out = CropForeground(keys=["image"], input_layout="HWC")(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
 
@@ -1991,7 +1998,7 @@ def test_crop_foreground_defaults_source_key_for_single_key_input():
 @pytest.mark.unit
 def test_crop_foreground_requires_source_key_for_multi_key_input():
     with pytest.raises(ValueError, match="`source_key` must be provided"):
-        CropForeground(keys=["image", "label"])
+        CropForeground(keys=["image", "label"], input_layout="HWC")
 
 
 @pytest.mark.unit
@@ -2005,6 +2012,7 @@ def test_crop_foreground_channel_indices_and_k_divisible():
         channel_indices=[1],
         k_divisible=2,
         margin=0,
+        input_layout="HWC",
     )(TensorBundle({"image": as_tensor(image_np)}))
 
     shape = tuple(ops.shape(out["image"]))
@@ -2019,7 +2027,7 @@ def test_crop_foreground_inverse_restores_original_canvas_for_2d():
     image_np[2:5, 3:6, 0] = 1.0
     image = as_tensor(image_np)
 
-    transform = CropForeground(keys=["image"], source_key="image")
+    transform = CropForeground(keys=["image"], source_key="image", input_layout="HWC")
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -2038,7 +2046,7 @@ def test_crop_foreground_inverse_restores_original_canvas_for_3d():
     image_np[1:4, 2:5, 3:6, 0] = 1.0
     image = as_tensor(image_np)
 
-    transform = CropForeground(keys=["image"], source_key="image")
+    transform = CropForeground(keys=["image"], source_key="image", input_layout="DHWC")
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -2055,7 +2063,7 @@ def test_crop_foreground_inverse_places_prediction_back_on_original_canvas():
     image = np.zeros((6, 7, 1), dtype=np.float32)
     image[2:5, 3:6, 0] = 2.0
     label = np.zeros((6, 7, 1), dtype=np.float32)
-    transform = CropForeground(keys=["image", "label"], source_key="image")
+    transform = CropForeground(keys=["image", "label"], source_key="image", input_layout="HWC")
 
     forward = transform(TensorBundle({"image": as_tensor(image), "label": as_tensor(label)}))
     prediction = tf.ones_like(forward["label"])
@@ -2077,7 +2085,7 @@ def test_crop_foreground_inverse_zero_pads_discarded_context():
     image = np.arange(42, dtype=np.float32).reshape(6, 7, 1)
     source = np.zeros((6, 7, 1), dtype=np.float32)
     source[2:5, 3:6, 0] = 1.0
-    transform = CropForeground(keys=["image"], source_key="source")
+    transform = CropForeground(keys=["image"], source_key="source", input_layout="HWC")
 
     forward = transform(TensorBundle({"image": as_tensor(image), "source": as_tensor(source)}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -2091,7 +2099,7 @@ def test_crop_foreground_inverse_zero_pads_discarded_context():
 @pytest.mark.unit
 def test_crop_foreground_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
-    transform = CropForeground(keys=["image"], source_key="image")
+    transform = CropForeground(keys=["image"], source_key="image", input_layout="HWC")
 
     restored = transform.inverse(bundle)
 
@@ -2100,7 +2108,7 @@ def test_crop_foreground_inverse_without_trace_is_noop():
 
 @pytest.mark.unit
 def test_crop_foreground_runs_under_tf_function_graph_mode():
-    transform = CropForeground(keys=["image"], source_key="image")
+    transform = CropForeground(keys=["image"], source_key="image", input_layout="HWC")
     image = as_tensor(
         np.array(
             [
@@ -3563,7 +3571,7 @@ def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing
 
     pipeline = Compose(
         [
-            CropForeground(keys=["image", "label"], source_key="image"),
+            CropForeground(keys=["image", "label"], source_key="image", input_layout="DHWC"),
             Orientation(keys=["image", "label"], axcodes="RAS"),
             Spacing(
                 keys=["image", "label"],

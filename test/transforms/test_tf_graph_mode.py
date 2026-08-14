@@ -339,7 +339,7 @@ def test_spatial_rank_agnostic_transforms_run_under_tf_function():
     flip = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
     rotate = Rotate90(keys=["image"], k=1, input_layout="HWC")
     resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5), input_layout="HWC")
-    foreground = CropForeground(keys=["image"], source_key="image")
+    foreground = CropForeground(keys=["image"], source_key="image", input_layout="HWC")
 
     image = as_tensor(
         np.array(
@@ -684,7 +684,7 @@ def test_orientation_forward_and_inverse_run_under_tf_function():
 def test_compose_crop_orientation_spacing_pipeline_runs_forward_and_inverse_under_tf_function():
     pipeline = Compose(
         [
-            CropForeground(keys=["image", "label"], source_key="image"),
+            CropForeground(keys=["image", "label"], source_key="image", input_layout="DHWC"),
             Orientation(keys=["image", "label"], axcodes="RAS"),
             Spacing(
                 keys=["image", "label"],

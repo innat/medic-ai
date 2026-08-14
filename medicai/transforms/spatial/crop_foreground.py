@@ -104,6 +104,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 source_key="image",
                 margin=4,
+                input_layout="HWC",
             )
 
             image = tf.pad(tf.ones((24, 24, 1)), paddings=[[8, 8], [8, 8], [0, 0]])
@@ -125,6 +126,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 keys=["image"],
                 margin=(2, 4, 4),
                 k_divisible=2,
+                input_layout="DHWC",
             )
 
             image = tf.pad(
@@ -160,9 +162,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -183,8 +183,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         self.end_coord_key = end_coord_key
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             allowed_layouts=("HWC", "DHWC"),
             transform_name=type(self).__name__,
         )
@@ -233,7 +231,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -272,7 +270,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             allow_missing_keys=self.allow_missing_keys,
         )
 
