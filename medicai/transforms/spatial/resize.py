@@ -14,7 +14,6 @@ from ..utils import (
     resolve_input_layout,
     restore_from_batch_axis,
     resize_volumes,
-    validate_layout,
     validate_tensor_matches_layout,
 )
 
@@ -66,6 +65,7 @@ class Resize(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 interpolation=("bilinear", "nearest"),
                 target_shape=(128, 128),
+                input_layout="HWC",
             )
 
             image = tf.random.normal((96, 96, 1))
@@ -89,6 +89,7 @@ class Resize(KeyedTransform, InvertibleTransform):
                 keys=["image"],
                 interpolation="trilinear",
                 target_shape=(32, 64, 64),
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((48, 96, 96, 1))
@@ -110,6 +111,7 @@ class Resize(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 interpolation=("bilinear", "nearest"),
                 target_shape=(48, 48),
+                input_layout="HWC",
             )
 
             image = tf.random.normal((96, 96, 1))
@@ -140,18 +142,13 @@ class Resize(KeyedTransform, InvertibleTransform):
         interpolation: str | Sequence[str] | Mapping[str, str],
         target_shape: Sequence[int],
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.target_shape = tuple(target_shape)
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -327,26 +324,18 @@ class Resize(KeyedTransform, InvertibleTransform):
         return resized
 
     def _resolve_layout(self, tensor: tf.Tensor, target_rank: int):
-        """Validate the current tensor layout against ``input_mode`` and ``target_shape``."""
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-            if layout.spatial_rank != target_rank:
-                raise ValueError(
-                    f"{type(self).__name__} expected target_shape with {layout.spatial_rank} spatial "
-                    f"dimensions for input_layout={self.input_layout!r}, got {target_rank}."
-                )
-            return layout
-        return validate_layout(
+        """Validate the current tensor layout against ``input_layout`` and ``target_shape``."""
+        layout = validate_tensor_matches_layout(
             tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(target_rank,),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
             transform_name=type(self).__name__,
         )
+        if layout.spatial_rank != target_rank:
+            raise ValueError(
+                f"{type(self).__name__} expected target_shape with {layout.spatial_rank} spatial "
+                f"dimensions for input_layout={self.input_layout!r}, got {target_rank}."
+            )
+        return layout
 
     def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
         """Extract the original spatial shape using the configured target rank."""

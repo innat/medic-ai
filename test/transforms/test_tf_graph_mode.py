@@ -338,7 +338,7 @@ def test_spatial_rank_agnostic_transforms_run_under_tf_function():
     crop = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
     flip = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
     rotate = Rotate90(keys=["image"], k=1, input_layout="HWC")
-    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5))
+    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5), input_layout="HWC")
     foreground = CropForeground(keys=["image"], source_key="image")
 
     image = as_tensor(
@@ -476,6 +476,7 @@ def test_resize_runs_under_tf_function_for_3d():
         keys=["image", "label"],
         interpolation=("trilinear", "nearest"),
         target_shape=(4, 5, 6),
+        input_layout="DHWC",
     )
     image = as_tensor(np.random.randn(6, 7, 8, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (6, 7, 8, 1)).astype(np.float32))
@@ -497,13 +498,13 @@ def test_resize_supports_batch_mode_under_tf_function():
         keys=["image"],
         interpolation="bilinear",
         target_shape=(4, 5),
-        input_mode="batch",
+        input_layout="BHWC",
     )
     resize_3d = Resize(
         keys=["image"],
         interpolation="trilinear",
         target_shape=(3, 4, 5),
-        input_mode="batch",
+        input_layout="BDHWC",
     )
 
     image_2d = as_tensor(np.random.randn(2, 6, 7, 1).astype(np.float32))

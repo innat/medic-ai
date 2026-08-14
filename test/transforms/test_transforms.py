@@ -42,7 +42,12 @@ def as_tensor(array, dtype=None):
 )
 def test_resize_validates_rank_and_interpolation(interpolation, target_shape, error):
     with pytest.raises(ValueError, match=error):
-        Resize(keys=["image", "label"], interpolation=interpolation, target_shape=target_shape)
+        Resize(
+            keys=["image", "label"],
+            interpolation=interpolation,
+            target_shape=target_shape,
+            input_layout="HWC",
+        )
 
 
 @pytest.mark.unit
@@ -52,6 +57,7 @@ def test_resize_accepts_mapping_mode_and_allow_missing_keys():
         keys=["image", "label"],
         interpolation={"image": "bilinear", "label": "nearest"},
         target_shape=(3, 4),
+        input_layout="HWC",
         allow_missing_keys=True,
     )
 
@@ -68,6 +74,7 @@ def test_resize_rejects_mapping_without_all_requested_keys():
             keys=["image", "label"],
             interpolation={"image": "bilinear"},
             target_shape=(3, 4),
+            input_layout="HWC",
         )
 
 
@@ -83,6 +90,7 @@ def test_resize_transform_for_2d_and_3d():
         keys=["image", "label"],
         interpolation=("bilinear", "nearest"),
         target_shape=(24, 20),
+        input_layout="HWC",
     )(inputs_2d_sample)
     assert tuple(ops.shape(out_2d_sample["image"])) == (24, 20, 1)
     assert tuple(ops.shape(out_2d_sample["label"])) == (24, 20, 1)
@@ -97,7 +105,7 @@ def test_resize_transform_for_2d_and_3d():
         keys=["image", "label"],
         interpolation=("bilinear", "nearest"),
         target_shape=(24, 20),
-        input_mode="batch",
+        input_layout="BHWC",
     )(inputs_2d)
     assert tuple(ops.shape(out_2d["image"])) == (1, 24, 20, 1)
     assert tuple(ops.shape(out_2d["label"])) == (1, 24, 20, 1)
@@ -112,6 +120,7 @@ def test_resize_transform_for_2d_and_3d():
         keys=["image", "label"],
         interpolation=("trilinear", "nearest"),
         target_shape=(8, 10, 12),
+        input_layout="DHWC",
     )(inputs_3d)
     assert tuple(ops.shape(out_3d["image"])) == (8, 10, 12, 1)
     assert tuple(ops.shape(out_3d["label"])) == (8, 10, 12, 1)
@@ -129,12 +138,12 @@ def test_resize_supports_batch_mode_for_3d_and_records_input_mode():
         keys=["image", "label"],
         interpolation=("trilinear", "nearest"),
         target_shape=(4, 5, 6),
-        input_mode="batch",
+        input_layout="BDHWC",
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (2, 4, 5, 6, 1)
     assert tuple(ops.shape(out["label"])) == (2, 4, 5, 6, 1)
-    assert out.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
 
 
 @pytest.mark.unit
@@ -161,8 +170,18 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     batch_2d = as_tensor(np.random.randn(2, 6, 8, 1).astype(np.float32))
     batch_3d = as_tensor(np.random.randn(2, 5, 6, 7, 1).astype(np.float32))
 
-    resize_2d = Resize(keys=["image"], interpolation="bilinear", target_shape=(3, 4))
-    resize_3d = Resize(keys=["image"], interpolation="trilinear", target_shape=(3, 4, 5))
+    resize_2d = Resize(
+        keys=["image"],
+        interpolation="bilinear",
+        target_shape=(3, 4),
+        input_layout="HWC",
+    )
+    resize_3d = Resize(
+        keys=["image"],
+        interpolation="trilinear",
+        target_shape=(3, 4, 5),
+        input_layout="DHWC",
+    )
 
     sample_2d_out = ops.convert_to_numpy(
         resize_2d.resize_batch_tensor(sample_2d[None, ...], "image", tf.constant([3, 4], tf.int32))
@@ -188,26 +207,26 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
 
 
 @pytest.mark.unit
-def test_resize_validates_input_mode_and_layout_contract():
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 4), input_mode="unknown")
+def test_resize_validates_input_layout_and_layout_contract():
+    with pytest.raises(ValueError, match="unsupported input_layout"):
+        Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 4), input_layout="CHW")
 
     transform = Resize(
         keys=["image"],
         interpolation="bilinear",
         target_shape=(4, 4),
-        input_mode="sample",
+        input_layout="HWC",
     )
     image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
 
-    with pytest.raises(ValueError, match="Expected spatial rank in \\(2\\) for input_mode='sample'"):
+    with pytest.raises(ValueError, match="expected target_shape with 3 spatial dimensions"):
         transform(TensorBundle({"image": image}))
 
 
 @pytest.mark.unit
 def test_resize_inverse_restores_original_spatial_shape():
     image = as_tensor(np.random.randn(6, 8, 1).astype(np.float32))
-    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(3, 4))
+    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(3, 4), input_layout="HWC")
 
     forward = resize(TensorBundle({"image": image}))
     restored = resize.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -219,7 +238,7 @@ def test_resize_inverse_restores_original_spatial_shape():
 @pytest.mark.unit
 def test_resize_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
-    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2))
+    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC")
 
     restored = resize.inverse(bundle)
 
@@ -3457,7 +3476,7 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
         [
             ShiftIntensity(keys=["image"], offset=2.0),
             Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
-            Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2)),
+            Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC"),
         ]
     )
 
