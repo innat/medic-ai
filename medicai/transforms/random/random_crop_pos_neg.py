@@ -10,11 +10,12 @@ from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis,
+    get_legacy_layout_components,
     get_spatial_shape,
+    resolve_input_layout,
     restore_from_batch_axis,
-    validate_input_mode,
     validate_layout,
-    validate_spatial_dims,
+    validate_tensor_matches_layout,
 )
 
 
@@ -25,7 +26,7 @@ class RandomCropByPosNegLabel(RandomTransform):
     voxels according to the ``pos:neg`` ratio, then the same patch is cropped
     from both image and label tensors.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -40,10 +41,9 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: Relative weight for negative-center sampling.
         num_samples: Number of samples to return. Currently only ``1`` is
             supported.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors. In batch mode, one sampled crop is shared across the full
-            batch.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``. In batch
+            layouts, one sampled crop is shared across the full batch.
         image_reference_key: Optional key for an intensity reference tensor
             used to constrain negative sampling.
         image_threshold: Threshold applied to ``image_reference_key`` during
@@ -103,8 +103,9 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: int,
         num_samples: int = 1,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         image_reference_key: str = None,
         image_threshold: float = 0.0,
         seed: int | keras.random.SeedGenerator | None = None,
@@ -131,14 +132,21 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.neg = neg
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
         self.crop = SpatialCrop(
             keys=self.keys,
             crop_size=self.target_shape,
+            input_layout=f"{'B' if self.input_mode == 'batch' else ''}{'D' if self.spatial_dims == 3 else ''}HWC",
             input_mode="batch",
             spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
@@ -163,13 +171,25 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         image = bundle.data[image_key]
         label = bundle.data[label_key]
-        layout = validate_layout(
-            image,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
-            transform_name=type(self).__name__,
-        )
+        if self._uses_explicit_input_layout:
+            layout = validate_tensor_matches_layout(
+                image,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+            validate_tensor_matches_layout(
+                label,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+        else:
+            layout = validate_layout(
+                image,
+                input_mode=self.input_mode,
+                allowed_spatial_ranks=(2, 3),
+                spatial_dims=self.spatial_dims,
+                transform_name=type(self).__name__,
+            )
         spatial_rank = layout.spatial_rank
         image_batched, _ = ensure_batch_axis(
             image,
@@ -217,6 +237,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             "pos": self.pos,
             "neg": self.neg,
             "image_reference_key": self.image_reference_key,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -273,6 +294,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             "pos": params["pos"],
             "neg": params["neg"],
             "image_reference_key": params["image_reference_key"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }

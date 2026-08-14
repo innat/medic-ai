@@ -1559,6 +1559,21 @@ def test_random_spatial_crop_supports_batch_mode_with_shared_crop():
 
 
 @pytest.mark.unit
+def test_random_spatial_crop_accepts_input_layout():
+    image = as_tensor(np.arange(2 * 5 * 6, dtype=np.float32).reshape(2, 5, 6, 1))
+
+    out = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(3, 4),
+        random_center=False,
+        input_layout="bhwc",
+    )(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_random_spatial_crop_shares_sampled_crop_across_batched_input():
     image = as_tensor(np.arange(2 * 5 * 6, dtype=np.float32).reshape(2, 5, 6, 1))
     transform = RandomSpatialCrop(
@@ -2099,6 +2114,27 @@ def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_mode
     assert tuple(ops.shape(out_3d["label"])) == (2, 3, 3, 3, 1)
     assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
     assert out_3d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+
+
+@pytest.mark.unit
+def test_random_crop_by_pos_neg_label_accepts_input_layout():
+    image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
+    label = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
+    label_np = ops.convert_to_numpy(label)
+    label_np[:, 3:5, 3:5, 0] = 1.0
+    label = as_tensor(label_np)
+
+    out = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(4, 4),
+        pos=1,
+        neg=1,
+        input_layout="BHWC",
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 4, 4, 1)
+    assert tuple(ops.shape(out["label"])) == (2, 4, 4, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit

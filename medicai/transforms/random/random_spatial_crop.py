@@ -6,7 +6,13 @@ import tensorflow as tf
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
-from ..utils import get_spatial_shape, validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    get_legacy_layout_components,
+    get_spatial_shape,
+    resolve_input_layout,
+    validate_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class RandomSpatialCrop(RandomTransform):
@@ -16,7 +22,7 @@ class RandomSpatialCrop(RandomTransform):
     before extracting a spatial patch with the deterministic
     :class:`~medicai.transforms.SpatialCrop` kernel.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -33,10 +39,9 @@ class RandomSpatialCrop(RandomTransform):
         random_center: If ``True``, sample crop centers randomly.
         random_shape: If ``True``, sample crop sizes between ``crop_size`` and
             ``max_crop_size``.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors. In batch mode, one sampled crop is shared across the full
-            batch.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``. In batch
+            layouts, one sampled crop is shared across the full batch.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         invalid_label: Label value treated as invalid when enforcing valid
@@ -83,8 +88,9 @@ class RandomSpatialCrop(RandomTransform):
         random_center: bool = True,
         random_shape: bool = False,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         min_valid_ratio: float = 0.0,
@@ -97,8 +103,14 @@ class RandomSpatialCrop(RandomTransform):
         self.max_crop_size = max_crop_size
         self.random_center = random_center
         self.random_shape = random_shape
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.invalid_label = invalid_label
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
@@ -106,6 +118,7 @@ class RandomSpatialCrop(RandomTransform):
         self.crop = SpatialCrop(
             keys=self.keys,
             crop_size=self.crop_size,
+            input_layout=self.input_layout,
             input_mode=self.input_mode,
             spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
@@ -138,13 +151,20 @@ class RandomSpatialCrop(RandomTransform):
             raise KeyError(f"Key '{sample_key}' not found in input data.")
 
         sample_tensor = bundle.data[sample_key]
-        layout = validate_layout(
-            sample_tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
-            transform_name=type(self).__name__,
-        )
+        if self._uses_explicit_input_layout:
+            layout = validate_tensor_matches_layout(
+                sample_tensor,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+        else:
+            layout = validate_layout(
+                sample_tensor,
+                input_mode=self.input_mode,
+                allowed_spatial_ranks=(2, 3),
+                spatial_dims=self.spatial_dims,
+                transform_name=type(self).__name__,
+            )
         spatial_rank = layout.spatial_rank
         spatial_shape = get_spatial_shape(sample_tensor, input_mode=self.input_mode)
         crop_size = self._get_crop_size(spatial_shape, spatial_rank)
@@ -168,6 +188,7 @@ class RandomSpatialCrop(RandomTransform):
             "crop_size": crop_size,
             "random_center": self.random_center,
             "random_shape": self.random_shape,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -234,6 +255,7 @@ class RandomSpatialCrop(RandomTransform):
             "original_shapes": original_shapes,
             "random_center": params["random_center"],
             "random_shape": params["random_shape"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }
