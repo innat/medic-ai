@@ -10,7 +10,6 @@ from ..utils import (
     get_legacy_layout_components,
     get_spatial_shape,
     resolve_input_layout,
-    validate_layout,
     validate_tensor_matches_layout,
 )
 
@@ -59,7 +58,11 @@ class RandomSpatialCrop(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomSpatialCrop
 
-            transform = RandomSpatialCrop(keys=["image"], crop_size=(32, 32))
+            transform = RandomSpatialCrop(
+                keys=["image"],
+                crop_size=(32, 32),
+                input_layout="HWC",
+            )
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
             output = result["image"]
@@ -72,7 +75,11 @@ class RandomSpatialCrop(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomSpatialCrop, TensorBundle
 
-            transform = RandomSpatialCrop(keys=["image"], crop_size=(16, 32, 32))
+            transform = RandomSpatialCrop(
+                keys=["image"],
+                crop_size=(16, 32, 32),
+                input_layout="DHWC",
+            )
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
             result = transform(bundle)
@@ -88,9 +95,7 @@ class RandomSpatialCrop(RandomTransform):
         random_center: bool = True,
         random_shape: bool = False,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         min_valid_ratio: float = 0.0,
@@ -103,11 +108,8 @@ class RandomSpatialCrop(RandomTransform):
         self.max_crop_size = max_crop_size
         self.random_center = random_center
         self.random_shape = random_shape
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -119,8 +121,6 @@ class RandomSpatialCrop(RandomTransform):
             keys=self.keys,
             crop_size=self.crop_size,
             input_layout=self.input_layout,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -151,20 +151,11 @@ class RandomSpatialCrop(RandomTransform):
             raise KeyError(f"Key '{sample_key}' not found in input data.")
 
         sample_tensor = bundle.data[sample_key]
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                sample_tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-        else:
-            layout = validate_layout(
-                sample_tensor,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(2, 3),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
+        layout = validate_tensor_matches_layout(
+            sample_tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = layout.spatial_rank
         spatial_shape = get_spatial_shape(sample_tensor, input_mode=self.input_mode)
         crop_size = self._get_crop_size(spatial_shape, spatial_rank)

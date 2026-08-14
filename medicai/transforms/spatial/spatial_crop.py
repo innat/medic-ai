@@ -9,7 +9,6 @@ from ..utils import (
     get_legacy_layout_components,
     get_spatial_shape,
     resolve_input_layout,
-    validate_layout,
     validate_tensor_matches_layout,
 )
 
@@ -55,6 +54,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 crop_size=(32, 64, 64),
                 crop_center=(24, 48, 48),
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((48, 96, 96, 1))
@@ -77,6 +77,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 crop_size=(64, 64),
                 crop_center=(48, 48),
+                input_layout="HWC",
             )
 
             image = tf.random.normal((96, 96, 1))
@@ -113,9 +114,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         crop_start: Sequence[int] | None = None,
         crop_center: Sequence[int] | None = None,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -125,11 +124,8 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         self.crop_size = crop_size
         self.crop_start = tuple(crop_start) if crop_start is not None else None
         self.crop_center = tuple(crop_center) if crop_center is not None else None
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -191,20 +187,11 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             tuple[tf.Tensor, tf.Tensor]: A pair ``(starts, crop_size)`` where
             both tensors have one value per spatial dimension.
         """
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-        else:
-            layout = validate_layout(
-                tensor,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(2, 3),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
+        layout = validate_tensor_matches_layout(
+            tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = layout.spatial_rank
         spatial_shape = get_spatial_shape(tensor, input_mode=self.input_mode)
         crop_size = tf.convert_to_tensor(

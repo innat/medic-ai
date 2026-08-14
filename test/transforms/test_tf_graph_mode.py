@@ -335,7 +335,7 @@ def test_normalize_intensity_supports_batch_mode_under_tf_function():
 
 @pytest.mark.unit
 def test_spatial_rank_agnostic_transforms_run_under_tf_function():
-    crop = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
+    crop = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1), input_layout="HWC")
     flip = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
     rotate = Rotate90(keys=["image"], k=1, input_layout="HWC")
     resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5), input_layout="HWC")
@@ -374,12 +374,12 @@ def test_spatial_rank_agnostic_transforms_run_under_tf_function():
 
 @pytest.mark.unit
 def test_spatial_crop_supports_batch_mode_under_tf_function():
-    crop_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1), input_mode="batch")
+    crop_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1), input_layout="BHWC")
     crop_3d = SpatialCrop(
         keys=["image"],
         crop_size=(2, 3, 4),
         crop_start=(1, 1, 1),
-        input_mode="batch",
+        input_layout="BDHWC",
     )
 
     image_2d = as_tensor(np.arange(2 * 5 * 6, dtype=np.float32).reshape(2, 5, 6, 1))
@@ -780,7 +780,12 @@ def test_random_choice_runs_under_tf_function_for_multi_choice():
 def test_random_rank_agnostic_transforms_run_under_tf_function():
     random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0, input_layout="HWC")
     random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3, input_layout="HWC")
-    random_spatial_crop = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)
+    random_spatial_crop = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(3, 4),
+        random_center=False,
+        input_layout="HWC",
+    )
     random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)
 
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
@@ -898,13 +903,13 @@ def test_random_spatial_crop_supports_batch_mode_under_tf_function():
         keys=["image"],
         crop_size=(3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BHWC",
     )
     random_spatial_crop_3d = RandomSpatialCrop(
         keys=["image"],
         crop_size=(2, 3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BDHWC",
     )
 
     image_2d = as_tensor(np.arange(2 * 5 * 6, dtype=np.float32).reshape(2, 5, 6, 1))
@@ -949,7 +954,7 @@ def test_random_spatial_crop_forward_and_inverse_run_under_tf_function_in_batch_
         keys=["image"],
         crop_size=(3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BHWC",
     )
 
     image = as_tensor(np.zeros((2, 5, 6, 1), dtype=np.float32))
@@ -977,7 +982,7 @@ def test_compose_random_spatial_crop_inverse_supports_batch_mode_under_tf_functi
                 keys=["image"],
                 crop_size=(3, 4),
                 random_center=False,
-                input_mode="batch",
+                input_layout="BHWC",
             ),
             RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
         ]

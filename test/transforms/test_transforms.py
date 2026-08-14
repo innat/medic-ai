@@ -1417,10 +1417,15 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(4, 5, 6, 1))
 
-    out_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))(
+    out_2d = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1), input_layout="HWC")(
         TensorBundle({"image": image_2d})
     )
-    out_3d = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), crop_center=(2, 2, 3))(
+    out_3d = SpatialCrop(
+        keys=["image"],
+        crop_size=(2, 3, 4),
+        crop_center=(2, 2, 3),
+        input_layout="DHWC",
+    )(
         TensorBundle({"image": image_3d})
     )
 
@@ -1438,18 +1443,18 @@ def test_spatial_crop_supports_batch_mode_with_shared_crop():
         keys=["image"],
         crop_size=(3, 4),
         crop_start=(1, 1),
-        input_mode="batch",
+        input_layout="BHWC",
     )(TensorBundle({"image": image_2d}))
     out_3d = SpatialCrop(
         keys=["image"],
         crop_size=(2, 3, 4),
         crop_start=(1, 1, 1),
-        input_mode="batch",
+        input_layout="BDHWC",
     )(TensorBundle({"image": image_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (2, 3, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 2, 3, 4, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -1459,7 +1464,7 @@ def test_spatial_crop_inverse_restores_original_canvas_for_2d():
     image_np[1:4, 1:5, 0] = np.arange(12, dtype=np.float32).reshape(3, 4)
     image = as_tensor(image_np)
 
-    transform = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
+    transform = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1), input_layout="HWC")
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -1481,7 +1486,7 @@ def test_spatial_crop_inverse_restores_original_canvas_for_batch_mode():
         keys=["image"],
         crop_size=(3, 4),
         crop_start=(1, 1),
-        input_mode="batch",
+        input_layout="BHWC",
     )
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1500,7 +1505,12 @@ def test_spatial_crop_inverse_restores_original_canvas_for_3d():
     image_np[1:3, 1:4, 1:5, 0] = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
     image = as_tensor(image_np)
 
-    transform = SpatialCrop(keys=["image"], crop_size=(2, 3, 4), crop_start=(1, 1, 1))
+    transform = SpatialCrop(
+        keys=["image"],
+        crop_size=(2, 3, 4),
+        crop_start=(1, 1, 1),
+        input_layout="DHWC",
+    )
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -1515,7 +1525,12 @@ def test_spatial_crop_inverse_restores_original_canvas_for_3d():
 def test_spatial_crop_inverse_places_prediction_back_on_original_canvas():
     image = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     label = as_tensor(np.zeros((5, 6, 1), dtype=np.float32))
-    transform = SpatialCrop(keys=["image", "label"], crop_size=(3, 4), crop_start=(1, 1))
+    transform = SpatialCrop(
+        keys=["image", "label"],
+        crop_size=(3, 4),
+        crop_start=(1, 1),
+        input_layout="HWC",
+    )
 
     forward = transform(TensorBundle({"image": image, "label": label}))
     prediction = tf.ones_like(forward["label"])
@@ -1539,7 +1554,7 @@ def test_spatial_crop_inverse_places_prediction_back_on_original_canvas():
 @pytest.mark.unit
 def test_spatial_crop_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
-    transform = SpatialCrop(keys=["image"], crop_size=(2, 2))
+    transform = SpatialCrop(keys=["image"], crop_size=(2, 2), input_layout="HWC")
 
     restored = transform.inverse(bundle)
 
@@ -1551,13 +1566,21 @@ def test_spatial_crop_validates_exclusive_start_and_center():
     with pytest.raises(
         ValueError, match="Only one of `crop_start` or `crop_center` may be provided"
     ):
-        SpatialCrop(keys=["image"], crop_size=(2, 2), crop_start=(0, 0), crop_center=(1, 1))
+        SpatialCrop(
+            keys=["image"],
+            crop_size=(2, 2),
+            crop_start=(0, 0),
+            crop_center=(1, 1),
+            input_layout="HWC",
+        )
 
 
 @pytest.mark.unit
 def test_spatial_crop_nonpositive_roi_uses_full_extent():
     image = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
-    out = SpatialCrop(keys=["image"], crop_size=(0, -1))(TensorBundle({"image": image}))
+    out = SpatialCrop(keys=["image"], crop_size=(0, -1), input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     assert tuple(ops.shape(out["image"])) == (5, 6, 1)
 
@@ -1567,10 +1590,20 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(4, 5, 6, 1))
 
-    out_2d = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)(
+    out_2d = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(3, 4),
+        random_center=False,
+        input_layout="HWC",
+    )(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), random_center=False)(
+    out_3d = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(2, 3, 4),
+        random_center=False,
+        input_layout="DHWC",
+    )(
         TensorBundle({"image": image_3d})
     )
 
@@ -1588,18 +1621,18 @@ def test_random_spatial_crop_supports_batch_mode_with_shared_crop():
         keys=["image"],
         crop_size=(3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BHWC",
     )(TensorBundle({"image": image_2d}))
     out_3d = RandomSpatialCrop(
         keys=["image"],
         crop_size=(2, 3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BDHWC",
     )(TensorBundle({"image": image_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (2, 3, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 2, 3, 4, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -1624,7 +1657,7 @@ def test_random_spatial_crop_shares_sampled_crop_across_batched_input():
         keys=["image"],
         crop_size=(3, 4),
         random_center=True,
-        input_mode="batch",
+        input_layout="BHWC",
         seed=23,
     )
 
@@ -1647,7 +1680,7 @@ def test_random_spatial_crop_inverse_restores_batched_input_canvas():
         keys=["image"],
         crop_size=(3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BHWC",
         seed=23,
     )
     forward = transform(TensorBundle({"image": image}))
@@ -1666,7 +1699,12 @@ def test_random_spatial_crop_inverse_restores_original_canvas_for_2d():
     image_np[1:4, 1:5, 0] = np.arange(12, dtype=np.float32).reshape(3, 4)
     image = as_tensor(image_np)
 
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)
+    transform = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(3, 4),
+        random_center=False,
+        input_layout="HWC",
+    )
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -1688,7 +1726,7 @@ def test_random_spatial_crop_inverse_restores_original_canvas_for_batch_mode():
         keys=["image"],
         crop_size=(3, 4),
         random_center=False,
-        input_mode="batch",
+        input_layout="BHWC",
     )
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1707,7 +1745,12 @@ def test_random_spatial_crop_inverse_restores_original_canvas_for_3d():
     image_np[1:3, 1:4, 1:5, 0] = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
     image = as_tensor(image_np)
 
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 3, 4), random_center=False)
+    transform = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(2, 3, 4),
+        random_center=False,
+        input_layout="DHWC",
+    )
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -1721,7 +1764,12 @@ def test_random_spatial_crop_inverse_restores_original_canvas_for_3d():
 @pytest.mark.unit
 def test_random_spatial_crop_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 5, 1), dtype=np.float32))})
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), random_center=False)
+    transform = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(2, 2),
+        random_center=False,
+        input_layout="HWC",
+    )
 
     restored = transform.inverse(bundle)
 
@@ -1731,19 +1779,19 @@ def test_random_spatial_crop_inverse_without_trace_is_noop():
 @pytest.mark.unit
 def test_random_spatial_crop_validates_configuration():
     with pytest.raises(ValueError, match="must contain at least one key"):
-        RandomSpatialCrop(keys=[], crop_size=(2, 2))
+        RandomSpatialCrop(keys=[], crop_size=(2, 2), input_layout="HWC")
 
     with pytest.raises(ValueError, match="min_valid_ratio must be in range"):
-        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=1.5)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=1.5, input_layout="HWC")
 
     with pytest.raises(ValueError, match="max_attempts must be a positive integer"):
-        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), max_attempts=0)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), max_attempts=0, input_layout="HWC")
 
     with pytest.raises(ValueError, match="must provide an invalid_label"):
-        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=0.2)
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=0.2, input_layout="HWC")
 
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), input_mode="unknown")
+    with pytest.raises(ValueError, match="unsupported input_layout"):
+        RandomSpatialCrop(keys=["image"], crop_size=(2, 2), input_layout="CHW")
 
 
 @pytest.mark.unit
@@ -1761,6 +1809,7 @@ def test_random_spatial_crop_random_size_and_label_aware_modes():
         random_shape=True,
         invalid_label=0,
         min_valid_ratio=0.0,
+        input_layout="DHWC",
     )(TensorBundle({"image": image, "label": label}))
 
     trace = out.get_applied_transforms()[-1]
@@ -1771,7 +1820,7 @@ def test_random_spatial_crop_random_size_and_label_aware_modes():
 
 @pytest.mark.unit
 def test_random_spatial_crop_requires_label_for_label_aware_mode():
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), invalid_label=0)
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), invalid_label=0, input_layout="HWC")
 
     with pytest.raises(KeyError, match="`label` key is required"):
         transform(TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))}))
@@ -1787,6 +1836,7 @@ def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
         crop_size=(2, 2),
         invalid_label=0,
         random_center=False,
+        input_layout="HWC",
     )(TensorBundle({"image": image, "mask": mask}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
@@ -1796,7 +1846,7 @@ def test_random_spatial_crop_uses_second_key_for_label_aware_mode():
 @pytest.mark.unit
 def test_random_spatial_crop_rejects_unsupported_spatial_rank():
     image_4d_spatial = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2, 2, 2))
+    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2, 2, 2), input_layout="BDHWC")
 
     with pytest.raises(ValueError, match="Expected spatial rank in \\(2, 3\\)"):
         transform(TensorBundle({"image": image_4d_spatial}))
@@ -1812,6 +1862,7 @@ def test_random_spatial_crop_label_aware_mode_keeps_thin_spatial_dimensions():
         crop_size=(1, 2, 2),
         invalid_label=0,
         random_center=False,
+        input_layout="DHWC",
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (1, 2, 2, 1)
@@ -1835,6 +1886,7 @@ def test_random_spatial_crop_label_aware_mode_supports_multi_channel_labels():
         crop_size=(2, 2),
         invalid_label=0,
         random_center=False,
+        input_layout="HWC",
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
@@ -2313,7 +2365,12 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_3d():
 def test_spatial_crop_records_per_key_crop_bounds_for_mixed_shapes():
     image = as_tensor(np.arange(36, dtype=np.float32).reshape(6, 6, 1))
     label = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
-    transform = SpatialCrop(keys=["image", "label"], crop_size=(4, 4), crop_center=(4, 4))
+    transform = SpatialCrop(
+        keys=["image", "label"],
+        crop_size=(4, 4),
+        crop_center=(4, 4),
+        input_layout="HWC",
+    )
 
     forward = transform(TensorBundle({"image": image, "label": label}))
     trace = forward.get_applied_transforms()[-1]
