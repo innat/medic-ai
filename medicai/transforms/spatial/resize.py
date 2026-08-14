@@ -9,12 +9,13 @@ from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis,
     ensure_spatial_tuple,
+    get_legacy_layout_components,
     get_spatial_shape,
+    resolve_input_layout,
     restore_from_batch_axis,
     resize_volumes,
-    validate_input_mode,
     validate_layout,
-    validate_spatial_dims,
+    validate_tensor_matches_layout,
 )
 
 
@@ -27,7 +28,7 @@ class Resize(KeyedTransform, InvertibleTransform):
     continuous images can use linear interpolation while discrete labels can
     use nearest-neighbor interpolation.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -49,9 +50,8 @@ class Resize(KeyedTransform, InvertibleTransform):
         target_shape: Target spatial shape. Must be length 2 for 2D resizing
             or length 3 for 3D resizing. This argument is required so callers
             explicitly define the intended output rank.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -140,14 +140,21 @@ class Resize(KeyedTransform, InvertibleTransform):
         interpolation: str | Sequence[str] | Mapping[str, str],
         target_shape: Sequence[int],
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.target_shape = tuple(target_shape)
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
         ndim = len(self.target_shape)
         if ndim not in (2, 3):
@@ -213,6 +220,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         del bundle
         return {
             "target_shape": self.target_shape,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -236,6 +244,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         return {
             "keys": list(present_keys),
             "target_shape": params["target_shape"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
             "original_shapes": original_shapes,
@@ -319,6 +328,18 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     def _resolve_layout(self, tensor: tf.Tensor, target_rank: int):
         """Validate the current tensor layout against ``input_mode`` and ``target_shape``."""
+        if self._uses_explicit_input_layout:
+            layout = validate_tensor_matches_layout(
+                tensor,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+            if layout.spatial_rank != target_rank:
+                raise ValueError(
+                    f"{type(self).__name__} expected target_shape with {layout.spatial_rank} spatial "
+                    f"dimensions for input_layout={self.input_layout!r}, got {target_rank}."
+                )
+            return layout
         return validate_layout(
             tensor,
             input_mode=self.input_mode,

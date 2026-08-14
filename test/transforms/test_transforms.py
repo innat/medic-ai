@@ -138,6 +138,23 @@ def test_resize_supports_batch_mode_for_3d_and_records_input_mode():
 
 
 @pytest.mark.unit
+def test_resize_accepts_input_layout():
+    image = as_tensor(np.random.randn(2, 6, 7, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (2, 6, 7, 1)).astype(np.float32))
+
+    out = Resize(
+        keys=["image", "label"],
+        interpolation=("bilinear", "nearest"),
+        target_shape=(4, 5),
+        input_layout="BHWC",
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 4, 5, 1)
+    assert tuple(ops.shape(out["label"])) == (2, 4, 5, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample_2d = as_tensor(np.random.randn(6, 8, 1).astype(np.float32))
     sample_3d = as_tensor(np.random.randn(5, 6, 7, 1).astype(np.float32))

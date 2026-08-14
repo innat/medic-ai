@@ -522,6 +522,27 @@ def test_resize_supports_batch_mode_under_tf_function():
 
 
 @pytest.mark.unit
+def test_resize_accepts_input_layout_under_tf_function():
+    resize = Resize(
+        keys=["image"],
+        interpolation="bilinear",
+        target_shape=(4, 5),
+        input_layout="BHWC",
+    )
+    image = as_tensor(np.random.randn(2, 6, 7, 1).astype(np.float32))
+
+    @tf.function
+    def apply_transform(x):
+        result = resize({"image": x})
+        return result["image"], result.get_applied_transforms()[-1]["params"]["input_layout"]
+
+    out_image, layout = apply_transform(image)
+
+    assert tuple(ops.shape(out_image)) == (2, 4, 5, 1)
+    assert layout == "BHWC"
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_supports_batch_mode_under_tf_function():
     scale_2d = ScaleIntensityRange(
         keys=["image"],
