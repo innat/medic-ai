@@ -1189,7 +1189,7 @@ def test_compose_random_crop_by_pos_neg_label_inverse_supports_batch_mode_under_
 
 @pytest.mark.unit
 def test_random_rotate_and_cutout_run_under_tf_function():
-    random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)
+    random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_layout="DHWC")
     random_cutout_2d = RandomCutOut(
         keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0, input_layout="HWC"
     )
@@ -1234,7 +1234,7 @@ def test_random_rotate_and_cutout_run_under_tf_function():
 
 @pytest.mark.unit
 def test_random_rotate_supports_batch_mode_under_tf_function():
-    random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_mode="batch")
+    random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_layout="BDHWC")
 
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
@@ -1275,7 +1275,7 @@ def test_random_rotate_accepts_input_layout_under_tf_function():
 
 @pytest.mark.unit
 def test_random_rotate_inverse_supports_batch_mode_under_tf_function():
-    random_rotate = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_mode="batch")
+    random_rotate = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_layout="BDHWC")
 
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
@@ -1302,7 +1302,7 @@ def test_random_rotate_inverse_supports_batch_mode_under_tf_function():
 def test_compose_random_rotate_inverse_supports_batch_mode_under_tf_function():
     pipeline = Compose(
         [
-            RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_mode="batch"),
+            RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_layout="BDHWC"),
             RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
         ]
     )

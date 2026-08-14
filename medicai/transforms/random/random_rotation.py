@@ -15,9 +15,6 @@ from ..utils import (
     get_legacy_layout_components,
     resolve_input_layout,
     restore_from_batch_axis,
-    validate_input_mode,
-    validate_layout,
-    validate_spatial_dims,
     validate_tensor_matches_layout,
 )
 
@@ -102,11 +99,6 @@ class RandomRotate(RandomTransform):
         fill_mode: Either ``"constant"`` or ``"crop"``.
         input_layout: Channel-last tensor layout. Supported values are
             ``"DHWC"`` and ``"BDHWC"``.
-        spatial_dims: Legacy spatial dimensionality contract. ``RandomRotate``
-            supports only 3D inputs.
-        input_mode: Legacy execution-mode contract. ``"sample"`` resolves to
-            ``input_layout="DHWC"`` and ``"batch"`` resolves to
-            ``input_layout="BDHWC"`` when ``input_layout`` is not provided.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -119,7 +111,12 @@ class RandomRotate(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomRotate
 
-            transform = RandomRotate(keys=["image", "label"], factor=0.2, prob=0.5)
+            transform = RandomRotate(
+                keys=["image", "label"],
+                factor=0.2,
+                prob=0.5,
+                input_layout="DHWC",
+            )
             image = tf.random.normal((32, 64, 64, 1))
             label = tf.cast(image > 0, tf.int32)
             result = transform({"image": image, "label": label})
@@ -133,7 +130,12 @@ class RandomRotate(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomRotate, TensorBundle
 
-            transform = RandomRotate(keys=["image", "label"], factor=0.2, prob=0.5)
+            transform = RandomRotate(
+                keys=["image", "label"],
+                factor=0.2,
+                prob=0.5,
+                input_layout="DHWC",
+            )
             image = tf.random.normal((32, 64, 64, 1))
             label = tf.cast(image > 0, tf.int32)
             bundle = TensorBundle({"image": image, "label": label})
@@ -150,9 +152,7 @@ class RandomRotate(RandomTransform):
         fill_value: float = 0.0,
         fill_mode: str = "constant",
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = 3,
-        input_mode: str | None = "sample",
+        input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -169,20 +169,13 @@ class RandomRotate(RandomTransform):
         self.factor = factor
         self.fill_value = fill_value
         self.fill_mode = fill_mode
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
-        self.input_mode = validate_input_mode(self.input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(
-            self.spatial_dims,
-            supported_dims=(3,),
-            transform_name=type(self).__name__,
-        )
+        if self.input_layout not in {"DHWC", "BDHWC"}:
+            raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC' or 'BDHWC'.")
         self.allow_missing_keys = allow_missing_keys
 
     @property
@@ -208,20 +201,11 @@ class RandomRotate(RandomTransform):
             return {"skip": True}
 
         sample_tensor = bundle.data[present_keys[0]]
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                sample_tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-        else:
-            layout = validate_layout(
-                sample_tensor,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(3,),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
+        layout = validate_tensor_matches_layout(
+            sample_tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         del layout
 
         should_rotate = self.sample_should_apply()

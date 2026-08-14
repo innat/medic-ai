@@ -2924,7 +2924,7 @@ def test_random_rotate_preserves_shape_and_records_trace():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
 
-    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)(
+    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_layout="DHWC")(
         TensorBundle({"image": image, "label": label})
     )
 
@@ -2943,7 +2943,7 @@ def test_random_rotate_supports_batch_mode_and_records_input_mode():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
 
-    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_mode="batch")(
+    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_layout="BDHWC")(
         TensorBundle({"image": image, "label": label})
     )
 
@@ -2975,7 +2975,7 @@ def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
     batch = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     angle = tf.constant(0.1, dtype=tf.float32)
 
-    transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0)
+    transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="DHWC")
 
     sample_out = ops.convert_to_numpy(transform.rotate_batch_tensor(sample[None, ...], "image", angle))[0]
     batch_out = ops.convert_to_numpy(transform.rotate_batch_tensor(batch, "image", angle))
@@ -2988,7 +2988,7 @@ def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
 def test_random_rotate_inverse_restores_when_angle_is_zero():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
-    transform = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0)
+    transform = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_layout="DHWC")
 
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -3002,7 +3002,7 @@ def test_random_rotate_inverse_restores_when_angle_is_zero():
 @pytest.mark.unit
 def test_random_rotate_inverse_is_noop_when_not_applied():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
-    transform = RandomRotate(keys=["image"], factor=0.2, prob=0.0)
+    transform = RandomRotate(keys=["image"], factor=0.2, prob=0.0, input_layout="DHWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -3013,7 +3013,9 @@ def test_random_rotate_inverse_is_noop_when_not_applied():
 @pytest.mark.unit
 def test_random_rotate_crop_mode_stays_non_invertible():
     image = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
-    transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0, fill_mode="crop")
+    transform = RandomRotate(
+        keys=["image"], factor=0.2, prob=1.0, fill_mode="crop", input_layout="DHWC"
+    )
 
     forward = transform(TensorBundle({"image": image}))
     trace = forward.get_applied_transforms()[-1]
@@ -3031,7 +3033,7 @@ def test_random_rotate_supports_integer_label_tensors():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 3, (4, 5, 6, 1)).astype(np.int32))
 
-    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)(
+    out = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0, input_layout="DHWC")(
         TensorBundle({"image": image, "label": label})
     )
 
@@ -3042,16 +3044,19 @@ def test_random_rotate_supports_integer_label_tensors():
 @pytest.mark.unit
 def test_random_rotate_validates_arguments_and_fill_crop_mode():
     with pytest.raises(ValueError, match="`keys` must have length 1 or 2"):
-        RandomRotate(keys=["image", "label", "mask"], factor=0.1)
+        RandomRotate(keys=["image", "label", "mask"], factor=0.1, input_layout="DHWC")
 
     with pytest.raises(ValueError, match="fill_mode must be either 'crop' or 'constant'"):
-        RandomRotate(keys=["image"], fill_mode="reflect")
+        RandomRotate(keys=["image"], fill_mode="reflect", input_layout="DHWC")
 
     with pytest.raises(ValueError, match="must be non-negative"):
-        RandomRotate(keys=["image"], factor=-0.1)
+        RandomRotate(keys=["image"], factor=-0.1, input_layout="DHWC")
+
+    with pytest.raises(ValueError, match="supports only input_layout='DHWC' or 'BDHWC'"):
+        RandomRotate(keys=["image"], factor=0.2, input_layout="HWC")
 
     image = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
-    out = RandomRotate(keys=["image"], factor=0.2, prob=1.0, fill_mode="crop")(
+    out = RandomRotate(keys=["image"], factor=0.2, prob=1.0, fill_mode="crop", input_layout="DHWC")(
         TensorBundle({"image": image})
     )
     assert tuple(ops.shape(out["image"])) == (4, 8, 8, 1)
@@ -3060,7 +3065,9 @@ def test_random_rotate_validates_arguments_and_fill_crop_mode():
 @pytest.mark.unit
 def test_random_rotate_allow_missing_keys_and_prob_zero():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
-    transform = RandomRotate(keys=["image", "label"], prob=0.0, allow_missing_keys=True)
+    transform = RandomRotate(
+        keys=["image", "label"], prob=0.0, allow_missing_keys=True, input_layout="DHWC"
+    )
     bundle = TensorBundle({"image": image})
 
     out = transform(bundle)
@@ -3068,8 +3075,8 @@ def test_random_rotate_allow_missing_keys_and_prob_zero():
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
 
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        RandomRotate(keys=["image"], factor=0.2, input_mode="unknown")
+    with pytest.raises(ValueError, match="unsupported input_layout"):
+        RandomRotate(keys=["image"], factor=0.2, input_layout="DCHW")
 
 
 @pytest.mark.unit
