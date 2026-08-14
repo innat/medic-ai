@@ -6,7 +6,7 @@ import tensorflow as tf
 from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    get_legacy_layout_components,
+    get_input_layout_info,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -144,7 +144,7 @@ class RandomCutOut(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
         self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
@@ -184,8 +184,6 @@ class RandomCutOut(RandomTransform):
             "label": label,
             "spatial_rank": spatial_rank,
             "should_apply": should_apply,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -194,7 +192,7 @@ class RandomCutOut(RandomTransform):
         params: dict[str, object],
     ) -> TensorBundle:
         """Apply the sampled cutout configuration to the selected image key."""
-        if self.input_mode == "batch":
+        if self.layout_info.batched:
             bundle.data[self.image_key] = _apply_if_applied(
                 params["should_apply"],
                 lambda: self.apply_batch_cutout(
@@ -231,8 +229,6 @@ class RandomCutOut(RandomTransform):
             "fill_mode": self.fill_mode,
             "cutout_mode": self.cutout_mode,
             "input_layout": self.input_layout,
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def apply_sample_cutout(

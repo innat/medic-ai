@@ -11,8 +11,8 @@ from ..base import (
 )
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    ensure_batch_axis,
-    get_legacy_layout_components,
+    ensure_batch_axis_for_layout,
+    get_input_layout_info,
     resolve_input_layout,
     restore_from_batch_axis,
     validate_tensor_matches_layout,
@@ -173,7 +173,7 @@ class RandomRotate(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
         if self.input_layout not in {"DHWC", "BDHWC"}:
             raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC' or 'BDHWC'.")
         self.allow_missing_keys = allow_missing_keys
@@ -223,8 +223,6 @@ class RandomRotate(RandomTransform):
             "factor": self.factor,
             "fill_mode": self.fill_mode,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -257,8 +255,6 @@ class RandomRotate(RandomTransform):
             "angle": params["angle"],
             "fill_mode": params["fill_mode"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -290,10 +286,9 @@ class RandomRotate(RandomTransform):
 
     def rotate_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
         """Rotate one tensor and apply optional center crop cleanup."""
-        batched_tensor, added_batch_axis = ensure_batch_axis(
+        batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             allowed_spatial_ranks=(3,),
         )
         rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
@@ -304,11 +299,9 @@ class RandomRotate(RandomTransform):
         interpolation = "BILINEAR" if key == self.keys[0] else "NEAREST"
         fill_value = self.fill_value if key == self.keys[0] else 0.0
 
-        layout = validate_layout(
+        layout = validate_tensor_matches_layout(
             tensor,
-            input_mode="batch",
-            allowed_spatial_ranks=(3,),
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             transform_name=type(self).__name__,
         )
         del layout
