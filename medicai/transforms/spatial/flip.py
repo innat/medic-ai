@@ -9,7 +9,6 @@ from ..utils import (
     get_legacy_layout_components,
     resolve_input_layout,
     resolve_input_layout_axes,
-    resolve_spatial_axes,
     restore_from_batch_axis,
 )
 
@@ -38,9 +37,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             is provided explicitly, axes refer to the real tensor axes of that
             layout. For example, under ``"BHWC"``, ``1`` means height and ``2``
             means width; under ``"BDHWC"``, ``1`` means depth, ``2`` means
-            height, and ``3`` means width. During the legacy transition path,
-            old ``input_mode``-based calls still interpret axes relative to the
-            spatial dimensions only.
+            height, and ``3`` means width.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -53,7 +50,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Flip
 
-            transform = Flip(keys=["image", "label"], spatial_axis=0)
+            transform = Flip(keys=["image", "label"], spatial_axis=0, input_layout="DHWC")
 
             image = tf.random.normal((32, 64, 64, 1))
             label = tf.random.uniform(
@@ -69,7 +66,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Flip, TensorBundle
 
-            transform = Flip(keys=["image"], spatial_axis=1)
+            transform = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
             image = tf.random.normal((64, 64, 1))
 
             forward = transform({"image": image})
@@ -85,7 +82,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Flip, TensorBundle
 
-            transform = Flip(keys=["image"], spatial_axis=0)
+            transform = Flip(keys=["image"], spatial_axis=0, input_layout="HWC")
             image = tf.random.normal((64, 64, 1))
 
             result = transform({"image": image})
@@ -108,9 +105,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         spatial_axis: Union[int, Sequence[int], None] = None,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -120,11 +115,8 @@ class Flip(KeyedTransform, InvertibleTransform):
                 "Use an explicit identity path instead of a no-op flip."
             )
         self.spatial_axis = spatial_axis
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -148,7 +140,9 @@ class Flip(KeyedTransform, InvertibleTransform):
         params = {
             "applied": True,
             "spatial_axis": self.spatial_axis,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
+            "spatial_dims": self.spatial_dims,
         }
         self.apply_to_present_keys(
             bundle,
@@ -211,7 +205,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor
-        if self._uses_explicit_input_layout:
+        if self.input_mode == "sample":
             return tf.reverse(tensor, axis=self._resolve_axes(tensor, spatial_axis=effective_axis))
         batched_tensor, added_batch_axis = ensure_batch_axis(
             tensor,
@@ -232,31 +226,22 @@ class Flip(KeyedTransform, InvertibleTransform):
             return tensor
         return tf.reverse(
             tensor,
-            axis=self._resolve_axes(tensor, spatial_axis=effective_axis, input_mode="batch"),
+            axis=self._resolve_axes(tensor, spatial_axis=effective_axis),
         )
 
     def _resolve_axes(
         self,
         tensor: tf.Tensor,
         spatial_axis: Union[int, Sequence[int], None] = None,
-        input_mode: str | None = None,
     ) -> tuple[int, ...]:
         axes = self.spatial_axis if spatial_axis is None else spatial_axis
         if isinstance(axes, int):
             axes = (axes,)
         if axes is None:
             return ()
-        if self._uses_explicit_input_layout:
-            return resolve_input_layout_axes(
-                tensor,
-                tuple(axes),
-                input_layout=self.input_layout,
-                name="spatial_axis",
-            )
-        return resolve_spatial_axes(
+        return resolve_input_layout_axes(
             tensor,
             tuple(axes),
-            input_mode=self.input_mode if input_mode is None else input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             name="spatial_axis",
         )

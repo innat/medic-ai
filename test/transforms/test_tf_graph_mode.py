@@ -85,7 +85,7 @@ def test_random_choice_can_run_inside_custom_train_step():
             self.transforms = RandomChoice(
                 transforms=[
                     ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
-                    Flip(keys=["image"], spatial_axis=1, input_mode="batch"),
+                    Flip(keys=["image"], spatial_axis=2, input_layout="BHWC"),
                 ],
                 num_choices=1,
                 prob=1.0,
@@ -336,8 +336,8 @@ def test_normalize_intensity_supports_batch_mode_under_tf_function():
 @pytest.mark.unit
 def test_spatial_rank_agnostic_transforms_run_under_tf_function():
     crop = SpatialCrop(keys=["image"], crop_size=(3, 4), crop_start=(1, 1))
-    flip = Flip(keys=["image"], spatial_axis=1)
-    rotate = Rotate90(keys=["image"], k=1)
+    flip = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
+    rotate = Rotate90(keys=["image"], k=1, input_layout="HWC")
     resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 5))
     foreground = CropForeground(keys=["image"], source_key="image")
 
@@ -399,10 +399,10 @@ def test_spatial_crop_supports_batch_mode_under_tf_function():
 
 @pytest.mark.unit
 def test_flip_and_rotate90_support_batch_mode_under_tf_function():
-    flip_2d = Flip(keys=["image"], spatial_axis=1, input_mode="batch")
-    flip_3d = Flip(keys=["image"], spatial_axis=2, input_mode="batch")
-    rotate_2d = Rotate90(keys=["image"], k=1, spatial_axis=(0, 1), input_mode="batch")
-    rotate_3d = Rotate90(keys=["image"], k=1, spatial_axis=(1, 2), input_mode="batch")
+    flip_2d = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=3, input_layout="BDHWC")
+    rotate_2d = Rotate90(keys=["image"], k=1, spatial_axis=(1, 2), input_layout="BHWC")
+    rotate_3d = Rotate90(keys=["image"], k=1, spatial_axis=(2, 3), input_layout="BDHWC")
 
     image_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     image_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
@@ -735,7 +735,7 @@ def test_random_choice_runs_under_tf_function_when_num_choices_is_one():
     choice = RandomChoice(
         transforms=[
             ShiftIntensity(keys=["image"], offset=1.0),
-            Flip(keys=["image"], spatial_axis=1),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
         ],
         num_choices=1,
         prob=1.0,

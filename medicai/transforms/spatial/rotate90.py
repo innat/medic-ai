@@ -11,9 +11,7 @@ from ..utils import (
     get_legacy_layout_components,
     resolve_input_layout,
     resolve_input_layout_axes,
-    resolve_spatial_axes,
     restore_from_batch_axis,
-    validate_layout,
     validate_tensor_matches_layout,
 )
 
@@ -47,8 +45,6 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             tensor axes of that layout. For example, under ``"BHWC"``, the
             2D image plane is ``(1, 2)``. Under ``"BDHWC"``, common 3D planes
             are axial ``(2, 3)``, coronal ``(1, 3)``, and sagittal ``(1, 2)``.
-            During the legacy transition path, old ``input_mode``-based calls
-            still interpret axes relative to the spatial dimensions only.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -61,7 +57,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Rotate90
 
-            transform = Rotate90(keys=["image", "label"], k=1)
+            transform = Rotate90(keys=["image", "label"], k=1, input_layout="HWC")
 
             image = tf.random.normal((128, 128, 1))
             label = tf.random.uniform((128, 128, 1), maxval=2, dtype=tf.int32)
@@ -75,7 +71,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Rotate90, TensorBundle
 
-            transform = Rotate90(keys=["image"], k=1)
+            transform = Rotate90(keys=["image"], k=1, input_layout="HWC")
 
             image = tf.random.normal((64, 64, 1))
             forward = transform({"image": image})
@@ -90,7 +86,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import Rotate90
 
-            transform = Rotate90(keys=["image", "label"], k=1)
+            transform = Rotate90(keys=["image", "label"], k=1, input_layout="DHWC")
 
             image = tf.random.normal((64, 128, 128, 1))
             label = tf.random.uniform(
@@ -117,19 +113,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         k: int = 1,
         spatial_axis: Sequence[int] | None = None,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.k = k
         self.spatial_axis = spatial_axis
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -229,14 +220,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         Returns:
             ``tf.Tensor``: The rotated tensor.
         """
-        if self._uses_explicit_input_layout:
-            validate_tensor_matches_layout(
-                tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-            axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
-            effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
+        validate_tensor_matches_layout(
+            tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
+        axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
+        effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
+        if self.input_mode == "sample":
             return tf.switch_case(
                 effective_k,
                 branch_fns={
@@ -267,11 +258,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         spatial_axis: Sequence[int] | None = None,
     ) -> tf.Tensor:
         """Rotate a batch-layout tensor by multiples of 90 degrees."""
-        axes = self._resolve_axes(
-            tensor,
-            spatial_axis=spatial_axis,
-            input_mode="batch",
-        )
+        axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
         effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
 
         return tf.switch_case(
@@ -304,14 +291,11 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         self,
         tensor: tf.Tensor,
         spatial_axis: Sequence[int] | None = None,
-        input_mode: str | None = None,
     ) -> tuple[int, int]:
-        effective_input_mode = self.input_mode if input_mode is None else input_mode
-        layout = validate_layout(
+        layout = validate_tensor_matches_layout(
             tensor,
-            input_mode=effective_input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            self.input_layout,
+            transform_name=type(self).__name__,
         )
 
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
@@ -319,23 +303,10 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             if layout.spatial_rank < 2:
                 raise ValueError(f"{type(self).__name__} requires at least two spatial dimensions.")
             return tuple(layout.spatial_axes[-2:])
-        if self._uses_explicit_input_layout:
-            axes = resolve_input_layout_axes(
-                tensor,
-                tuple(effective_axis),
-                input_layout=self.input_layout,
-                name="spatial_axis",
-            )
-            if len(axes) != 2:
-                raise ValueError("`spatial_axis` must contain exactly two axes.")
-            return axes
-
-        axes = resolve_spatial_axes(
+        axes = resolve_input_layout_axes(
             tensor,
             tuple(effective_axis),
-            input_mode=effective_input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             name="spatial_axis",
         )
         if len(axes) != 2:

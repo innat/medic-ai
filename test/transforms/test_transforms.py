@@ -2411,8 +2411,8 @@ def test_flip_supports_2d_and_3d_and_records_inverse_trace():
     image_2d = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     image_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
 
-    flip_2d = Flip(keys=["image"], spatial_axis=1)
-    flip_3d = Flip(keys=["image"], spatial_axis=(0, 2))
+    flip_2d = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=(0, 2), input_layout="DHWC")
 
     out_2d = flip_2d(TensorBundle({"image": image_2d}))
     out_3d = flip_3d(TensorBundle({"image": image_3d}))
@@ -2441,8 +2441,8 @@ def test_flip_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    flip_2d = Flip(keys=["image"], spatial_axis=1, input_mode="batch")
-    flip_3d = Flip(keys=["image"], spatial_axis=(0, 2), input_mode="batch")
+    flip_2d = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=(1, 3), input_layout="BDHWC")
 
     out_2d = flip_2d(TensorBundle({"image": batch_2d}))
     out_3d = flip_3d(TensorBundle({"image": batch_3d}))
@@ -2485,10 +2485,10 @@ def test_flip_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     batch = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
 
-    sample_out = Flip(keys=["image"], spatial_axis=1, input_mode="sample")(
+    sample_out = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")(
         TensorBundle({"image": sample})
     )
-    batch_out = Flip(keys=["image"], spatial_axis=1, input_mode="batch")(
+    batch_out = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")(
         TensorBundle({"image": batch})
     )
 
@@ -2507,10 +2507,10 @@ def test_flip_requires_spatial_axis_and_invalid_axis_raises():
     image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
 
     with pytest.raises(ValueError, match="requires `spatial_axis`"):
-        Flip(keys=["image"], spatial_axis=None)
+        Flip(keys=["image"], spatial_axis=None, input_layout="HWC")
 
     with pytest.raises(ValueError):
-        Flip(keys=["image"], spatial_axis=5)(TensorBundle({"image": image}))
+        Flip(keys=["image"], spatial_axis=5, input_layout="HWC")(TensorBundle({"image": image}))
 
 
 @pytest.mark.unit
@@ -2518,8 +2518,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     pipeline = Compose(
         [
-            Flip(keys=["image"], spatial_axis=0),
-            Flip(keys=["image"], spatial_axis=1),
+            Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
         ]
     )
 
@@ -2536,7 +2536,7 @@ def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
 @pytest.mark.unit
 def test_flip_negative_axis_resolves_against_spatial_rank_only():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    out = Flip(keys=["image"], spatial_axis=-1)(TensorBundle({"image": image}))
+    out = Flip(keys=["image"], spatial_axis=-1, input_layout="HWC")(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(
         ops.convert_to_numpy(out["image"]),
@@ -2545,31 +2545,9 @@ def test_flip_negative_axis_resolves_against_spatial_rank_only():
 
 
 @pytest.mark.unit
-def test_flip_validates_input_mode():
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        Flip(keys=["image"], spatial_axis=0, input_mode="unknown")
-
-
-@pytest.mark.unit
-def test_flip_spatial_dims_disambiguates_rank4_sample_vs_batch_inputs():
-    batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
-    sample_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
-
-    with pytest.raises(ValueError, match="Expected spatial_dims=2"):
-        Flip(
-            keys=["image"],
-            spatial_axis=1,
-            input_mode="sample",
-            spatial_dims=2,
-        )(TensorBundle({"image": batch_2d}))
-
-    out = Flip(
-        keys=["image"],
-        spatial_axis=1,
-        input_mode="sample",
-        spatial_dims=3,
-    )(TensorBundle({"image": sample_3d}))
-    assert tuple(out["image"].shape) == (2, 3, 4, 1)
+def test_flip_validates_input_layout():
+    with pytest.raises(ValueError, match="unsupported input_layout"):
+        Flip(keys=["image"], spatial_axis=0, input_layout="CHW")
 
 
 @pytest.mark.unit
@@ -2577,8 +2555,8 @@ def test_rotate90_supports_2d_and_3d_and_records_inverse_trace():
     image_2d = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     image_3d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
 
-    rotate_2d = Rotate90(keys=["image"], k=1)
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2))
+    rotate_2d = Rotate90(keys=["image"], k=1, input_layout="HWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2), input_layout="DHWC")
 
     out_2d = rotate_2d(TensorBundle({"image": image_2d}))
     out_3d = rotate_3d(TensorBundle({"image": image_3d}))
@@ -2604,8 +2582,8 @@ def test_rotate90_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    rotate_2d = Rotate90(keys=["image"], k=1, input_mode="batch")
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2), input_mode="batch")
+    rotate_2d = Rotate90(keys=["image"], k=1, input_layout="BHWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(2, 3), input_layout="BDHWC")
 
     out_2d = rotate_2d(TensorBundle({"image": batch_2d}))
     out_3d = rotate_3d(TensorBundle({"image": batch_3d}))
@@ -2644,8 +2622,8 @@ def test_rotate90_uses_same_batch_kernel_for_sample_and_batch_modes():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    rotate_2d = Rotate90(keys=["image"], k=1)
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2))
+    rotate_2d = Rotate90(keys=["image"], k=1, input_layout="HWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2), input_layout="DHWC")
 
     expected_sample_2d = np.rot90(ops.convert_to_numpy(sample_2d), k=1, axes=(0, 1))
     expected_sample_3d = np.rot90(ops.convert_to_numpy(sample_3d), k=3, axes=(1, 2))
@@ -2673,12 +2651,14 @@ def test_rotate90_uses_same_batch_kernel_for_sample_and_batch_modes():
 @pytest.mark.unit
 def test_rotate90_k_zero_is_noop_and_invalid_axes_raise():
     image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-    out = Rotate90(keys=["image"], k=4)(TensorBundle({"image": image}))
+    out = Rotate90(keys=["image"], k=4, input_layout="HWC")(TensorBundle({"image": image}))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert out.get_applied_transforms() == []
 
     with pytest.raises(ValueError, match="must contain exactly two axes"):
-        Rotate90(keys=["image"], k=1, spatial_axis=(0,))(TensorBundle({"image": image}))
+        Rotate90(keys=["image"], k=1, spatial_axis=(0,), input_layout="HWC")(
+            TensorBundle({"image": image})
+        )
 
 
 @pytest.mark.unit
@@ -2686,8 +2666,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_rotate90_instances():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     pipeline = Compose(
         [
-            Rotate90(keys=["image"], k=1),
-            Rotate90(keys=["image"], k=3),
+            Rotate90(keys=["image"], k=1, input_layout="HWC"),
+            Rotate90(keys=["image"], k=3, input_layout="HWC"),
         ]
     )
 
@@ -2704,16 +2684,18 @@ def test_compose_inverse_restores_pipeline_with_multiple_rotate90_instances():
 @pytest.mark.unit
 def test_rotate90_negative_axes_resolve_against_spatial_rank_only():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    out = Rotate90(keys=["image"], k=1, spatial_axis=(0, -1))(TensorBundle({"image": image}))
+    out = Rotate90(keys=["image"], k=1, spatial_axis=(0, -1), input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     expected = np.rot90(ops.convert_to_numpy(image), k=1, axes=(0, 1))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), expected)
 
 
 @pytest.mark.unit
-def test_rotate90_validates_input_mode():
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        Rotate90(keys=["image"], k=1, input_mode="unknown")
+def test_rotate90_validates_input_layout():
+    with pytest.raises(ValueError, match="unsupported input_layout"):
+        Rotate90(keys=["image"], k=1, input_layout="CHW")
 
 
 @pytest.mark.unit
@@ -2721,7 +2703,7 @@ def test_rotate90_validates_input_mode():
 def test_rotate90_branch_parity_for_non_square_2d_inputs(k):
     image = as_tensor(np.arange(15, dtype=np.float32).reshape(3, 5, 1))
 
-    out = Rotate90(keys=["image"], k=k)(TensorBundle({"image": image}))
+    out = Rotate90(keys=["image"], k=k, input_layout="HWC")(TensorBundle({"image": image}))
     expected = np.rot90(ops.convert_to_numpy(image), k=k, axes=(0, 1))
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), expected)
@@ -2750,7 +2732,9 @@ def test_rotate90_branch_parity_for_non_square_2d_inputs(k):
 def test_rotate90_branch_parity_for_anisotropic_3d_inputs(k, spatial_axis):
     image = as_tensor(np.arange(60, dtype=np.float32).reshape(3, 4, 5, 1))
 
-    out = Rotate90(keys=["image"], k=k, spatial_axis=spatial_axis)(TensorBundle({"image": image}))
+    out = Rotate90(keys=["image"], k=k, spatial_axis=spatial_axis, input_layout="DHWC")(
+        TensorBundle({"image": image})
+    )
     expected = np.rot90(ops.convert_to_numpy(image), k=k, axes=spatial_axis)
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), expected)
@@ -3472,7 +3456,7 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
     transform = Compose(
         [
             ShiftIntensity(keys=["image"], offset=2.0),
-            Flip(keys=["image"], spatial_axis=1),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
             Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2)),
         ]
     )
