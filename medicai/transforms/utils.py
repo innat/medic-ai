@@ -520,6 +520,37 @@ def ensure_batch_axis(
     return tensor, False
 
 
+def ensure_batch_axis_for_layout(
+    tensor: tf.Tensor,
+    *,
+    input_layout: str,
+    allowed_spatial_ranks: Sequence[int] = (2, 3),
+) -> tuple[tf.Tensor, bool]:
+    """Normalize a tensor declared by ``input_layout`` to a batched view.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        input_layout: Canonical public layout string such as ``"HWC"`` or
+            ``"BDHWC"``.
+        allowed_spatial_ranks: Accepted spatial ranks for validation.
+
+    Returns:
+        tuple[tf.Tensor, bool]: A pair ``(batched_tensor, added_batch_axis)``
+        where ``added_batch_axis`` is ``True`` only when a leading singleton
+        batch axis was inserted for sample-layout input.
+    """
+    layout = validate_tensor_matches_layout(tensor, input_layout)
+    if layout.spatial_rank not in allowed_spatial_ranks:
+        allowed = ", ".join(str(rank) for rank in allowed_spatial_ranks)
+        raise ValueError(
+            f"Expected spatial rank in ({allowed}) for input_layout={layout.input_layout!r}, "
+            f"received {layout.spatial_rank} for shape {tensor.shape}."
+        )
+    if layout.batched:
+        return tensor, False
+    return tensor[None, ...], True
+
+
 def restore_from_batch_axis(tensor: tf.Tensor, added_batch_axis: bool) -> tf.Tensor:
     """Remove a temporary singleton batch axis added by :func:`ensure_batch_axis`."""
     if added_batch_axis:

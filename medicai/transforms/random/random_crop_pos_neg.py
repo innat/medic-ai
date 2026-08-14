@@ -9,9 +9,9 @@ from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    ensure_batch_axis,
-    get_legacy_layout_components,
-    get_spatial_shape,
+    ensure_batch_axis_for_layout,
+    get_input_layout_info,
+    get_spatial_shape_for_layout,
     resolve_input_layout,
     restore_from_batch_axis,
     validate_tensor_matches_layout,
@@ -125,14 +125,14 @@ class RandomCropByPosNegLabel(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
         self.crop = SpatialCrop(
             keys=self.keys,
             crop_size=self.target_shape,
-            input_layout=f"{'B' if self.input_mode == 'batch' else ''}{'D' if self.spatial_dims == 3 else ''}HWC",
+            input_layout=self.input_layout,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -166,15 +166,13 @@ class RandomCropByPosNegLabel(RandomTransform):
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
-        image_batched, _ = ensure_batch_axis(
+        image_batched, _ = ensure_batch_axis_for_layout(
             image,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
         )
-        label_batched, _ = ensure_batch_axis(
+        label_batched, _ = ensure_batch_axis_for_layout(
             label,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
         )
 
         image_reference = None
@@ -184,10 +182,9 @@ class RandomCropByPosNegLabel(RandomTransform):
             image_reference = bundle.data[self.image_reference_key]
         image_reference_batched = None
         if image_reference is not None:
-            image_reference_batched, _ = ensure_batch_axis(
+            image_reference_batched, _ = ensure_batch_axis_for_layout(
                 image_reference,
-                input_mode=self.input_mode,
-                spatial_dims=self.spatial_dims,
+                input_layout=self.input_layout,
             )
         center = self.sample_center(
             image_batched,
@@ -201,7 +198,10 @@ class RandomCropByPosNegLabel(RandomTransform):
                 f"`target_shape` must contain exactly {spatial_rank} values for input shape "
                 f"{image.shape}; received {self.target_shape}."
             )
-        spatial_shape = get_spatial_shape(image_batched, input_mode="batch")
+        spatial_shape = get_spatial_shape_for_layout(
+            image_batched,
+            input_layout=self.crop.input_layout,
+        )
         starts = tf.maximum(center - crop_size // 2, 0)
         ends = tf.minimum(starts + crop_size, spatial_shape)
         starts = tf.maximum(ends - crop_size, 0)
@@ -213,8 +213,6 @@ class RandomCropByPosNegLabel(RandomTransform):
             "neg": self.neg,
             "image_reference_key": self.image_reference_key,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def _validate_sampling_weights(self, pos: int, neg: int) -> None:
@@ -252,11 +250,13 @@ class RandomCropByPosNegLabel(RandomTransform):
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor, input_mode=self.input_mode)
-            batched_tensor, added_batch_axis = ensure_batch_axis(
+            original_shapes[key] = get_spatial_shape_for_layout(
                 tensor,
-                input_mode=self.input_mode,
-                spatial_dims=self.spatial_dims,
+                input_layout=self.input_layout,
+            )
+            batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
+                tensor,
+                input_layout=self.input_layout,
             )
             cropped = self.crop.crop_tensor(
                 batched_tensor,
@@ -293,8 +293,6 @@ class RandomCropByPosNegLabel(RandomTransform):
             "neg": params["neg"],
             "image_reference_key": params["image_reference_key"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -304,17 +302,14 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
-        input_mode = trace["params"].get("input_mode", self.input_mode)
-        spatial_dims = trace["params"].get("spatial_dims", self.spatial_dims)
 
         def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
-            batched_tensor, added_batch_axis = ensure_batch_axis(
+            batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
                 tensor,
-                input_mode=input_mode,
-                spatial_dims=spatial_dims,
+                input_layout=self.input_layout,
             )
             restored = self.crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
             return restore_from_batch_axis(restored, added_batch_axis)
@@ -350,7 +345,10 @@ class RandomCropByPosNegLabel(RandomTransform):
         coords = tf.where(tf.reduce_any(label > 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
-            fallback_shape=get_spatial_shape(label, input_mode="batch"),
+            fallback_shape=get_spatial_shape_for_layout(
+                label,
+                input_layout=self.crop.input_layout,
+            ),
             spatial_rank=spatial_rank,
         )
 
@@ -370,7 +368,10 @@ class RandomCropByPosNegLabel(RandomTransform):
             coords = tf.where(tf.reduce_any(label == 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
-            fallback_shape=get_spatial_shape(image, input_mode="batch"),
+            fallback_shape=get_spatial_shape_for_layout(
+                image,
+                input_layout=self.crop.input_layout,
+            ),
             spatial_rank=spatial_rank,
         )
 
