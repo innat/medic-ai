@@ -14,7 +14,6 @@ from ..utils import (
     get_spatial_shape,
     resolve_input_layout,
     restore_from_batch_axis,
-    validate_layout,
     validate_tensor_matches_layout,
 )
 
@@ -65,6 +64,7 @@ class RandomCropByPosNegLabel(RandomTransform):
                 target_shape=(32, 32),
                 pos=1,
                 neg=1,
+                input_layout="HWC",
             )
 
             image = tf.random.normal((64, 64, 1))
@@ -85,6 +85,7 @@ class RandomCropByPosNegLabel(RandomTransform):
                 target_shape=(16, 32, 32),
                 pos=1,
                 neg=1,
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((32, 64, 64, 1))
@@ -103,28 +104,16 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: int,
         num_samples: int = 1,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         image_reference_key: str = None,
         image_threshold: float = 0.0,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=1.0, seed=seed)
-        if pos < 0 or neg < 0:
-            raise ValueError("pos and neg must be non-negative.")
-        if pos == 0 and neg == 0:
-            raise ValueError("pos and neg cannot both be zero.")
-        normalized_keys = _normalize_keys(keys)
-        if len(normalized_keys) != 2:
-            class_name = type(self).__name__
-            raise ValueError(
-                f"{class_name} transformation requires a pair of image and label as keys. "
-            )
-        if num_samples != 1:
-            class_name = self.__class__.__name__
-            raise ValueError(f"{class_name} transformation currently supports only num_samples=1.")
+        self._validate_sampling_weights(pos, neg)
+        normalized_keys = self._validate_keys(keys)
+        self._validate_num_samples(num_samples)
 
         self.keys = normalized_keys
         self.target_shape = target_shape
@@ -132,11 +121,8 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.neg = neg
         self.num_samples = num_samples
         self.pos_ratio = pos / (pos + neg)
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -147,8 +133,6 @@ class RandomCropByPosNegLabel(RandomTransform):
             keys=self.keys,
             crop_size=self.target_shape,
             input_layout=f"{'B' if self.input_mode == 'batch' else ''}{'D' if self.spatial_dims == 3 else ''}HWC",
-            input_mode="batch",
-            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 
@@ -171,25 +155,16 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         image = bundle.data[image_key]
         label = bundle.data[label_key]
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                image,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-            validate_tensor_matches_layout(
-                label,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-        else:
-            layout = validate_layout(
-                image,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(2, 3),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
+        layout = validate_tensor_matches_layout(
+            image,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
+        validate_tensor_matches_layout(
+            label,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = layout.spatial_rank
         image_batched, _ = ensure_batch_axis(
             image,
@@ -241,6 +216,29 @@ class RandomCropByPosNegLabel(RandomTransform):
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
+
+    def _validate_sampling_weights(self, pos: int, neg: int) -> None:
+        """Validate positive/negative sampling weights."""
+        if pos < 0 or neg < 0:
+            raise ValueError("pos and neg must be non-negative.")
+        if pos == 0 and neg == 0:
+            raise ValueError("pos and neg cannot both be zero.")
+
+    def _validate_keys(self, keys: Sequence[str]) -> list[str]:
+        """Validate that exactly two keys are provided."""
+        normalized_keys = _normalize_keys(keys)
+        if len(normalized_keys) != 2:
+            class_name = type(self).__name__
+            raise ValueError(
+                f"{class_name} transformation requires a pair of image and label as keys. "
+            )
+        return normalized_keys
+
+    def _validate_num_samples(self, num_samples: int) -> None:
+        """Validate the currently supported sample count."""
+        if num_samples != 1:
+            class_name = type(self).__name__
+            raise ValueError(f"{class_name} transformation currently supports only num_samples=1.")
 
     def apply_with_params(
         self,

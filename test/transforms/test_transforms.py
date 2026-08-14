@@ -2143,6 +2143,7 @@ def test_random_crop_by_pos_neg_label_uses_spatial_crop_kernel():
         target_shape=(3, 3, 3),
         pos=1,
         neg=1,
+        input_layout="DHWC",
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (3, 3, 3, 1)
@@ -2163,6 +2164,7 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
         target_shape=(4, 4),
         pos=1,
         neg=1,
+        input_layout="HWC",
     )(TensorBundle({"image": image_2d, "label": label_2d}))
 
     image_3d = as_tensor(np.random.randn(6, 6, 6, 1).astype(np.float32))
@@ -2174,6 +2176,7 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
         target_shape=(3, 3, 3),
         pos=1,
         neg=1,
+        input_layout="DHWC",
     )(TensorBundle({"image": image_3d, "label": label_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (4, 4, 1)
@@ -2183,7 +2186,7 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_mode():
+def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_layout():
     image_2d = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
     label_2d = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
     label_2d_np = ops.convert_to_numpy(label_2d)
@@ -2195,7 +2198,7 @@ def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_mode
         target_shape=(4, 4),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BHWC",
     )(TensorBundle({"image": image_2d, "label": label_2d}))
 
     image_3d = as_tensor(np.random.randn(2, 6, 6, 6, 1).astype(np.float32))
@@ -2209,15 +2212,15 @@ def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_mode
         target_shape=(3, 3, 3),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BDHWC",
     )(TensorBundle({"image": image_3d, "label": label_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (2, 4, 4, 1)
     assert tuple(ops.shape(out_2d["label"])) == (2, 4, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 3, 3, 3, 1)
     assert tuple(ops.shape(out_3d["label"])) == (2, 3, 3, 3, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
-    assert out_3d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+    assert out_3d.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
 
 
 @pytest.mark.unit
@@ -2254,7 +2257,7 @@ def test_random_crop_by_pos_neg_label_shares_sampled_crop_across_batched_input()
         target_shape=(3, 3),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BHWC",
         seed=23,
     )
 
@@ -2282,6 +2285,7 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
         target_shape=(4, 4),
         pos=1,
         neg=0,
+        input_layout="HWC",
     )
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -2316,7 +2320,7 @@ def test_random_crop_by_pos_neg_label_inverse_restores_batched_input_canvas():
         target_shape=(3, 3),
         pos=1,
         neg=0,
-        input_mode="batch",
+        input_layout="BHWC",
     )
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -2351,6 +2355,7 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_3d():
         target_shape=(3, 3, 3),
         pos=1,
         neg=0,
+        input_layout="DHWC",
     )
     forward = transform(TensorBundle({"image": image, "label": label}))
     restored = transform.inverse(
@@ -2397,7 +2402,13 @@ def test_random_crop_by_pos_neg_label_inverse_without_trace_is_noop():
             "label": as_tensor(np.ones((4, 4, 1), dtype=np.float32)),
         }
     )
-    transform = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2), pos=1, neg=1)
+    transform = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(2, 2),
+        pos=1,
+        neg=1,
+        input_layout="HWC",
+    )
 
     restored = transform.inverse(bundle)
 
@@ -2407,17 +2418,34 @@ def test_random_crop_by_pos_neg_label_inverse_without_trace_is_noop():
 @pytest.mark.unit
 def test_random_crop_by_pos_neg_label_validates_arguments():
     with pytest.raises(ValueError, match="pos and neg must be non-negative"):
-        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=-1, neg=1)
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=-1,
+            neg=1,
+            input_layout="DHWC",
+        )
 
     with pytest.raises(ValueError, match="pos and neg cannot both be zero"):
-        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=0, neg=0)
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=0,
+            neg=0,
+            input_layout="DHWC",
+        )
 
     with pytest.raises(ValueError, match="requires a pair of image and label as keys"):
-        RandomCropByPosNegLabel(keys=["image"], target_shape=(2, 2, 2), pos=1, neg=1)
+        RandomCropByPosNegLabel(keys=["image"], target_shape=(2, 2, 2), pos=1, neg=1, input_layout="DHWC")
 
     with pytest.raises(ValueError, match="currently supports only num_samples=1"):
         RandomCropByPosNegLabel(
-            keys=["image", "label"], target_shape=(2, 2, 2), pos=1, neg=1, num_samples=2
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=1,
+            neg=1,
+            num_samples=2,
+            input_layout="DHWC",
         )
 
 
@@ -2425,7 +2453,13 @@ def test_random_crop_by_pos_neg_label_validates_arguments():
 def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys():
     image_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
     label_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
-    transform = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2), pos=1, neg=1)
+    transform = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(2, 2),
+        pos=1,
+        neg=1,
+        input_layout="HWC",
+    )
 
     with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
@@ -2433,7 +2467,13 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
     image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     label_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     with pytest.raises(ValueError, match="`target_shape` must contain exactly 2 values"):
-        RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(2, 2, 2), pos=1, neg=1)(
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=1,
+            neg=1,
+            input_layout="HWC",
+        )(
             TensorBundle({"image": image_2d, "label": label_2d})
         )
 
@@ -2442,6 +2482,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
         target_shape=(2, 2, 2),
         pos=1,
         neg=1,
+        input_layout="DHWC",
         allow_missing_keys=True,
     )
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 4, 1), dtype=np.float32))})
@@ -2449,14 +2490,14 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
 
 
 @pytest.mark.unit
-def test_random_crop_by_pos_neg_label_validates_input_mode_and_layout_contract():
-    with pytest.raises(ValueError, match="supports only input_mode values"):
+def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract():
+    with pytest.raises(ValueError, match="unsupported input_layout"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
             target_shape=(2, 2),
             pos=1,
             neg=1,
-            input_mode="unknown",
+            input_layout="CHW",
         )
 
     image = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
@@ -2466,7 +2507,7 @@ def test_random_crop_by_pos_neg_label_validates_input_mode_and_layout_contract()
         target_shape=(2, 2),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BHWC",
     )
 
     with pytest.raises(ValueError, match="Expected a channel-last batch tensor shaped like"):
@@ -2483,6 +2524,7 @@ def test_random_crop_by_pos_neg_label_validates_image_reference_key():
         target_shape=(2, 2, 2),
         pos=1,
         neg=1,
+        input_layout="DHWC",
         image_reference_key="reference",
     )
 

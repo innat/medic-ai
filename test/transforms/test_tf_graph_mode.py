@@ -1009,8 +1009,20 @@ def test_compose_random_spatial_crop_inverse_supports_batch_mode_under_tf_functi
 
 @pytest.mark.unit
 def test_random_crop_by_pos_neg_label_runs_under_tf_function_for_2d_and_3d():
-    crop_2d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(4, 4), pos=1, neg=1)
-    crop_3d = RandomCropByPosNegLabel(keys=["image", "label"], target_shape=(3, 3, 3), pos=1, neg=1)
+    crop_2d = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(4, 4),
+        pos=1,
+        neg=1,
+        input_layout="HWC",
+    )
+    crop_3d = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(3, 3, 3),
+        pos=1,
+        neg=1,
+        input_layout="DHWC",
+    )
 
     image_2d = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
     label_2d = as_tensor(np.pad(np.ones((2, 2, 1), dtype=np.float32), ((3, 3), (3, 3), (0, 0))))
@@ -1046,14 +1058,14 @@ def test_random_crop_by_pos_neg_label_runs_under_tf_function_in_batch_mode():
         target_shape=(4, 4),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BHWC",
     )
     crop_3d = RandomCropByPosNegLabel(
         keys=["image", "label"],
         target_shape=(3, 3, 3),
         pos=1,
         neg=1,
-        input_mode="batch",
+        input_layout="BDHWC",
     )
 
     image_2d = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
@@ -1071,12 +1083,12 @@ def test_random_crop_by_pos_neg_label_runs_under_tf_function_in_batch_mode():
     @tf.function
     def apply_2d(x, y):
         result = crop_2d({"image": x, "label": y})
-        return result["image"], result["label"], result.get_applied_transforms()[-1]["params"]["input_mode"]
+        return result["image"], result["label"], result.get_applied_transforms()[-1]["params"]["input_layout"]
 
     @tf.function
     def apply_3d(x, y):
         result = crop_3d({"image": x, "label": y})
-        return result["image"], result["label"], result.get_applied_transforms()[-1]["params"]["input_mode"]
+        return result["image"], result["label"], result.get_applied_transforms()[-1]["params"]["input_layout"]
 
     out_2d_image, out_2d_label, out_2d_mode = apply_2d(image_2d, label_2d)
     out_3d_image, out_3d_label, out_3d_mode = apply_3d(image_3d, label_3d)
@@ -1085,8 +1097,8 @@ def test_random_crop_by_pos_neg_label_runs_under_tf_function_in_batch_mode():
     assert tuple(ops.shape(out_2d_label)) == (2, 4, 4, 1)
     assert tuple(ops.shape(out_3d_image)) == (2, 3, 3, 3, 1)
     assert tuple(ops.shape(out_3d_label)) == (2, 3, 3, 3, 1)
-    assert out_2d_mode == "batch"
-    assert out_3d_mode == "batch"
+    assert out_2d_mode == "BHWC"
+    assert out_3d_mode == "BDHWC"
 
 
 @pytest.mark.unit
@@ -1123,7 +1135,7 @@ def test_random_crop_by_pos_neg_label_forward_and_inverse_run_under_tf_function_
         target_shape=(3, 3),
         pos=1,
         neg=0,
-        input_mode="batch",
+        input_layout="BHWC",
     )
 
     image = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
@@ -1159,7 +1171,7 @@ def test_compose_random_crop_by_pos_neg_label_inverse_supports_batch_mode_under_
                 target_shape=(3, 3),
                 pos=1,
                 neg=0,
-                input_mode="batch",
+                input_layout="BHWC",
             ),
             RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
         ]
