@@ -3150,6 +3150,24 @@ def test_random_cutout_supports_batch_mode_and_records_input_mode():
 
 
 @pytest.mark.unit
+def test_random_cutout_accepts_input_layout():
+    image = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+    label = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+
+    out = RandomCutOut(
+        keys=["image", "label"],
+        mask_size=(2, 2),
+        num_cuts=1,
+        prob=1.0,
+        input_layout="bhwc",
+        seed=7,
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 8, 8, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_random_cutout_batch_mode_replays_with_same_integer_seed():
     image = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
     label = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))

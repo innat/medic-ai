@@ -5,7 +5,14 @@ import tensorflow as tf
 
 from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode, validate_layout, validate_spatial_dims
+from ..utils import (
+    get_legacy_layout_components,
+    resolve_input_layout,
+    validate_input_mode,
+    validate_layout,
+    validate_spatial_dims,
+    validate_tensor_matches_layout,
+)
 
 
 class RandomCutOut(RandomTransform):
@@ -15,7 +22,7 @@ class RandomCutOut(RandomTransform):
     corresponding image regions with either a constant value or Gaussian
     noise.
 
-    Depending on ``input_mode``, it supports:
+    Depending on ``input_layout``, it supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -33,10 +40,12 @@ class RandomCutOut(RandomTransform):
         fill_mode: Either ``"constant"`` or ``"gaussian"``.
         fill_value: Constant fill value used when ``fill_mode="constant"``.
         gaussian_std: Standard deviation for Gaussian fill noise.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors. In batch mode, one Bernoulli apply decision is sampled
-            for the full batch, while cutout masks are generated per sample.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
+        spatial_dims: Legacy spatial dimensionality contract.
+        input_mode: Legacy execution-mode contract. In batch mode, one
+            Bernoulli apply decision is sampled for the full batch, while
+            cutout masks are generated per sample.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         invalid_label: Optional label value marking invalid regions.
@@ -100,8 +109,9 @@ class RandomCutOut(RandomTransform):
         fill_value: float = 0.0,
         gaussian_std: float = 0.1,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = "sample",
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         cutout_mode: str = "volume",
@@ -135,8 +145,16 @@ class RandomCutOut(RandomTransform):
         self.fill_mode = fill_mode
         self.fill_value = fill_value
         self.gaussian_std = gaussian_std
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.input_mode = validate_input_mode(self.input_mode, transform_name=type(self).__name__)
+        self.spatial_dims = validate_spatial_dims(self.spatial_dims, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
@@ -157,20 +175,32 @@ class RandomCutOut(RandomTransform):
 
         image = bundle.data[self.image_key]
         label = bundle.data[self.label_key]
-        layout = validate_layout(
-            image,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=self.spatial_dims,
-            transform_name=type(self).__name__,
-        )
-        validate_layout(
-            label,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(layout.spatial_rank,),
-            spatial_dims=self.spatial_dims,
-            transform_name=type(self).__name__,
-        )
+        if self._uses_explicit_input_layout:
+            layout = validate_tensor_matches_layout(
+                image,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+            validate_tensor_matches_layout(
+                label,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+        else:
+            layout = validate_layout(
+                image,
+                input_mode=self.input_mode,
+                allowed_spatial_ranks=(2, 3),
+                spatial_dims=self.spatial_dims,
+                transform_name=type(self).__name__,
+            )
+            validate_layout(
+                label,
+                input_mode=self.input_mode,
+                allowed_spatial_ranks=(layout.spatial_rank,),
+                spatial_dims=self.spatial_dims,
+                transform_name=type(self).__name__,
+            )
         spatial_rank = layout.spatial_rank
 
         should_apply = self.sample_should_apply()
@@ -226,6 +256,7 @@ class RandomCutOut(RandomTransform):
             "num_cuts": self.num_cuts,
             "fill_mode": self.fill_mode,
             "cutout_mode": self.cutout_mode,
+            "input_layout": self.input_layout,
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }

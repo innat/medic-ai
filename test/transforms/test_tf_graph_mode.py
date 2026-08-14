@@ -1366,6 +1366,30 @@ def test_random_cutout_supports_batch_mode_under_tf_function():
 
 
 @pytest.mark.unit
+def test_random_cutout_accepts_input_layout_under_tf_function():
+    random_cutout = RandomCutOut(
+        keys=["image", "label"],
+        mask_size=(2, 2),
+        num_cuts=1,
+        prob=1.0,
+        input_layout="BHWC",
+        seed=13,
+    )
+
+    image = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+    label = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+
+    @tf.function
+    def apply_cutout(x, y):
+        result = random_cutout({"image": x, "label": y})
+        return result["image"]
+
+    cutout = apply_cutout(image, label)
+
+    assert tuple(ops.shape(cutout)) == (2, 8, 8, 1)
+
+
+@pytest.mark.unit
 def test_lambda_transform_and_compose_run_under_tf_function():
     lambda_transform = LambdaTransform(
         keys=["image"],
