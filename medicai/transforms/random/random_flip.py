@@ -50,7 +50,12 @@ class RandomFlip(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomFlip
 
-            transform = RandomFlip(keys=["image"], prob=0.5, spatial_axis=0)
+            transform = RandomFlip(
+                keys=["image"],
+                prob=0.5,
+                spatial_axis=0,
+                input_layout="HWC",
+            )
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
             output = result["image"]
@@ -63,7 +68,12 @@ class RandomFlip(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomFlip, TensorBundle
 
-            transform = RandomFlip(keys=["image"], prob=0.5, spatial_axis=0)
+            transform = RandomFlip(
+                keys=["image"],
+                prob=0.5,
+                spatial_axis=0,
+                input_layout="DHWC",
+            )
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
             result = transform(bundle)
@@ -77,9 +87,7 @@ class RandomFlip(RandomTransform):
         prob: float = 0.1,
         spatial_axis: Union[int, Sequence[int], None] = None,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -88,8 +96,6 @@ class RandomFlip(RandomTransform):
             keys=keys,
             spatial_axis=spatial_axis,
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             allow_missing_keys=allow_missing_keys,
         )
 
@@ -135,8 +141,6 @@ class RandomFlip(RandomTransform):
             "should_apply": self.sample_should_apply(),
             "spatial_axis": self.flip.spatial_axis,
             "input_layout": self.flip.input_layout,
-            "input_mode": self.flip.input_mode,
-            "spatial_dims": self.flip.spatial_dims,
         }
 
     def apply_with_params(
@@ -198,8 +202,6 @@ class RandomFlip(RandomTransform):
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def _get_last_random_flip_trace(self, bundle: TensorBundle):

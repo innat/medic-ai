@@ -42,7 +42,7 @@ def test_dual_mode_transforms_can_run_inside_custom_train_step():
             self.transforms = Compose(
                 [
                     ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
-                    RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch"),
+                    RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="BHWC"),
                 ]
             )
             self.backbone = keras.Sequential(
@@ -437,13 +437,13 @@ def test_flip_and_rotate90_support_batch_mode_under_tf_function():
 
 @pytest.mark.unit
 def test_random_flip_and_rotate90_support_batch_mode_under_tf_function():
-    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch")
+    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="BHWC")
     random_rotate90 = RandomRotate90(
         keys=["image"],
         prob=1.0,
         max_k=3,
         spatial_axis=(0, 1),
-        input_mode="batch",
+        input_layout="BHWC",
     )
 
     image = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
@@ -777,8 +777,8 @@ def test_random_choice_runs_under_tf_function_for_multi_choice():
 
 @pytest.mark.unit
 def test_random_rank_agnostic_transforms_run_under_tf_function():
-    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0)
-    random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3)
+    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=0, input_layout="HWC")
+    random_rotate90 = RandomRotate90(keys=["image"], prob=1.0, max_k=3, input_layout="HWC")
     random_spatial_crop = RandomSpatialCrop(keys=["image"], crop_size=(3, 4), random_center=False)
     random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)
 
@@ -802,13 +802,13 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
 
 @pytest.mark.unit
 def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function():
-    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch")
+    random_flip = RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="BHWC")
     random_rotate90 = RandomRotate90(
         keys=["image"],
         prob=1.0,
         max_k=3,
         spatial_axis=(0, 1),
-        input_mode="batch",
+        input_layout="BHWC",
     )
     image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
 
@@ -837,13 +837,13 @@ def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function()
 def test_compose_random_flip_and_rotate90_inverse_supports_batch_mode_under_tf_function():
     pipeline = Compose(
         [
-            RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_mode="batch"),
+            RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="BHWC"),
             RandomRotate90(
                 keys=["image"],
                 prob=1.0,
                 max_k=3,
                 spatial_axis=(0, 1),
-                input_mode="batch",
+                input_layout="BHWC",
                 seed=13,
             ),
         ]
