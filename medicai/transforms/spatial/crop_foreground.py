@@ -7,9 +7,8 @@ from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_spatial_tuple,
     get_input_layout_info,
-    get_legacy_layout_components,
     get_spatial_rank,
-    get_spatial_shape,
+    get_spatial_shape_for_layout,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -189,7 +188,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         layout_info = get_input_layout_info(self.input_layout)
         if layout_info.batched:
             raise ValueError(f"{type(self).__name__} supports only sample layouts 'HWC' and 'DHWC'.")
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:
@@ -204,7 +202,10 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         spatial_rank = get_spatial_rank(source_data)
-        image_shape = get_spatial_shape(source_data)
+        image_shape = get_spatial_shape_for_layout(
+            source_data,
+            input_layout=self.input_layout,
+        )
 
         if self.channel_indices is not None:
             source_data = tf.gather(source_data, self.channel_indices, axis=-1)
@@ -236,7 +237,10 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         )
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor)
+            original_shapes[key] = get_spatial_shape_for_layout(
+                tensor,
+                input_layout=self.input_layout,
+            )
             return crop.crop_tensor(tensor, min_coords, crop_size)
 
         present_keys = crop.apply_to_present_keys(bundle, apply_crop)
@@ -255,7 +259,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 "original_shapes": original_shapes,
                 "source_key": self.source_key,
                 "input_layout": self.input_layout,
-                "spatial_dims": self.spatial_dims,
             },
         )
         return bundle
@@ -301,7 +304,10 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         def empty_bbox():
             return (
                 tf.zeros((spatial_rank,), dtype=coord_dtype),
-                tf.cast(get_spatial_shape(image), coord_dtype),
+                tf.cast(
+                    get_spatial_shape_for_layout(image, input_layout=self.input_layout),
+                    coord_dtype,
+                ),
             )
 
         def foreground_bbox():
