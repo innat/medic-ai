@@ -5,7 +5,6 @@ import tensorflow as tf
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    get_legacy_layout_components,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -91,7 +90,6 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -120,8 +118,6 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         return {
             "offset": self.offset,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(self, tensor: tf.Tensor, params: dict[str, object]) -> tf.Tensor:
@@ -139,8 +135,6 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "offset": params["offset"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def shift_tensor(

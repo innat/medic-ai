@@ -11,7 +11,7 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
-from ..utils import get_legacy_layout_components, resolve_input_layout
+from ..utils import resolve_input_layout
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -113,7 +113,6 @@ class RandomShiftIntensity(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         self.shift = ShiftIntensity(
             keys=self.keys,
@@ -138,8 +137,6 @@ class RandomShiftIntensity(RandomTransform):
             "channel_wise": self.channel_wise,
             "offset": self.offset,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -223,8 +220,6 @@ class RandomShiftIntensity(RandomTransform):
             "channel_wise": params["channel_wise"],
             "offset": params["offset"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
             "sampled_offsets": sampled_offsets,
         }
 

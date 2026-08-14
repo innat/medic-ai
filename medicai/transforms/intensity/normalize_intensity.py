@@ -6,7 +6,6 @@ from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     custom_tf_boolean_mask,
-    get_legacy_layout_components,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -120,7 +119,6 @@ class NormalizeIntensity(KeyedTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -133,8 +131,6 @@ class NormalizeIntensity(KeyedTransform):
                     "nonzero": self.nonzero,
                     "channel_wise": self.channel_wise,
                     "input_layout": self.input_layout,
-                    "input_mode": self.input_mode,
-                    "spatial_dims": self.spatial_dims,
                 },
                 applied=True,
                 random=False,

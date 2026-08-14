@@ -110,7 +110,6 @@ class RandomRotate90(RandomTransform):
             allow_missing_keys=self.allow_missing_keys,
         )
         self.input_layout = self.rotate.input_layout
-        self.input_mode = self.rotate.input_mode
 
     @property
     def invertible(self) -> bool:

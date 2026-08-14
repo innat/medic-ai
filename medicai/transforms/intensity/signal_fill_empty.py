@@ -5,7 +5,6 @@ import tensorflow as tf
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    get_legacy_layout_components,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -94,7 +93,6 @@ class SignalFillEmpty(KeyedTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -106,8 +104,6 @@ class SignalFillEmpty(KeyedTransform):
                     "keys": list(present_keys),
                     "fill_value": self.fill_value,
                     "input_layout": self.input_layout,
-                    "input_mode": self.input_mode,
-                    "spatial_dims": self.spatial_dims,
                 },
                 applied=True,
                 random=False,

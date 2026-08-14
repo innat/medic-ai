@@ -7,7 +7,6 @@ import tensorflow as tf
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    get_legacy_layout_components,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -140,7 +139,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     @property
     def invertible(self) -> bool:
@@ -197,8 +195,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_max": self.output_max,
             "clip": self.clip,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -231,8 +227,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             "output_max": params["output_max"],
             "clip": params["clip"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def scale_tensor(
