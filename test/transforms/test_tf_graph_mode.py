@@ -1245,6 +1245,29 @@ def test_random_rotate_supports_batch_mode_under_tf_function():
 
 
 @pytest.mark.unit
+def test_random_rotate_accepts_input_layout_under_tf_function():
+    random_rotate = RandomRotate(
+        keys=["image", "label"],
+        factor=0.2,
+        prob=1.0,
+        input_layout="BDHWC",
+    )
+
+    image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
+
+    @tf.function
+    def apply_rotate(x, y):
+        result = random_rotate({"image": x, "label": y})
+        return result["image"], result["label"]
+
+    rotated_image, rotated_label = apply_rotate(image, label)
+
+    assert tuple(ops.shape(rotated_image)) == (2, 4, 5, 6, 1)
+    assert tuple(ops.shape(rotated_label)) == (2, 4, 5, 6, 1)
+
+
+@pytest.mark.unit
 def test_random_rotate_inverse_supports_batch_mode_under_tf_function():
     random_rotate = RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_mode="batch")
 

@@ -12,10 +12,13 @@ from ..base import (
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis,
+    get_legacy_layout_components,
+    resolve_input_layout,
     restore_from_batch_axis,
     validate_input_mode,
     validate_layout,
     validate_spatial_dims,
+    validate_tensor_matches_layout,
 )
 
 
@@ -84,10 +87,10 @@ class RandomRotate(RandomTransform):
     still a resampling-based, best-effort inverse rather than an exact
     round-trip reconstruction.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
+    - sample 3D tensors shaped ``(D, H, W, C)`` with ``input_layout="DHWC"``
+    - batch 3D tensors shaped ``(B, D, H, W, C)`` with ``input_layout="BDHWC"``
 
     Args:
         keys: One or two keys. When two keys are provided, they are typically
@@ -97,8 +100,13 @@ class RandomRotate(RandomTransform):
         fill_value: Constant fill value for the primary image key when
             ``fill_mode="constant"``.
         fill_mode: Either ``"constant"`` or ``"crop"``.
-        input_mode: Either ``"sample"`` for ``(D, H, W, C)`` tensors or
-            ``"batch"`` for ``(B, D, H, W, C)`` tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"DHWC"`` and ``"BDHWC"``.
+        spatial_dims: Legacy spatial dimensionality contract. ``RandomRotate``
+            supports only 3D inputs.
+        input_mode: Legacy execution-mode contract. ``"sample"`` resolves to
+            ``input_layout="DHWC"`` and ``"batch"`` resolves to
+            ``input_layout="BDHWC"`` when ``input_layout`` is not provided.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -142,8 +150,9 @@ class RandomRotate(RandomTransform):
         fill_value: float = 0.0,
         fill_mode: str = "constant",
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = 3,
+        input_mode: str | None = "sample",
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -160,9 +169,17 @@ class RandomRotate(RandomTransform):
         self.factor = factor
         self.fill_value = fill_value
         self.fill_mode = fill_mode
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.input_mode = validate_input_mode(self.input_mode, transform_name=type(self).__name__)
         self.spatial_dims = validate_spatial_dims(
-            spatial_dims,
+            self.spatial_dims,
             supported_dims=(3,),
             transform_name=type(self).__name__,
         )
@@ -191,13 +208,20 @@ class RandomRotate(RandomTransform):
             return {"skip": True}
 
         sample_tensor = bundle.data[present_keys[0]]
-        layout = validate_layout(
-            sample_tensor,
-            input_mode=self.input_mode,
-            allowed_spatial_ranks=(3,),
-            spatial_dims=self.spatial_dims,
-            transform_name=type(self).__name__,
-        )
+        if self._uses_explicit_input_layout:
+            layout = validate_tensor_matches_layout(
+                sample_tensor,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
+        else:
+            layout = validate_layout(
+                sample_tensor,
+                input_mode=self.input_mode,
+                allowed_spatial_ranks=(3,),
+                spatial_dims=self.spatial_dims,
+                transform_name=type(self).__name__,
+            )
         del layout
 
         should_rotate = self.sample_should_apply()
@@ -214,6 +238,7 @@ class RandomRotate(RandomTransform):
             "angle": angle,
             "factor": self.factor,
             "fill_mode": self.fill_mode,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -247,6 +272,7 @@ class RandomRotate(RandomTransform):
             "factor": params["factor"],
             "angle": params["angle"],
             "fill_mode": params["fill_mode"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }

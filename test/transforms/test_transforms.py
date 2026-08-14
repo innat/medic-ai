@@ -2953,6 +2953,23 @@ def test_random_rotate_supports_batch_mode_and_records_input_mode():
 
 
 @pytest.mark.unit
+def test_random_rotate_accepts_input_layout():
+    image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
+
+    out = RandomRotate(
+        keys=["image", "label"],
+        factor=0.2,
+        prob=1.0,
+        input_layout="bdhwc",
+    )(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 4, 5, 6, 1)
+    assert tuple(ops.shape(out["label"])) == (2, 4, 5, 6, 1)
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
+
+
+@pytest.mark.unit
 def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     batch = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
