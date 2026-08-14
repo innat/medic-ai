@@ -545,7 +545,12 @@ def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
 def test_scale_intensity_range_handles_flat_input():
     image = as_tensor(np.full((1, 2, 2), 5.0, dtype=np.float32))
     out = ScaleIntensityRange(
-        keys=["image"], input_min=5.0, input_max=5.0, output_min=0.0, output_max=1.0
+        keys=["image"],
+        input_min=5.0,
+        input_max=5.0,
+        output_min=0.0,
+        output_max=1.0,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 0.0, rtol=1e-6)
     trace = out.get_applied_transforms()[-1]
@@ -565,6 +570,7 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
         output_max=10.0,
         clip=True,
         dtype=np.float32,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(
@@ -583,7 +589,7 @@ def test_scale_intensity_range_supports_batch_mode():
         input_max=255.0,
         output_min=0.0,
         output_max=1.0,
-        input_mode="batch",
+        input_layout="BHWC",
     )(TensorBundle({"image": image_2d}))
     out_3d = ScaleIntensityRange(
         keys=["image"],
@@ -591,7 +597,7 @@ def test_scale_intensity_range_supports_batch_mode():
         input_max=1.0,
         output_min=-1.0,
         output_max=1.0,
-        input_mode="batch",
+        input_layout="BDHWC",
     )(TensorBundle({"image": image_3d}))
 
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), 128.0 / 255.0, rtol=1e-6)
@@ -633,6 +639,7 @@ def test_scale_intensity_range_uses_same_pixel_kernel_for_sample_and_batch_modes
         input_max=255.0,
         output_min=0.0,
         output_max=1.0,
+        input_layout="HWC",
     )
 
     sample_scaled = transform.scale_batch_tensor(sample)
@@ -666,6 +673,7 @@ def test_scale_intensity_range_accepts_uint8_tensor_inputs():
         output_min=0.0,
         output_max=1.0,
         clip=True,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     assert out["image"].dtype == tf.float32
@@ -685,6 +693,7 @@ def test_scale_intensity_range_inverse_restores_affine_mapping():
         input_max=1.0,
         output_min=-1.0,
         output_max=1.0,
+        input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image}))
@@ -706,6 +715,7 @@ def test_scale_intensity_range_inverse_restores_normalized_mapping():
         keys=["image"],
         input_min=0.0,
         input_max=255.0,
+        input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image}))
@@ -729,6 +739,7 @@ def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_i
                 input_max=1.0,
                 output_min=-1.0,
                 output_max=1.0,
+                input_layout="HWC",
             ),
             ScaleIntensityRange(
                 keys=["image"],
@@ -736,6 +747,7 @@ def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_i
                 input_max=1.0,
                 output_min=0.0,
                 output_max=2.0,
+                input_layout="HWC",
             ),
         ]
     )
@@ -760,6 +772,7 @@ def test_scale_intensity_range_inverse_uses_recorded_trace_parameters():
         input_max=1.0,
         output_min=-1.0,
         output_max=1.0,
+        input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image}))
@@ -788,6 +801,7 @@ def test_scale_intensity_range_inverse_is_noop_when_clipped():
         output_min=0.0,
         output_max=10.0,
         clip=True,
+        input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image}))
@@ -811,6 +825,7 @@ def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict
         input_max=1.0,
         output_min=-1.0,
         output_max=1.0,
+        input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image, "label": label}))
@@ -822,13 +837,19 @@ def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict
 @pytest.mark.unit
 def test_scale_intensity_range_rejects_partial_target_range():
     with pytest.raises(ValueError, match="must be provided together"):
-        ScaleIntensityRange(keys=["image"], input_min=0.0, input_max=1.0, output_min=0.0)
+        ScaleIntensityRange(
+            keys=["image"],
+            input_min=0.0,
+            input_max=1.0,
+            output_min=0.0,
+            input_layout="HWC",
+        )
 
 
 @pytest.mark.unit
 def test_normalize_intensity_records_trace():
     image = as_tensor(np.array([[[1.0], [2.0]], [[3.0], [4.0]]], dtype=np.float32))
-    out = NormalizeIntensity(keys=["image"])(TensorBundle({"image": image}))
+    out = NormalizeIntensity(keys=["image"], input_layout="HWC")(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
     trace = out.get_applied_transforms()[-1]
@@ -840,7 +861,7 @@ def test_normalize_intensity_records_trace():
 @pytest.mark.unit
 def test_normalize_intensity_nonzero_preserves_zero_background():
     image = as_tensor(np.array([[[0.0], [1.0]], [[3.0], [0.0]]], dtype=np.float32))
-    out = NormalizeIntensity(keys=["image"], nonzero=True)(TensorBundle({"image": image}))
+    out = NormalizeIntensity(keys=["image"], nonzero=True, input_layout="HWC")(TensorBundle({"image": image}))
 
     normalized = ops.convert_to_numpy(out["image"])
     assert normalized[0, 0, 0] == 0.0
@@ -855,6 +876,7 @@ def test_normalize_intensity_channel_wise_with_fixed_stats():
         offset=1.0,
         scale=2.0,
         channel_wise=True,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(
@@ -870,6 +892,7 @@ def test_normalize_intensity_channel_wise_nonzero_leaves_empty_channel_unchanged
         keys=["image"],
         nonzero=True,
         channel_wise=True,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     normalized = ops.convert_to_numpy(out["image"])
@@ -884,6 +907,7 @@ def test_normalize_intensity_channel_wise_nonzero_preserves_zero_background():
         keys=["image"],
         nonzero=True,
         channel_wise=True,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     normalized = ops.convert_to_numpy(out["image"])
@@ -896,10 +920,10 @@ def test_normalize_intensity_supports_batch_mode():
     image_2d = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
 
-    out_2d = NormalizeIntensity(keys=["image"], input_mode="batch")(
+    out_2d = NormalizeIntensity(keys=["image"], input_layout="BHWC")(
         TensorBundle({"image": image_2d})
     )
-    out_3d = NormalizeIntensity(keys=["image"], input_mode="batch")(
+    out_3d = NormalizeIntensity(keys=["image"], input_layout="BDHWC")(
         TensorBundle({"image": image_3d})
     )
 
@@ -922,7 +946,7 @@ def test_normalize_intensity_accepts_input_layout():
 @pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
-    out = SignalFillEmpty(keys=["image"], fill_value=0.0)(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")(TensorBundle({"image": image}))
 
     filled = ops.convert_to_numpy(out["image"])
     assert np.isfinite(filled).all()
@@ -935,7 +959,7 @@ def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
 @pytest.mark.unit
 def test_signal_fill_empty_outputs_float32_tensor():
     image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float64))
-    out = SignalFillEmpty(keys=["image"], fill_value=2.0)(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="HWC")(TensorBundle({"image": image}))
 
     assert out["image"].dtype == tf.float32
     np.testing.assert_allclose(
@@ -952,10 +976,10 @@ def test_signal_fill_empty_supports_batch_mode():
         np.array([[[[[np.nan]]], [[[-np.inf]]]], [[[[1.0]]], [[[np.inf]]]]], dtype=np.float32)
     )
 
-    out_2d = SignalFillEmpty(keys=["image"], fill_value=0.0, input_mode="batch")(
+    out_2d = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="BHWC")(
         TensorBundle({"image": image_2d})
     )
-    out_3d = SignalFillEmpty(keys=["image"], fill_value=2.0, input_mode="batch")(
+    out_3d = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="BDHWC")(
         TensorBundle({"image": image_3d})
     )
 
@@ -991,7 +1015,7 @@ def test_signal_fill_empty_uses_same_pixel_kernel_for_sample_and_batch_modes():
             dtype=np.float32,
         )
     )
-    transform = SignalFillEmpty(keys=["image"], fill_value=0.0)
+    transform = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")
 
     sample_filled = transform.nan_to_num_batch(sample)
     batch_filled = transform.nan_to_num_batch(batch)
@@ -1013,7 +1037,7 @@ def test_signal_fill_empty_uses_same_pixel_kernel_for_sample_and_batch_modes():
 @pytest.mark.unit
 def test_shift_intensity_records_trace():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = ShiftIntensity(keys=["image"], offset=2.0)(TensorBundle({"image": image}))
+    out = ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")(TensorBundle({"image": image}))
 
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "ShiftIntensity"
@@ -1026,7 +1050,7 @@ def test_shift_intensity_records_trace():
 @pytest.mark.unit
 def test_shift_intensity_inverse_restores_scalar_offset():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    transform = ShiftIntensity(keys=["image"], offset=2.5)
+    transform = ShiftIntensity(keys=["image"], offset=2.5, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1043,10 +1067,10 @@ def test_shift_intensity_supports_batch_mode():
     image_2d = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
 
-    out_2d = ShiftIntensity(keys=["image"], offset=0.5, input_mode="batch")(
+    out_2d = ShiftIntensity(keys=["image"], offset=0.5, input_layout="BHWC")(
         TensorBundle({"image": image_2d})
     )
-    out_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_mode="batch")(
+    out_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_layout="BDHWC")(
         TensorBundle({"image": image_3d})
     )
 
@@ -1071,10 +1095,10 @@ def test_shift_intensity_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     batch = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
 
-    sample_out = ShiftIntensity(keys=["image"], offset=2.0, input_mode="sample")(
+    sample_out = ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")(
         TensorBundle({"image": sample})
     )
-    batch_out = ShiftIntensity(keys=["image"], offset=2.0, input_mode="batch")(
+    batch_out = ShiftIntensity(keys=["image"], offset=2.0, input_layout="BHWC")(
         TensorBundle({"image": batch})
     )
 
@@ -1094,7 +1118,7 @@ def test_shift_intensity_uses_same_batch_kernel_for_sample_and_batch_modes():
 def test_shift_intensity_inverse_restores_broadcast_channel_offsets():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
     offsets = as_tensor(np.array([0.5, -0.25], dtype=np.float32))
-    transform = ShiftIntensity(keys=["image"], offset=offsets)
+    transform = ShiftIntensity(keys=["image"], offset=offsets, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1109,7 +1133,7 @@ def test_shift_intensity_inverse_restores_broadcast_channel_offsets():
 @pytest.mark.unit
 def test_shift_intensity_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
-    transform = ShiftIntensity(keys=["image"], offset=1.0)
+    transform = ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC")
 
     restored = transform.inverse(bundle)
 
@@ -1121,8 +1145,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instanc
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     pipeline = Compose(
         [
-            ShiftIntensity(keys=["image"], offset=1.0),
-            ShiftIntensity(keys=["image"], offset=-2.0),
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=-2.0, input_layout="HWC"),
         ]
     )
 
@@ -1140,7 +1164,7 @@ def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instanc
 def test_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    transform = ShiftIntensity(keys=["image", "label"], offset=1.0)
+    transform = ShiftIntensity(keys=["image", "label"], offset=1.0, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image, "label": label}))
 
@@ -1151,7 +1175,7 @@ def test_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
 @pytest.mark.unit
 def test_random_shift_intensity_preserves_shape_and_range():
     image = as_tensor(np.array([[[[1.0], [2.0]], [[3.0], [4.0]]]], dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=(-0.2, 0.8), prob=1.0)(
+    out = RandomShiftIntensity(keys=["image"], offset=(-0.2, 0.8), prob=1.0, input_layout="BHWC")(
         TensorBundle({"image": image})
     )
     shifted = ops.convert_to_numpy(out["image"])
@@ -1171,7 +1195,7 @@ def test_random_shift_intensity_preserves_shape_and_range():
 @pytest.mark.unit
 def test_random_shift_intensity_inverse_restores_scalar_sample():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1186,7 +1210,7 @@ def test_random_shift_intensity_inverse_restores_scalar_sample():
 @pytest.mark.unit
 def test_random_shift_intensity_inverse_restores_channel_wise_sample():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1201,7 +1225,7 @@ def test_random_shift_intensity_inverse_restores_channel_wise_sample():
 @pytest.mark.unit
 def test_random_shift_intensity_inverse_is_noop_when_not_applied():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1216,7 +1240,7 @@ def test_random_shift_intensity_inverse_is_noop_when_not_applied():
 @pytest.mark.unit
 def test_random_shift_intensity_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
-    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)
+    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC")
 
     restored = transform.inverse(bundle)
 
@@ -1227,7 +1251,7 @@ def test_random_shift_intensity_inverse_without_trace_is_noop():
 def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image", "label"], offset=0.5, prob=1.0)
+    transform = RandomShiftIntensity(keys=["image", "label"], offset=0.5, prob=1.0, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image, "label": label}))
 
@@ -1238,7 +1262,7 @@ def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_stric
 @pytest.mark.unit
 def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
     image = as_tensor(np.ones((4, 4, 2), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")(
         TensorBundle({"image": image})
     )
 
@@ -1250,7 +1274,7 @@ def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0)(TensorBundle({"image": image}))
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0, input_layout="HWC")(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
@@ -1261,10 +1285,10 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.ones((6, 5, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((4, 6, 5, 1), dtype=np.float32))
 
-    out_2d = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0)(
+    out_2d = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC")(
         TensorBundle({"image": image_2d})
     )
-    out_3d = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)(
+    out_3d = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="DHWC")(
         TensorBundle({"image": image_3d})
     )
 
@@ -1283,7 +1307,7 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
 def test_random_shift_intensity_channel_wise_samples_per_channel_values():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
 
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True)(
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")(
         TensorBundle({"image": image})
     )
 
@@ -1363,7 +1387,7 @@ def test_random_shift_intensity_accepts_batch_mode():
         keys=["image"],
         offset=0.5,
         prob=1.0,
-        input_mode="batch",
+        input_layout="BHWC",
         seed=17,
     )
 
@@ -1371,7 +1395,7 @@ def test_random_shift_intensity_accepts_batch_mode():
 
     assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
     trace = out.get_applied_transforms()[-1]
-    assert trace["params"]["input_mode"] == "batch"
+    assert trace["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -1399,6 +1423,7 @@ def test_random_shift_intensity_inverse_restores_batched_input():
         offset=0.5,
         prob=1.0,
         channel_wise=True,
+        input_layout="BHWC",
         seed=17,
     )
 
@@ -3581,7 +3606,7 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
     image = as_tensor(np.arange(16, dtype=np.float32).reshape(4, 4, 1))
     transform = Compose(
         [
-            ShiftIntensity(keys=["image"], offset=2.0),
+            ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
             Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
             Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC"),
         ]

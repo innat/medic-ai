@@ -61,6 +61,7 @@ class NormalizeIntensity(KeyedTransform):
                 keys=["image"],
                 nonzero=True,
                 channel_wise=False,
+                input_layout="HWC",
             )
 
             image = tf.random.normal((64, 64, 1))
@@ -79,6 +80,7 @@ class NormalizeIntensity(KeyedTransform):
                 keys=["image"],
                 nonzero=True,
                 channel_wise=False,
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((32, 64, 64, 1))
@@ -105,9 +107,7 @@ class NormalizeIntensity(KeyedTransform):
         channel_wise: bool = False,
         dtype=tf.float32,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
@@ -118,8 +118,6 @@ class NormalizeIntensity(KeyedTransform):
         self.dtype = dtype
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)

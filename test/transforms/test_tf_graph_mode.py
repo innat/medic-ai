@@ -41,7 +41,7 @@ def test_dual_mode_transforms_can_run_inside_custom_train_step():
             super().__init__()
             self.transforms = Compose(
                 [
-                    ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
+                    ShiftIntensity(keys=["image"], offset=0.25, input_layout="BHWC"),
                     RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="BHWC"),
                 ]
             )
@@ -84,7 +84,7 @@ def test_random_choice_can_run_inside_custom_train_step():
             super().__init__()
             self.transforms = RandomChoice(
                 transforms=[
-                    ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
+                    ShiftIntensity(keys=["image"], offset=0.25, input_layout="BHWC"),
                     Flip(keys=["image"], spatial_axis=2, input_layout="BHWC"),
                 ],
                 num_choices=1,
@@ -130,9 +130,9 @@ def test_random_choice_multi_choice_can_run_inside_custom_train_step():
             super().__init__()
             self.transforms = RandomChoice(
                 transforms=[
-                    ShiftIntensity(keys=["image"], offset=0.25, input_mode="batch"),
-                    ShiftIntensity(keys=["image"], offset=-0.5, input_mode="batch"),
-                    ShiftIntensity(keys=["image"], offset=1.0, input_mode="batch"),
+                    ShiftIntensity(keys=["image"], offset=0.25, input_layout="BHWC"),
+                    ShiftIntensity(keys=["image"], offset=-0.5, input_layout="BHWC"),
+                    ShiftIntensity(keys=["image"], offset=1.0, input_layout="BHWC"),
                 ],
                 num_choices=2,
                 prob=1.0,
@@ -217,12 +217,12 @@ def test_random_cutout_can_run_inside_custom_train_step():
 
 @pytest.mark.unit
 def test_intensity_transforms_run_under_tf_function():
-    normalize = NormalizeIntensity(keys=["image"], nonzero=True)
+    normalize = NormalizeIntensity(keys=["image"], nonzero=True, input_layout="HWC")
     scale = ScaleIntensityRange(
-        keys=["image"], input_min=0.0, input_max=1.0, output_min=-1.0, output_max=1.0
+        keys=["image"], input_min=0.0, input_max=1.0, output_min=-1.0, output_max=1.0, input_layout="HWC"
     )
-    shift = ShiftIntensity(keys=["image"], offset=0.25)
-    fill = SignalFillEmpty(keys=["image"], fill_value=0.0)
+    shift = ShiftIntensity(keys=["image"], offset=0.25, input_layout="HWC")
+    fill = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")
 
     image = as_tensor(np.array([[[0.0], [1.0]], [[np.nan], [0.5]]], dtype=np.float32))
 
@@ -243,8 +243,8 @@ def test_intensity_transforms_run_under_tf_function():
 
 @pytest.mark.unit
 def test_signal_fill_empty_supports_batch_mode_under_tf_function():
-    fill_2d = SignalFillEmpty(keys=["image"], fill_value=0.0, input_mode="batch")
-    fill_3d = SignalFillEmpty(keys=["image"], fill_value=2.0, input_mode="batch")
+    fill_2d = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="BHWC")
+    fill_3d = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="BDHWC")
 
     image_2d = as_tensor(
         np.array([[[[np.nan]], [[1.0]]], [[[np.inf]], [[-np.inf]]]], dtype=np.float32)
@@ -259,23 +259,23 @@ def test_signal_fill_empty_supports_batch_mode_under_tf_function():
         out_3d = fill_3d({"image": x3})
         return (
             out_2d["image"],
-            out_2d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_2d.get_applied_transforms()[-1]["params"]["input_layout"],
             out_3d["image"],
-            out_3d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_3d.get_applied_transforms()[-1]["params"]["input_layout"],
         )
 
     out_2d, mode_2d, out_3d, mode_3d = apply_transforms(image_2d, image_3d)
 
     assert np.isfinite(ops.convert_to_numpy(out_2d)).all()
     assert np.isfinite(ops.convert_to_numpy(out_3d)).all()
-    assert mode_2d == "batch"
-    assert mode_3d == "batch"
+    assert mode_2d == "BHWC"
+    assert mode_3d == "BDHWC"
 
 
 @pytest.mark.unit
 def test_normalize_intensity_sparse_nonzero_paths_remain_shape_stable_under_tf_function():
-    normalize_global = NormalizeIntensity(keys=["image"], nonzero=True, channel_wise=False)
-    normalize_channel = NormalizeIntensity(keys=["image"], nonzero=True, channel_wise=True)
+    normalize_global = NormalizeIntensity(keys=["image"], nonzero=True, channel_wise=False, input_layout="HWC")
+    normalize_channel = NormalizeIntensity(keys=["image"], nonzero=True, channel_wise=True, input_layout="HWC")
 
     image = as_tensor(
         np.array(
@@ -306,8 +306,8 @@ def test_normalize_intensity_sparse_nonzero_paths_remain_shape_stable_under_tf_f
 
 @pytest.mark.unit
 def test_normalize_intensity_supports_batch_mode_under_tf_function():
-    normalize_2d = NormalizeIntensity(keys=["image"], input_mode="batch")
-    normalize_3d = NormalizeIntensity(keys=["image"], input_mode="batch")
+    normalize_2d = NormalizeIntensity(keys=["image"], input_layout="BHWC")
+    normalize_3d = NormalizeIntensity(keys=["image"], input_layout="BDHWC")
 
     image_2d = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
@@ -318,9 +318,9 @@ def test_normalize_intensity_supports_batch_mode_under_tf_function():
         out_3d = normalize_3d({"image": x3})
         return (
             out_2d["image"],
-            out_2d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_2d.get_applied_transforms()[-1]["params"]["input_layout"],
             out_3d["image"],
-            out_3d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_3d.get_applied_transforms()[-1]["params"]["input_layout"],
         )
 
     out_2d, mode_2d, out_3d, mode_3d = apply_transforms(image_2d, image_3d)
@@ -329,8 +329,8 @@ def test_normalize_intensity_supports_batch_mode_under_tf_function():
     assert tuple(ops.shape(out_3d)) == (2, 3, 4, 5, 1)
     assert np.isfinite(ops.convert_to_numpy(out_2d)).all()
     assert np.isfinite(ops.convert_to_numpy(out_3d)).all()
-    assert mode_2d == "batch"
-    assert mode_3d == "batch"
+    assert mode_2d == "BHWC"
+    assert mode_3d == "BDHWC"
 
 
 @pytest.mark.unit
@@ -572,7 +572,7 @@ def test_scale_intensity_range_supports_batch_mode_under_tf_function():
         input_max=255.0,
         output_min=0.0,
         output_max=1.0,
-        input_mode="batch",
+        input_layout="BHWC",
     )
     scale_3d = ScaleIntensityRange(
         keys=["image"],
@@ -580,7 +580,7 @@ def test_scale_intensity_range_supports_batch_mode_under_tf_function():
         input_max=1.0,
         output_min=-1.0,
         output_max=1.0,
-        input_mode="batch",
+        input_layout="BDHWC",
     )
 
     image_2d = as_tensor(np.full((2, 3, 4, 1), 128.0, dtype=np.float32))
@@ -592,17 +592,17 @@ def test_scale_intensity_range_supports_batch_mode_under_tf_function():
         out_3d = scale_3d({"image": x3})
         return (
             out_2d["image"],
-            out_2d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_2d.get_applied_transforms()[-1]["params"]["input_layout"],
             out_3d["image"],
-            out_3d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_3d.get_applied_transforms()[-1]["params"]["input_layout"],
         )
 
     out_2d, mode_2d, out_3d, mode_3d = apply_transforms(image_2d, image_3d)
 
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d), 128.0 / 255.0, rtol=1e-6)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d), 0.0, rtol=1e-6)
-    assert mode_2d == "batch"
-    assert mode_3d == "batch"
+    assert mode_2d == "BHWC"
+    assert mode_3d == "BDHWC"
 
 
 @pytest.mark.unit
@@ -735,7 +735,7 @@ def test_compose_crop_orientation_spacing_pipeline_runs_forward_and_inverse_unde
 def test_random_choice_runs_under_tf_function_when_num_choices_is_one():
     choice = RandomChoice(
         transforms=[
-            ShiftIntensity(keys=["image"], offset=1.0),
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
             Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
         ],
         num_choices=1,
@@ -755,9 +755,9 @@ def test_random_choice_runs_under_tf_function_when_num_choices_is_one():
 def test_random_choice_runs_under_tf_function_for_multi_choice():
     choice = RandomChoice(
         transforms=[
-            ShiftIntensity(keys=["image"], offset=1.0),
-            ShiftIntensity(keys=["image"], offset=2.0),
-            ShiftIntensity(keys=["image"], offset=4.0),
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=4.0, input_layout="HWC"),
         ],
         num_choices=2,
         prob=1.0,
@@ -786,7 +786,7 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
         random_center=False,
         input_layout="HWC",
     )
-    random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0)
+    random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="HWC")
 
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
 
@@ -872,8 +872,8 @@ def test_compose_random_flip_and_rotate90_inverse_supports_batch_mode_under_tf_f
 
 @pytest.mark.unit
 def test_shift_intensity_supports_batch_mode_under_tf_function():
-    shift_2d = ShiftIntensity(keys=["image"], offset=0.5, input_mode="batch")
-    shift_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_mode="batch")
+    shift_2d = ShiftIntensity(keys=["image"], offset=0.5, input_layout="BHWC")
+    shift_3d = ShiftIntensity(keys=["image"], offset=-0.25, input_layout="BDHWC")
 
     image_2d = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((2, 3, 4, 5, 1), dtype=np.float32))
@@ -884,17 +884,17 @@ def test_shift_intensity_supports_batch_mode_under_tf_function():
         out_3d = shift_3d({"image": x3})
         return (
             out_2d["image"],
-            out_2d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_2d.get_applied_transforms()[-1]["params"]["input_layout"],
             out_3d["image"],
-            out_3d.get_applied_transforms()[-1]["params"]["input_mode"],
+            out_3d.get_applied_transforms()[-1]["params"]["input_layout"],
         )
 
     out_2d, mode_2d, out_3d, mode_3d = apply_transforms(image_2d, image_3d)
 
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d), 1.5, rtol=1e-6)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d), 0.75, rtol=1e-6)
-    assert mode_2d == "batch"
-    assert mode_3d == "batch"
+    assert mode_2d == "BHWC"
+    assert mode_3d == "BDHWC"
 
 
 @pytest.mark.unit
@@ -984,7 +984,7 @@ def test_compose_random_spatial_crop_inverse_supports_batch_mode_under_tf_functi
                 random_center=False,
                 input_layout="BHWC",
             ),
-            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="BHWC"),
         ]
     )
 
@@ -1173,7 +1173,7 @@ def test_compose_random_crop_by_pos_neg_label_inverse_supports_batch_mode_under_
                 neg=0,
                 input_layout="BHWC",
             ),
-            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="BHWC"),
         ]
     )
 
@@ -1321,7 +1321,7 @@ def test_compose_random_rotate_inverse_supports_batch_mode_under_tf_function():
     pipeline = Compose(
         [
             RandomRotate(keys=["image", "label"], factor=0.0, prob=1.0, input_layout="BDHWC"),
-            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_mode="batch"),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="BDHWC"),
         ]
     )
 

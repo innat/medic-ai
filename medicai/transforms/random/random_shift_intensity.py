@@ -59,7 +59,12 @@ class RandomShiftIntensity(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomShiftIntensity
 
-            transform = RandomShiftIntensity(keys=["image"], offset=0.1, prob=0.5)
+            transform = RandomShiftIntensity(
+                keys=["image"],
+                offset=0.1,
+                prob=0.5,
+                input_layout="HWC",
+            )
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
             output = result["image"]
@@ -72,7 +77,12 @@ class RandomShiftIntensity(RandomTransform):
             import tensorflow as tf
             from medicai.transforms import RandomShiftIntensity, TensorBundle
 
-            transform = RandomShiftIntensity(keys=["image"], offset=0.1, prob=0.5)
+            transform = RandomShiftIntensity(
+                keys=["image"],
+                offset=0.1,
+                prob=0.5,
+                input_layout="DHWC",
+            )
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
             result = transform(bundle)
@@ -87,9 +97,7 @@ class RandomShiftIntensity(RandomTransform):
         prob: float = 0.1,
         channel_wise: bool = False,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -103,8 +111,6 @@ class RandomShiftIntensity(RandomTransform):
         self.channel_wise = channel_wise
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -113,8 +119,6 @@ class RandomShiftIntensity(RandomTransform):
             keys=self.keys,
             offset=0.0,
             input_layout=self.input_layout,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
 

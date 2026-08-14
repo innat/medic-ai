@@ -61,6 +61,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
                 output_min=-1.0,
                 output_max=1.0,
                 clip=True,
+                input_layout="HWC",
             )
 
             image = tf.random.uniform((64, 64, 1), minval=0.0, maxval=255.0)
@@ -83,6 +84,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
                 output_min=0.0,
                 output_max=1.0,
                 clip=True,
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((32, 64, 64, 1))
@@ -123,16 +125,11 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: bool = False,
         dtype: tf.DType = tf.float32,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
-        if (output_min is None) != (output_max is None):
-            raise ValueError(
-                "`output_min` and `output_max` must be provided together or both omitted."
-            )
+        self._validate_output_range_args(output_min, output_max)
         self.input_min = input_min
         self.input_max = input_max
         self.output_min = output_min
@@ -141,8 +138,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         self.dtype = dtype
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
@@ -320,6 +315,17 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             self.input_layout,
             transform_name=type(self).__name__,
         )
+
+    def _validate_output_range_args(
+        self,
+        output_min: Optional[float],
+        output_max: Optional[float],
+    ) -> None:
+        """Validate target range argument pairing."""
+        if (output_min is None) != (output_max is None):
+            raise ValueError(
+                "`output_min` and `output_max` must be provided together or both omitted."
+            )
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

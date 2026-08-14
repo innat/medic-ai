@@ -46,7 +46,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import ShiftIntensity
 
-            transform = ShiftIntensity(keys=["image"], offset=0.1)
+            transform = ShiftIntensity(keys=["image"], offset=0.1, input_layout="HWC")
 
             image = tf.random.normal((64, 64, 1))
             result = transform({"image": image})
@@ -60,7 +60,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             import tensorflow as tf
             from medicai.transforms import ShiftIntensity, TensorBundle
 
-            transform = ShiftIntensity(keys=["image"], offset=0.1)
+            transform = ShiftIntensity(keys=["image"], offset=0.1, input_layout="DHWC")
 
             image = tf.random.normal((32, 64, 64, 1))
             bundle = TensorBundle({"image": image})
@@ -82,17 +82,13 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         offset: Union[float, tf.Tensor],
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.offset = offset
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)

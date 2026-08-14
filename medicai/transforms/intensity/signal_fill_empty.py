@@ -43,7 +43,7 @@ class SignalFillEmpty(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import SignalFillEmpty
 
-            transform = SignalFillEmpty(keys=["image"], fill_value=0.0)
+            transform = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")
 
             image = tf.constant([[[float("nan")], [1.0]]], dtype=tf.float32)
             result = transform({"image": image})
@@ -57,7 +57,7 @@ class SignalFillEmpty(KeyedTransform):
             import tensorflow as tf
             from medicai.transforms import SignalFillEmpty, TensorBundle
 
-            transform = SignalFillEmpty(keys=["image"], fill_value=0.0)
+            transform = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="DHWC")
 
             image = tf.random.normal((16, 32, 32, 1))
             image = tf.tensor_scatter_nd_update(
@@ -85,17 +85,13 @@ class SignalFillEmpty(KeyedTransform):
         keys: Sequence[str],
         fill_value: float = 0.0,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = None,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         self.fill_value = fill_value
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
