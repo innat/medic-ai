@@ -629,6 +629,26 @@ def test_spacing_and_orientation_run_under_tf_function():
 
 
 @pytest.mark.unit
+def test_spacing_and_orientation_accept_dhwc_input_layout_under_tf_function():
+    spacing = Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="dhwc")
+    orientation = Orientation(keys=["image"], axcodes="RAS", input_layout="DHWC")
+
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    affine = as_tensor(np.eye(4, dtype=np.float32))
+
+    @tf.function
+    def apply_transforms(x, a):
+        spaced = spacing({"image": x}, {"affine": a})
+        oriented = orientation({"image": spaced["image"]}, {"affine": spaced["affine"]})
+        return oriented["image"], oriented["affine"]
+
+    out_image, out_affine = apply_transforms(image, affine)
+
+    assert tuple(ops.shape(out_image)) == (4, 5, 6, 1)
+    assert tuple(ops.shape(out_affine)) == (4, 4)
+
+
+@pytest.mark.unit
 def test_orientation_forward_and_inverse_run_under_tf_function():
     orientation = Orientation(keys=["image", "label"], axcodes="RAS")
 

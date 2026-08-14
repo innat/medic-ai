@@ -8,11 +8,14 @@ from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trac
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     compute_orientation_transform,
+    get_legacy_layout_components,
     get_spatial_rank,
     orientation_from_affine,
     reoriented_affine,
+    resolve_input_layout,
     validate_affine_matrix,
     validate_input_mode,
+    validate_tensor_matches_layout,
 )
 
 
@@ -58,8 +61,12 @@ class Orientation(KeyedTransform, InvertibleTransform):
             The string must contain exactly three characters, use only
             ``R/L/A/P/S/I``, and specify one code from each anatomical axis
             family.
-        input_mode: Execution mode for the transform. Only ``"sample"`` is
-            supported because orientation is defined per sample affine.
+        input_layout: Tensor layout contract for selected tensors.
+            ``Orientation`` currently supports only ``"DHWC"`` because it is
+            affine-aware and sample-level.
+        input_mode: Legacy execution-mode contract. Only ``"sample"`` is
+            supported and it resolves to ``input_layout="DHWC"`` when
+            ``input_layout`` is not provided.
         allow_missing_keys: If ``True``, missing keys are skipped. If ``False``,
             missing requested keys raise an error.
 
@@ -135,15 +142,25 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str] = ("image", "label"),
         axcodes: str = "RAS",
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        input_mode: str | None = "sample",
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
         axcodes = axcodes.upper()
         self._validate_axcodes(axcodes)
         self.axcodes = axcodes
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=3,
+            transform_name=type(self).__name__,
+        )
+        if self.input_layout != "DHWC":
+            raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC'.")
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.input_mode = validate_input_mode(
-            input_mode,
+            self.input_mode,
             supported_modes=("sample",),
             transform_name=type(self).__name__,
         )
@@ -191,6 +208,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 "target_tensor_axcodes": target_tensor_axcodes,
                 "perm_spatial": transform_info["perm_spatial"],
                 "flip_axes": transform_info["flip_axes"],
+                "input_layout": self.input_layout,
             },
         )
         return bundle
@@ -231,6 +249,11 @@ class Orientation(KeyedTransform, InvertibleTransform):
             if key not in bundle.data:
                 continue
             tensor = bundle.data[key]
+            validate_tensor_matches_layout(
+                tensor,
+                self.input_layout,
+                transform_name=type(self).__name__,
+            )
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(

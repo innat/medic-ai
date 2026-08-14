@@ -267,6 +267,31 @@ def test_sample_only_spatial_transforms_reject_batch_input_mode():
 
 
 @pytest.mark.unit
+def test_spacing_and_orientation_accept_dhwc_input_layout_and_reject_other_layouts():
+    image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
+    label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
+    affine = as_tensor(np.eye(4, dtype=np.float32))
+
+    spacing = Spacing(
+        keys=["image", "label"],
+        pixdim=(1.0, 1.0, 1.0),
+        input_layout="dhwc",
+    )
+    spaced = spacing(TensorBundle({"image": image, "label": label}, {"affine": affine}))
+    assert spaced.get_applied_transforms()[-1]["params"]["input_layout"] == "DHWC"
+
+    orientation = Orientation(keys=["image", "label"], axcodes="RAS", input_layout="DHWC")
+    oriented = orientation(TensorBundle({"image": image, "label": label}, {"affine": affine}))
+    assert oriented.get_applied_transforms()[-1]["params"]["input_layout"] == "DHWC"
+
+    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+        Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="BHWC")
+
+    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+        Orientation(keys=["image"], axcodes="RAS", input_layout="HWC")
+
+
+@pytest.mark.unit
 def test_spacing_uses_default_spacing_when_affine_missing():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     spacing = Spacing(keys=["image"], pixdim=(2.0, 2.0, 2.0))
