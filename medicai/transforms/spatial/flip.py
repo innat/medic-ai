@@ -5,8 +5,8 @@ import tensorflow as tf
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    ensure_batch_axis,
-    get_legacy_layout_components,
+    ensure_batch_axis_for_layout,
+    get_input_layout_info,
     resolve_input_layout,
     resolve_input_layout_axes,
     restore_from_batch_axis,
@@ -119,7 +119,7 @@ class Flip(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -141,8 +141,6 @@ class Flip(KeyedTransform, InvertibleTransform):
             "applied": True,
             "spatial_axis": self.spatial_axis,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
         self.apply_to_present_keys(
             bundle,
@@ -157,8 +155,6 @@ class Flip(KeyedTransform, InvertibleTransform):
             "applied": self.spatial_axis is not None,
             "spatial_axis": self.spatial_axis,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -181,8 +177,6 @@ class Flip(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def flip_tensor(
@@ -205,12 +199,11 @@ class Flip(KeyedTransform, InvertibleTransform):
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor
-        if self.input_mode == "sample":
+        if not self.layout_info.batched:
             return tf.reverse(tensor, axis=self._resolve_axes(tensor, spatial_axis=effective_axis))
-        batched_tensor, added_batch_axis = ensure_batch_axis(
+        batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
         )
         flipped = self.flip_batch_tensor(batched_tensor, spatial_axis=effective_axis)
         return restore_from_batch_axis(flipped, added_batch_axis)

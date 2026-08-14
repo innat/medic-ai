@@ -7,10 +7,10 @@ import tensorflow as tf
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    ensure_batch_axis,
+    ensure_batch_axis_for_layout,
     ensure_spatial_tuple,
-    get_legacy_layout_components,
-    get_spatial_shape,
+    get_input_layout_info,
+    get_spatial_shape_for_layout,
     resolve_input_layout,
     restore_from_batch_axis,
     resize_volumes,
@@ -151,7 +151,7 @@ class Resize(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
 
         ndim = len(self.target_shape)
         if ndim not in (2, 3):
@@ -218,8 +218,6 @@ class Resize(KeyedTransform, InvertibleTransform):
         return {
             "target_shape": self.target_shape,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -242,8 +240,6 @@ class Resize(KeyedTransform, InvertibleTransform):
             "keys": list(present_keys),
             "target_shape": params["target_shape"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
             "original_shapes": original_shapes,
             "interpolation": {key: self.interpolation[key] for key in present_keys},
         }
@@ -268,10 +264,9 @@ class Resize(KeyedTransform, InvertibleTransform):
             )
 
         layout = self._resolve_layout(tensor, target_rank)
-        batched_tensor, added_batch_axis = ensure_batch_axis(
+        batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
             allowed_spatial_ranks=(target_rank,),
         )
         resized = self.resize_batch_tensor(
@@ -292,10 +287,8 @@ class Resize(KeyedTransform, InvertibleTransform):
         """Resize one batch-layout tensor to the requested spatial shape."""
         effective_spatial_rank = spatial_rank
         if effective_spatial_rank is None:
-            layout = validate_layout(
+            layout = validate_tensor_matches_layout(
                 tensor,
-                input_mode="batch",
-                allowed_spatial_ranks=(2, 3),
                 transform_name=type(self).__name__,
             )
             effective_spatial_rank = layout.spatial_rank
@@ -340,7 +333,10 @@ class Resize(KeyedTransform, InvertibleTransform):
     def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
         """Extract the original spatial shape using the configured target rank."""
         self._resolve_layout(tensor, len(self.target_shape))
-        return get_spatial_shape(tensor, input_mode=self.input_mode)
+        return get_spatial_shape_for_layout(
+            tensor,
+            input_layout=self.input_layout,
+        )
 
     def _get_last_resize_trace(self, bundle: TensorBundle) -> dict | None:
         return _pop_last_transform_trace(bundle, type(self).__name__)

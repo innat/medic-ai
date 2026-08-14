@@ -7,8 +7,8 @@ import tensorflow as tf
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    ensure_batch_axis,
-    get_legacy_layout_components,
+    ensure_batch_axis_for_layout,
+    get_input_layout_info,
     resolve_input_layout,
     resolve_input_layout_axes,
     restore_from_batch_axis,
@@ -123,7 +123,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -153,8 +153,6 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                     "k": inverse_k,
                     "spatial_axis": params["spatial_axis"],
                     "input_layout": params["input_layout"],
-                    "input_mode": params["input_mode"],
-                    "spatial_dims": params["spatial_dims"],
                 },
             ),
         )
@@ -168,8 +166,6 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             "k": self.k % 4,
             "spatial_axis": self.spatial_axis,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def transform_tensor(
@@ -197,8 +193,6 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             "k": params["k"],
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def rotate_tensor(
@@ -211,7 +205,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
         Args:
             tensor: Channel-last 2D or 3D tensor in sample or batch layout,
-                depending on ``self.input_mode``.
+                depending on ``self.input_layout``.
             k: Optional quarter-turn override. When ``None``, ``self.k`` is
                 used.
             spatial_axis: Optional rotation plane override. When ``None``,
@@ -227,7 +221,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         )
         axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
         effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
-        if self.input_mode == "sample":
+        if not self.layout_info.batched:
             return tf.switch_case(
                 effective_k,
                 branch_fns={
@@ -239,10 +233,9 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                     ),
                 },
             )
-        batched_tensor, added_batch_axis = ensure_batch_axis(
+        batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
-            input_mode=self.input_mode,
-            spatial_dims=self.spatial_dims,
+            input_layout=self.input_layout,
         )
         rotated = self.rotate_batch_tensor(
             batched_tensor,
