@@ -14,7 +14,8 @@ class LayoutInfo:
         spatial_rank: Number of spatial axes.
         batched: Whether the leading axis is interpreted as batch.
         batch_axis: Batch-axis index when ``batched=True``; otherwise ``None``.
-        channel_axis: Channel-axis index.
+        channel_axis: Channel-axis index. In Medic-AI transforms this is
+            always the last axis.
         spatial_axes: Spatial-axis indices in tensor order.
     """
 
@@ -33,7 +34,6 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
         "spatial_rank": 2,
         "batched": False,
         "batch_axis": None,
-        "channel_axis": 2,
         "spatial_axes": (0, 1),
     },
     "DHWC": {
@@ -41,7 +41,6 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
         "spatial_rank": 3,
         "batched": False,
         "batch_axis": None,
-        "channel_axis": 3,
         "spatial_axes": (0, 1, 2),
     },
     "BHWC": {
@@ -49,7 +48,6 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
         "spatial_rank": 2,
         "batched": True,
         "batch_axis": 0,
-        "channel_axis": 3,
         "spatial_axes": (1, 2),
     },
     "BDHWC": {
@@ -57,7 +55,6 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
         "spatial_rank": 3,
         "batched": True,
         "batch_axis": 0,
-        "channel_axis": 4,
         "spatial_axes": (1, 2, 3),
     },
 }
@@ -161,13 +158,14 @@ def get_input_layout_info(input_layout: str) -> LayoutInfo:
     """
     normalized = validate_input_layout(input_layout)
     info = _INPUT_LAYOUT_TO_INFO[normalized]
+    tensor_rank = int(info["tensor_rank"])
     return LayoutInfo(
         input_layout=normalized,
-        tensor_rank=int(info["tensor_rank"]),
+        tensor_rank=tensor_rank,
         spatial_rank=int(info["spatial_rank"]),
         batched=bool(info["batched"]),
         batch_axis=info["batch_axis"],
-        channel_axis=int(info["channel_axis"]),
+        channel_axis=tensor_rank - 1,
         spatial_axes=tuple(info["spatial_axes"]),
     )
 

@@ -325,10 +325,11 @@ class RandomTransform(Transform):
         ``RandomTransform`` itself does not enforce per-item or per-batch
         randomness for batched tensors. Each concrete transform defines that
         policy. In the current migrated dual-mode wrappers, when
-        ``input_mode="batch"`` is supported, one random decision / parameter
-        set is typically sampled for the whole input bundle and then applied
-        consistently across the batch. Per-item batched randomness is planned
-        as a later design step rather than the default today.
+        a batch layout such as ``"BHWC"`` or ``"BDHWC"`` is supported, one
+        random decision / parameter set is typically sampled for the whole
+        input bundle and then applied consistently across the batch.
+        Per-item batched randomness is planned as a later design step rather
+        than the default today.
 
     Example:
         Build a tiny random transform that adds a bias to ``"image"``:
@@ -862,7 +863,7 @@ class KeyedTransform(Transform):
         ``KeyedTransform`` is also not inherently sample-only. It works for
         both sample-level and batch-level transforms, provided subclasses make
         their expected layout explicit through validation such as
-        ``input_mode`` checks.
+        ``input_layout`` checks.
 
     When to use this:
         Use ``KeyedTransform`` when a transform acts on one or more known data
