@@ -9,14 +9,12 @@ from ..utils import (
     SpatialResample,
     compute_destination_affine,
     compute_output_shape,
-    get_legacy_layout_components,
     get_spatial_rank,
     is_axis_aligned_affine,
     resolve_input_layout,
     resize_volumes,
     round_half_up,
     spacing_from_affine,
-    validate_input_mode,
     validate_tensor_matches_layout,
 )
 
@@ -54,9 +52,6 @@ class Spacing(KeyedTransform, InvertibleTransform):
         input_layout: Tensor layout contract for selected tensors. ``Spacing``
             currently supports only ``"DHWC"`` because it is affine-aware and
             sample-level.
-        input_mode: Legacy execution-mode contract. Only ``"sample"`` is
-            supported and it resolves to ``input_layout="DHWC"`` when
-            ``input_layout`` is not provided.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -160,26 +155,17 @@ class Spacing(KeyedTransform, InvertibleTransform):
         keys: Sequence[str] = ("image", "label"),
         pixdim: Sequence[float] = (1.0, 1.0, 1.0),
         interpolation: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
-        input_layout: str | None = None,
-        input_mode: str | None = "sample",
+        input_layout: str = "DHWC",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.pixdim = tuple(pixdim)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=3,
             transform_name=type(self).__name__,
         )
         if self.input_layout != "DHWC":
             raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC'.")
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
-        self.input_mode = validate_input_mode(
-            self.input_mode,
-            supported_modes=("sample",),
-            transform_name=type(self).__name__,
-        )
 
         if len(self.pixdim) != 3:
             raise ValueError(

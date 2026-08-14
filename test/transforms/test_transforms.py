@@ -278,11 +278,11 @@ def test_sample_only_spatial_transforms_reject_batch_layouts_or_input_mode():
     with pytest.raises(ValueError, match="supports only sample layouts 'HWC' and 'DHWC'"):
         CropForeground(keys=["image"], input_layout="BHWC")
 
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        Orientation(keys=["image"], input_mode="batch")
+    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+        Orientation(keys=["image"], input_layout="BDHWC")
 
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_mode="batch")
+    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+        Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="BDHWC")
 
 
 @pytest.mark.unit
