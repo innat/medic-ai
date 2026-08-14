@@ -6,8 +6,8 @@ from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trac
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_spatial_tuple,
-    get_legacy_layout_components,
-    get_spatial_shape,
+    get_input_layout_info,
+    get_spatial_shape_for_layout,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -128,7 +128,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
+        self.layout_info = get_input_layout_info(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         crop_starts = {}
@@ -139,7 +139,10 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             starts, crop_size = self.compute_crop_bounds(tensor)
             crop_starts[key] = starts
             crop_sizes[key] = crop_size
-            original_shapes[key] = get_spatial_shape(tensor, input_mode=self.input_mode)
+            original_shapes[key] = get_spatial_shape_for_layout(
+                tensor,
+                input_layout=self.input_layout,
+            )
             return self.crop_tensor(tensor, starts, crop_size)
 
         present_keys = self.apply_to_present_keys(bundle, apply_crop)
@@ -153,8 +156,6 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                     "crop_size": crop_sizes,
                     "original_shapes": original_shapes,
                     "input_layout": self.input_layout,
-                    "input_mode": self.input_mode,
-                    "spatial_dims": self.spatial_dims,
                 },
             )
         return bundle
@@ -193,7 +194,10 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
-        spatial_shape = get_spatial_shape(tensor, input_mode=self.input_mode)
+        spatial_shape = get_spatial_shape_for_layout(
+            tensor,
+            input_layout=self.input_layout,
+        )
         crop_size = tf.convert_to_tensor(
             ensure_spatial_tuple(self.crop_size, spatial_rank, "crop_size"),
             dtype=tf.int32,
@@ -231,7 +235,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             ``tf.Tensor``: The cropped tensor with the original channel
             dimension preserved.
         """
-        if self.input_mode == "batch":
+        if self.layout_info.batched:
             begin = tf.concat([[0], starts, [0]], axis=0)
             size = tf.concat(
                 [[tf.shape(tensor)[0]], crop_size, [tf.shape(tensor)[-1]]],
@@ -251,11 +255,14 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         """Pad a cropped tensor back into its original spatial canvas."""
         crop_start = tf.cast(crop_start, tf.int32)
         original_shape = tf.cast(original_shape, tf.int32)
-        current_shape = get_spatial_shape(tensor, input_mode=self.input_mode)
+        current_shape = get_spatial_shape_for_layout(
+            tensor,
+            input_layout=self.input_layout,
+        )
         pad_before = crop_start
         pad_after = original_shape - crop_start - current_shape
         spatial_paddings = tf.stack([pad_before, pad_after], axis=1)
-        if self.input_mode == "batch":
+        if self.layout_info.batched:
             paddings = tf.concat(
                 [
                     tf.constant([[0, 0]], dtype=tf.int32),

@@ -474,6 +474,21 @@ def get_spatial_shape(tensor: tf.Tensor, *, input_mode: str = "sample") -> tf.Te
     return tf.gather(tf.shape(tensor), layout.spatial_axes)
 
 
+def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.Tensor:
+    """Return the dynamic spatial shape of a tensor validated by ``input_layout``.
+
+    Args:
+        tensor: Input tensor in Medic-AI channel-last layout.
+        input_layout: Canonical public layout string such as ``"HWC"`` or
+            ``"BDHWC"``.
+
+    Returns:
+        tf.Tensor: Dynamic spatial shape.
+    """
+    layout = validate_tensor_matches_layout(tensor, input_layout)
+    return tf.gather(tf.shape(tensor), layout.spatial_axes)
+
+
 def ensure_batch_axis(
     tensor: tf.Tensor,
     *,

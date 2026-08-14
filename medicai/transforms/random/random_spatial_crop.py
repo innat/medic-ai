@@ -7,8 +7,7 @@ from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    get_legacy_layout_components,
-    get_spatial_shape,
+    get_spatial_shape_for_layout,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -112,7 +111,6 @@ class RandomSpatialCrop(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
-        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
         self.invalid_label = invalid_label
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
@@ -157,7 +155,10 @@ class RandomSpatialCrop(RandomTransform):
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
-        spatial_shape = get_spatial_shape(sample_tensor, input_mode=self.input_mode)
+        spatial_shape = get_spatial_shape_for_layout(
+            sample_tensor,
+            input_layout=self.input_layout,
+        )
         crop_size = self._get_crop_size(spatial_shape, spatial_rank)
 
         if self.invalid_label is None:
@@ -180,8 +181,6 @@ class RandomSpatialCrop(RandomTransform):
             "random_center": self.random_center,
             "random_shape": self.random_shape,
             "input_layout": self.input_layout,
-            "input_mode": self.input_mode,
-            "spatial_dims": self.spatial_dims,
         }
 
     def apply_with_params(
@@ -196,7 +195,10 @@ class RandomSpatialCrop(RandomTransform):
         original_shapes = {}
 
         def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor, input_mode=self.input_mode)
+            original_shapes[key] = get_spatial_shape_for_layout(
+                tensor,
+                input_layout=self.input_layout,
+            )
             return self.crop.crop_tensor(tensor, params["crop_start"], params["crop_size"])
 
         present_keys = self.crop.apply_to_present_keys(
@@ -247,8 +249,6 @@ class RandomSpatialCrop(RandomTransform):
             "random_center": params["random_center"],
             "random_shape": params["random_shape"],
             "input_layout": params["input_layout"],
-            "input_mode": params["input_mode"],
-            "spatial_dims": params["spatial_dims"],
         }
 
     def _get_crop_size(self, spatial_shape: tf.Tensor, spatial_rank: int) -> tf.Tensor:
