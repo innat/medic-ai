@@ -180,7 +180,7 @@ def test_random_cutout_can_run_inside_custom_train_step():
                 mask_size=(2, 2),
                 num_cuts=1,
                 prob=1.0,
-                input_mode="batch",
+                input_layout="BHWC",
                 seed=19,
             )
             self.backbone = keras.Sequential(
@@ -1190,9 +1190,15 @@ def test_compose_random_crop_by_pos_neg_label_inverse_supports_batch_mode_under_
 @pytest.mark.unit
 def test_random_rotate_and_cutout_run_under_tf_function():
     random_rotate = RandomRotate(keys=["image", "label"], factor=0.2, prob=1.0)
-    random_cutout_2d = RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0)
+    random_cutout_2d = RandomCutOut(
+        keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0, input_layout="HWC"
+    )
     random_cutout_slicewise = RandomCutOut(
-        keys=["image", "label"], mask_size=(2, 2), num_cuts=1, prob=1.0
+        keys=["image", "label"],
+        mask_size=(2, 2),
+        num_cuts=1,
+        prob=1.0,
+        input_layout="DHWC",
     )
 
     image_3d = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
@@ -1329,7 +1335,7 @@ def test_random_cutout_supports_batch_mode_under_tf_function():
         mask_size=(2, 2),
         num_cuts=1,
         prob=1.0,
-        input_mode="batch",
+        input_layout="BHWC",
         seed=13,
     )
     random_cutout_3d = RandomCutOut(
@@ -1337,7 +1343,7 @@ def test_random_cutout_supports_batch_mode_under_tf_function():
         mask_size=(2, 2),
         num_cuts=1,
         prob=1.0,
-        input_mode="batch",
+        input_layout="BDHWC",
         seed=13,
     )
 

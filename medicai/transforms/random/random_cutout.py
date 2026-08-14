@@ -8,9 +8,6 @@ from ..tensor_bundle import TensorBundle
 from ..utils import (
     get_legacy_layout_components,
     resolve_input_layout,
-    validate_input_mode,
-    validate_layout,
-    validate_spatial_dims,
     validate_tensor_matches_layout,
 )
 
@@ -42,10 +39,8 @@ class RandomCutOut(RandomTransform):
         gaussian_std: Standard deviation for Gaussian fill noise.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
-        spatial_dims: Legacy spatial dimensionality contract.
-        input_mode: Legacy execution-mode contract. In batch mode, one
-            Bernoulli apply decision is sampled for the full batch, while
-            cutout masks are generated per sample.
+            In batch layouts, one Bernoulli apply decision is sampled for the
+            full batch, while cutout masks are generated per sample.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         invalid_label: Optional label value marking invalid regions.
@@ -68,6 +63,7 @@ class RandomCutOut(RandomTransform):
                 mask_size=(16, 16),
                 num_cuts=2,
                 prob=0.5,
+                input_layout="HWC",
             )
 
             image = tf.random.normal((64, 64, 1))
@@ -89,6 +85,7 @@ class RandomCutOut(RandomTransform):
                 mask_size=(16, 16),
                 num_cuts=2,
                 prob=0.5,
+                input_layout="DHWC",
             )
 
             image = tf.random.normal((32, 64, 64, 1))
@@ -109,9 +106,7 @@ class RandomCutOut(RandomTransform):
         fill_value: float = 0.0,
         gaussian_std: float = 0.1,
         *,
-        input_layout: str | None = None,
-        spatial_dims: int | None = None,
-        input_mode: str | None = "sample",
+        input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         invalid_label=None,
         cutout_mode: str = "volume",
@@ -145,16 +140,11 @@ class RandomCutOut(RandomTransform):
         self.fill_mode = fill_mode
         self.fill_value = fill_value
         self.gaussian_std = gaussian_std
-        self._uses_explicit_input_layout = input_layout is not None
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            input_mode=input_mode,
-            spatial_dims=spatial_dims,
             transform_name=type(self).__name__,
         )
         self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
-        self.input_mode = validate_input_mode(self.input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(self.spatial_dims, transform_name=type(self).__name__)
         self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
@@ -175,32 +165,16 @@ class RandomCutOut(RandomTransform):
 
         image = bundle.data[self.image_key]
         label = bundle.data[self.label_key]
-        if self._uses_explicit_input_layout:
-            layout = validate_tensor_matches_layout(
-                image,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-            validate_tensor_matches_layout(
-                label,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
-        else:
-            layout = validate_layout(
-                image,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(2, 3),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
-            validate_layout(
-                label,
-                input_mode=self.input_mode,
-                allowed_spatial_ranks=(layout.spatial_rank,),
-                spatial_dims=self.spatial_dims,
-                transform_name=type(self).__name__,
-            )
+        layout = validate_tensor_matches_layout(
+            image,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
+        validate_tensor_matches_layout(
+            label,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = layout.spatial_rank
 
         should_apply = self.sample_should_apply()
