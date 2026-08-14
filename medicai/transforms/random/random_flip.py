@@ -16,7 +16,7 @@ class RandomFlip(RandomTransform):
     ``True``, each selected channel-last tensor is reversed along the
     configured axes.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -33,12 +33,8 @@ class RandomFlip(RandomTransform):
             ``1`` is the height direction, and axis ``2`` is the width
             direction; these correspond to the sagittal, coronal, and axial
             viewing orientations depending on which axis is being mirrored.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors. Note that rank-4 tensors are inherently ambiguous:
-            ``(D, H, W, C)`` in sample mode and ``(B, H, W, C)`` in batch mode
-            have the same rank. Medic-AI does not infer intent from shape
-            alone, so choose ``input_mode`` explicitly.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``. The seed controls the Bernoulli
             apply/skip draw for each call. A fresh transform instance created
@@ -81,8 +77,9 @@ class RandomFlip(RandomTransform):
         prob: float = 0.1,
         spatial_axis: Union[int, Sequence[int], None] = None,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -90,6 +87,7 @@ class RandomFlip(RandomTransform):
         self.flip = Flip(
             keys=keys,
             spatial_axis=spatial_axis,
+            input_layout=input_layout,
             input_mode=input_mode,
             spatial_dims=spatial_dims,
             allow_missing_keys=allow_missing_keys,
@@ -136,6 +134,7 @@ class RandomFlip(RandomTransform):
             "enabled": self.flip.spatial_axis is not None,
             "should_apply": self.sample_should_apply(),
             "spatial_axis": self.flip.spatial_axis,
+            "input_layout": self.flip.input_layout,
             "input_mode": self.flip.input_mode,
             "spatial_dims": self.flip.spatial_dims,
         }
@@ -198,6 +197,7 @@ class RandomFlip(RandomTransform):
         return {
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }

@@ -6,10 +6,11 @@ from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis,
+    get_legacy_layout_components,
+    resolve_input_layout,
+    resolve_input_layout_axes,
     resolve_spatial_axes,
     restore_from_batch_axis,
-    validate_input_mode,
-    validate_spatial_dims,
 )
 
 
@@ -19,7 +20,7 @@ class Flip(KeyedTransform, InvertibleTransform):
     ``Flip`` deterministically reverses channel-last tensors using
     TensorFlow's ``tf.reverse``. It can be applied to common Medic-AI
     dictionary-style samples such as image-label pairs. Depending on
-    ``input_mode``, it supports:
+    ``input_layout``, it supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -33,23 +34,15 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     Args:
         keys: Keys of the tensors to flip.
-        spatial_axis: Spatial axis or axes to reverse. Axes follow the tensor's
-            sample layout, so ``0`` refers to ``H`` for 2D tensors and ``D``
-            for 3D tensors. In batch mode, axes are still expressed relative to
-            the spatial dimensions only, so the batch axis is never included.
-            For 2D tensors, ``0`` refers to the vertical-height axis and ``1``
-            refers to the horizontal-width axis. For 3D tensors using
-            sample-space axis numbering ``(D, H, W)``, axis ``0`` is the depth
-            direction, axis ``1`` is the height direction, and axis ``2`` is
-            the width direction; these correspond to the sagittal, coronal,
-            and axial viewing orientations depending on which axis is being
-            mirrored.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors. Note that rank-4 tensors are inherently ambiguous:
-            ``(D, H, W, C)`` in sample mode and ``(B, H, W, C)`` in batch mode
-            have the same rank. Medic-AI does not infer intent from shape
-            alone, so choose ``input_mode`` explicitly.
+        spatial_axis: Spatial axis or axes to reverse. When ``input_layout``
+            is provided explicitly, axes refer to the real tensor axes of that
+            layout. For example, under ``"BHWC"``, ``1`` means height and ``2``
+            means width; under ``"BDHWC"``, ``1`` means depth, ``2`` means
+            height, and ``3`` means width. During the legacy transition path,
+            old ``input_mode``-based calls still interpret axes relative to the
+            spatial dimensions only.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -115,8 +108,9 @@ class Flip(KeyedTransform, InvertibleTransform):
         keys: Sequence[str],
         spatial_axis: Union[int, Sequence[int], None] = None,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -126,8 +120,14 @@ class Flip(KeyedTransform, InvertibleTransform):
                 "Use an explicit identity path instead of a no-op flip."
             )
         self.spatial_axis = spatial_axis
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
-        self.spatial_dims = validate_spatial_dims(spatial_dims, transform_name=type(self).__name__)
+        self._uses_explicit_input_layout = input_layout is not None
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            input_mode=input_mode,
+            spatial_dims=spatial_dims,
+            transform_name=type(self).__name__,
+        )
+        self.input_mode, self.spatial_dims = get_legacy_layout_components(self.input_layout)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -162,6 +162,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         return {
             "applied": self.spatial_axis is not None,
             "spatial_axis": self.spatial_axis,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.spatial_dims,
         }
@@ -185,6 +186,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         return {
             "keys": list(present_keys),
             "spatial_axis": params["spatial_axis"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }
@@ -209,6 +211,8 @@ class Flip(KeyedTransform, InvertibleTransform):
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor
+        if self._uses_explicit_input_layout:
+            return tf.reverse(tensor, axis=self._resolve_axes(tensor, spatial_axis=effective_axis))
         batched_tensor, added_batch_axis = ensure_batch_axis(
             tensor,
             input_mode=self.input_mode,
@@ -242,6 +246,13 @@ class Flip(KeyedTransform, InvertibleTransform):
             axes = (axes,)
         if axes is None:
             return ()
+        if self._uses_explicit_input_layout:
+            return resolve_input_layout_axes(
+                tensor,
+                tuple(axes),
+                input_layout=self.input_layout,
+                name="spatial_axis",
+            )
         return resolve_spatial_axes(
             tensor,
             tuple(axes),

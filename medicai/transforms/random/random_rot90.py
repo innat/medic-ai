@@ -11,9 +11,6 @@ from ..base import (
 )
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
-from ..utils import validate_input_mode
-
-
 class RandomRotate90(RandomTransform):
     """Randomly rotate selected tensors by quarter turns.
 
@@ -21,7 +18,7 @@ class RandomRotate90(RandomTransform):
     samples an integer ``k`` in ``[1, max_k]`` before delegating to
     :class:`~medicai.transforms.Rotate90`.
 
-    Depending on ``input_mode``, this transform supports:
+    Depending on ``input_layout``, this transform supports:
 
     - sample 2D tensors shaped ``(H, W, C)``
     - sample 3D tensors shaped ``(D, H, W, C)``
@@ -42,9 +39,8 @@ class RandomRotate90(RandomTransform):
             the valid spatial planes are ``(1, 2)`` for the axial plane,
             ``(0, 2)`` for the coronal plane, and ``(0, 1)`` for the
             sagittal plane when using sample-space axis numbering ``(D, H, W)``.
-        input_mode: Either ``"sample"`` for ``(H, W, C)`` / ``(D, H, W, C)``
-            tensors, or ``"batch"`` for ``(B, H, W, C)`` / ``(B, D, H, W, C)``
-            tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
@@ -85,8 +81,9 @@ class RandomRotate90(RandomTransform):
         max_k: int = 3,
         spatial_axis: Sequence[int] | None = None,
         *,
-        spatial_dims: int,
-        input_mode: str = "sample",
+        input_layout: str | None = None,
+        spatial_dims: int | None = None,
+        input_mode: str | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -96,16 +93,18 @@ class RandomRotate90(RandomTransform):
         self.keys = _normalize_keys(keys)
         self.max_k = max_k
         self.spatial_axis = spatial_axis
-        self.input_mode = validate_input_mode(input_mode, transform_name=type(self).__name__)
         self.allow_missing_keys = allow_missing_keys
         self.rotate = Rotate90(
             keys=self.keys,
             k=1,
             spatial_axis=self.spatial_axis,
-            input_mode=self.input_mode,
+            input_layout=input_layout,
+            input_mode=input_mode,
             spatial_dims=spatial_dims,
             allow_missing_keys=self.allow_missing_keys,
         )
+        self.input_layout = self.rotate.input_layout
+        self.input_mode = self.rotate.input_mode
 
     @property
     def invertible(self) -> bool:
@@ -122,6 +121,7 @@ class RandomRotate90(RandomTransform):
             "should_apply": self.sample_should_apply(),
             "k": self.random_integers(shape=(), minval=1, maxval=self.max_k + 1, dtype=tf.int32),
             "spatial_axis": self.spatial_axis,
+            "input_layout": self.input_layout,
             "input_mode": self.input_mode,
             "spatial_dims": self.rotate.spatial_dims,
         }
@@ -193,6 +193,7 @@ class RandomRotate90(RandomTransform):
             "keys": list(present_keys),
             "k": params["k"],
             "spatial_axis": params["spatial_axis"],
+            "input_layout": params["input_layout"],
             "input_mode": params["input_mode"],
             "spatial_dims": params["spatial_dims"],
         }

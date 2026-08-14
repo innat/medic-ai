@@ -554,6 +554,40 @@ def normalize_spatial_axes(
     return normalize_axes(axes, spatial_rank, name=name)
 
 
+def resolve_input_layout_axes(
+    tensor: tf.Tensor,
+    axes: Sequence[int],
+    *,
+    input_layout: str,
+    name: str = "spatial_axis",
+) -> tuple[int, ...]:
+    """Resolve actual tensor axes against a declared public ``input_layout``.
+
+    Args:
+        tensor: Input tensor expected to match ``input_layout``.
+        axes: Axis indices expressed in real tensor-axis coordinates.
+        input_layout: Canonical public layout string.
+        name: Axis-group name used in error messages.
+
+    Returns:
+        tuple[int, ...]: Normalized tensor-axis indices.
+
+    Raises:
+        ValueError: If any resolved axis falls outside the spatial axes of the
+            declared layout.
+    """
+    layout = validate_tensor_matches_layout(tensor, input_layout)
+    normalized = normalize_axes(tuple(axes), layout.tensor_rank, name=name)
+    invalid = tuple(axis for axis in normalized if axis not in layout.spatial_axes)
+    if invalid:
+        raise ValueError(
+            f"`{name}` must refer only to spatial axes for input_layout="
+            f"{layout.input_layout!r}. Received {normalized}, spatial axes are "
+            f"{layout.spatial_axes}."
+        )
+    return normalized
+
+
 def resolve_spatial_axes(
     tensor: tf.Tensor,
     axes: Sequence[int],

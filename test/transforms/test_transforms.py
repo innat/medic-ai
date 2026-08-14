@@ -2350,6 +2350,28 @@ def test_flip_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
 
 
 @pytest.mark.unit
+def test_flip_accepts_input_layout_with_real_tensor_axes():
+    batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
+
+    flip_2d = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=(1, 3), input_layout="BDHWC")
+
+    out_2d = flip_2d(TensorBundle({"image": batch_2d}))
+    out_3d = flip_3d(TensorBundle({"image": batch_3d}))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out_2d["image"]),
+        ops.convert_to_numpy(batch_2d)[:, :, ::-1, :],
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out_3d["image"]),
+        ops.convert_to_numpy(batch_3d)[:, ::-1, :, ::-1, :],
+    )
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
 def test_flip_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     batch = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
@@ -2485,6 +2507,25 @@ def test_rotate90_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), expected_2d)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d["image"]), expected_3d)
     assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+
+
+@pytest.mark.unit
+def test_rotate90_accepts_input_layout_with_real_tensor_axes():
+    batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
+
+    rotate_2d = Rotate90(keys=["image"], k=1, spatial_axis=(1, 2), input_layout="BHWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(2, 3), input_layout="BDHWC")
+
+    out_2d = rotate_2d(TensorBundle({"image": batch_2d}))
+    out_3d = rotate_3d(TensorBundle({"image": batch_3d}))
+
+    expected_2d = np.rot90(ops.convert_to_numpy(batch_2d), k=1, axes=(1, 2))
+    expected_3d = np.rot90(ops.convert_to_numpy(batch_3d), k=3, axes=(2, 3))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), expected_2d)
+    np.testing.assert_allclose(ops.convert_to_numpy(out_3d["image"]), expected_3d)
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -2628,6 +2669,32 @@ def test_random_rotate90_supports_batch_mode_and_records_input_mode():
 
     assert tuple(ops.shape(out["image"])) in {(2, 4, 3, 1), (2, 3, 4, 1)}
     assert out.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+
+
+@pytest.mark.unit
+def test_random_flip_and_random_rotate90_accept_input_layout():
+    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+
+    flip_out = RandomFlip(
+        keys=["image"],
+        prob=1.0,
+        spatial_axis=2,
+        input_layout="BHWC",
+        seed=3,
+    )(TensorBundle({"image": image}))
+    rotate_out = RandomRotate90(
+        keys=["image"],
+        prob=1.0,
+        max_k=3,
+        spatial_axis=(1, 2),
+        input_layout="BHWC",
+        seed=5,
+    )(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(flip_out["image"])) == (2, 3, 4, 1)
+    assert tuple(ops.shape(rotate_out["image"])) in {(2, 4, 3, 1), (2, 3, 4, 1)}
+    assert flip_out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+    assert rotate_out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
