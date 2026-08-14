@@ -16,21 +16,18 @@ from medicai.transforms import (
 from medicai.transforms.base import _apply_if_applied, _is_tensorflow_eager_execution, ensure_tensor_bundle
 from medicai.transforms.utils import (
     LayoutInfo,
-    ensure_batch_axis,
+    ensure_batch_axis_for_layout,
     ensure_spatial_tuple,
     get_input_layout_info,
     get_spatial_rank,
-    get_spatial_shape,
+    get_spatial_shape_for_layout,
     normalize_input_layout,
     normalize_axes,
     normalize_spatial_axes,
     restore_from_batch_axis,
-    resolve_layout,
-    resolve_spatial_axes,
+    resolve_input_layout_axes,
     validate_input_layout,
     validate_tensor_matches_layout,
-    validate_input_mode,
-    validate_layout,
     validate_spatial_rank,
 )
 
@@ -645,24 +642,31 @@ def test_spatial_helpers_handle_2d_and_3d_channel_last_tensors():
     assert ensure_spatial_tuple((4, 5), 2, "roi_size") == (4, 5)
     assert normalize_axes((-1, 0), rank=3) == (2, 0)
     assert normalize_spatial_axes((-1, 0), spatial_rank=3) == (2, 0)
-    np.testing.assert_array_equal(ops.convert_to_numpy(get_spatial_shape(image_2d)), [16, 12])
-    np.testing.assert_array_equal(ops.convert_to_numpy(get_spatial_shape(image_3d)), [8, 16, 12])
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(get_spatial_shape_for_layout(image_2d, input_layout="HWC")),
+        [16, 12],
+    )
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(get_spatial_shape_for_layout(image_3d, input_layout="DHWC")),
+        [8, 16, 12],
+    )
 
 
 @pytest.mark.unit
-def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
+def test_layout_helpers_describe_sample_and_batch_channel_last_tensors():
     sample_2d = as_tensor(np.zeros((16, 12, 1), dtype=np.float32))
     sample_3d = as_tensor(np.zeros((8, 16, 12, 1), dtype=np.float32))
     batch_2d = as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32))
     batch_3d = as_tensor(np.zeros((2, 8, 16, 12, 1), dtype=np.float32))
 
-    layout_sample_2d = resolve_layout(sample_2d, input_mode="sample")
-    layout_sample_3d = resolve_layout(sample_3d, input_mode="sample")
-    layout_batch_2d = resolve_layout(batch_2d, input_mode="batch")
-    layout_batch_3d = resolve_layout(batch_3d, input_mode="batch")
+    layout_sample_2d = validate_tensor_matches_layout(sample_2d, "HWC")
+    layout_sample_3d = validate_tensor_matches_layout(sample_3d, "DHWC")
+    layout_batch_2d = validate_tensor_matches_layout(batch_2d, "BHWC")
+    layout_batch_3d = validate_tensor_matches_layout(batch_3d, "BDHWC")
 
     assert isinstance(layout_sample_2d, LayoutInfo)
     assert layout_sample_2d == LayoutInfo(
+        input_layout="HWC",
         tensor_rank=3,
         spatial_rank=2,
         batched=False,
@@ -671,6 +675,7 @@ def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
         spatial_axes=(0, 1),
     )
     assert layout_sample_3d == LayoutInfo(
+        input_layout="DHWC",
         tensor_rank=4,
         spatial_rank=3,
         batched=False,
@@ -679,6 +684,7 @@ def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
         spatial_axes=(0, 1, 2),
     )
     assert layout_batch_2d == LayoutInfo(
+        input_layout="BHWC",
         tensor_rank=4,
         spatial_rank=2,
         batched=True,
@@ -687,6 +693,7 @@ def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
         spatial_axes=(1, 2),
     )
     assert layout_batch_3d == LayoutInfo(
+        input_layout="BDHWC",
         tensor_rank=5,
         spatial_rank=3,
         batched=True,
@@ -696,59 +703,30 @@ def test_resolve_layout_describes_sample_and_batch_channel_last_tensors():
     )
 
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape(batch_2d, input_mode="batch")),
+        ops.convert_to_numpy(get_spatial_shape_for_layout(batch_2d, input_layout="BHWC")),
         [16, 12],
     )
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape(batch_3d, input_mode="batch")),
+        ops.convert_to_numpy(get_spatial_shape_for_layout(batch_3d, input_layout="BDHWC")),
         [8, 16, 12],
     )
 
 
 @pytest.mark.unit
-def test_validate_input_mode_and_layout_helpers_cover_sample_and_batch_contracts():
+def test_layout_axis_helpers_cover_sample_and_batch_contracts():
     sample_3d = as_tensor(np.zeros((8, 16, 12, 1), dtype=np.float32))
     batch_2d = as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32))
 
-    assert validate_input_mode("sample") == "sample"
-    assert validate_input_mode("batch") == "batch"
-    assert validate_input_mode(
-        "sample",
-        supported_modes=("sample",),
-        transform_name="Spacing",
-    ) == "sample"
-
-    sample_layout = validate_layout(
-        sample_3d,
-        input_mode="sample",
-        allowed_spatial_ranks=(3,),
-    )
-    batch_layout = validate_layout(
-        batch_2d,
-        input_mode="batch",
-        allowed_spatial_ranks=(2,),
-    )
+    sample_layout = validate_tensor_matches_layout(sample_3d, "DHWC")
+    batch_layout = validate_tensor_matches_layout(batch_2d, "BHWC")
 
     assert sample_layout.spatial_axes == (0, 1, 2)
     assert batch_layout.spatial_axes == (1, 2)
-    assert resolve_spatial_axes(sample_3d, (0, -1), input_mode="sample") == (0, 2)
-    assert resolve_spatial_axes(batch_2d, (0, -1), input_mode="batch") == (1, 2)
+    assert resolve_input_layout_axes(sample_3d, (0, -1), input_layout="DHWC") == (0, 3)
+    assert resolve_input_layout_axes(batch_2d, (1, -2), input_layout="BHWC") == (1, 2)
 
-    with pytest.raises(ValueError, match="Expected spatial_dims=2"):
-        validate_layout(
-            batch_2d,
-            input_mode="sample",
-            allowed_spatial_ranks=(2, 3),
-            spatial_dims=2,
-        )
-
-    strict_batch_layout = validate_layout(
-        batch_2d,
-        input_mode="batch",
-        allowed_spatial_ranks=(2,),
-        spatial_dims=2,
-    )
-    assert strict_batch_layout.spatial_rank == 2
+    with pytest.raises(ValueError, match="must refer only to spatial axes"):
+        resolve_input_layout_axes(batch_2d, (0,), input_layout="BHWC")
 
 
 @pytest.mark.unit
@@ -756,8 +734,8 @@ def test_batch_axis_helpers_normalize_sample_and_batch_inputs():
     sample_2d = as_tensor(np.zeros((4, 5, 1), dtype=np.float32))
     batch_2d = as_tensor(np.zeros((2, 4, 5, 1), dtype=np.float32))
 
-    sample_batched, sample_added = ensure_batch_axis(sample_2d, input_mode="sample")
-    batch_batched, batch_added = ensure_batch_axis(batch_2d, input_mode="batch")
+    sample_batched, sample_added = ensure_batch_axis_for_layout(sample_2d, input_layout="HWC")
+    batch_batched, batch_added = ensure_batch_axis_for_layout(batch_2d, input_layout="BHWC")
 
     assert sample_added is True
     assert batch_added is False
@@ -789,18 +767,16 @@ def test_spatial_helpers_validate_invalid_inputs():
     with pytest.raises(ValueError):
         normalize_axes((0, 0), rank=3)
 
-    with pytest.raises(ValueError, match="input_mode"):
-        resolve_layout(as_tensor(np.zeros((4, 4, 1), dtype=np.float32)), input_mode="unknown")
-
-    with pytest.raises(ValueError, match="channel-last batch tensor"):
-        resolve_layout(as_tensor(np.zeros((4, 4, 1), dtype=np.float32)), input_mode="batch")
-
-    with pytest.raises(ValueError, match="supports only input_mode values"):
-        validate_input_mode("batch", supported_modes=("sample",), transform_name="Spacing")
+    with pytest.raises(ValueError, match="expects input_layout='BDHWC' with rank 5"):
+        validate_tensor_matches_layout(
+            as_tensor(np.zeros((4, 4, 1), dtype=np.float32)),
+            "BDHWC",
+            transform_name="Rotate90",
+        )
 
     with pytest.raises(ValueError, match="Expected spatial rank in"):
-        validate_layout(
+        ensure_batch_axis_for_layout(
             as_tensor(np.zeros((4, 16, 12, 1), dtype=np.float32)),
-            input_mode="batch",
+            input_layout="BHWC",
             allowed_spatial_ranks=(3,),
         )

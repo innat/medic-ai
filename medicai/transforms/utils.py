@@ -169,62 +169,24 @@ def get_input_layout_info(input_layout: str) -> LayoutInfo:
         spatial_axes=tuple(info["spatial_axes"]),
     )
 
-
-def get_legacy_layout_components(input_layout: str) -> tuple[str, int]:
-    """Return legacy ``(input_mode, spatial_dims)`` for one canonical layout.
-
-    Args:
-        input_layout: Public layout string such as ``"HWC"`` or ``"BDHWC"``.
-
-    Returns:
-        tuple[str, int]: Legacy execution mode and spatial dimensionality.
-    """
-    layout = get_input_layout_info(input_layout)
-    return ("batch" if layout.batched else "sample", layout.spatial_rank)
-
-
 def resolve_input_layout(
     *,
-    input_layout: str | None = None,
-    input_mode: str | None = None,
-    spatial_dims: int | None = None,
+    input_layout: str,
     allowed_layouts: Sequence[str] = ("HWC", "DHWC", "BHWC", "BDHWC"),
     transform_name: str | None = None,
 ) -> str:
-    """Resolve one canonical public ``input_layout`` from new or legacy args.
-
-    During migration, transforms may temporarily accept either the new
-    ``input_layout`` argument or the older ``input_mode`` / ``spatial_dims``
-    pair. This helper makes the new layout string the single stored contract.
+    """Resolve one canonical public ``input_layout``.
 
     Args:
-        input_layout: New explicit layout string.
-        input_mode: Legacy execution mode.
-        spatial_dims: Legacy spatial dimensionality.
+        input_layout: Explicit public layout string.
         allowed_layouts: Layouts accepted by the calling transform.
         transform_name: Optional transform name for clearer error messages.
 
     Returns:
         str: Canonical uppercase input layout.
     """
-    if input_layout is not None:
-        return validate_input_layout(
-            input_layout,
-            allowed_layouts=allowed_layouts,
-            transform_name=transform_name,
-        )
-
-    legacy_mode = validate_input_mode(
-        "sample" if input_mode is None else input_mode,
-        transform_name=transform_name,
-    )
-    legacy_dims = validate_spatial_dims(
-        3 if spatial_dims is None else spatial_dims,
-        transform_name=transform_name,
-    )
-    derived = f"{'B' if legacy_mode == 'batch' else ''}{'D' if legacy_dims == 3 else ''}HWC"
     return validate_input_layout(
-        derived,
+        input_layout,
         allowed_layouts=allowed_layouts,
         transform_name=transform_name,
     )
@@ -259,79 +221,6 @@ def validate_tensor_matches_layout(
         )
     return layout
 
-
-def resolve_layout(
-    tensor: tf.Tensor,
-    *,
-    input_mode: str = "sample",
-    allowed_spatial_ranks: Sequence[int] = (2, 3),
-    spatial_dims: int | None = None,
-) -> LayoutInfo:
-    """Resolve static channel-last layout information for a transform tensor.
-
-    Args:
-        tensor: Tensor in Medic-AI channel-last layout.
-        input_mode: Either ``"sample"`` or ``"batch"``.
-        allowed_spatial_ranks: Allowed spatial ranks after interpreting the
-            tensor according to ``input_mode``.
-        spatial_dims: Optional explicit spatial dimensionality contract.
-            When provided, the resolved spatial rank must match exactly.
-
-    Returns:
-        LayoutInfo: Resolved static layout metadata.
-
-    Raises:
-        ValueError: If ``input_mode`` is invalid, the tensor rank is too low,
-            or the resolved spatial rank is unsupported.
-    """
-    if input_mode not in {"sample", "batch"}:
-        raise ValueError(
-            f"`input_mode` must be either 'sample' or 'batch'. Received {input_mode!r}."
-        )
-
-    tensor_rank = get_tensor_rank(tensor)
-    minimum_rank = 3 if input_mode == "sample" else 4
-    if tensor_rank < minimum_rank:
-        expected = "(H, W, C) / (D, H, W, C)" if input_mode == "sample" else (
-            "(B, H, W, C) / (B, D, H, W, C)"
-        )
-        raise ValueError(
-            f"Expected a channel-last {input_mode} tensor shaped like {expected}. "
-            f"Received rank {tensor_rank} with shape {tensor.shape}."
-        )
-
-    spatial_rank = tensor_rank - 1 if input_mode == "sample" else tensor_rank - 2
-    if spatial_rank not in allowed_spatial_ranks:
-        allowed = ", ".join(str(rank) for rank in allowed_spatial_ranks)
-        raise ValueError(
-            f"Expected spatial rank in ({allowed}) for input_mode={input_mode!r}, "
-            f"received {spatial_rank} for shape {tensor.shape}."
-        )
-    if spatial_dims is not None:
-        if spatial_dims not in (2, 3):
-            raise ValueError(f"`spatial_dims` must be 2, 3, or None. Received {spatial_dims}.")
-        if spatial_rank != spatial_dims:
-            raise ValueError(
-                f"Expected spatial_dims={spatial_dims} for input_mode={input_mode!r}, "
-                f"but resolved spatial rank {spatial_rank} from shape {tensor.shape}."
-            )
-
-    batch_axis = 0 if input_mode == "batch" else None
-    channel_axis = tensor_rank - 1
-    spatial_start = 1 if input_mode == "batch" else 0
-    spatial_axes = tuple(range(spatial_start, channel_axis))
-
-    return LayoutInfo(
-        input_layout=f"{'B' if input_mode == 'batch' else ''}{'D' if spatial_rank == 3 else ''}HWC",
-        tensor_rank=tensor_rank,
-        spatial_rank=spatial_rank,
-        batched=input_mode == "batch",
-        batch_axis=batch_axis,
-        channel_axis=channel_axis,
-        spatial_axes=spatial_axes,
-    )
-
-
 def custom_tf_boolean_mask(
     tensor: tf.Tensor,
     mask: tf.Tensor,
@@ -364,86 +253,17 @@ def custom_tf_boolean_mask(
         f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."
     )
 
-
-def validate_input_mode(
-    input_mode: str,
-    *,
-    supported_modes: Sequence[str] = ("sample", "batch"),
-    transform_name: str | None = None,
-) -> str:
-    """Validate and normalize a transform ``input_mode`` string.
-
-    Args:
-        input_mode: Candidate execution mode.
-        supported_modes: Modes accepted by the calling transform.
-        transform_name: Optional transform name for clearer error messages.
-
-    Returns:
-        str: The validated ``input_mode``.
-
-    Raises:
-        ValueError: If ``input_mode`` is unsupported.
-    """
-    normalized = str(input_mode)
-    if normalized not in supported_modes:
-        label = transform_name or "Transform"
-        supported = ", ".join(repr(mode) for mode in supported_modes)
-        raise ValueError(
-            f"{label} supports only input_mode values ({supported}). Received {normalized!r}."
-        )
-    return normalized
-
-
-def validate_spatial_dims(
-    spatial_dims: int | None,
-    *,
-    supported_dims: Sequence[int] = (2, 3),
-    transform_name: str | None = None,
-) -> int:
-    """Validate a required transform ``spatial_dims`` contract."""
-    label = transform_name or "Transform"
-    supported = ", ".join(str(dim) for dim in supported_dims)
-    if spatial_dims is None:
-        raise ValueError(f"{label} requires `spatial_dims` and it must be one of ({supported}).")
-    if spatial_dims not in supported_dims:
-        raise ValueError(
-            f"{label} supports only spatial_dims values ({supported}). Received {spatial_dims!r}."
-        )
-    return spatial_dims
-
-
-def validate_layout(
-    tensor: tf.Tensor,
-    *,
-    input_mode: str,
-    allowed_spatial_ranks: Sequence[int] = (2, 3),
-    spatial_dims: int | None = None,
-    transform_name: str | None = None,
-) -> LayoutInfo:
-    """Resolve and validate tensor layout for one transform call.
-
-    Args:
-        tensor: Input tensor in Medic-AI channel-last layout.
-        input_mode: Either ``"sample"`` or ``"batch"``.
-        allowed_spatial_ranks: Accepted spatial ranks for the transform.
-        transform_name: Optional transform name for clearer error messages.
-
-    Returns:
-        LayoutInfo: Resolved static layout metadata.
-    """
-    del transform_name
-    input_mode = validate_input_mode(input_mode)
-    return resolve_layout(
-        tensor,
-        input_mode=input_mode,
-        allowed_spatial_ranks=allowed_spatial_ranks,
-        spatial_dims=spatial_dims,
-    )
-
-
 def get_spatial_rank(tensor: tf.Tensor) -> int:
     """Return the number of spatial dimensions in a channel-last sample tensor."""
-    return resolve_layout(tensor, input_mode="sample").spatial_rank
+    rank = get_tensor_rank(tensor)
+    if rank == 3:
+        return 2
+    if rank == 4:
+        return 3
+    raise ValueError(
+        "Expected a channel-last sample tensor shaped like (H, W, C) or (D, H, W, C). "
+        f"Received rank {rank} with shape {tensor.shape}."
+    )
 
 
 def validate_spatial_rank(
@@ -451,25 +271,14 @@ def validate_spatial_rank(
     allowed_ranks: Sequence[int] = (2, 3),
 ) -> int:
     """Validate the spatial rank of a channel-last sample tensor."""
-    return resolve_layout(
-        tensor,
-        input_mode="sample",
-        allowed_spatial_ranks=allowed_ranks,
-    ).spatial_rank
-
-
-def get_spatial_shape(tensor: tf.Tensor, *, input_mode: str = "sample") -> tf.Tensor:
-    """Return the dynamic spatial shape of a channel-last tensor.
-
-    Args:
-        tensor: Input tensor in Medic-AI channel-last layout.
-        input_mode: Either ``"sample"`` or ``"batch"``.
-
-    Returns:
-        tf.Tensor: Dynamic spatial shape.
-    """
-    layout = resolve_layout(tensor, input_mode=input_mode)
-    return tf.gather(tf.shape(tensor), layout.spatial_axes)
+    spatial_rank = get_spatial_rank(tensor)
+    if spatial_rank not in allowed_ranks:
+        allowed = ", ".join(str(rank) for rank in allowed_ranks)
+        raise ValueError(
+            f"Expected spatial rank in ({allowed}), received {spatial_rank} for shape "
+            f"{tensor.shape}."
+        )
+    return spatial_rank
 
 
 def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.Tensor:
@@ -485,38 +294,6 @@ def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.
     """
     layout = validate_tensor_matches_layout(tensor, input_layout)
     return tf.gather(tf.shape(tensor), layout.spatial_axes)
-
-
-def ensure_batch_axis(
-    tensor: tf.Tensor,
-    *,
-    input_mode: str,
-    spatial_dims: int | None = None,
-    allowed_spatial_ranks: Sequence[int] = (2, 3),
-) -> tuple[tf.Tensor, bool]:
-    """Normalize a sample or batch tensor to a batched view.
-
-    Args:
-        tensor: Input tensor in Medic-AI channel-last layout.
-        input_mode: Either ``"sample"`` or ``"batch"``.
-        spatial_dims: Optional explicit spatial dimensionality contract.
-        allowed_spatial_ranks: Accepted spatial ranks for layout validation.
-
-    Returns:
-        tuple[tf.Tensor, bool]: A pair ``(batched_tensor, added_batch_axis)``
-        where ``added_batch_axis`` is ``True`` only when a leading singleton
-        batch axis was inserted for sample-mode input.
-    """
-    validate_layout(
-        tensor,
-        input_mode=input_mode,
-        allowed_spatial_ranks=allowed_spatial_ranks,
-        spatial_dims=spatial_dims,
-    )
-    if input_mode == "sample":
-        return tensor[None, ...], True
-    return tensor, False
-
 
 def ensure_batch_axis_for_layout(
     tensor: tf.Tensor,
@@ -630,38 +407,6 @@ def resolve_input_layout_axes(
             f"{layout.spatial_axes}."
         )
     return normalized
-
-
-def resolve_spatial_axes(
-    tensor: tf.Tensor,
-    axes: Sequence[int],
-    *,
-    input_mode: str = "sample",
-    allowed_spatial_ranks: Sequence[int] = (2, 3),
-    spatial_dims: int | None = None,
-    name: str = "spatial_axes",
-) -> tuple[int, ...]:
-    """Resolve spatial-relative axes against a channel-last tensor layout.
-
-    Args:
-        tensor: Input tensor in Medic-AI channel-last layout.
-        axes: Axes expressed relative to the spatial dimensions only.
-        input_mode: Either ``"sample"`` or ``"batch"``.
-        allowed_spatial_ranks: Accepted spatial ranks for layout validation.
-        name: Axis-group name used in error messages.
-
-    Returns:
-        tuple[int, ...]: Tensor-axis indices corresponding to ``axes``.
-    """
-    layout = validate_layout(
-        tensor,
-        input_mode=input_mode,
-        allowed_spatial_ranks=allowed_spatial_ranks,
-        spatial_dims=spatial_dims,
-    )
-    normalized = normalize_spatial_axes(axes, layout.spatial_rank, name=name)
-    return tuple(layout.spatial_axes[axis] for axis in normalized)
-
 
 # Affine Utility
 
