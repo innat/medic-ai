@@ -289,6 +289,9 @@ class Resize(KeyedTransform, InvertibleTransform):
         if effective_spatial_rank is None:
             layout = validate_tensor_matches_layout(
                 tensor,
+                input_layout=self.input_layout if self.layout_info.batched else (
+                    "BDHWC" if len(target_shape) == 3 else "BHWC"
+                ),
                 transform_name=type(self).__name__,
             )
             effective_spatial_rank = layout.spatial_rank

@@ -208,7 +208,7 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
 
 @pytest.mark.unit
 def test_resize_validates_input_layout_and_layout_contract():
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Resize(keys=["image"], interpolation="bilinear", target_shape=(4, 4), input_layout="CHW")
 
     transform = Resize(
@@ -219,7 +219,7 @@ def test_resize_validates_input_layout_and_layout_contract():
     )
     image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
 
-    with pytest.raises(ValueError, match="expected target_shape with 3 spatial dimensions"):
+    with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image}))
 
 
@@ -275,13 +275,13 @@ def test_spacing_rejects_2d_inputs_with_clear_error():
 
 @pytest.mark.unit
 def test_sample_only_spatial_transforms_reject_batch_layouts_or_input_mode():
-    with pytest.raises(ValueError, match="supports only sample layouts 'HWC' and 'DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         CropForeground(keys=["image"], input_layout="BHWC")
 
-    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Orientation(keys=["image"], input_layout="BDHWC")
 
-    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="BDHWC")
 
 
@@ -303,10 +303,10 @@ def test_spacing_and_orientation_accept_dhwc_input_layout_and_reject_other_layou
     oriented = orientation(TensorBundle({"image": image, "label": label}, {"affine": affine}))
     assert oriented.get_applied_transforms()[-1]["params"]["input_layout"] == "DHWC"
 
-    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="BHWC")
 
-    with pytest.raises(ValueError, match="supports only input_layout='DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Orientation(keys=["image"], axcodes="RAS", input_layout="HWC")
 
 

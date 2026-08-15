@@ -328,11 +328,17 @@ class Spacing(KeyedTransform, InvertibleTransform):
             if key not in bundle.data:
                 continue
             tensor = bundle.data[key]
-            validate_tensor_matches_layout(
-                tensor,
-                self.input_layout,
-                transform_name=type(self).__name__,
-            )
+            try:
+                validate_tensor_matches_layout(
+                    tensor,
+                    self.input_layout,
+                    transform_name=type(self).__name__,
+                )
+            except ValueError as error:
+                raise ValueError(
+                    f"{type(self).__name__} supports only 3D channel-last tensors shaped "
+                    f"(D, H, W, C). Key '{key}' has shape {tensor.shape}."
+                ) from error
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
