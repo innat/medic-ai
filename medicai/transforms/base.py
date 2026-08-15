@@ -584,8 +584,8 @@ class RandomChoice(RandomTransform):
 
             transform = RandomChoice(
                 transforms=[
-                    RandomRotate90(keys=["image"], prob=1.0),
-                    RandomRotate(keys=["image"], factor=0.2, prob=1.0),
+                    RandomRotate90(keys=["image"], prob=1.0, input_layout="DHWC"),
+                    RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="DHWC"),
                 ],
                 num_choices=1,
                 prob=1.0,
@@ -603,9 +603,9 @@ class RandomChoice(RandomTransform):
 
             transform = RandomChoice(
                 transforms=[
-                    Flip(keys=["image"], spatial_axis=0),
-                    Flip(keys=["image"], spatial_axis=1),
-                    ShiftIntensity(keys=["image"], offset=0.1),
+                    Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+                    ShiftIntensity(keys=["image"], offset=0.1, input_layout="HWC"),
                 ],
                 num_choices=(1, 2),
                 weights=[1.0, 1.0, 0.5],

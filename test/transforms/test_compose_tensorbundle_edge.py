@@ -65,13 +65,13 @@ def test_compose_inverse_reverses_invertible_transforms_only():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offset=3.0),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=3.0, input_layout="HWC"),
         ]
     )
 
     forward = pipeline({"image": image})
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}))
+    restored = pipeline.inverse(forward)
 
     expected = ops.convert_to_numpy(image) + 3.0
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
@@ -80,10 +80,10 @@ def test_compose_inverse_reverses_invertible_transforms_only():
 @pytest.mark.unit
 def test_compose_inverse_accepts_mapping_inputs():
     image = np.arange(6, dtype=np.float32).reshape(2, 3, 1)
-    pipeline = Compose([Flip(keys=["image"], spatial_axis=1)])
+    pipeline = Compose([Flip(keys=["image"], spatial_axis=1, input_layout="HWC")])
 
     forward = pipeline({"image": image})
-    restored = pipeline.inverse({"image": forward["image"]})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), image)
 
@@ -91,11 +91,11 @@ def test_compose_inverse_accepts_mapping_inputs():
 @pytest.mark.unit
 def test_compose_inverse_traverses_nested_compose_blocks():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-    inner = Compose([Flip(keys=["image"], spatial_axis=1)])
-    outer = Compose([inner, ShiftIntensity(keys=["image"], offset=3.0)])
+    inner = Compose([Flip(keys=["image"], spatial_axis=1, input_layout="HWC")])
+    outer = Compose([inner, ShiftIntensity(keys=["image"], offset=3.0, input_layout="HWC")])
 
     forward = outer({"image": image})
-    restored = outer.inverse(TensorBundle({"image": forward["image"]}))
+    restored = outer.inverse(forward)
 
     expected = ops.convert_to_numpy(image) + 3.0
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
@@ -106,8 +106,8 @@ def test_compose_inverse_handles_repeated_shift_intensity_instances():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            ShiftIntensity(keys=["image"], offset=2.0),
-            ShiftIntensity(keys=["image"], offset=-0.5),
+            ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=-0.5, input_layout="HWC"),
         ]
     )
 
@@ -134,6 +134,7 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
                 input_max=1.0,
                 output_min=-1.0,
                 output_max=1.0,
+                input_layout="HWC",
             ),
             ScaleIntensityRange(
                 keys=["image"],
@@ -141,6 +142,7 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
                 input_max=1.0,
                 output_min=0.0,
                 output_max=255.0,
+                input_layout="HWC",
             ),
         ]
     )
@@ -162,8 +164,8 @@ def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0),
-            RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="HWC"),
+            RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC"),
         ]
     )
 
@@ -209,7 +211,7 @@ def test_random_choice_applies_exact_number_without_replacement():
 @pytest.mark.unit
 def test_random_choice_respects_prob_zero():
     transform = RandomChoice(
-        transforms=[ShiftIntensity(keys=["image"], offset=2.0)],
+        transforms=[ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")],
         num_choices=1,
         prob=0.0,
     )
@@ -227,8 +229,8 @@ def test_random_choice_respects_prob_zero():
 def test_random_choice_inverse_reverses_selected_invertible_transforms():
     transform = RandomChoice(
         transforms=[
-            Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offset=3.0),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=3.0, input_layout="HWC"),
         ],
         num_choices=2,
         prob=1.0,
@@ -251,8 +253,8 @@ def test_random_choice_inverse_reverses_selected_invertible_transforms():
 def test_random_choice_weights_can_force_selection():
     transform = RandomChoice(
         transforms=[
-            ShiftIntensity(keys=["image"], offset=5.0),
-            ShiftIntensity(keys=["image"], offset=100.0),
+            ShiftIntensity(keys=["image"], offset=5.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=100.0, input_layout="HWC"),
         ],
         num_choices=1,
         prob=1.0,

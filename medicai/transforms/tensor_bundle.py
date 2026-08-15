@@ -38,8 +38,8 @@ class TensorBundle:
     """
 
     def __init__(self, data: Mapping[str, Any], meta: Mapping[str, Any] | None = None):
-        self.data = data
-        self.meta = meta or {}
+        self.data = dict(data)
+        self.meta = {} if meta is None else dict(meta)
 
     def __getitem__(self, key: str) -> Any:
         """Access tensor data or metadata using dictionary-like key access.

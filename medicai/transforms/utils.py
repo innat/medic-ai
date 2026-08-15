@@ -493,6 +493,10 @@ def orientation_from_affine(affine: tf.Tensor) -> tf.Tensor:
     """Infer a three-letter orientation code from a 4x4 affine matrix."""
     matrix = tf.cast(validate_affine_matrix(affine)[:3, :3], tf.float32)
     current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
+    unique_axes, _, counts = tf.unique_with_counts(current_axes)
+    del unique_axes
+    if tf.reduce_any(counts > 1):
+        raise ValueError("Affine orientation is invalid: multiple output axes map to the same world axis.")
     gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
     signs = tf.gather_nd(matrix, gather_indices) >= 0
 
@@ -524,6 +528,10 @@ def compute_orientation_transform(
 
     matrix = tf.cast(validate_affine_matrix(affine)[:3, :3], tf.float32)
     current_axes = tf.argmax(tf.abs(matrix), axis=0, output_type=tf.int32)
+    unique_axes, _, counts = tf.unique_with_counts(current_axes)
+    del unique_axes
+    if tf.reduce_any(counts > 1):
+        raise ValueError("Affine orientation is invalid: multiple output axes map to the same world axis.")
     gather_indices = tf.stack([current_axes, tf.range(3, dtype=tf.int32)], axis=1)
     current_signs = tf.sign(tf.gather_nd(matrix, gather_indices))
     current_signs = tf.where(current_signs == 0, tf.ones_like(current_signs), current_signs)

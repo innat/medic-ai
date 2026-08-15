@@ -370,8 +370,8 @@ def test_random_choice_records_eager_trace_metadata():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     choice = RandomChoice(
         transforms=[
-            ShiftIntensity(keys=["image"], offset=1.0),
-            Flip(keys=["image"], spatial_axis=1),
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
         ],
         num_choices=1,
         prob=1.0,
@@ -395,8 +395,8 @@ def test_random_choice_inverse_replays_selected_invertible_transforms():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     choice = RandomChoice(
         transforms=[
-            Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offset=2.0),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
         ],
         num_choices=2,
         prob=1.0,
@@ -417,11 +417,11 @@ def test_compose_inverse_restores_pipeline_with_random_choice():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     pipeline = Compose(
         [
-            ShiftIntensity(keys=["image"], offset=1.0),
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
             RandomChoice(
                 transforms=[
-                    Flip(keys=["image"], spatial_axis=1),
-                    ShiftIntensity(keys=["image"], offset=2.0),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+                    ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
                 ],
                 num_choices=2,
                 prob=1.0,
@@ -447,8 +447,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_random_choice_instances
         [
             RandomChoice(
                 transforms=[
-                    Flip(keys=["image"], spatial_axis=1),
-                    ShiftIntensity(keys=["image"], offset=1.0),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+                    ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
                 ],
                 num_choices=1,
                 prob=1.0,
@@ -456,8 +456,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_random_choice_instances
             ),
             RandomChoice(
                 transforms=[
-                    ShiftIntensity(keys=["image"], offset=2.0),
-                    Flip(keys=["image"], spatial_axis=0),
+                    ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
+                    Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
                 ],
                 num_choices=1,
                 prob=1.0,
