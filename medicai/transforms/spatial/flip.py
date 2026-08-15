@@ -6,6 +6,7 @@ from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
+    get_batched_input_layout,
     get_input_layout_info,
     resolve_input_layout,
     resolve_input_layout_axes,
@@ -134,17 +135,23 @@ class Flip(KeyedTransform, InvertibleTransform):
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
-        if self.spatial_axis is None:
+        trace = self._get_last_flip_trace(bundle)
+        if trace is None:
+            if self.spatial_axis is None:
+                return bundle
+            params = {
+                "spatial_axis": self.spatial_axis,
+                "input_layout": self.input_layout,
+            }
+            self.apply_to_present_keys(
+                bundle,
+                lambda tensor, key: self.transform_tensor(tensor, key, params),
+            )
             return bundle
-
-        params = {
-            "applied": True,
-            "spatial_axis": self.spatial_axis,
-            "input_layout": self.input_layout,
-        }
         self.apply_to_present_keys(
             bundle,
-            lambda tensor, key: self.transform_tensor(tensor, key, params),
+            lambda tensor, key: self.transform_tensor(tensor, key, trace["params"]),
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 
@@ -219,13 +226,22 @@ class Flip(KeyedTransform, InvertibleTransform):
             return tensor
         return tf.reverse(
             tensor,
-            axis=self._resolve_axes(tensor, spatial_axis=effective_axis),
+            axis=self._resolve_axes(
+                tensor,
+                spatial_axis=effective_axis,
+                input_layout=(
+                    self.input_layout
+                    if self.layout_info.batched
+                    else get_batched_input_layout(self.input_layout)
+                ),
+            ),
         )
 
     def _resolve_axes(
         self,
         tensor: tf.Tensor,
         spatial_axis: Union[int, Sequence[int], None] = None,
+        input_layout: str | None = None,
     ) -> tuple[int, ...]:
         axes = self.spatial_axis if spatial_axis is None else spatial_axis
         if isinstance(axes, int):
@@ -235,6 +251,11 @@ class Flip(KeyedTransform, InvertibleTransform):
         return resolve_input_layout_axes(
             tensor,
             tuple(axes),
-            input_layout=self.input_layout,
+            input_layout=self.input_layout if input_layout is None else input_layout,
             name="spatial_axis",
         )
+
+    def _get_last_flip_trace(self, bundle: TensorBundle):
+        from ..base import _pop_last_transform_trace
+
+        return _pop_last_transform_trace(bundle, type(self).__name__)

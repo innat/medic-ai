@@ -256,6 +256,11 @@ class RandomSpatialCrop(RandomTransform):
             crop_size = tf.fill([spatial_rank], tf.cast(self.crop_size, tf.int32))
         else:
             crop_size = tf.convert_to_tensor(self.crop_size, dtype=tf.int32)
+            if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
+                raise ValueError(
+                    f"Expected spatial rank in (2, 3) with crop_size length matching the "
+                    f"input spatial rank {spatial_rank}, got crop_size={self.crop_size!r}."
+                )
 
         if self.random_shape:
             max_crop_size = (

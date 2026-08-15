@@ -8,6 +8,7 @@ from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
+    get_batched_input_layout,
     get_input_layout_info,
     resolve_input_layout,
     resolve_input_layout_axes,
@@ -138,10 +139,28 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
-        params = self.get_transform_params(bundle)
-        if not params["applied"]:
+        trace = self._get_last_rotate90_trace(bundle)
+        if trace is None:
+            params = self.get_transform_params(bundle)
+            if not params["applied"]:
+                return bundle
+            inverse_k = (-params["k"]) % 4
+            self.apply_to_present_keys(
+                bundle,
+                lambda tensor, key: self.transform_tensor(
+                    tensor,
+                    key,
+                    {
+                        "applied": True,
+                        "k": inverse_k,
+                        "spatial_axis": params["spatial_axis"],
+                        "input_layout": params["input_layout"],
+                    },
+                ),
+            )
             return bundle
 
+        params = trace["params"]
         inverse_k = (-params["k"]) % 4
         self.apply_to_present_keys(
             bundle,
@@ -155,6 +174,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                     "input_layout": params["input_layout"],
                 },
             ),
+            keys=params.get("keys", []),
         )
         return bundle
 
@@ -251,7 +271,15 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         spatial_axis: Sequence[int] | None = None,
     ) -> tf.Tensor:
         """Rotate a batch-layout tensor by multiples of 90 degrees."""
-        axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
+        axes = self._resolve_axes(
+            tensor,
+            spatial_axis=spatial_axis,
+            input_layout=(
+                self.input_layout
+                if self.layout_info.batched
+                else get_batched_input_layout(self.input_layout)
+            ),
+        )
         effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
 
         return tf.switch_case(
@@ -284,10 +312,11 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         self,
         tensor: tf.Tensor,
         spatial_axis: Sequence[int] | None = None,
+        input_layout: str | None = None,
     ) -> tuple[int, int]:
         layout = validate_tensor_matches_layout(
             tensor,
-            self.input_layout,
+            self.input_layout if input_layout is None else input_layout,
             transform_name=type(self).__name__,
         )
 
@@ -299,9 +328,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         axes = resolve_input_layout_axes(
             tensor,
             tuple(effective_axis),
-            input_layout=self.input_layout,
+            input_layout=self.input_layout if input_layout is None else input_layout,
             name="spatial_axis",
         )
         if len(axes) != 2:
             raise ValueError("`spatial_axis` must contain exactly two axes.")
         return axes
+
+    def _get_last_rotate90_trace(self, bundle: TensorBundle):
+        from ..base import _pop_last_transform_trace
+
+        return _pop_last_transform_trace(bundle, type(self).__name__)

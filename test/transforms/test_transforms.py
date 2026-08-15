@@ -556,7 +556,7 @@ def test_scale_intensity_range_handles_flat_input():
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "ScaleIntensityRange"
     assert trace["random"] is False
-    assert trace["params"]["input_mode"] == "sample"
+    assert trace["params"]["input_layout"] == "HWC"
 
 
 @pytest.mark.unit
@@ -855,7 +855,7 @@ def test_normalize_intensity_records_trace():
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "NormalizeIntensity"
     assert trace["random"] is False
-    assert trace["params"]["input_mode"] == "sample"
+    assert trace["params"]["input_layout"] == "HWC"
 
 
 @pytest.mark.unit
@@ -953,7 +953,7 @@ def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "SignalFillEmpty"
     assert trace["random"] is False
-    assert trace["params"]["input_mode"] == "sample"
+    assert trace["params"]["input_layout"] == "HWC"
 
 
 @pytest.mark.unit
@@ -1043,7 +1043,7 @@ def test_shift_intensity_records_trace():
     assert trace["name"] == "ShiftIntensity"
     assert trace["params"]["keys"] == ["image"]
     assert trace["params"]["offset"] == 2.0
-    assert trace["params"]["input_mode"] == "sample"
+    assert trace["params"]["input_layout"] == "HWC"
     assert trace["invertible"] is True
 
 
@@ -1331,6 +1331,7 @@ def test_random_shift_intensity_replays_with_same_integer_seed():
         prob=1.0,
         channel_wise=True,
         seed=11,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
     second = RandomShiftIntensity(
         keys=["image"],
@@ -1338,6 +1339,7 @@ def test_random_shift_intensity_replays_with_same_integer_seed():
         prob=1.0,
         channel_wise=True,
         seed=11,
+        input_layout="HWC",
     )(TensorBundle({"image": image}))
 
     np.testing.assert_allclose(
@@ -1356,6 +1358,7 @@ def test_random_shift_intensity_shares_sampled_offsets_across_batched_input():
         prob=1.0,
         channel_wise=True,
         seed=17,
+        input_layout="BHWC",
     )
 
     out = transform(TensorBundle({"image": image}))
@@ -1377,7 +1380,7 @@ def test_random_shift_intensity_shares_sampled_offsets_across_batched_input():
         rtol=1e-5,
         atol=1e-6,
     )
-    assert trace["params"]["input_mode"] == "sample"
+    assert trace["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -1815,7 +1818,7 @@ def test_random_spatial_crop_validates_configuration():
     with pytest.raises(ValueError, match="must provide an invalid_label"):
         RandomSpatialCrop(keys=["image"], crop_size=(2, 2), min_valid_ratio=0.2, input_layout="HWC")
 
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomSpatialCrop(keys=["image"], crop_size=(2, 2), input_layout="CHW")
 
 
@@ -1957,7 +1960,7 @@ def test_crop_foreground_accepts_input_layout_and_rejects_batch_layout():
     assert tuple(ops.shape(out["image"])) == (4, 4, 1)
     assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "HWC"
 
-    with pytest.raises(ValueError, match="supports only sample layouts 'HWC' and 'DHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         CropForeground(keys=["image"], source_key="image", input_layout="BHWC")
 
 
@@ -2486,7 +2489,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
         input_layout="HWC",
     )
 
-    with pytest.raises(ValueError, match="currently supports only 2D or 3D inputs"):
+    with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
 
     image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
@@ -2516,7 +2519,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
 
 @pytest.mark.unit
 def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract():
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
             target_shape=(2, 2),
@@ -2535,7 +2538,7 @@ def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract
         input_layout="BHWC",
     )
 
-    with pytest.raises(ValueError, match="Expected a channel-last batch tensor shaped like"):
+    with pytest.raises(ValueError, match="expects input_layout='BHWC' with rank 4"):
         transform(TensorBundle({"image": image, "label": label}))
 
 
@@ -2592,8 +2595,8 @@ def test_flip_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    flip_2d = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")
-    flip_3d = Flip(keys=["image"], spatial_axis=(1, 3), input_layout="BDHWC")
+    flip_2d = Flip(keys=["image"], spatial_axis=1, input_layout="BHWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=(0, 2), input_layout="BDHWC")
 
     out_2d = flip_2d(TensorBundle({"image": batch_2d}))
     out_3d = flip_3d(TensorBundle({"image": batch_3d}))
@@ -2606,7 +2609,7 @@ def test_flip_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
         ops.convert_to_numpy(out_3d["image"]),
         ops.convert_to_numpy(batch_3d)[:, ::-1, :, ::-1, :],
     )
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -2614,8 +2617,8 @@ def test_flip_accepts_input_layout_with_real_tensor_axes():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    flip_2d = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")
-    flip_3d = Flip(keys=["image"], spatial_axis=(1, 3), input_layout="BDHWC")
+    flip_2d = Flip(keys=["image"], spatial_axis=1, input_layout="BHWC")
+    flip_3d = Flip(keys=["image"], spatial_axis=(0, 2), input_layout="BDHWC")
 
     out_2d = flip_2d(TensorBundle({"image": batch_2d}))
     out_3d = flip_3d(TensorBundle({"image": batch_3d}))
@@ -2639,7 +2642,7 @@ def test_flip_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample_out = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")(
         TensorBundle({"image": sample})
     )
-    batch_out = Flip(keys=["image"], spatial_axis=2, input_layout="BHWC")(
+    batch_out = Flip(keys=["image"], spatial_axis=1, input_layout="BHWC")(
         TensorBundle({"image": batch})
     )
 
@@ -2697,7 +2700,7 @@ def test_flip_negative_axis_resolves_against_spatial_rank_only():
 
 @pytest.mark.unit
 def test_flip_validates_input_layout():
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Flip(keys=["image"], spatial_axis=0, input_layout="CHW")
 
 
@@ -2734,7 +2737,7 @@ def test_rotate90_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
     rotate_2d = Rotate90(keys=["image"], k=1, input_layout="BHWC")
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(2, 3), input_layout="BDHWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2), input_layout="BDHWC")
 
     out_2d = rotate_2d(TensorBundle({"image": batch_2d}))
     out_3d = rotate_3d(TensorBundle({"image": batch_3d}))
@@ -2744,7 +2747,7 @@ def test_rotate90_supports_batch_mode_for_2d_and_3d_channel_last_tensors():
 
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), expected_2d)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d["image"]), expected_3d)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -2752,8 +2755,8 @@ def test_rotate90_accepts_input_layout_with_real_tensor_axes():
     batch_2d = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     batch_3d = as_tensor(np.arange(120, dtype=np.float32).reshape(2, 3, 4, 5, 1))
 
-    rotate_2d = Rotate90(keys=["image"], k=1, spatial_axis=(1, 2), input_layout="BHWC")
-    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(2, 3), input_layout="BDHWC")
+    rotate_2d = Rotate90(keys=["image"], k=1, spatial_axis=(0, 1), input_layout="BHWC")
+    rotate_3d = Rotate90(keys=["image"], k=3, spatial_axis=(1, 2), input_layout="BDHWC")
 
     out_2d = rotate_2d(TensorBundle({"image": batch_2d}))
     out_3d = rotate_3d(TensorBundle({"image": batch_3d}))
@@ -2845,7 +2848,7 @@ def test_rotate90_negative_axes_resolve_against_spatial_rank_only():
 
 @pytest.mark.unit
 def test_rotate90_validates_input_layout():
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         Rotate90(keys=["image"], k=1, input_layout="CHW")
 
 
@@ -2914,7 +2917,7 @@ def test_random_rotate90_supports_batch_mode_and_records_input_mode():
     )
 
     assert tuple(ops.shape(out["image"])) in {(2, 4, 3, 1), (2, 3, 4, 1)}
-    assert out.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -2924,7 +2927,7 @@ def test_random_flip_and_random_rotate90_accept_input_layout():
     flip_out = RandomFlip(
         keys=["image"],
         prob=1.0,
-        spatial_axis=2,
+        spatial_axis=1,
         input_layout="BHWC",
         seed=3,
     )(TensorBundle({"image": image}))
@@ -2932,7 +2935,7 @@ def test_random_flip_and_random_rotate90_accept_input_layout():
         keys=["image"],
         prob=1.0,
         max_k=3,
-        spatial_axis=(1, 2),
+        spatial_axis=(0, 1),
         input_layout="BHWC",
         seed=5,
     )(TensorBundle({"image": image}))
@@ -3054,7 +3057,7 @@ def test_random_rotate90_validates_max_k():
     with pytest.raises(ValueError, match="must be >= 1"):
         RandomRotate90(keys=["image"], max_k=0, input_layout="HWC")
 
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomRotate90(keys=["image"], input_layout="CHW")
 
 
@@ -3088,7 +3091,7 @@ def test_random_rotate_supports_batch_mode_and_records_input_mode():
 
     assert tuple(ops.shape(out["image"])) == (2, 4, 5, 6, 1)
     assert tuple(ops.shape(out["label"])) == (2, 4, 5, 6, 1)
-    assert out.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
 
 
 @pytest.mark.unit
@@ -3191,7 +3194,7 @@ def test_random_rotate_validates_arguments_and_fill_crop_mode():
     with pytest.raises(ValueError, match="must be non-negative"):
         RandomRotate(keys=["image"], factor=-0.1, input_layout="DHWC")
 
-    with pytest.raises(ValueError, match="supports only input_layout='DHWC' or 'BDHWC'"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomRotate(keys=["image"], factor=0.2, input_layout="HWC")
 
     image = as_tensor(np.random.randn(4, 8, 8, 1).astype(np.float32))
@@ -3214,7 +3217,7 @@ def test_random_rotate_allow_missing_keys_and_prob_zero():
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
 
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomRotate(keys=["image"], factor=0.2, input_layout="DCHW")
 
 
@@ -3294,8 +3297,8 @@ def test_random_cutout_supports_batch_mode_and_records_input_mode():
 
     assert tuple(ops.shape(out_2d["image"])) == (2, 8, 8, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 4, 8, 8, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
-    assert out_3d.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+    assert out_3d.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
 
 
 @pytest.mark.unit
@@ -3377,7 +3380,7 @@ def test_random_cutout_validates_arguments():
             input_layout="HWC",
         )
 
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, input_layout="CHW")
 
 
@@ -3469,7 +3472,7 @@ def test_random_cutout_prob_zero_and_unsupported_rank_rejection():
         num_cuts=1,
         input_layout="HWC",
     )
-    with pytest.raises(ValueError, match="Expected a channel-last sample tensor shaped like"):
+    with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
 
 
@@ -3499,7 +3502,7 @@ def test_random_flip_supports_batch_mode_and_records_input_mode():
         ops.convert_to_numpy(out["image"]),
         ops.convert_to_numpy(image)[:, :, ::-1, :],
     )
-    assert out.get_applied_transforms()[-1]["params"]["input_mode"] == "batch"
+    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
@@ -3580,7 +3583,7 @@ def test_random_flip_requires_spatial_axis():
     with pytest.raises(ValueError, match="requires `spatial_axis`"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=None, input_layout="HWC")
 
-    with pytest.raises(ValueError, match="unsupported input_layout"):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="CHW")
 
 

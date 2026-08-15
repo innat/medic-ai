@@ -235,6 +235,12 @@ class Orientation(KeyedTransform, InvertibleTransform):
             if key not in bundle.data:
                 continue
             tensor = bundle.data[key]
+            rank = tensor.shape.rank
+            if rank != 4:
+                raise ValueError(
+                    f"{type(self).__name__} supports only 3D channel-last tensors shaped "
+                    f"(D, H, W, C). Key '{key}' has shape {tensor.shape}."
+                )
             validate_tensor_matches_layout(
                 tensor,
                 self.input_layout,
