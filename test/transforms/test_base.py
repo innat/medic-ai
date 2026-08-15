@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -5,11 +7,14 @@ import keras
 from keras import ops
 
 from medicai.transforms import (
+    Compose,
+    Flip,
     InvertibleTransform,
     KeyedTransform,
     LambdaTransform,
     RandomChoice,
     RandomTransform,
+    ShiftIntensity,
     TensorBundle,
     Transform,
 )
@@ -335,7 +340,10 @@ def test_random_transform_rejects_unsupported_seed_type():
             bundle["should_apply"] = self.sample_should_apply()
             return bundle
 
-    with pytest.raises(TypeError, match="`seed` must be None, an integer, or keras.random.SeedGenerator"):
+    with pytest.raises(
+        TypeError,
+        match=re.escape("`seed` must be None, an integer, or keras.random.SeedGenerator"),
+    ):
         SeedAwareRandomTransform(prob=0.5, seed="bad-seed")
 
 
@@ -722,11 +730,13 @@ def test_layout_axis_helpers_cover_sample_and_batch_contracts():
 
     assert sample_layout.spatial_axes == (0, 1, 2)
     assert batch_layout.spatial_axes == (1, 2)
-    assert resolve_input_layout_axes(sample_3d, (0, -1), input_layout="DHWC") == (0, 3)
+    assert resolve_input_layout_axes(sample_3d, (0, -2), input_layout="DHWC") == (0, 2)
     assert resolve_input_layout_axes(batch_2d, (1, -2), input_layout="BHWC") == (1, 2)
 
     with pytest.raises(ValueError, match="must refer only to spatial axes"):
         resolve_input_layout_axes(batch_2d, (0,), input_layout="BHWC")
+    with pytest.raises(ValueError, match="must refer only to spatial axes"):
+        resolve_input_layout_axes(sample_3d, (0, -1), input_layout="DHWC")
 
 
 @pytest.mark.unit

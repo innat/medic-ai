@@ -6,6 +6,7 @@ from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     custom_tf_boolean_mask,
+    get_input_layout_info,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -151,14 +152,16 @@ class NormalizeIntensity(KeyedTransform):
 
     def _normalize_channel_wise(self, tensor: tf.Tensor) -> tf.Tensor:
         mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        reduce_axes = tuple(range(tensor.shape.rank - 1))
+        reduce_axes = get_input_layout_info(self.input_layout).spatial_axes
         mask_f = tf.cast(mask, tensor.dtype)
         valid_counts = tf.reduce_sum(mask_f, axis=reduce_axes)
 
-        broadcast_shape = tf.concat(
-            [tf.ones([tensor.shape.rank - 1], dtype=tf.int32), [tf.shape(tensor)[-1]]],
-            axis=0,
-        )
+        broadcast_shape = tf.shape(valid_counts)
+        for axis in sorted(reduce_axes):
+            broadcast_shape = tf.concat(
+                [broadcast_shape[:axis], [1], broadcast_shape[axis:]],
+                axis=0,
+            )
         valid_counts_b = tf.reshape(valid_counts, broadcast_shape)
 
         masked_tensor = tf.where(mask, tensor, tf.zeros_like(tensor))

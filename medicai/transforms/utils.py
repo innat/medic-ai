@@ -58,6 +58,7 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
         "spatial_axes": (1, 2, 3),
     },
 }
+_SUPPORTED_INPUT_LAYOUTS: tuple[str, ...] = tuple(_INPUT_LAYOUT_TO_INFO)
 
 
 def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
@@ -120,7 +121,7 @@ def normalize_input_layout(input_layout: str) -> str:
 def validate_input_layout(
     input_layout: str,
     *,
-    allowed_layouts: Sequence[str] = ("HWC", "DHWC", "BHWC", "BDHWC"),
+    allowed_layouts: Sequence[str] = _SUPPORTED_INPUT_LAYOUTS,
     transform_name: str | None = None,
 ) -> str:
     """Validate and normalize a transform ``input_layout`` string.
@@ -172,7 +173,7 @@ def get_input_layout_info(input_layout: str) -> LayoutInfo:
 def resolve_input_layout(
     *,
     input_layout: str,
-    allowed_layouts: Sequence[str] = ("HWC", "DHWC", "BHWC", "BDHWC"),
+    allowed_layouts: Sequence[str] = _SUPPORTED_INPUT_LAYOUTS,
     transform_name: str | None = None,
 ) -> str:
     """Resolve one canonical public ``input_layout``.
@@ -247,7 +248,7 @@ def custom_tf_boolean_mask(
         fill_tensor = tf.cast(fill_value, tensor.dtype)
         return tf.where(bool_mask, tensor, fill_tensor)
     if mode == "multiply":
-        numeric_mask = tf.cast(mask, tensor.dtype)
+        numeric_mask = tf.cast(bool_mask, tensor.dtype)
         return tf.multiply(tensor, numeric_mask)
     raise ValueError(
         f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."

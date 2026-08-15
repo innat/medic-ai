@@ -171,11 +171,11 @@ class RandomRotate(RandomTransform):
         self.fill_mode = fill_mode
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
+            allowed_layouts=("DHWC", "BDHWC"),
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
-        if self.input_layout not in {"DHWC", "BDHWC"}:
-            raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC' or 'BDHWC'.")
+        self.batch_input_layout = "BDHWC"
         self.allow_missing_keys = allow_missing_keys
 
     @property
@@ -201,12 +201,11 @@ class RandomRotate(RandomTransform):
             return {"skip": True}
 
         sample_tensor = bundle.data[present_keys[0]]
-        layout = validate_tensor_matches_layout(
+        validate_tensor_matches_layout(
             sample_tensor,
             self.input_layout,
             transform_name=type(self).__name__,
         )
-        del layout
 
         should_rotate = self.sample_should_apply()
         angle = self.random_uniform(
@@ -301,7 +300,7 @@ class RandomRotate(RandomTransform):
 
         layout = validate_tensor_matches_layout(
             tensor,
-            input_layout=self.input_layout,
+            input_layout=self.batch_input_layout,
             transform_name=type(self).__name__,
         )
         del layout

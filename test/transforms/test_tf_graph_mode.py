@@ -442,7 +442,7 @@ def test_random_flip_and_rotate90_support_batch_mode_under_tf_function():
         keys=["image"],
         prob=1.0,
         max_k=3,
-        spatial_axis=(0, 1),
+        spatial_axis=(1, 2),
         input_layout="BHWC",
     )
 
@@ -454,9 +454,9 @@ def test_random_flip_and_rotate90_support_batch_mode_under_tf_function():
         rotated = random_rotate90({"image": x})
         return (
             flipped["image"],
-            flipped.get_applied_transforms()[-1]["params"]["input_mode"],
+            flipped.get_applied_transforms()[-1]["params"]["input_layout"],
             rotated["image"],
-            rotated.get_applied_transforms()[-1]["params"]["input_mode"],
+            rotated.get_applied_transforms()[-1]["params"]["input_layout"],
         )
 
     flipped_image, flipped_mode, rotated_image, rotated_mode = apply_transforms(image)
@@ -465,8 +465,8 @@ def test_random_flip_and_rotate90_support_batch_mode_under_tf_function():
         ops.convert_to_numpy(flipped_image),
         ops.convert_to_numpy(image)[:, :, ::-1, :],
     )
-    assert flipped_mode == "batch"
-    assert rotated_mode == "batch"
+    assert flipped_mode == "BHWC"
+    assert rotated_mode == "BHWC"
     assert tuple(ops.shape(rotated_image)) in {(2, 4, 3, 1), (2, 3, 4, 1)}
 
 
@@ -813,7 +813,7 @@ def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function()
         keys=["image"],
         prob=1.0,
         max_k=3,
-        spatial_axis=(0, 1),
+        spatial_axis=(1, 2),
         input_layout="BHWC",
     )
     image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
@@ -848,7 +848,7 @@ def test_compose_random_flip_and_rotate90_inverse_supports_batch_mode_under_tf_f
                 keys=["image"],
                 prob=1.0,
                 max_k=3,
-                spatial_axis=(0, 1),
+                spatial_axis=(1, 2),
                 input_layout="BHWC",
                 seed=13,
             ),
@@ -1373,20 +1373,20 @@ def test_random_cutout_supports_batch_mode_under_tf_function():
     @tf.function
     def apply_cutout_2d(x, y):
         result = random_cutout_2d({"image": x, "label": y})
-        return result["image"], result.get_applied_transforms()[-1]["params"]["input_mode"]
+        return result["image"], result.get_applied_transforms()[-1]["params"]["input_layout"]
 
     @tf.function
     def apply_cutout_3d(x, y):
         result = random_cutout_3d({"image": x, "label": y})
-        return result["image"], result.get_applied_transforms()[-1]["params"]["input_mode"]
+        return result["image"], result.get_applied_transforms()[-1]["params"]["input_layout"]
 
     cutout_2d, mode_2d = apply_cutout_2d(image_2d, label_2d)
     cutout_3d, mode_3d = apply_cutout_3d(image_3d, label_3d)
 
     assert tuple(ops.shape(cutout_2d)) == (2, 8, 8, 1)
     assert tuple(ops.shape(cutout_3d)) == (2, 4, 5, 6, 1)
-    assert mode_2d == "batch"
-    assert mode_3d == "batch"
+    assert mode_2d == "BHWC"
+    assert mode_3d == "BDHWC"
 
 
 @pytest.mark.unit

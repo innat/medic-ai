@@ -105,7 +105,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         num_samples: int = 1,
         *,
         input_layout: str,
-        image_reference_key: str = None,
+        image_reference_key: str | None = None,
         image_threshold: float = 0.0,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
@@ -126,6 +126,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
+        self.batch_input_layout = "BDHWC" if self.layout_info.spatial_rank == 3 else "BHWC"
         self.image_reference_key = image_reference_key
         self.image_threshold = image_threshold
         self.allow_missing_keys = allow_missing_keys
@@ -200,7 +201,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             )
         spatial_shape = get_spatial_shape_for_layout(
             image_batched,
-            input_layout=self.crop.input_layout,
+            input_layout=self.batch_input_layout,
         )
         starts = tf.maximum(center - crop_size // 2, 0)
         ends = tf.minimum(starts + crop_size, spatial_shape)
@@ -258,10 +259,11 @@ class RandomCropByPosNegLabel(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            cropped = self.crop.crop_tensor(
+            cropped = self.crop_tensor(
                 batched_tensor,
                 params["crop_start"],
                 params["crop_size"],
+                input_layout=self.batch_input_layout,
             )
             return restore_from_batch_axis(cropped, added_batch_axis)
 
@@ -311,7 +313,12 @@ class RandomCropByPosNegLabel(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            restored = self.crop.pad_to_original_shape(batched_tensor, crop_start, original_shape)
+            restored = self.pad_to_original_shape(
+                batched_tensor,
+                crop_start,
+                original_shape,
+                input_layout=self.batch_input_layout,
+            )
             return restore_from_batch_axis(restored, added_batch_axis)
 
         self.crop.apply_to_present_keys(
@@ -347,7 +354,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             coords,
             fallback_shape=get_spatial_shape_for_layout(
                 label,
-                input_layout=self.crop.input_layout,
+                input_layout=self.batch_input_layout,
             ),
             spatial_rank=spatial_rank,
         )
@@ -370,7 +377,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             coords,
             fallback_shape=get_spatial_shape_for_layout(
                 image,
-                input_layout=self.crop.input_layout,
+                input_layout=self.batch_input_layout,
             ),
             spatial_rank=spatial_rank,
         )
@@ -410,3 +417,41 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     def _get_last_random_crop_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)
+
+    def crop_tensor(
+        self,
+        tensor: tf.Tensor,
+        crop_start: tf.Tensor,
+        crop_size: tf.Tensor,
+        *,
+        input_layout: str,
+    ) -> tf.Tensor:
+        """Crop one tensor using the provided layout contract."""
+        layout = get_input_layout_info(input_layout)
+        if layout.batched:
+            begin = tf.concat([[0], crop_start, [0]], axis=0)
+            size = tf.concat([[tf.shape(tensor)[0]], crop_size, [tf.shape(tensor)[-1]]], axis=0)
+        else:
+            begin = tf.concat([crop_start, [0]], axis=0)
+            size = tf.concat([crop_size, [tf.shape(tensor)[-1]]], axis=0)
+        return tf.slice(tensor, begin=begin, size=size)
+
+    def pad_to_original_shape(
+        self,
+        tensor: tf.Tensor,
+        crop_start: tf.Tensor,
+        original_shape: tf.Tensor,
+        *,
+        input_layout: str,
+    ) -> tf.Tensor:
+        """Pad one tensor back into its original spatial canvas."""
+        crop_start = tf.cast(crop_start, tf.int32)
+        original_shape = tf.cast(original_shape, tf.int32)
+        current_shape = get_spatial_shape_for_layout(tensor, input_layout=input_layout)
+        pad_before = crop_start
+        pad_after = tf.maximum(original_shape - crop_start - current_shape, 0)
+        paddings = [[0, 0]]
+        for before, after in zip(tf.unstack(pad_before), tf.unstack(pad_after), strict=True):
+            paddings.append([before, after])
+        paddings.append([0, 0])
+        return tf.pad(tensor, paddings)

@@ -24,10 +24,10 @@ available under the same keys.
 - batched 2D tensors use `(B, H, W, C)`
 - batched 3D tensors use `(B, D, H, W, C)`
 
-The new transform API makes execution mode explicit through `input_mode`:
+The new transform API makes execution mode explicit through `input_layout`:
 
-- `input_mode="sample"` means the transform expects one sample tensor at a time
-- `input_mode="batch"` means the transform expects one batched tensor bundle
+- sample layouts (`"HWC"`, `"DHWC"`) mean the transform expects one sample tensor at a time
+- batch layouts (`"BHWC"`, `"BDHWC"`) mean the transform expects one batched tensor bundle
 
 Not every transform supports both modes.
 
@@ -42,13 +42,13 @@ sample-specific metadata or sample-specific spatial decisions:
 - `Spacing`
 - `Orientation`
 
-They accept `input_mode="sample"` only and raise a clear error if
-`input_mode="batch"` is requested.
+They accept only sample layouts (`"HWC"` or `"DHWC"`) and raise a clear error
+for unsupported batch layouts.
 
 ### Dual-mode transforms
 
 These transforms can operate on either one sample or one already-batched
-tensor bundle, depending on `input_mode`:
+tensor bundle, depending on `input_layout`:
 
 - `Flip`
 - `Rotate90`
@@ -56,9 +56,11 @@ tensor bundle, depending on `input_mode`:
 - `SpatialCrop`
 - `RandomFlip`
 - `RandomRotate90`
+- `RandomRotate`
 - `RandomShiftIntensity`
 - `RandomSpatialCrop`
 - `RandomCropByPosNegLabel`
+- `RandomCutOut`
 
 Most transforms are intentionally 2D/3D agnostic, so callers should provide
 rank-appropriate spatial arguments explicitly instead of relying on implicit
@@ -79,8 +81,8 @@ caller provides spatial arguments with the correct rank.
 
 For dual-mode spatial transforms, the same class can be used either:
 
-- in dataloaders with `input_mode="sample"`
-- on already batched tensors with `input_mode="batch"`
+- in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
+- on already batched tensors with batch layouts such as `"BHWC"` or `"BDHWC"`
 
 For metadata-aware transforms such as `Spacing` and `Orientation`, keep them in
 sample pipelines because affine metadata is tracked per sample.
@@ -142,10 +144,10 @@ contract. The `seed` argument accepts:
 - an integer seed for reproducible replay
 - `keras.random.SeedGenerator` for stateful seeded sampling
 
-For the currently migrated dual-mode random transforms, when
-`input_mode="batch"` is used, one random decision or one sampled parameter set
-is shared across the whole incoming batch tensor. This keeps inversion and
-trace behavior simple and predictable.
+For the currently migrated dual-mode random transforms, when a batch layout is
+used, one random decision or one sampled parameter set is shared across the
+whole incoming batch tensor. This keeps inversion and trace behavior simple
+and predictable.
 
 Common examples:
 

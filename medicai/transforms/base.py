@@ -464,6 +464,11 @@ class RandomTransform(Transform):
             return None
         if isinstance(seed, keras.random.SeedGenerator):
             return seed
+        if isinstance(seed, bool):
+            raise TypeError(
+                "`seed` must be None, an integer, or keras.random.SeedGenerator. "
+                f"Received {type(seed).__name__}."
+            )
         if isinstance(seed, int):
             return keras.random.SeedGenerator(seed)
         raise TypeError(
@@ -751,7 +756,9 @@ class RandomChoice(RandomTransform):
 
         def branch():
             local_data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
-            local_bundle = TensorBundle(local_data, dict(meta))
+            local_meta = dict(meta)
+            local_meta["applied_transforms"] = list(meta.get("applied_transforms", []))
+            local_bundle = TensorBundle(local_data, local_meta)
             output = self.transforms[index](local_bundle)
             return tuple(output.data[key] for key in data_keys)
 

@@ -155,6 +155,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         keys: Sequence[str] = ("image", "label"),
         pixdim: Sequence[float] = (1.0, 1.0, 1.0),
         interpolation: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
+        *,
         input_layout: str = "DHWC",
         allow_missing_keys: bool = False,
     ):
@@ -162,10 +163,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
         self.pixdim = tuple(pixdim)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
+            allowed_layouts=("DHWC",),
             transform_name=type(self).__name__,
         )
-        if self.input_layout != "DHWC":
-            raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC'.")
 
         if len(self.pixdim) != 3:
             raise ValueError(

@@ -137,6 +137,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str] = ("image", "label"),
         axcodes: str = "RAS",
+        *,
         input_layout: str = "DHWC",
         allow_missing_keys: bool = False,
     ):
@@ -146,10 +147,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
         self.axcodes = axcodes
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
+            allowed_layouts=("DHWC",),
             transform_name=type(self).__name__,
         )
-        if self.input_layout != "DHWC":
-            raise ValueError(f"{type(self).__name__} supports only input_layout='DHWC'.")
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         affine = bundle.meta.get("affine")
