@@ -271,9 +271,12 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         spatial_axis: Sequence[int] | None = None,
     ) -> tf.Tensor:
         """Rotate a batch-layout tensor by multiples of 90 degrees."""
+        effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
+        if effective_axis is not None and not self.layout_info.batched:
+            effective_axis = tuple(axis + 1 for axis in effective_axis)
         axes = self._resolve_axes(
             tensor,
-            spatial_axis=spatial_axis,
+            spatial_axis=effective_axis,
             input_layout=(
                 self.input_layout
                 if self.layout_info.batched

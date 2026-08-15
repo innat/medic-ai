@@ -393,14 +393,11 @@ def resolve_input_layout_axes(
     input_layout: str,
     name: str = "spatial_axis",
 ) -> tuple[int, ...]:
-    """Resolve spatial-axis indices against a declared public ``input_layout``.
+    """Resolve actual tensor axes against a declared public ``input_layout``.
 
     Args:
         tensor: Input tensor expected to match ``input_layout``.
-        axes: Axis indices expressed relative to spatial dimensions only.
-            For example, under ``"HWC"``, ``0`` means height and ``1`` means
-            width. Under ``"BHWC"``, the same ``(0, 1)`` spatial indices map
-            to the real tensor axes ``(1, 2)``.
+        axes: Axis indices expressed in real tensor-axis coordinates.
         input_layout: Canonical public layout string.
         name: Axis-group name used in error messages.
 
@@ -412,8 +409,15 @@ def resolve_input_layout_axes(
             declared layout.
     """
     layout = validate_tensor_matches_layout(tensor, input_layout)
-    normalized = normalize_spatial_axes(tuple(axes), layout.spatial_rank, name=name)
-    return tuple(layout.spatial_axes[index] for index in normalized)
+    normalized = normalize_axes(tuple(axes), layout.tensor_rank, name=name)
+    invalid = tuple(axis for axis in normalized if axis not in layout.spatial_axes)
+    if invalid:
+        raise ValueError(
+            f"`{name}` must refer only to spatial axes for input_layout="
+            f"{layout.input_layout!r}. Received {normalized}, spatial axes are "
+            f"{layout.spatial_axes}."
+        )
+    return normalized
 
 # Affine Utility
 

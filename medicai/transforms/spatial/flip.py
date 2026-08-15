@@ -224,6 +224,11 @@ class Flip(KeyedTransform, InvertibleTransform):
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor
+        if not self.layout_info.batched:
+            if isinstance(effective_axis, int):
+                effective_axis = effective_axis + 1
+            else:
+                effective_axis = tuple(axis + 1 for axis in effective_axis)
         return tf.reverse(
             tensor,
             axis=self._resolve_axes(
