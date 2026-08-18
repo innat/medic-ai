@@ -13,8 +13,6 @@ from .tensor_bundle import TensorBundle
 
 def _as_tensor_like(value: Any) -> Any:
     """Convert tensor-like numeric values to backend-aware tensors when practical."""
-    if tf.is_tensor(value) or keras.backend.is_tensor(value):
-        return value
     if isinstance(value, (np.ndarray, np.generic, list, tuple, int, float, bool)):
         try:
             return keras.ops.convert_to_tensor(value)
