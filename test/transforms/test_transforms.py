@@ -944,6 +944,16 @@ def test_normalize_intensity_accepts_input_layout():
 
 
 @pytest.mark.unit
+def test_normalize_intensity_accepts_plain_numpy_inputs():
+    image = np.arange(12, dtype=np.float32).reshape(3, 4, 1)
+
+    out = NormalizeIntensity(keys=["image"], input_layout="HWC")({"image": image})
+
+    assert tuple(ops.shape(out["image"])) == (3, 4, 1)
+    assert tf.is_tensor(out["image"])
+
+
+@pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
     out = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")(TensorBundle({"image": image}))
@@ -1676,6 +1686,22 @@ def test_random_spatial_crop_accepts_input_layout():
 
     assert tuple(ops.shape(out["image"])) == (2, 3, 4, 1)
     assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
+def test_random_spatial_crop_accepts_plain_numpy_inputs():
+    image = np.arange(30, dtype=np.float32).reshape(5, 6, 1)
+
+    out = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(3, 4),
+        random_center=False,
+        input_layout="HWC",
+        seed=7,
+    )({"image": image})
+
+    assert tuple(ops.shape(out["image"])) == (3, 4, 1)
+    assert tf.is_tensor(out["image"])
 
 
 @pytest.mark.unit

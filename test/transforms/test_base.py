@@ -121,6 +121,23 @@ def test_ensure_tensor_bundle_converts_numpy_scalars():
 
 
 @pytest.mark.unit
+def test_ensure_tensor_bundle_converts_python_tensor_like_values():
+    bundle = ensure_tensor_bundle(
+        {"image": [[[1.0], [2.0]], [[3.0], [4.0]]]},
+        {"shape_hint": (2, 2, 1)},
+    )
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(bundle["image"]),
+        np.array([[[1.0], [2.0]], [[3.0], [4.0]]], dtype=np.float32),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(bundle["shape_hint"]),
+        np.array([2, 2, 1]),
+    )
+
+
+@pytest.mark.unit
 def test_apply_if_applied_handles_python_bools():
     assert _apply_if_applied(True, lambda: "applied", lambda: "skipped") == "applied"
     assert _apply_if_applied(False, lambda: "applied", lambda: "skipped") == "skipped"

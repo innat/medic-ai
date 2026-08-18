@@ -12,14 +12,19 @@ from .tensor_bundle import TensorBundle
 
 
 def _as_tensor_like(value: Any) -> Any:
-    """Convert NumPy tensor-like values to backend-aware tensors when practical."""
-    if isinstance(value, (np.ndarray, np.generic)):
-        return keras.ops.convert_to_tensor(value)
+    """Convert tensor-like numeric values to backend-aware tensors when practical."""
+    if tf.is_tensor(value) or keras.backend.is_tensor(value):
+        return value
+    if isinstance(value, (np.ndarray, np.generic, list, tuple, int, float, bool)):
+        try:
+            return keras.ops.convert_to_tensor(value)
+        except (TypeError, ValueError):
+            return value
     return value
 
 
 def _convert_numpy_mapping(mapping: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Convert top-level NumPy tensor-like values in a mapping to tensors."""
+    """Convert top-level tensor-like values in a mapping to tensors when possible."""
     if mapping is None:
         return {}
 
@@ -168,6 +173,21 @@ def _require_static_value(value: Any, name: str) -> Any:
 def _is_tensorflow_eager_execution() -> bool:
     """Return whether TensorFlow is currently executing eagerly."""
     return tf.executing_eagerly()
+
+
+def _normalize_random_dtype(dtype: Any) -> str:
+    """Normalize dtype values for Keras random ops across backends.
+
+    Keras random APIs accept backend-neutral dtype descriptors such as
+    ``"float32"`` and ``"int32"``. Passing TensorFlow dtype objects directly
+    can fail under non-TensorFlow backends, especially JAX.
+    """
+    try:
+        return keras.backend.standardize_dtype(dtype)
+    except (AttributeError, TypeError, ValueError):
+        if hasattr(dtype, "name"):
+            return str(dtype.name)
+        return str(dtype)
 
 
 class Transform:
@@ -417,7 +437,7 @@ class RandomTransform(Transform):
             shape=shape,
             minval=minval,
             maxval=maxval,
-            dtype=dtype,
+            dtype=_normalize_random_dtype(dtype),
             seed=self.seed_generator,
         )
 
@@ -434,7 +454,7 @@ class RandomTransform(Transform):
             shape=shape,
             mean=mean,
             stddev=stddev,
-            dtype=dtype,
+            dtype=_normalize_random_dtype(dtype),
             seed=self.seed_generator,
         )
 
@@ -451,7 +471,7 @@ class RandomTransform(Transform):
             shape=shape,
             minval=minval,
             maxval=maxval,
-            dtype=dtype,
+            dtype=_normalize_random_dtype(dtype),
             seed=self.seed_generator,
         )
 
