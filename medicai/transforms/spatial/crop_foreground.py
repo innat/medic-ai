@@ -1,5 +1,6 @@
 from typing import Callable, Optional, Sequence, Union
 
+from keras import ops
 import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
@@ -208,7 +209,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         )
 
         if self.channel_indices is not None:
-            source_data = tf.gather(source_data, self.channel_indices, axis=-1)
+            source_data = ops.take(source_data, self.channel_indices, axis=-1)
 
         min_coords, max_coords = self.find_bounding_box(source_data, self.select_fn, spatial_rank)
         min_coords, max_coords = self.add_margin(
@@ -297,25 +298,25 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         spatial_rank: int,
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Find the bounding box of the foreground in the image."""
-        mask = tf.reduce_any(select_fn(image), axis=-1)
+        mask = ops.any(select_fn(image), axis=-1)
         coords = tf.where(mask)
         coord_dtype = coords.dtype
 
         def empty_bbox():
             return (
-                tf.zeros((spatial_rank,), dtype=coord_dtype),
-                tf.cast(
+                ops.zeros((spatial_rank,), dtype=coord_dtype),
+                ops.cast(
                     get_spatial_shape_for_layout(image, input_layout=self.input_layout),
                     coord_dtype,
                 ),
             )
 
         def foreground_bbox():
-            min_coords = tf.cast(tf.reduce_min(coords[:, :spatial_rank], axis=0), coord_dtype)
-            max_coords = tf.cast(tf.reduce_max(coords[:, :spatial_rank], axis=0) + 1, coord_dtype)
+            min_coords = ops.cast(ops.min(coords[:, :spatial_rank], axis=0), coord_dtype)
+            max_coords = ops.cast(ops.max(coords[:, :spatial_rank], axis=0) + 1, coord_dtype)
             return min_coords, max_coords
 
-        return tf.cond(tf.shape(coords)[0] > 0, foreground_bbox, empty_bbox)
+        return ops.cond(ops.shape(coords)[0] > 0, foreground_bbox, empty_bbox)
 
     def add_margin(
         self,
@@ -327,19 +328,19 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         spatial_rank: int,
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Add margin to the bounding box while staying inside image bounds."""
-        margin = tf.convert_to_tensor(
+        margin = ops.convert_to_tensor(
             ensure_spatial_tuple(margin, spatial_rank, "margin"),
-            dtype=tf.int32,
+            dtype="int32",
         )
 
-        min_coords = tf.maximum(tf.cast(min_coords, tf.int32) - margin, 0)
-        max_coords = tf.minimum(
-            tf.cast(max_coords, tf.int32) + margin, tf.cast(image_shape, tf.int32)
+        min_coords = ops.maximum(ops.cast(min_coords, "int32") - margin, 0)
+        max_coords = ops.minimum(
+            ops.cast(max_coords, "int32") + margin, ops.cast(image_shape, "int32")
         )
 
         if not allow_smaller:
-            min_coords = tf.minimum(min_coords, tf.cast(image_shape, tf.int32) - margin)
-            max_coords = tf.maximum(max_coords, margin)
+            min_coords = ops.minimum(min_coords, ops.cast(image_shape, "int32") - margin)
+            max_coords = ops.maximum(max_coords, margin)
 
         return min_coords, max_coords
 
@@ -352,15 +353,15 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         spatial_rank: int,
     ) -> tuple[tf.Tensor, tf.Tensor]:
         """Expand the bounding box so its size is divisible by ``k_divisible``."""
-        k_divisible = tf.convert_to_tensor(
+        k_divisible = ops.convert_to_tensor(
             ensure_spatial_tuple(k_divisible, spatial_rank, "k_divisible"),
-            dtype=tf.int32,
+            dtype="int32",
         )
 
         size = max_coords - min_coords
         remainder = size % k_divisible
-        padding = tf.where(remainder != 0, k_divisible - remainder, 0)
-        max_coords = tf.minimum(max_coords + padding, tf.cast(image_shape, tf.int32))
+        padding = ops.where(remainder != 0, k_divisible - remainder, 0)
+        max_coords = ops.minimum(max_coords + padding, ops.cast(image_shape, "int32"))
         return min_coords, max_coords
 
     def _get_last_crop_foreground_trace(self, bundle: TensorBundle):

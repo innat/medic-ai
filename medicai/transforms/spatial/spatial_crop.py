@@ -1,6 +1,6 @@
-from typing import Sequence
+from typing import Any, Sequence
 
-import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
@@ -135,7 +135,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         crop_sizes = {}
         original_shapes = {}
 
-        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_crop(tensor: Any, key: str) -> Any:
             starts, crop_size = self.compute_crop_bounds(tensor)
             crop_starts[key] = starts
             crop_sizes[key] = crop_size
@@ -168,17 +168,21 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         crop_starts = trace["params"].get("crop_start", {})
         original_shapes = trace["params"].get("original_shapes", {})
 
-        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_crop(tensor: Any, key: str) -> Any:
             crop_start = crop_starts.get(key)
             original_shape = original_shapes.get(key)
             if crop_start is None or original_shape is None:
                 return tensor
             return self.pad_to_original_shape(tensor, crop_start, original_shape)
 
-        self.apply_to_present_keys(bundle, apply_inverse_crop, keys=trace["params"].get("keys", []))
+        self.apply_to_present_keys(
+            bundle,
+            apply_inverse_crop,
+            keys=trace["params"].get("keys", []),
+        )
         return bundle
 
-    def compute_crop_bounds(self, tensor: tf.Tensor) -> tuple[tf.Tensor, tf.Tensor]:
+    def compute_crop_bounds(self, tensor: Any) -> tuple[Any, Any]:
         """Compute bounded crop start coordinates and crop size.
 
         Args:
@@ -198,32 +202,32 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             tensor,
             input_layout=self.input_layout,
         )
-        crop_size = tf.convert_to_tensor(
+        crop_size = ops.convert_to_tensor(
             ensure_spatial_tuple(self.crop_size, spatial_rank, "crop_size"),
-            dtype=tf.int32,
+            dtype="int32",
         )
-        crop_size = tf.where(crop_size > 0, crop_size, spatial_shape)
-        crop_size = tf.minimum(crop_size, spatial_shape)
+        crop_size = ops.where(crop_size > 0, crop_size, spatial_shape)
+        crop_size = ops.minimum(crop_size, spatial_shape)
 
         if self.crop_start is not None:
-            starts = tf.convert_to_tensor(
+            starts = ops.convert_to_tensor(
                 ensure_spatial_tuple(self.crop_start, spatial_rank, "crop_start"),
-                dtype=tf.int32,
+                dtype="int32",
             )
         elif self.crop_center is not None:
-            center = tf.convert_to_tensor(
+            center = ops.convert_to_tensor(
                 ensure_spatial_tuple(self.crop_center, spatial_rank, "crop_center"),
-                dtype=tf.int32,
+                dtype="int32",
             )
-            starts = tf.maximum(center - crop_size // 2, 0)
+            starts = ops.maximum(center - crop_size // 2, 0)
         else:
-            starts = tf.zeros((spatial_rank,), dtype=tf.int32)
+            starts = ops.zeros((spatial_rank,), dtype="int32")
 
-        ends = tf.minimum(starts + crop_size, spatial_shape)
-        starts = tf.maximum(ends - crop_size, 0)
+        ends = ops.minimum(starts + crop_size, spatial_shape)
+        starts = ops.maximum(ends - crop_size, 0)
         return starts, crop_size
 
-    def crop_tensor(self, tensor: tf.Tensor, starts: tf.Tensor, crop_size: tf.Tensor) -> tf.Tensor:
+    def crop_tensor(self, tensor: Any, starts: Any, crop_size: Any) -> Any:
         """Crop one tensor using TensorFlow slicing.
 
         Args:
@@ -236,50 +240,67 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             dimension preserved.
         """
         if self.layout_info.batched:
-            begin = tf.concat([[0], starts, [0]], axis=0)
-            size = tf.concat(
-                [[tf.shape(tensor)[0]], crop_size, [tf.shape(tensor)[-1]]],
+            begin = ops.concatenate(
+                [
+                    ops.convert_to_tensor([0], dtype="int32"),
+                    starts,
+                    ops.convert_to_tensor([0], dtype="int32"),
+                ],
+                axis=0,
+            )
+            size = ops.concatenate(
+                [
+                    ops.reshape(ops.shape(tensor)[0], (1,)),
+                    crop_size,
+                    ops.reshape(ops.shape(tensor)[-1], (1,)),
+                ],
                 axis=0,
             )
         else:
-            begin = tf.concat([starts, [0]], axis=0)
-            size = tf.concat([crop_size, [tf.shape(tensor)[-1]]], axis=0)
-        return tf.slice(tensor, begin=begin, size=size)
+            begin = ops.concatenate(
+                [starts, ops.convert_to_tensor([0], dtype="int32")],
+                axis=0,
+            )
+            size = ops.concatenate(
+                [crop_size, ops.reshape(ops.shape(tensor)[-1], (1,))],
+                axis=0,
+            )
+        return ops.slice(tensor, start_indices=begin, shape=size)
 
     def pad_to_original_shape(
         self,
-        tensor: tf.Tensor,
-        crop_start: tf.Tensor,
-        original_shape: tf.Tensor,
-    ) -> tf.Tensor:
+        tensor: Any,
+        crop_start: Any,
+        original_shape: Any,
+    ) -> Any:
         """Pad a cropped tensor back into its original spatial canvas."""
-        crop_start = tf.cast(crop_start, tf.int32)
-        original_shape = tf.cast(original_shape, tf.int32)
+        crop_start = ops.cast(crop_start, "int32")
+        original_shape = ops.cast(original_shape, "int32")
         current_shape = get_spatial_shape_for_layout(
             tensor,
             input_layout=self.input_layout,
         )
         pad_before = crop_start
         pad_after = original_shape - crop_start - current_shape
-        spatial_paddings = tf.stack([pad_before, pad_after], axis=1)
+        spatial_paddings = ops.stack([pad_before, pad_after], axis=1)
         if self.layout_info.batched:
-            paddings = tf.concat(
+            paddings = ops.concatenate(
                 [
-                    tf.constant([[0, 0]], dtype=tf.int32),
+                    ops.convert_to_tensor([[0, 0]], dtype="int32"),
                     spatial_paddings,
-                    tf.constant([[0, 0]], dtype=tf.int32),
+                    ops.convert_to_tensor([[0, 0]], dtype="int32"),
                 ],
                 axis=0,
             )
         else:
-            paddings = tf.concat(
+            paddings = ops.concatenate(
                 [
                     spatial_paddings,
-                    tf.constant([[0, 0]], dtype=tf.int32),
+                    ops.convert_to_tensor([[0, 0]], dtype="int32"),
                 ],
                 axis=0,
             )
-        return tf.pad(tensor, paddings)
+        return ops.pad(tensor, paddings)
 
     def _get_last_spatial_crop_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

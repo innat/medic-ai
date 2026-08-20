@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
+from keras import ops
 import tensorflow as tf
 
 
@@ -249,17 +250,17 @@ def custom_tf_boolean_mask(
     Returns:
         tf.Tensor: Masked tensor according to ``mode``.
     """
-    bool_mask = tf.cast(mask, tf.bool) if mask.dtype != tf.bool else mask
+    bool_mask = ops.cast(mask, "bool") if mask.dtype != tf.bool else mask
 
     if mode == "extract":
         indices = tf.where(bool_mask)
         return tf.gather_nd(tensor, indices)
     if mode == "where":
-        fill_tensor = tf.cast(fill_value, tensor.dtype)
-        return tf.where(bool_mask, tensor, fill_tensor)
+        fill_tensor = ops.cast(fill_value, tensor.dtype)
+        return ops.where(bool_mask, tensor, fill_tensor)
     if mode == "multiply":
-        numeric_mask = tf.cast(bool_mask, tensor.dtype)
-        return tf.multiply(tensor, numeric_mask)
+        numeric_mask = ops.cast(bool_mask, tensor.dtype)
+        return ops.multiply(tensor, numeric_mask)
     raise ValueError(
         f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."
     )
@@ -304,7 +305,7 @@ def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.
         tf.Tensor: Dynamic spatial shape.
     """
     layout = validate_tensor_matches_layout(tensor, input_layout)
-    return tf.gather(tf.shape(tensor), layout.spatial_axes)
+    return ops.take(ops.shape(tensor), layout.spatial_axes)
 
 def ensure_batch_axis_for_layout(
     tensor: tf.Tensor,
