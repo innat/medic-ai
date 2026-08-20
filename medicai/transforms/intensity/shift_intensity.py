@@ -1,6 +1,7 @@
 from typing import Sequence, Union
 
 import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
@@ -107,7 +108,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         offset = trace["params"].get("offset", self.offset)
         self.apply_to_present_keys(
             bundle,
-            lambda tensor, _: self.shift_tensor(tensor, offset=-tf.cast(offset, tensor.dtype)),
+            lambda tensor, _: self.shift_tensor(tensor, offset=-ops.cast(offset, tensor.dtype)),
             keys=trace["params"].get("keys", []),
         )
         return bundle
@@ -145,7 +146,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         This kernel is agnostic to sample vs batch layout because it performs
         only elementwise addition with TensorFlow broadcasting.
         """
-        offset_value = tf.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
+        offset_value = ops.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
         return tensor + offset_value
 
     def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:

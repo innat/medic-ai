@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
@@ -240,14 +241,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
-        effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
+        effective_k = tf.math.floormod(ops.cast(self.k if k is None else k, "int32"), 4)
         if not self.layout_info.batched:
             return tf.switch_case(
                 effective_k,
                 branch_fns={
                     0: lambda: tensor,
                     1: lambda: self._rotate_once(tensor, axes),
-                    2: lambda: tf.reverse(tensor, axis=axes),
+                    2: lambda: ops.flip(tensor, axis=axes),
                     3: lambda: self._rotate_once(
                         self._rotate_once(self._rotate_once(tensor, axes), axes), axes
                     ),
@@ -283,14 +284,14 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 else get_batched_input_layout(self.input_layout)
             ),
         )
-        effective_k = tf.math.floormod(tf.cast(self.k if k is None else k, tf.int32), 4)
+        effective_k = tf.math.floormod(ops.cast(self.k if k is None else k, "int32"), 4)
 
         return tf.switch_case(
             effective_k,
             branch_fns={
                 0: lambda: tensor,
                 1: lambda: self._rotate_once(tensor, axes),
-                2: lambda: tf.reverse(tensor, axis=axes),
+                2: lambda: ops.flip(tensor, axis=axes),
                 3: lambda: self._rotate_once(
                     self._rotate_once(self._rotate_once(tensor, axes), axes), axes
                 ),
@@ -299,17 +300,17 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     def _rotate_once(self, tensor: tf.Tensor, axes: tuple[int, int]) -> tf.Tensor:
         perm = [axis for axis in range(tensor.shape.rank) if axis not in axes] + list(axes)
-        transposed = tf.transpose(tensor, perm=perm)
+        transposed = ops.transpose(tensor, axes=perm)
         perm_len = len(perm)
-        rotated = tf.transpose(
-            tf.reverse(transposed, axis=[perm_len - 1]),
-            perm=[*range(perm_len - 2), perm_len - 1, perm_len - 2],
+        rotated = ops.transpose(
+            ops.flip(transposed, axis=[perm_len - 1]),
+            axes=[*range(perm_len - 2), perm_len - 1, perm_len - 2],
         )
 
         inverse_perm = [0] * len(perm)
         for index, axis in enumerate(perm):
             inverse_perm[axis] = index
-        return tf.transpose(rotated, perm=inverse_perm)
+        return ops.transpose(rotated, axes=inverse_perm)
 
     def _resolve_axes(
         self,

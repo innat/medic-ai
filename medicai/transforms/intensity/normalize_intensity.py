@@ -5,8 +5,6 @@ import tensorflow as tf
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    custom_tf_boolean_mask,
-    get_input_layout_info,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -152,51 +150,50 @@ class NormalizeIntensity(KeyedTransform):
 
     def _normalize_channel_wise(self, tensor: tf.Tensor) -> tf.Tensor:
         mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        reduce_axes = get_input_layout_info(self.input_layout).spatial_axes
-        mask_f = tf.cast(mask, tensor.dtype)
-        valid_counts = tf.reduce_sum(mask_f, axis=reduce_axes)
+        num_dims = tf.rank(tensor)
+        channel_axis = num_dims - 1
 
-        broadcast_shape = tf.shape(valid_counts)
-        for axis in sorted(reduce_axes):
-            broadcast_shape = tf.concat(
-                [broadcast_shape[:axis], [1], broadcast_shape[axis:]],
-                axis=0,
-            )
-        valid_counts_b = tf.reshape(valid_counts, broadcast_shape)
+        def normalize_single_channel(channel_and_mask):
+            channel, channel_mask = channel_and_mask
+            channel_masked = tf.boolean_mask(channel, channel_mask)
+            has_valid = tf.size(channel_masked) > 0
 
-        masked_tensor = tf.where(mask, tensor, tf.zeros_like(tensor))
-        mean = tf.reduce_sum(masked_tensor, axis=reduce_axes) / tf.where(
-            valid_counts > 0,
-            valid_counts,
-            tf.ones_like(valid_counts),
+            def normalize_nonempty():
+                mean = tf.reduce_mean(channel_masked)
+                std = tf.math.reduce_std(channel_masked)
+                sub = self.offset if self.offset is not None else mean
+                div = self.scale if self.scale is not None else std
+                sub = tf.cast(sub, channel.dtype)
+                div = tf.cast(div, channel.dtype)
+                div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
+                normalized = (channel - sub) / div
+                if self.nonzero:
+                    return tf.where(channel_mask, normalized, channel)
+                return normalized
+
+            return tf.cond(has_valid, normalize_nonempty, lambda: channel)
+
+        permutation = tf.concat(
+            [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0
         )
-        mean_b = tf.reshape(mean, broadcast_shape)
-
-        sq_diff = tf.where(mask, tf.square(tensor - mean_b), tf.zeros_like(tensor))
-        std = tf.sqrt(tf.reduce_sum(sq_diff, axis=reduce_axes) / tf.where(
-            valid_counts > 0,
-            valid_counts,
-            tf.ones_like(valid_counts),
-        ))
-        std_b = tf.reshape(std, broadcast_shape)
-
-        sub = mean_b if self.offset is None else tf.cast(self.offset, tensor.dtype)
-        div = std_b if self.scale is None else tf.cast(self.scale, tensor.dtype)
-        div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-
-        normalized = (tensor - sub) / div
-        if self.nonzero:
-            normalized = tf.where(mask, normalized, tensor)
-
-        has_valid = valid_counts_b > 0
-        return tf.where(has_valid, normalized, tensor)
+        transposed_tensor = tf.transpose(tensor, perm=permutation)
+        transposed_mask = tf.transpose(mask, perm=permutation)
+        normalized_transposed = tf.map_fn(
+            normalize_single_channel,
+            (transposed_tensor, transposed_mask),
+            dtype=tensor.dtype,
+        )
+        inverse_permutation = tf.concat(
+            [tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0
+        )
+        return tf.transpose(normalized_transposed, perm=inverse_permutation)
 
     def _normalize_global(self, tensor: tf.Tensor) -> tf.Tensor:
         mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
         num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
 
         def normalize():
-            vals = custom_tf_boolean_mask(tensor, mask, mode="extract")
+            vals = tf.boolean_mask(tensor, mask)
             mean = tf.reduce_mean(vals)
             std = tf.math.reduce_std(vals)
             std = tf.where(std == 0.0, 1.0, std)

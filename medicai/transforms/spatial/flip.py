@@ -1,6 +1,7 @@
 from typing import Sequence, Union
 
 import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform
 from ..tensor_bundle import TensorBundle
@@ -207,7 +208,7 @@ class Flip(KeyedTransform, InvertibleTransform):
         if effective_axis is None:
             return tensor
         if not self.layout_info.batched:
-            return tf.reverse(tensor, axis=self._resolve_axes(tensor, spatial_axis=effective_axis))
+            return ops.flip(tensor, axis=self._resolve_axes(tensor, spatial_axis=effective_axis))
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
             input_layout=self.input_layout,
@@ -229,7 +230,7 @@ class Flip(KeyedTransform, InvertibleTransform):
                 effective_axis = effective_axis + 1
             else:
                 effective_axis = tuple(axis + 1 for axis in effective_axis)
-        return tf.reverse(
+        return ops.flip(
             tensor,
             axis=self._resolve_axes(
                 tensor,

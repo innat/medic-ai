@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 import keras
 import numpy as np
 import tensorflow as tf
+from keras import ops
 
 from .tensor_bundle import TensorBundle
 
@@ -15,7 +16,7 @@ def _as_tensor_like(value: Any) -> Any:
     """Convert tensor-like numeric values to backend-aware tensors when practical."""
     if isinstance(value, (np.ndarray, np.generic, list, tuple, int, float, bool)):
         try:
-            return keras.ops.convert_to_tensor(value)
+            return ops.convert_to_tensor(value)
         except (TypeError, ValueError):
             return value
     return value
@@ -824,21 +825,21 @@ class RandomChoice(RandomTransform):
                 maxval=1.0,
                 dtype=tf.float32,
             )
-            return tf.argsort(scores, direction="DESCENDING")
+            return ops.argsort(scores, axis=-1, direction="descending")
 
-        weights = tf.convert_to_tensor(self.weights, dtype=tf.float32)
+        weights = ops.convert_to_tensor(self.weights, dtype="float32")
         uniforms = self.random_uniform(
             shape=(num_transforms,),
             minval=1e-6,
             maxval=1.0,
             dtype=tf.float32,
         )
-        gumbels = -tf.math.log(-tf.math.log(uniforms))
+        gumbels = -ops.log(-ops.log(uniforms))
         valid = weights > 0.0
-        safe_weights = tf.where(valid, weights, 1e-9)
-        scores = tf.math.log(safe_weights) + gumbels
-        scores = tf.where(valid, scores, -1e9)
-        return tf.argsort(scores, direction="DESCENDING")
+        safe_weights = ops.where(valid, weights, 1e-9)
+        scores = ops.log(safe_weights) + gumbels
+        scores = ops.where(valid, scores, -1e9)
+        return ops.argsort(scores, axis=-1, direction="descending")
 
     def _normalize_num_choices(self, num_choices: int | tuple[int, int]) -> tuple[int, int]:
         if isinstance(num_choices, int):
