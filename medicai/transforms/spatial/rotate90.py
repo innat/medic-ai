@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
-import tensorflow as tf
 from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform
@@ -191,10 +190,10 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     def transform_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         key: str,
         params: dict[str, object],
-    ) -> tf.Tensor:
+    ) -> Any:
         """Apply the configured quarter-turn kernel to one tensor."""
         del key
         return self.rotate_tensor(
@@ -218,10 +217,10 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     def rotate_tensor(
         self,
-        tensor: tf.Tensor,
-        k: int | tf.Tensor | None = None,
+        tensor: Any,
+        k: int | Any | None = None,
         spatial_axis: Sequence[int] | None = None,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Rotate one tensor by multiples of 90 degrees.
 
         Args:
@@ -233,7 +232,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 ``self.spatial_axis`` is used.
 
         Returns:
-            ``tf.Tensor``: The rotated tensor.
+            Tensor-like: The rotated tensor.
         """
         validate_tensor_matches_layout(
             tensor,
@@ -241,18 +240,18 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
-        effective_k = tf.math.floormod(ops.cast(self.k if k is None else k, "int32"), 4)
+        effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
         if not self.layout_info.batched:
-            return tf.switch_case(
+            return ops.switch(
                 effective_k,
-                branch_fns={
-                    0: lambda: tensor,
-                    1: lambda: self._rotate_once(tensor, axes),
-                    2: lambda: ops.flip(tensor, axis=axes),
-                    3: lambda: self._rotate_once(
+                [
+                    lambda: tensor,
+                    lambda: self._rotate_once(tensor, axes),
+                    lambda: ops.flip(tensor, axis=axes),
+                    lambda: self._rotate_once(
                         self._rotate_once(self._rotate_once(tensor, axes), axes), axes
                     ),
-                },
+                ],
             )
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
@@ -267,10 +266,10 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     def rotate_batch_tensor(
         self,
-        tensor: tf.Tensor,
-        k: int | tf.Tensor | None = None,
+        tensor: Any,
+        k: int | Any | None = None,
         spatial_axis: Sequence[int] | None = None,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Rotate a batch-layout tensor by multiples of 90 degrees."""
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is not None and not self.layout_info.batched:
@@ -284,21 +283,21 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 else get_batched_input_layout(self.input_layout)
             ),
         )
-        effective_k = tf.math.floormod(ops.cast(self.k if k is None else k, "int32"), 4)
+        effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
 
-        return tf.switch_case(
+        return ops.switch(
             effective_k,
-            branch_fns={
-                0: lambda: tensor,
-                1: lambda: self._rotate_once(tensor, axes),
-                2: lambda: ops.flip(tensor, axis=axes),
-                3: lambda: self._rotate_once(
+            [
+                lambda: tensor,
+                lambda: self._rotate_once(tensor, axes),
+                lambda: ops.flip(tensor, axis=axes),
+                lambda: self._rotate_once(
                     self._rotate_once(self._rotate_once(tensor, axes), axes), axes
                 ),
-            },
+            ],
         )
 
-    def _rotate_once(self, tensor: tf.Tensor, axes: tuple[int, int]) -> tf.Tensor:
+    def _rotate_once(self, tensor: Any, axes: tuple[int, int]) -> Any:
         perm = [axis for axis in range(tensor.shape.rank) if axis not in axes] + list(axes)
         transposed = ops.transpose(tensor, axes=perm)
         perm_len = len(perm)
@@ -314,7 +313,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     def _resolve_axes(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         spatial_axis: Sequence[int] | None = None,
         input_layout: str | None = None,
     ) -> tuple[int, int]:

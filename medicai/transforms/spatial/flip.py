@@ -1,6 +1,5 @@
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
-import tensorflow as tf
 from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform
@@ -167,10 +166,10 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     def transform_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         key: str,
         params: dict[str, object],
-    ) -> tf.Tensor:
+    ) -> Any:
         """Apply the configured flip kernel to one tensor."""
         del key
         return self.flip_tensor(tensor, spatial_axis=params["spatial_axis"])
@@ -189,9 +188,9 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     def flip_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         spatial_axis: Union[int, Sequence[int], None] = None,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Flip one tensor using explicit spatial axes.
 
         Args:
@@ -218,9 +217,9 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     def flip_batch_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         spatial_axis: Union[int, Sequence[int], None] = None,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Flip a batched tensor using spatial axes expressed without the batch axis."""
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
@@ -245,7 +244,7 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     def _resolve_axes(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         spatial_axis: Union[int, Sequence[int], None] = None,
         input_layout: str | None = None,
     ) -> tuple[int, ...]:

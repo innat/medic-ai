@@ -1,6 +1,5 @@
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
-import tensorflow as tf
 from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
@@ -80,7 +79,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offset: Union[float, tf.Tensor],
+        offset: Union[float, Any],
         *,
         input_layout: str,
         allow_missing_keys: bool = False,
@@ -121,7 +120,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             "input_layout": self.input_layout,
         }
 
-    def transform_tensor(self, tensor: tf.Tensor, params: dict[str, object]) -> tf.Tensor:
+    def transform_tensor(self, tensor: Any, params: dict[str, object]) -> Any:
         """Shift one tensor using the prepared transform parameters."""
         self._validate_tensor_layout(tensor)
         return self.shift_tensor(tensor, offset=params["offset"])
@@ -139,8 +138,8 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         }
 
     def shift_tensor(
-        self, tensor: tf.Tensor, offset: Union[float, tf.Tensor, None] = None
-    ) -> tf.Tensor:
+        self, tensor: Any, offset: Union[float, Any, None] = None
+    ) -> Any:
         """Shift one tensor by a scalar or broadcastable offset.
 
         This kernel is agnostic to sample vs batch layout because it performs
@@ -149,7 +148,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         offset_value = ops.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
         return tensor + offset_value
 
-    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+    def _validate_tensor_layout(self, tensor: Any) -> None:
         """Validate sample or batch channel-last layout for intensity shifting."""
         validate_tensor_matches_layout(
             tensor,
