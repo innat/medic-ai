@@ -685,6 +685,27 @@ def test_scale_intensity_range_accepts_uint8_tensor_inputs():
 
 
 @pytest.mark.unit
+def test_scale_intensity_range_accepts_numpy_mapping_inputs():
+    image = np.array([[[0.0], [128.0], [255.0]]], dtype=np.float32)
+
+    out = ScaleIntensityRange(
+        keys=["image"],
+        input_min=0.0,
+        input_max=255.0,
+        output_min=0.0,
+        output_max=1.0,
+        clip=True,
+        input_layout="HWC",
+    )({"image": image})
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out["image"]),
+        np.array([[[0.0], [128.0 / 255.0], [1.0]]], dtype=np.float32),
+        rtol=1e-6,
+    )
+
+
+@pytest.mark.unit
 def test_scale_intensity_range_inverse_restores_affine_mapping():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
@@ -1098,6 +1119,15 @@ def test_shift_intensity_accepts_input_layout():
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 1.5, rtol=1e-6)
     assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
+def test_shift_intensity_accepts_numpy_mapping_inputs():
+    image = np.ones((3, 4, 1), dtype=np.float32)
+
+    out = ShiftIntensity(keys=["image"], offset=0.5, input_layout="HWC")({"image": image})
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 1.5, rtol=1e-6)
 
 
 @pytest.mark.unit
@@ -2661,6 +2691,15 @@ def test_flip_accepts_input_layout_with_real_tensor_axes():
 
 
 @pytest.mark.unit
+def test_flip_accepts_numpy_mapping_inputs():
+    image = np.arange(6, dtype=np.float32).reshape(2, 3, 1)
+
+    out = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")({"image": image})
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), image[:, ::-1, :])
+
+
+@pytest.mark.unit
 def test_flip_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     batch = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
@@ -2793,6 +2832,15 @@ def test_rotate90_accepts_input_layout_with_real_tensor_axes():
     np.testing.assert_allclose(ops.convert_to_numpy(out_2d["image"]), expected_2d)
     np.testing.assert_allclose(ops.convert_to_numpy(out_3d["image"]), expected_3d)
     assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
+
+
+@pytest.mark.unit
+def test_rotate90_accepts_numpy_mapping_inputs():
+    image = np.arange(6, dtype=np.float32).reshape(2, 3, 1)
+
+    out = Rotate90(keys=["image"], k=1, input_layout="HWC")({"image": image})
+
+    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), np.rot90(image, k=1, axes=(0, 1)))
 
 
 @pytest.mark.unit
