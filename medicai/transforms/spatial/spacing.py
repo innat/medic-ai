@@ -2,6 +2,7 @@ import warnings
 from typing import Mapping, Sequence
 
 import tensorflow as tf
+from medicai.utils.image import resize_volumes
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
@@ -12,7 +13,6 @@ from ..utils import (
     get_spatial_rank,
     is_axis_aligned_affine,
     resolve_input_layout,
-    resize_volumes,
     round_half_up,
     spacing_from_affine,
     validate_tensor_matches_layout,

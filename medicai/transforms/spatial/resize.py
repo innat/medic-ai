@@ -4,6 +4,8 @@ from typing import Mapping, Sequence
 
 import tensorflow as tf
 
+from medicai.utils.image import resize_volumes
+
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
@@ -13,7 +15,6 @@ from ..utils import (
     get_spatial_shape_for_layout,
     resolve_input_layout,
     restore_from_batch_axis,
-    resize_volumes,
     validate_tensor_matches_layout,
 )
 
