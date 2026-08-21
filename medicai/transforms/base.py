@@ -1194,9 +1194,14 @@ class LambdaTransform(KeyedTransform):
         return self.inverse_fn is not None
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        should_apply: tf.Tensor | bool = True
+        should_apply: Any | bool = True
         if self.prob is not None:
-            should_apply = tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
+            should_apply = keras.random.uniform(
+                shape=(),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            ) < self.prob
 
         present_keys = self.iter_present_keys(bundle)
         for key in present_keys:
