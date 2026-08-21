@@ -1,7 +1,6 @@
 from typing import Any, Sequence
 
 import keras
-import tensorflow as tf
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
@@ -308,13 +307,13 @@ class RandomSpatialCrop(RandomTransform):
         return random_start + crop_size // 2
 
     def _get_label_aware_center(
-        self, spatial_shape: tf.Tensor, crop_size: tf.Tensor, label: tf.Tensor, spatial_rank: int
-    ) -> tf.Tensor:
+        self, spatial_shape: Any, crop_size: Any, label: Any, spatial_rank: int
+    ) -> Any:
         if label.shape.rank is not None and label.shape.rank > spatial_rank:
-            valid_mask = tf.reduce_any(label != self.invalid_label, axis=-1)
+            valid_mask = ops.any(label != self.invalid_label, axis=-1)
         else:
             valid_mask = label != self.invalid_label
-        valid_coords = tf.where(valid_mask)
+        valid_coords = ops.where(valid_mask)
 
         def fallback():
             return self._get_random_center(spatial_shape, crop_size, spatial_rank)
@@ -323,12 +322,12 @@ class RandomSpatialCrop(RandomTransform):
             idx = self.random_integers(
                 shape=(),
                 minval=0,
-                maxval=tf.shape(valid_coords)[0],
-                dtype=tf.int32,
+                maxval=ops.shape(valid_coords)[0],
+                dtype="int32",
             )
             return ops.cast(valid_coords[idx][:spatial_rank], "int32")
 
-        center = tf.cond(tf.shape(valid_coords)[0] > 0, sample_valid_center, fallback)
+        center = ops.cond(ops.shape(valid_coords)[0] > 0, sample_valid_center, fallback)
 
         if self.min_valid_ratio > 0:
             center = self._enforce_min_valid_ratio(
@@ -339,25 +338,31 @@ class RandomSpatialCrop(RandomTransform):
 
     def _enforce_min_valid_ratio(
         self,
-        center: tf.Tensor,
-        spatial_shape: tf.Tensor,
-        crop_size: tf.Tensor,
-        label: tf.Tensor,
+        center: Any,
+        spatial_shape: Any,
+        crop_size: Any,
+        label: Any,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ) -> Any:
         def body(i, current_center):
             starts = ops.maximum(current_center - crop_size // 2, 0)
             ends = ops.minimum(starts + crop_size, spatial_shape)
             starts = ops.maximum(ends - crop_size, 0)
             if label.shape.rank is not None and label.shape.rank > spatial_rank:
-                begin = tf.concat([starts, tf.constant([0], dtype=tf.int32)], axis=0)
-                size = tf.concat([crop_size, [tf.shape(label)[-1]]], axis=0)
-                crop = tf.slice(label, begin=begin, size=size)
+                begin = ops.concatenate(
+                    [starts, ops.convert_to_tensor([0], dtype="int32")],
+                    axis=0,
+                )
+                size = ops.concatenate(
+                    [crop_size, ops.reshape(ops.shape(label)[-1], (1,))],
+                    axis=0,
+                )
+                crop = ops.slice(label, start_indices=begin, shape=size)
             else:
-                crop = tf.slice(label, begin=starts, size=crop_size)
+                crop = ops.slice(label, start_indices=starts, shape=crop_size)
 
             valid_ratio = ops.mean(ops.cast(crop != self.invalid_label, "float32"))
-            new_center = tf.cond(
+            new_center = ops.cond(
                 valid_ratio >= self.min_valid_ratio,
                 lambda: current_center,
                 lambda: self._get_random_center(spatial_shape, crop_size, spatial_rank),
@@ -367,7 +372,15 @@ class RandomSpatialCrop(RandomTransform):
         def cond(i, _):
             return i < self.max_attempts
 
-        _, center = tf.while_loop(cond, body, [0, center], parallel_iterations=1)
+        _, center = ops.while_loop(
+            cond,
+            body,
+            (
+                ops.convert_to_tensor(0, dtype="int32"),
+                center,
+            ),
+            maximum_iterations=self.max_attempts,
+        )
         return center
 
     def _get_last_random_spatial_crop_trace(self, bundle: TensorBundle):

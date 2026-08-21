@@ -6,7 +6,6 @@ from keras import ops
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
-    custom_tf_boolean_mask,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -163,7 +162,7 @@ class NormalizeIntensity(KeyedTransform):
 
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask = channel_and_mask
-            channel_masked = custom_tf_boolean_mask(channel, channel_mask, mode="extract")
+            channel_masked = self._extract_masked_values(channel, channel_mask)
             has_valid = tf.size(channel_masked) > 0
 
             def normalize_nonempty():
@@ -205,7 +204,7 @@ class NormalizeIntensity(KeyedTransform):
         num_valid = ops.sum(ops.cast(mask, "int32"))
 
         def normalize():
-            vals = custom_tf_boolean_mask(tensor, mask, mode="extract")
+            vals = self._extract_masked_values(tensor, mask)
             mean = ops.mean(vals)
             std = ops.std(vals)
             std = ops.where(ops.equal(std, 0.0), 1.0, std)
@@ -225,3 +224,17 @@ class NormalizeIntensity(KeyedTransform):
             self.input_layout,
             transform_name=type(self).__name__,
         )
+
+    def _extract_masked_values(self, tensor: Any, mask: Any) -> Any:
+        """Return flattened values selected by ``mask`` using Keras ops only."""
+        flat_tensor = ops.reshape(tensor, (-1,))
+        flat_mask = ops.cast(ops.reshape(mask, (-1,)), "bool")
+        num_values = ops.shape(flat_tensor)[0]
+        flat_indices = ops.arange(num_values, dtype="int32")
+        sentinel = ops.full(ops.shape(flat_indices), num_values, dtype="int32")
+        masked_indices = ops.where(flat_mask, flat_indices, sentinel)
+        sorted_indices = ops.sort(masked_indices)
+        valid_count = ops.sum(ops.cast(flat_mask, "int32"))
+        gather_positions = ops.arange(valid_count, dtype="int32")
+        valid_indices = ops.take(sorted_indices, gather_positions, axis=0)
+        return ops.take(flat_tensor, valid_indices, axis=0)

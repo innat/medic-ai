@@ -272,38 +272,6 @@ def validate_tensor_matches_layout(
         )
     return layout
 
-def custom_tf_boolean_mask(
-    tensor: Any,
-    mask: Any,
-    mode: str = "extract",
-    fill_value: float | int = 0,
-) -> Any:
-    """Apply a TensorFlow-native boolean mask without calling ``tf.boolean_mask``.
-
-    Args:
-        tensor: Input tensor.
-        mask: Boolean-like mask tensor broadcastable to ``tensor``.
-        mode: One of ``"extract"``, ``"where"``, or ``"multiply"``.
-        fill_value: Fill value used when ``mode="where"``.
-
-    Returns:
-        Tensor-like object: Masked tensor according to ``mode``.
-    """
-    bool_mask = ops.cast(mask, "bool")
-
-    if mode == "extract":
-        indices = tf.where(bool_mask)
-        return tf.gather_nd(tensor, indices)
-    if mode == "where":
-        fill_tensor = ops.cast(fill_value, tensor.dtype)
-        return ops.where(bool_mask, tensor, fill_tensor)
-    if mode == "multiply":
-        numeric_mask = ops.cast(bool_mask, tensor.dtype)
-        return ops.multiply(tensor, numeric_mask)
-    raise ValueError(
-        f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."
-    )
-
 def get_spatial_rank(tensor: Any) -> int:
     """Return the number of spatial dimensions in a channel-last sample tensor."""
     rank = get_tensor_rank(tensor)
