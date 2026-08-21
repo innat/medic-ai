@@ -676,7 +676,7 @@ def test_scale_intensity_range_accepts_uint8_tensor_inputs():
         input_layout="HWC",
     )(TensorBundle({"image": image}))
 
-    assert out["image"].dtype == tf.float32
+    assert ops.dtype(out["image"]) == "float32"
     np.testing.assert_allclose(
         ops.convert_to_numpy(out["image"]),
         np.array([[[0.0], [128.0 / 255.0], [1.0]]], dtype=np.float32),
@@ -971,7 +971,7 @@ def test_normalize_intensity_accepts_plain_numpy_inputs():
     out = NormalizeIntensity(keys=["image"], input_layout="HWC")({"image": image})
 
     assert tuple(ops.shape(out["image"])) == (3, 4, 1)
-    assert tf.is_tensor(out["image"])
+    assert ops.is_tensor(out["image"])
 
 
 @pytest.mark.unit
@@ -992,7 +992,7 @@ def test_signal_fill_empty_outputs_float32_tensor():
     image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float64))
     out = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="HWC")(TensorBundle({"image": image}))
 
-    assert out["image"].dtype == tf.float32
+    assert ops.dtype(out["image"]) == "float32"
     np.testing.assert_allclose(
         ops.convert_to_numpy(out["image"]), np.array([[[2.0], [1.0]]], dtype=np.float32)
     )
