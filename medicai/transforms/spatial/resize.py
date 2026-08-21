@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import tensorflow as tf
+from keras import ops
 
 from medicai.utils.image import resize_volumes
 
@@ -185,7 +186,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         params = self.get_transform_params(bundle)
         original_shapes = {}
 
-        def apply_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_resize(tensor: Any, key: str) -> Any:
             original_shapes[key] = self._get_original_spatial_shape(tensor)
             return self.transform_tensor(tensor, key, params)
 
@@ -200,7 +201,7 @@ class Resize(KeyedTransform, InvertibleTransform):
 
         original_shapes = trace["params"].get("original_shapes", {})
 
-        def apply_inverse_resize(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_resize(tensor: Any, key: str) -> Any:
             target_shape = original_shapes.get(key)
             if target_shape is None:
                 return tensor
@@ -223,10 +224,10 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     def transform_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         key: str,
         params: dict[str, object],
-    ) -> tf.Tensor:
+    ) -> Any:
         """Resize one tensor with the configured target shape."""
         return self.resize_tensor(tensor, key, target_shape=params["target_shape"])
 
@@ -234,7 +235,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         self,
         params: dict[str, object],
         present_keys: Sequence[str],
-        original_shapes: Mapping[str, tf.Tensor],
+        original_shapes: Mapping[str, Any],
     ) -> dict[str, object]:
         """Build invertible trace metadata for the current resize."""
         return {
@@ -247,10 +248,10 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     def resize_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         key: str,
-        target_shape: Sequence[int] | tf.Tensor,
-    ) -> tf.Tensor:
+        target_shape: Sequence[int] | Any,
+    ) -> Any:
         """Resize one tensor to the requested spatial shape."""
         if isinstance(target_shape, tf.Tensor):
             target_shape_tensor = target_shape
@@ -259,9 +260,9 @@ class Resize(KeyedTransform, InvertibleTransform):
                 raise ValueError("`target_shape` tensor must have a statically known length.")
         else:
             target_rank = len(target_shape)
-            target_shape_tensor = tf.convert_to_tensor(
+            target_shape_tensor = ops.convert_to_tensor(
                 ensure_spatial_tuple(target_shape, target_rank, "target_shape"),
-                dtype=tf.int32,
+                dtype="int32",
             )
 
         layout = self._resolve_layout(tensor, target_rank)
@@ -280,11 +281,11 @@ class Resize(KeyedTransform, InvertibleTransform):
 
     def resize_batch_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor: Any,
         key: str,
-        target_shape: tf.Tensor,
+        target_shape: Any,
         spatial_rank: int | None = None,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Resize one batch-layout tensor to the requested spatial shape."""
         effective_spatial_rank = spatial_rank
         if effective_spatial_rank is None:
@@ -306,10 +307,10 @@ class Resize(KeyedTransform, InvertibleTransform):
             f"{effective_spatial_rank}."
         )
 
-    def _resize_2d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
-        return tf.image.resize(tensor, target_shape, method=self.interpolation.get(key))
+    def _resize_2d(self, tensor: Any, key: str, target_shape: Any) -> Any:
+        return ops.image.resize(tensor, target_shape, interpolation=self.interpolation.get(key))
 
-    def _resize_3d(self, tensor: tf.Tensor, key: str, target_shape: tf.Tensor) -> tf.Tensor:
+    def _resize_3d(self, tensor: Any, key: str, target_shape: Any) -> Any:
         resized = resize_volumes(
             tensor,
             target_shape[0],
@@ -320,7 +321,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         )
         return resized
 
-    def _resolve_layout(self, tensor: tf.Tensor, target_rank: int):
+    def _resolve_layout(self, tensor: Any, target_rank: int):
         """Validate the current tensor layout against ``input_layout`` and ``target_shape``."""
         layout = validate_tensor_matches_layout(
             tensor,
@@ -334,7 +335,7 @@ class Resize(KeyedTransform, InvertibleTransform):
             )
         return layout
 
-    def _get_original_spatial_shape(self, tensor: tf.Tensor) -> tf.Tensor:
+    def _get_original_spatial_shape(self, tensor: Any) -> Any:
         """Extract the original spatial shape using the configured target rank."""
         self._resolve_layout(tensor, len(self.target_shape))
         return get_spatial_shape_for_layout(
