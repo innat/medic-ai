@@ -733,8 +733,8 @@ class RandomChoice(RandomTransform):
 
         current_outputs = tuple(bundle.data[key] for key in data_keys)
         for step in range(self.max_choices):
-            current_outputs = tf.cond(
-                tf.logical_and(should_apply, tf.constant(step, dtype=tf.int32) < num_to_apply),
+            current_outputs = ops.cond(
+                ops.logical_and(should_apply, ops.cast(step, "int32") < num_to_apply),
                 lambda current_outputs=current_outputs, step=step: self._apply_graph_step(
                     current_outputs,
                     step,
@@ -750,19 +750,19 @@ class RandomChoice(RandomTransform):
 
     def _apply_graph_step(
         self,
-        current_outputs: tuple[tf.Tensor, ...],
+        current_outputs: tuple[Any, ...],
         step: int,
-        permutation: tf.Tensor,
+        permutation: Any,
         data_keys: tuple[str, ...],
         meta: Mapping[str, Any],
-    ) -> tuple[tf.Tensor, ...]:
+    ) -> tuple[Any, ...]:
         """Apply one graph-safe selection step for ``RandomChoice``."""
         selected_index = permutation[step]
-        branch_fns = {
-            index: self._make_graph_branch(index, current_outputs, data_keys, meta)
+        branch_fns = [
+            self._make_graph_branch(index, current_outputs, data_keys, meta)
             for index in range(len(self.transforms))
-        }
-        return tf.switch_case(selected_index, branch_fns=branch_fns)
+        ]
+        return ops.switch(selected_index, branch_fns)
 
     def _make_graph_branch(
         self,
@@ -797,14 +797,14 @@ class RandomChoice(RandomTransform):
                 bundle = transform.inverse(bundle)
         return bundle
 
-    def _sample_num_choices(self) -> tf.Tensor:
+    def _sample_num_choices(self):
         if self.min_choices == self.max_choices:
-            return tf.constant(self.min_choices, dtype=tf.int32)
+            return ops.convert_to_tensor(self.min_choices, dtype="int32")
         return self.random_integers(
             shape=(),
             minval=self.min_choices,
             maxval=self.max_choices + 1,
-            dtype=tf.int32,
+            dtype="int32",
         )
 
     def _sample_indices(self, num_to_apply: int) -> list[int]:
@@ -815,7 +815,7 @@ class RandomChoice(RandomTransform):
         permutation = _require_static_value(permutation[:num_to_apply], "selected_indices")
         return [int(index) for index in permutation]
 
-    def _sample_permutation_graph(self) -> tf.Tensor:
+    def _sample_permutation_graph(self):
         """Graph-safe unique permutation of transform indices."""
         num_transforms = len(self.transforms)
         if self.weights is None:
@@ -823,7 +823,7 @@ class RandomChoice(RandomTransform):
                 shape=(num_transforms,),
                 minval=0.0,
                 maxval=1.0,
-                dtype=tf.float32,
+                dtype="float32",
             )
             return ops.argsort(scores, axis=-1, direction="descending")
 
@@ -832,7 +832,7 @@ class RandomChoice(RandomTransform):
             shape=(num_transforms,),
             minval=1e-6,
             maxval=1.0,
-            dtype=tf.float32,
+            dtype="float32",
         )
         gumbels = -ops.log(-ops.log(uniforms))
         valid = weights > 0.0
