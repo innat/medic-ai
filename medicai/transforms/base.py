@@ -60,7 +60,7 @@ def ensure_tensor_bundle(
     return TensorBundle(_convert_numpy_mapping(inputs), _convert_numpy_mapping(meta))
 
 
-def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
+def _trace_applied_to_bool(applied: Any | bool) -> bool:
     """Convert a trace `applied` flag into a Python bool when possible."""
     if isinstance(applied, bool):
         return applied
@@ -75,7 +75,7 @@ def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
 
 
 def _apply_if_applied(
-    applied: tf.Tensor | bool,
+    applied: Any | bool,
     true_fn,
     false_fn,
 ):
@@ -140,7 +140,7 @@ def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str,
     return normalized
 
 
-def _get_static_tensor_value(value: tf.Tensor) -> Any:
+def _get_static_tensor_value(value: Any) -> Any:
     """Return a Python-visible static value for a TensorFlow tensor when available.
 
     This intentionally stays TensorFlow-specific because ``keras.ops`` does not
@@ -279,7 +279,7 @@ class Transform:
         self,
         *,
         params: Mapping[str, Any] | None = None,
-        applied: tf.Tensor | bool = True,
+        applied: Any | bool = True,
         random: bool = False,
         invertible: bool | None = None,
         kernel: str | None = None,
@@ -499,7 +499,7 @@ class RandomTransform(Transform):
         self,
         bundle: TensorBundle,
         params: Mapping[str, Any] | None = None,
-        applied: tf.Tensor | bool | None = None,
+        applied: Any | bool | None = None,
         kernel: str | None = None,
     ) -> TensorBundle:
         """Append a random transform trace entry to bundle metadata.
@@ -1277,7 +1277,7 @@ class LambdaTransform(KeyedTransform):
                 return entry
         return None
 
-    def _call_tensor_fn(self, fn, tensor: tf.Tensor, key: str) -> tf.Tensor:
+    def _call_tensor_fn(self, fn, tensor: Any, key: str) -> Any:
         takes_key = self._fn_takes_key if fn is self.fn else self._inverse_fn_takes_key
         if takes_key:
             return fn(tensor, key)
