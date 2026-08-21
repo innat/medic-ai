@@ -326,7 +326,7 @@ class RandomSpatialCrop(RandomTransform):
                 maxval=tf.shape(valid_coords)[0],
                 dtype=tf.int32,
             )
-            return tf.cast(valid_coords[idx][:spatial_rank], tf.int32)
+            return ops.cast(valid_coords[idx][:spatial_rank], "int32")
 
         center = tf.cond(tf.shape(valid_coords)[0] > 0, sample_valid_center, fallback)
 
@@ -346,9 +346,9 @@ class RandomSpatialCrop(RandomTransform):
         spatial_rank: int,
     ) -> tf.Tensor:
         def body(i, current_center):
-            starts = tf.maximum(current_center - crop_size // 2, 0)
-            ends = tf.minimum(starts + crop_size, spatial_shape)
-            starts = tf.maximum(ends - crop_size, 0)
+            starts = ops.maximum(current_center - crop_size // 2, 0)
+            ends = ops.minimum(starts + crop_size, spatial_shape)
+            starts = ops.maximum(ends - crop_size, 0)
             if label.shape.rank is not None and label.shape.rank > spatial_rank:
                 begin = tf.concat([starts, tf.constant([0], dtype=tf.int32)], axis=0)
                 size = tf.concat([crop_size, [tf.shape(label)[-1]]], axis=0)
@@ -356,7 +356,7 @@ class RandomSpatialCrop(RandomTransform):
             else:
                 crop = tf.slice(label, begin=starts, size=crop_size)
 
-            valid_ratio = tf.reduce_mean(tf.cast(crop != self.invalid_label, tf.float32))
+            valid_ratio = ops.mean(ops.cast(crop != self.invalid_label, "float32"))
             new_center = tf.cond(
                 valid_ratio >= self.min_valid_ratio,
                 lambda: current_center,
