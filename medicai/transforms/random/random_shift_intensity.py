@@ -1,7 +1,7 @@
-from typing import Sequence, Tuple, Union
+from typing import Any, Sequence, Tuple, Union
 
 import keras
-import tensorflow as tf
+from keras import ops
 
 from ..base import (
     RandomTransform,
@@ -148,7 +148,7 @@ class RandomShiftIntensity(RandomTransform):
         sampled_offsets = {}
         present_keys = self.shift.iter_present_keys(bundle)
 
-        def apply_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_shift(tensor, key: str):
             if params["channel_wise"]:
                 offset_shape = [1] * (tensor.shape.rank - 1) + [tensor.shape[-1]]
                 offsets = self.random_uniform(
@@ -190,14 +190,14 @@ class RandomShiftIntensity(RandomTransform):
         applied = trace.get("applied", False)
         sampled_offsets = trace["params"].get("sampled_offsets", {})
 
-        def apply_inverse_shift(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_shift(tensor, key: str):
             offset = sampled_offsets.get(key)
             if offset is None:
                 return tensor
             return _apply_if_applied(
                 applied,
                 lambda tensor=tensor, offset=offset: self.shift.shift_tensor(
-                    tensor, offset=-tf.cast(offset, tensor.dtype)
+                    tensor, offset=-ops.cast(offset, tensor.dtype)
                 ),
                 lambda tensor=tensor: tensor,
             )
@@ -212,7 +212,7 @@ class RandomShiftIntensity(RandomTransform):
     def build_trace_params(
         self,
         params: dict[str, object],
-        sampled_offsets: dict[str, tf.Tensor],
+        sampled_offsets: dict[str, Any],
     ) -> dict[str, object]:
         """Build random trace metadata for the current intensity shift."""
         return {
