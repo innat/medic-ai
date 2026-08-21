@@ -1,6 +1,5 @@
 from typing import Any, Sequence
 
-import tensorflow as tf
 from keras import ops
 
 from ..base import KeyedTransform
@@ -157,13 +156,13 @@ class NormalizeIntensity(KeyedTransform):
             if self.nonzero
             else ops.cast(ops.ones_like(tensor), "bool")
         )
-        num_dims = tf.rank(tensor)
+        num_dims = len(ops.shape(tensor))
         channel_axis = num_dims - 1
 
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask = channel_and_mask
             channel_masked = self._extract_masked_values(channel, channel_mask)
-            has_valid = tf.size(channel_masked) > 0
+            has_valid = ops.size(channel_masked) > 0
 
             def normalize_nonempty():
                 mean = ops.mean(channel_masked)
@@ -178,22 +177,17 @@ class NormalizeIntensity(KeyedTransform):
                     return ops.where(channel_mask, normalized, channel)
                 return normalized
 
-            return tf.cond(has_valid, normalize_nonempty, lambda: channel)
+            return ops.cond(has_valid, normalize_nonempty, lambda: channel)
 
-        permutation = tf.concat(
-            [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0
-        )
-        transposed_tensor = tf.transpose(tensor, perm=permutation)
-        transposed_mask = tf.transpose(mask, perm=permutation)
-        normalized_transposed = tf.map_fn(
+        permutation = (channel_axis, *range(channel_axis))
+        transposed_tensor = ops.transpose(tensor, axes=permutation)
+        transposed_mask = ops.transpose(mask, axes=permutation)
+        normalized_transposed = ops.map(
             normalize_single_channel,
             (transposed_tensor, transposed_mask),
-            dtype=tensor.dtype,
         )
-        inverse_permutation = tf.concat(
-            [tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0
-        )
-        return tf.transpose(normalized_transposed, perm=inverse_permutation)
+        inverse_permutation = (*range(1, num_dims), 0)
+        return ops.transpose(normalized_transposed, axes=inverse_permutation)
 
     def _normalize_global(self, tensor: Any) -> Any:
         mask = (
@@ -215,7 +209,7 @@ class NormalizeIntensity(KeyedTransform):
                 return ops.where(mask, (tensor - sub) / div, tensor)
             return (tensor - sub) / div
 
-        return tf.cond(num_valid > 0, normalize, lambda: tensor)
+        return ops.cond(num_valid > 0, normalize, lambda: tensor)
 
     def _validate_tensor_layout(self, tensor: Any) -> None:
         """Validate sample or batch channel-last layout for normalization."""
