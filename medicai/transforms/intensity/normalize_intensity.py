@@ -223,12 +223,6 @@ class NormalizeIntensity(KeyedTransform):
         """Return flattened values selected by ``mask`` using Keras ops only."""
         flat_tensor = ops.reshape(tensor, (-1,))
         flat_mask = ops.cast(ops.reshape(mask, (-1,)), "bool")
-        num_values = ops.shape(flat_tensor)[0]
-        flat_indices = ops.arange(num_values, dtype="int32")
-        sentinel = ops.full(ops.shape(flat_indices), num_values, dtype="int32")
-        masked_indices = ops.where(flat_mask, flat_indices, sentinel)
-        sorted_indices = ops.sort(masked_indices)
-        valid_count = ops.sum(ops.cast(flat_mask, "int32"))
-        gather_positions = ops.arange(valid_count, dtype="int32")
-        valid_indices = ops.take(sorted_indices, gather_positions, axis=0)
+        valid_indices = ops.where(flat_mask)
+        valid_indices = ops.squeeze(valid_indices, axis=-1)
         return ops.take(flat_tensor, valid_indices, axis=0)
