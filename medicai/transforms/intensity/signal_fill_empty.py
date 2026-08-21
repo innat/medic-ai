@@ -1,6 +1,7 @@
 from typing import Sequence
 
-import tensorflow as tf
+import numpy as np
+from keras import ops
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
@@ -112,49 +113,50 @@ class SignalFillEmpty(KeyedTransform):
         )
         return bundle
 
-    def transform_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
+    def transform_tensor(self, tensor):
         """Sanitize one tensor after validating its channel-last layout."""
         self._validate_tensor_layout(tensor)
         return self.nan_to_num(tensor)
 
     def nan_to_num(
         self,
-        tensor: tf.Tensor,
+        tensor,
         nan: float | None = None,
         posinf: float | None = None,
         neginf: float | None = None,
-    ) -> tf.Tensor:
+    ):
         """Replace NaN, positive infinity, and negative infinity values in a tensor."""
-        tensor = tf.cast(tf.convert_to_tensor(tensor), tf.float32)
+        tensor = ops.cast(ops.convert_to_tensor(tensor), "float32")
         return self.nan_to_num_batch(tensor, nan=nan, posinf=posinf, neginf=neginf)
 
     def nan_to_num_batch(
         self,
-        tensor: tf.Tensor,
+        tensor,
         nan: float | None = None,
         posinf: float | None = None,
         neginf: float | None = None,
-    ) -> tf.Tensor:
+    ):
         """Sanitize a tensor with a kernel that is agnostic to sample vs batch layout."""
 
         nan = self.fill_value if nan is None else nan
-        posinf = tf.float32.max if posinf is None else posinf
-        neginf = -tf.float32.max if neginf is None else neginf
+        max_float32 = float(np.finfo(np.float32).max)
+        posinf = max_float32 if posinf is None else posinf
+        neginf = -max_float32 if neginf is None else neginf
 
-        tensor = tf.where(tf.math.is_nan(tensor), nan, tensor)
-        tensor = tf.where(
-            tf.math.is_inf(tensor) & (tensor > 0),
+        tensor = ops.where(ops.isnan(tensor), nan, tensor)
+        tensor = ops.where(
+            ops.logical_and(ops.isinf(tensor), tensor > 0),
             posinf,
             tensor,
         )
-        tensor = tf.where(
-            tf.math.is_inf(tensor) & (tensor < 0),
+        tensor = ops.where(
+            ops.logical_and(ops.isinf(tensor), tensor < 0),
             neginf,
             tensor,
         )
         return tensor
 
-    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+    def _validate_tensor_layout(self, tensor) -> None:
         """Validate sample or batch channel-last layout for signal sanitization."""
         validate_tensor_matches_layout(
             tensor,
