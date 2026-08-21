@@ -1270,12 +1270,11 @@ class LambdaTransform(KeyedTransform):
         return bundle
 
     def _get_last_trace(self, bundle: TensorBundle) -> dict[str, Any] | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") != type(self).__name__:
-                continue
-            if entry.get("params", {}).get("_lambda_id") == self._trace_id:
-                return entry
-        return None
+        return _pop_last_transform_trace(
+            bundle,
+            type(self).__name__,
+            predicate=lambda entry: entry.get("params", {}).get("_lambda_id") == self._trace_id,
+        )
 
     def _call_tensor_fn(self, fn, tensor: Any, key: str) -> Any:
         takes_key = self._fn_takes_key if fn is self.fn else self._inverse_fn_takes_key

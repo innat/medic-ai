@@ -600,6 +600,33 @@ def test_lambda_transform_supports_inverse_and_meta_hooks():
 
 
 @pytest.mark.unit
+def test_compose_inverse_handles_repeated_lambda_transform_instances():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    pipeline = Compose(
+        [
+            LambdaTransform(
+                keys=["image"],
+                fn=lambda tensor: tensor + 2.0,
+                inverse_fn=lambda tensor: tensor - 2.0,
+                name="plus_two",
+            ),
+            LambdaTransform(
+                keys=["image"],
+                fn=lambda tensor: tensor * 3.0,
+                inverse_fn=lambda tensor: tensor / 3.0,
+                name="times_three",
+            ),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0, rtol=1e-6)
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_lambda_transform_skips_meta_hook_when_probabilistic_apply_is_false():
     image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
     transform = LambdaTransform(
