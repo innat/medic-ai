@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from keras import ops
 import tensorflow as tf
@@ -62,25 +62,44 @@ _INPUT_LAYOUT_TO_INFO: Mapping[str, dict[str, int | bool | tuple[int, ...] | Non
 _SUPPORTED_INPUT_LAYOUTS: tuple[str, ...] = tuple(_INPUT_LAYOUT_TO_INFO)
 
 
-def validate_affine_matrix(affine: tf.Tensor) -> tf.Tensor:
+def _get_static_shape_tuple(tensor: Any) -> tuple[int | None, ...]:
+    """Return a backend-neutral static shape tuple when available."""
+    shape = getattr(tensor, "shape", None)
+    if shape is None:
+        raise ValueError("Tensor must expose a `shape` attribute.")
+
+    if hasattr(shape, "as_list"):
+        try:
+            return tuple(shape.as_list())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return tuple(int(dim) if dim is not None else None for dim in shape)
+    except TypeError as err:
+        raise ValueError("Tensor shape must be tuple-like.") from err
+
+
+def validate_affine_matrix(affine: Any) -> Any:
     """Validate and normalize an affine matrix to float32 4x4 form.
 
     Args:
         affine: Candidate affine matrix.
 
     Returns:
-        tf.Tensor: The affine cast to ``tf.float32``.
+        Tensor-like object: The affine cast to ``float32``.
 
     Raises:
         ValueError: If ``affine`` is not statically shaped ``(4, 4)``.
     """
-    affine = tf.cast(affine, tf.float32)
-    if affine.shape.rank != 2 or affine.shape[0] != 4 or affine.shape[1] != 4:
+    affine = ops.cast(ops.convert_to_tensor(affine), "float32")
+    shape = _get_static_shape_tuple(affine)
+    if len(shape) != 2 or shape[0] != 4 or shape[1] != 4:
         raise ValueError(f"Expected a 4x4 affine matrix, got shape {affine.shape}.")
     return affine
 
 
-def get_tensor_rank(tensor: tf.Tensor) -> int:
+def get_tensor_rank(tensor: Any) -> int:
     """Return the static rank of a channel-last sample tensor.
 
     Args:
@@ -92,10 +111,27 @@ def get_tensor_rank(tensor: tf.Tensor) -> int:
     Raises:
         ValueError: If the tensor rank is unknown.
     """
-    rank = tensor.shape.rank
+    shape = getattr(tensor, "shape", None)
+    if shape is None:
+        raise ValueError("Tensor must expose a `shape` attribute.")
+
+    rank = getattr(shape, "rank", None)
+    if rank is not None:
+        return int(rank)
+
+    try:
+        return len(shape)
+    except TypeError:
+        pass
+
+    ndim = getattr(tensor, "ndim", None)
+    if ndim is not None:
+        return int(ndim)
+
+    rank = ops.ndim(tensor)
     if rank is None:
         raise ValueError("Tensor rank must be statically known.")
-    return rank
+    return int(rank)
 
 
 def normalize_input_layout(input_layout: str) -> str:
@@ -205,7 +241,7 @@ def resolve_input_layout(
 
 
 def validate_tensor_matches_layout(
-    tensor: tf.Tensor,
+    tensor: Any,
     input_layout: str,
     *,
     transform_name: str | None = None,
@@ -234,8 +270,8 @@ def validate_tensor_matches_layout(
     return layout
 
 def custom_tf_boolean_mask(
-    tensor: tf.Tensor,
-    mask: tf.Tensor,
+    tensor: Any,
+    mask: Any,
     mode: str = "extract",
     fill_value: float | int = 0,
 ) -> tf.Tensor:
@@ -265,7 +301,7 @@ def custom_tf_boolean_mask(
         f"Unsupported mode '{mode}'. Choose from 'extract', 'where', or 'multiply'."
     )
 
-def get_spatial_rank(tensor: tf.Tensor) -> int:
+def get_spatial_rank(tensor: Any) -> int:
     """Return the number of spatial dimensions in a channel-last sample tensor."""
     rank = get_tensor_rank(tensor)
     if rank == 3:
@@ -279,7 +315,7 @@ def get_spatial_rank(tensor: tf.Tensor) -> int:
 
 
 def validate_spatial_rank(
-    tensor: tf.Tensor,
+    tensor: Any,
     allowed_ranks: Sequence[int] = (2, 3),
 ) -> int:
     """Validate the spatial rank of a channel-last sample tensor."""
@@ -293,7 +329,7 @@ def validate_spatial_rank(
     return spatial_rank
 
 
-def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.Tensor:
+def get_spatial_shape_for_layout(tensor: Any, *, input_layout: str) -> Any:
     """Return the dynamic spatial shape of a tensor validated by ``input_layout``.
 
     Args:
@@ -308,11 +344,11 @@ def get_spatial_shape_for_layout(tensor: tf.Tensor, *, input_layout: str) -> tf.
     return ops.take(ops.shape(tensor), layout.spatial_axes)
 
 def ensure_batch_axis_for_layout(
-    tensor: tf.Tensor,
+    tensor: Any,
     *,
     input_layout: str,
     allowed_spatial_ranks: Sequence[int] = (2, 3),
-) -> tuple[tf.Tensor, bool]:
+) -> tuple[Any, bool]:
     """Normalize a tensor declared by ``input_layout`` to a batched view.
 
     Args:
@@ -338,7 +374,7 @@ def ensure_batch_axis_for_layout(
     return tensor[None, ...], True
 
 
-def restore_from_batch_axis(tensor: tf.Tensor, added_batch_axis: bool) -> tf.Tensor:
+def restore_from_batch_axis(tensor: Any, added_batch_axis: bool) -> Any:
     """Remove a temporary singleton batch axis added by :func:`ensure_batch_axis`."""
     if added_batch_axis:
         return tensor[0]

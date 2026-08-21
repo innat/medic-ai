@@ -24,6 +24,7 @@ from medicai.transforms.utils import (
     ensure_batch_axis_for_layout,
     ensure_spatial_tuple,
     get_input_layout_info,
+    get_tensor_rank,
     get_spatial_rank,
     get_spatial_shape_for_layout,
     normalize_input_layout,
@@ -177,6 +178,14 @@ def test_validate_tensor_matches_layout_accepts_matching_rank():
     layout = validate_tensor_matches_layout(tensor, "BHWC", transform_name="Flip")
 
     assert layout.input_layout == "BHWC"
+
+
+@pytest.mark.unit
+def test_get_tensor_rank_accepts_tuple_like_shapes_without_tensorflow_rank_attr():
+    class DummyTensor:
+        shape = (2, 16, 16, 1)
+
+    assert get_tensor_rank(DummyTensor()) == 4
 
 
 @pytest.mark.unit

@@ -7,7 +7,7 @@ from medicai.transforms import Compose, CropForeground, Flip, ScaleIntensityRang
 
 
 def _backend() -> str:
-    return keras.backend.backend()
+    return keras.config.backend()
 
 
 def _require_backend(name: str) -> None:
