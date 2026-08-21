@@ -2,6 +2,7 @@ from typing import Sequence
 
 import keras
 import tensorflow as tf
+from keras import ops
 
 from ..base import (
     RandomTransform,
@@ -212,7 +213,7 @@ class RandomRotate(RandomTransform):
             shape=(),
             minval=-self.factor,
             maxval=self.factor,
-            dtype=tf.float32,
+            dtype="float32",
         )
         return {
             "skip": False,
@@ -267,7 +268,7 @@ class RandomRotate(RandomTransform):
         applied = trace.get("applied", False)
         angle = trace["params"].get("angle")
 
-        def apply_inverse_rotate(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_rotate(tensor, key: str):
             return _apply_if_applied(
                 applied,
                 lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, -angle),
@@ -283,7 +284,7 @@ class RandomRotate(RandomTransform):
             bundle.data[key] = apply_inverse_rotate(tensor, key)
         return bundle
 
-    def rotate_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
+    def rotate_tensor(self, tensor: tf.Tensor, key: str, angle) -> tf.Tensor:
         """Rotate one tensor and apply optional center crop cleanup."""
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
@@ -293,7 +294,7 @@ class RandomRotate(RandomTransform):
         rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
         return restore_from_batch_axis(rotated, added_batch_axis)
 
-    def rotate_batch_tensor(self, tensor: tf.Tensor, key: str, angle: tf.Tensor) -> tf.Tensor:
+    def rotate_batch_tensor(self, tensor: tf.Tensor, key: str, angle) -> tf.Tensor:
         """Rotate one batch-layout tensor and apply optional center crop cleanup."""
         interpolation = "BILINEAR" if key == self.keys[0] else "NEAREST"
         fill_value = self.fill_value if key == self.keys[0] else 0.0
@@ -346,7 +347,7 @@ class RandomRotate(RandomTransform):
             )
             * 0.98
         )
-        crop_fraction = tf.clip_by_value(crop_fraction, 1e-6, 1.0 - 1e-6)
+        crop_fraction = ops.clip(crop_fraction, 1e-6, 1.0 - 1e-6)
         method = "bilinear" if interpolation == "BILINEAR" else "nearest"
 
         flat_tensor = tf.reshape(tensor, [batch_size * depth, height, width, channels])
