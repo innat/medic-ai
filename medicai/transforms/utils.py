@@ -5,6 +5,9 @@ from keras import ops
 import tensorflow as tf
 
 
+# Backend-neutral layout and shape utilities
+
+
 @dataclass(frozen=True)
 class LayoutInfo:
     """Static layout description for a channel-last transform tensor.
@@ -286,7 +289,7 @@ def custom_tf_boolean_mask(
     Returns:
         tf.Tensor: Masked tensor according to ``mode``.
     """
-    bool_mask = ops.cast(mask, "bool") if mask.dtype != tf.bool else mask
+    bool_mask = ops.cast(mask, "bool")
 
     if mode == "extract":
         indices = tf.where(bool_mask)
@@ -424,7 +427,7 @@ def normalize_spatial_axes(
 
 
 def resolve_input_layout_axes(
-    tensor: tf.Tensor,
+    tensor: Any,
     axes: Sequence[int],
     *,
     input_layout: str,
@@ -455,6 +458,14 @@ def resolve_input_layout_axes(
             f"{layout.spatial_axes}."
         )
     return normalized
+
+
+# TensorFlow-native affine and resampling utilities
+#
+# These helpers still intentionally use TensorFlow directly. They sit below the
+# backend-neutral layout/shape layer above, and power the remaining transform
+# paths that have not yet been migrated fully to ``keras.ops``.
+
 
 # Affine Utility
 
