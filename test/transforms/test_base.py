@@ -189,6 +189,15 @@ def test_get_tensor_rank_accepts_tuple_like_shapes_without_tensorflow_rank_attr(
 
 
 @pytest.mark.unit
+def test_validate_tensor_matches_layout_accepts_plain_numpy_input():
+    tensor = np.zeros((16, 16, 1), dtype=np.float32)
+
+    layout = validate_tensor_matches_layout(tensor, "HWC", transform_name="Flip")
+
+    assert layout.input_layout == "HWC"
+
+
+@pytest.mark.unit
 def test_validate_tensor_matches_layout_rejects_mismatched_rank():
     tensor = as_tensor(np.zeros((16, 16, 1), dtype=np.float32))
 
@@ -799,6 +808,15 @@ def test_batch_axis_helpers_accept_plain_numpy_inputs():
         ops.convert_to_numpy(restore_from_batch_axis(sample_batched, sample_added)),
         sample_2d,
     )
+
+
+@pytest.mark.unit
+def test_get_spatial_shape_for_layout_accepts_plain_numpy_input():
+    sample_3d = np.zeros((8, 16, 12, 1), dtype=np.float32)
+
+    spatial_shape = get_spatial_shape_for_layout(sample_3d, input_layout="DHWC")
+
+    np.testing.assert_array_equal(ops.convert_to_numpy(spatial_shape), [8, 16, 12])
 
 
 @pytest.mark.unit

@@ -277,7 +277,7 @@ def custom_tf_boolean_mask(
     mask: Any,
     mode: str = "extract",
     fill_value: float | int = 0,
-) -> tf.Tensor:
+) -> Any:
     """Apply a TensorFlow-native boolean mask without calling ``tf.boolean_mask``.
 
     Args:
@@ -287,7 +287,7 @@ def custom_tf_boolean_mask(
         fill_value: Fill value used when ``mode="where"``.
 
     Returns:
-        tf.Tensor: Masked tensor according to ``mode``.
+        Tensor-like object: Masked tensor according to ``mode``.
     """
     bool_mask = ops.cast(mask, "bool")
 
@@ -341,7 +341,7 @@ def get_spatial_shape_for_layout(tensor: Any, *, input_layout: str) -> Any:
             ``"BDHWC"``.
 
     Returns:
-        tf.Tensor: Dynamic spatial shape.
+        Tensor-like object: Dynamic spatial shape.
     """
     layout = validate_tensor_matches_layout(tensor, input_layout)
     return ops.take(ops.shape(tensor), layout.spatial_axes)
@@ -361,7 +361,7 @@ def ensure_batch_axis_for_layout(
         allowed_spatial_ranks: Accepted spatial ranks for validation.
 
     Returns:
-        tuple[tf.Tensor, bool]: A pair ``(batched_tensor, added_batch_axis)``
+        tuple[Any, bool]: A pair ``(batched_tensor, added_batch_axis)``
         where ``added_batch_axis`` is ``True`` only when a leading singleton
         batch axis was inserted for sample-layout input.
     """
