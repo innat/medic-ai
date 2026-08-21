@@ -1,5 +1,22 @@
 from typing import Any, Mapping
 
+from keras import ops
+
+
+def _coerce_tensor_data(value: Any) -> Any:
+    """Convert tensor-like data payloads to backend-aware tensors when practical."""
+    if isinstance(value, (list, tuple, int, float, bool)):
+        try:
+            return ops.convert_to_tensor(value)
+        except (TypeError, ValueError):
+            return value
+    if hasattr(value, "__array__"):
+        try:
+            return ops.convert_to_tensor(value)
+        except (TypeError, ValueError):
+            return value
+    return value
+
 
 class TensorBundle:
     """Container for transform tensors and their associated metadata.
@@ -38,7 +55,7 @@ class TensorBundle:
     """
 
     def __init__(self, data: Mapping[str, Any], meta: Mapping[str, Any] | None = None):
-        self.data = dict(data)
+        self.data = {key: _coerce_tensor_data(value) for key, value in dict(data).items()}
         self.meta = {} if meta is None else dict(meta)
 
     def __getitem__(self, key: str) -> Any:
@@ -69,7 +86,7 @@ class TensorBundle:
             value (Any): Tensor or metadata value to store.
         """
         if key in self.data:
-            self.data[key] = value
+            self.data[key] = _coerce_tensor_data(value)
         else:
             self.meta[key] = value
 
@@ -104,7 +121,7 @@ class TensorBundle:
             key (str): The key to associate with the value.
             value (Any): The tensor-like value to store.
         """
-        self.data[key] = value
+        self.data[key] = _coerce_tensor_data(value)
 
     def set_meta(self, key: str, value: Any):
         """Store a metadata value in the metadata mapping.

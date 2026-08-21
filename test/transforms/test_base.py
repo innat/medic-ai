@@ -80,6 +80,20 @@ def test_tensorbundle_setitem_routes_to_data_or_meta():
 
 
 @pytest.mark.unit
+def test_tensorbundle_coerces_tensor_like_data_assignments_but_not_meta():
+    bundle = TensorBundle({"image": np.zeros((2, 2, 1), dtype=np.float32)})
+    bundle["image"] = np.ones((2, 2, 1), dtype=np.float32)
+    bundle.set_data("label", [[1, 0], [0, 1]])
+    bundle["case_id"] = "case-001"
+
+    assert hasattr(bundle["image"], "shape")
+    assert hasattr(bundle["label"], "shape")
+    np.testing.assert_allclose(ops.convert_to_numpy(bundle["image"]), 1.0)
+    np.testing.assert_allclose(ops.convert_to_numpy(bundle["label"]), [[1, 0], [0, 1]])
+    assert bundle.meta["case_id"] == "case-001"
+
+
+@pytest.mark.unit
 def test_tensorbundle_contains_checks_data_and_meta():
     bundle = TensorBundle(
         {"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))},
