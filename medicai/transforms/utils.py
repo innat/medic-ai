@@ -785,11 +785,12 @@ def _validate_volume_and_coords(
     volume = tf.convert_to_tensor(volume)
     coords = tf.cast(tf.convert_to_tensor(coords), tf.float32)
 
-    if volume.shape.rank != 4:
+    if get_tensor_rank(volume) != 4:
         raise ValueError(
             f"Expected a 4D channel-last volume shaped (D, H, W, C), got {volume.shape}."
         )
-    if coords.shape.rank != 2 or coords.shape[-1] != 3:
+    coords_shape = _get_static_shape_tuple(coords)
+    if len(coords_shape) != 2 or coords_shape[-1] != 3:
         raise ValueError(f"Expected coords shaped (N, 3), got {coords.shape}.")
     return volume, coords
 
@@ -1057,11 +1058,12 @@ class SpatialResample:
         dst_affine = tf.cast(dst_affine, tf.float32)
         output_shape = tf.cast(output_shape, tf.int32)
 
-        if tensor.shape.rank != 4:
+        if get_tensor_rank(tensor) != 4:
             raise ValueError(
                 f"Expected a 4D channel-last tensor shaped (D, H, W, C), got {tensor.shape}."
             )
-        if output_shape.shape.rank != 1 or output_shape.shape[0] != 3:
+        output_shape_static = _get_static_shape_tuple(output_shape)
+        if len(output_shape_static) != 1 or output_shape_static[0] != 3:
             raise ValueError(f"Expected output_shape shaped (3,), got {output_shape.shape}.")
 
         index_mapping_affine = tf.linalg.matmul(invert_affine(src_affine), dst_affine)
