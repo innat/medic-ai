@@ -1,7 +1,7 @@
 from typing import Sequence
 
 import keras
-import tensorflow as tf
+from keras import ops
 
 from ..base import (
     RandomTransform,
@@ -124,7 +124,7 @@ class RandomRotate90(RandomTransform):
         del bundle
         return {
             "should_apply": self.sample_should_apply(),
-            "k": self.random_integers(shape=(), minval=1, maxval=self.max_k + 1, dtype=tf.int32),
+            "k": self.random_integers(shape=(), minval=1, maxval=self.max_k + 1, dtype="int32"),
             "spatial_axis": self.spatial_axis,
             "input_layout": self.input_layout,
         }
@@ -155,8 +155,8 @@ class RandomRotate90(RandomTransform):
         applied = trace.get("applied", False)
         k = trace["params"].get("k")
 
-        def apply_inverse_rotate(tensor: tf.Tensor, _: str) -> tf.Tensor:
-            inverse_k = tf.math.floormod(-tf.cast(k, tf.int32), 4)
+        def apply_inverse_rotate(tensor, _: str):
+            inverse_k = ops.mod(-ops.cast(k, "int32"), 4)
             return _apply_if_applied(
                 applied,
                 lambda tensor=tensor: self.rotate.rotate_tensor(tensor, k=inverse_k),
@@ -170,10 +170,10 @@ class RandomRotate90(RandomTransform):
 
     def transform_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor,
         key: str,
         params: dict[str, object],
-    ) -> tf.Tensor:
+    ):
         """Apply the sampled rotation conditionally to one tensor."""
         del key
         return _apply_if_applied(

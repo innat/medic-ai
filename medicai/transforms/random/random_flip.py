@@ -1,7 +1,6 @@
 from typing import Sequence, Union
 
 import keras
-import tensorflow as tf
 
 from ..base import RandomTransform, _apply_if_applied, _pop_last_transform_trace
 from ..spatial.flip import Flip
@@ -121,7 +120,7 @@ class RandomFlip(RandomTransform):
 
         applied = trace.get("applied", False)
 
-        def apply_inverse_flip(tensor: tf.Tensor, _: str) -> tf.Tensor:
+        def apply_inverse_flip(tensor, _: str):
             return _apply_if_applied(
                 applied,
                 lambda tensor=tensor: self.flip.flip_tensor(tensor),
@@ -177,10 +176,10 @@ class RandomFlip(RandomTransform):
 
     def transform_tensor(
         self,
-        tensor: tf.Tensor,
+        tensor,
         key: str,
         params: dict[str, object],
-    ) -> tf.Tensor:
+    ):
         """Apply the sampled flip decision to one tensor."""
         del key
         return _apply_if_applied(
