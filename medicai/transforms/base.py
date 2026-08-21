@@ -414,23 +414,23 @@ class RandomTransform(Transform):
         self.seed = seed
         self.seed_generator = self._normalize_seed(seed)
 
-    def sample_should_apply(self) -> tf.Tensor:
+    def sample_should_apply(self):
         """Sample whether the random transform should be applied.
 
         Returns:
-            tf.Tensor: A scalar boolean tensor indicating whether the random
-            transform should execute for the current sample.
+            Tensor-like object: A scalar boolean value indicating whether the
+            random transform should execute for the current sample.
         """
-        return self.random_uniform(shape=(), minval=0.0, maxval=1.0, dtype=tf.float32) < self.prob
+        return self.random_uniform(shape=(), minval=0.0, maxval=1.0, dtype="float32") < self.prob
 
     def random_uniform(
         self,
         *,
-        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        shape: Sequence[int] | tuple | list,
         minval: float | int = 0.0,
         maxval: float | int = 1.0,
-        dtype: tf.dtypes.DType = tf.float32,
-    ) -> tf.Tensor:
+        dtype: Any = "float32",
+    ):
         """Sample from a uniform distribution using the transform seed stream."""
         return keras.random.uniform(
             shape=shape,
@@ -443,11 +443,11 @@ class RandomTransform(Transform):
     def random_normal(
         self,
         *,
-        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        shape: Sequence[int] | tuple | list,
         mean: float = 0.0,
         stddev: float = 1.0,
-        dtype: tf.dtypes.DType = tf.float32,
-    ) -> tf.Tensor:
+        dtype: Any = "float32",
+    ):
         """Sample from a normal distribution using the transform seed stream."""
         return keras.random.normal(
             shape=shape,
@@ -460,11 +460,11 @@ class RandomTransform(Transform):
     def random_integers(
         self,
         *,
-        shape: Sequence[int] | tf.TensorShape | tuple | list,
+        shape: Sequence[int] | tuple | list,
         minval: int,
         maxval: int,
-        dtype: tf.dtypes.DType = tf.int32,
-    ) -> tf.Tensor:
+        dtype: Any = "int32",
+    ):
         """Sample integer values using the transform seed stream."""
         return keras.random.randint(
             shape=shape,

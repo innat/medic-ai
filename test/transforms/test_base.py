@@ -383,6 +383,23 @@ def test_random_transform_rejects_unsupported_seed_type():
 
 
 @pytest.mark.unit
+def test_random_transform_random_helpers_accept_tensorflow_dtype_inputs():
+    class SeedAwareRandomTransform(RandomTransform):
+        def apply(self, bundle):
+            bundle["uniform"] = self.random_uniform(shape=(2,), dtype=tf.float32)
+            bundle["normal"] = self.random_normal(shape=(2,), dtype=tf.float32)
+            bundle["integers"] = self.random_integers(shape=(4,), minval=0, maxval=3, dtype=tf.int32)
+            return bundle
+
+    image = as_tensor(np.zeros((2, 2, 1), dtype=np.float32))
+    out = SeedAwareRandomTransform(prob=1.0, seed=7)(TensorBundle({"image": image}))
+
+    assert str(out["uniform"].dtype) == "float32"
+    assert str(out["normal"].dtype) == "float32"
+    assert str(out["integers"].dtype) == "int32"
+
+
+@pytest.mark.unit
 def test_random_choice_validates_configuration():
     with pytest.raises(ValueError, match="at least one transform"):
         RandomChoice(transforms=[], num_choices=1)
