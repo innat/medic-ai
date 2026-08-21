@@ -10,6 +10,7 @@ from medicai.transforms.utils import (
     is_axis_aligned_affine,
     origin_from_affine,
     spacing_from_affine,
+    validate_affine_matrix,
 )
 
 
@@ -147,3 +148,12 @@ def test_spacing_from_affine_rejects_non_4x4_matrices():
 
     with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
         spacing_from_affine(affine)
+
+
+@pytest.mark.unit
+def test_validate_affine_matrix_accepts_plain_numpy_input():
+    affine = np.eye(4, dtype=np.float32)
+
+    validated = validate_affine_matrix(affine)
+
+    np.testing.assert_allclose(ops.convert_to_numpy(validated), affine)

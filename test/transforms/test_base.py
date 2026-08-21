@@ -788,6 +788,20 @@ def test_batch_axis_helpers_normalize_sample_and_batch_inputs():
 
 
 @pytest.mark.unit
+def test_batch_axis_helpers_accept_plain_numpy_inputs():
+    sample_2d = np.zeros((4, 5, 1), dtype=np.float32)
+
+    sample_batched, sample_added = ensure_batch_axis_for_layout(sample_2d, input_layout="HWC")
+
+    assert sample_added is True
+    assert tuple(ops.shape(sample_batched)) == (1, 4, 5, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restore_from_batch_axis(sample_batched, sample_added)),
+        sample_2d,
+    )
+
+
+@pytest.mark.unit
 def test_spatial_helpers_validate_invalid_inputs():
     image_1d = as_tensor(np.zeros((8,), dtype=np.float32))
 
