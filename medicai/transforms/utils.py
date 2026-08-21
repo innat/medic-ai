@@ -374,13 +374,13 @@ def ensure_batch_axis_for_layout(
         )
     if layout.batched:
         return tensor, False
-    return tensor[None, ...], True
+    return ops.expand_dims(tensor, axis=0), True
 
 
 def restore_from_batch_axis(tensor: Any, added_batch_axis: bool) -> Any:
     """Remove a temporary singleton batch axis added by :func:`ensure_batch_axis`."""
     if added_batch_axis:
-        return tensor[0]
+        return ops.squeeze(tensor, axis=0)
     return tensor
 
 
