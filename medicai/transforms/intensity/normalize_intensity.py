@@ -157,37 +157,24 @@ class NormalizeIntensity(KeyedTransform):
             else ops.cast(ops.ones_like(tensor), "bool")
         )
         num_dims = len(ops.shape(tensor))
-        channel_axis = num_dims - 1
+        spatial_axes = tuple(range(num_dims - 1))
+        mask_f = ops.cast(mask, tensor.dtype)
+        count = ops.sum(mask_f, axis=spatial_axes, keepdims=True)
+        safe_count = ops.where(count > 0, count, ops.ones_like(count))
 
-        def normalize_single_channel(channel_and_mask):
-            channel, channel_mask = channel_and_mask
-            channel_masked = self._extract_masked_values(channel, channel_mask)
-            has_valid = ops.size(channel_masked) > 0
+        masked_tensor = ops.where(mask, tensor, ops.zeros_like(tensor))
+        mean = ops.sum(masked_tensor, axis=spatial_axes, keepdims=True) / safe_count
+        centered = tensor - mean
+        masked_sq = ops.where(mask, ops.square(centered), ops.zeros_like(centered))
+        std = ops.sqrt(ops.sum(masked_sq, axis=spatial_axes, keepdims=True) / safe_count)
 
-            def normalize_nonempty():
-                mean = ops.mean(channel_masked)
-                std = ops.std(channel_masked)
-                sub = self.offset if self.offset is not None else mean
-                div = self.scale if self.scale is not None else std
-                sub = ops.cast(sub, channel.dtype)
-                div = ops.cast(div, channel.dtype)
-                div = ops.where(ops.equal(div, 0.0), ops.ones_like(div), div)
-                normalized = (channel - sub) / div
-                if self.nonzero:
-                    return ops.where(channel_mask, normalized, channel)
-                return normalized
-
-            return ops.cond(has_valid, normalize_nonempty, lambda: channel)
-
-        permutation = (channel_axis, *range(channel_axis))
-        transposed_tensor = ops.transpose(tensor, axes=permutation)
-        transposed_mask = ops.transpose(mask, axes=permutation)
-        normalized_transposed = ops.map(
-            normalize_single_channel,
-            (transposed_tensor, transposed_mask),
-        )
-        inverse_permutation = (*range(1, num_dims), 0)
-        return ops.transpose(normalized_transposed, axes=inverse_permutation)
+        sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
+        div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
+        div = ops.where(ops.equal(div, 0.0), ops.ones_like(div), div)
+        normalized = (tensor - sub) / div
+        if self.nonzero:
+            normalized = ops.where(mask, normalized, tensor)
+        return ops.where(count > 0, normalized, tensor)
 
     def _normalize_global(self, tensor: Any) -> Any:
         mask = (
@@ -195,21 +182,24 @@ class NormalizeIntensity(KeyedTransform):
             if self.nonzero
             else ops.cast(ops.ones_like(tensor), "bool")
         )
-        num_valid = ops.sum(ops.cast(mask, "int32"))
+        mask_f = ops.cast(mask, tensor.dtype)
+        count = ops.sum(mask_f)
+        safe_count = ops.where(count > 0, count, ops.ones_like(count))
 
-        def normalize():
-            vals = self._extract_masked_values(tensor, mask)
-            mean = ops.mean(vals)
-            std = ops.std(vals)
-            std = ops.where(ops.equal(std, 0.0), 1.0, std)
-            sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
-            div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
-            div = ops.where(ops.equal(div, 0.0), 1.0, div)
-            if self.nonzero:
-                return ops.where(mask, (tensor - sub) / div, tensor)
-            return (tensor - sub) / div
+        masked_tensor = ops.where(mask, tensor, ops.zeros_like(tensor))
+        mean = ops.sum(masked_tensor) / safe_count
+        centered = tensor - mean
+        masked_sq = ops.where(mask, ops.square(centered), ops.zeros_like(centered))
+        std = ops.sqrt(ops.sum(masked_sq) / safe_count)
 
-        return ops.cond(num_valid > 0, normalize, lambda: tensor)
+        std = ops.where(ops.equal(std, 0.0), 1.0, std)
+        sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
+        div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
+        div = ops.where(ops.equal(div, 0.0), 1.0, div)
+        normalized = (tensor - sub) / div
+        if self.nonzero:
+            normalized = ops.where(mask, normalized, tensor)
+        return ops.where(count > 0, normalized, tensor)
 
     def _validate_tensor_layout(self, tensor: Any) -> None:
         """Validate sample or batch channel-last layout for normalization."""
@@ -218,11 +208,3 @@ class NormalizeIntensity(KeyedTransform):
             self.input_layout,
             transform_name=type(self).__name__,
         )
-
-    def _extract_masked_values(self, tensor: Any, mask: Any) -> Any:
-        """Return flattened values selected by ``mask`` using Keras ops only."""
-        flat_tensor = ops.reshape(tensor, (-1,))
-        flat_mask = ops.cast(ops.reshape(mask, (-1,)), "bool")
-        valid_indices = ops.where(flat_mask)
-        valid_indices = ops.squeeze(valid_indices, axis=-1)
-        return ops.take(flat_tensor, valid_indices, axis=0)
