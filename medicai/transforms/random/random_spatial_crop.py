@@ -1,7 +1,8 @@
-from typing import Sequence
+from typing import Any, Sequence
 
 import keras
 import tensorflow as tf
+from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
@@ -171,9 +172,9 @@ class RandomSpatialCrop(RandomTransform):
                 spatial_shape, crop_size, bundle[label_key], spatial_rank
             )
 
-        starts = tf.maximum(center - crop_size // 2, 0)
-        ends = tf.minimum(starts + crop_size, spatial_shape)
-        starts = tf.maximum(ends - crop_size, 0)
+        starts = ops.maximum(center - crop_size // 2, 0)
+        ends = ops.minimum(starts + crop_size, spatial_shape)
+        starts = ops.maximum(ends - crop_size, 0)
         return {
             "skip": False,
             "crop_start": starts,
@@ -194,7 +195,7 @@ class RandomSpatialCrop(RandomTransform):
 
         original_shapes = {}
 
-        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_crop(tensor: Any, key: str) -> Any:
             original_shapes[key] = get_spatial_shape_for_layout(
                 tensor,
                 input_layout=self.input_layout,
@@ -221,7 +222,7 @@ class RandomSpatialCrop(RandomTransform):
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
 
-        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_crop(tensor: Any, key: str) -> Any:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
@@ -238,7 +239,7 @@ class RandomSpatialCrop(RandomTransform):
         self,
         params: dict[str, object],
         present_keys: Sequence[str],
-        original_shapes: dict[str, tf.Tensor],
+        original_shapes: dict[str, Any],
     ) -> dict[str, object]:
         """Build random trace metadata for the current spatial crop."""
         return {
@@ -251,11 +252,11 @@ class RandomSpatialCrop(RandomTransform):
             "input_layout": params["input_layout"],
         }
 
-    def _get_crop_size(self, spatial_shape: tf.Tensor, spatial_rank: int) -> tf.Tensor:
+    def _get_crop_size(self, spatial_shape: Any, spatial_rank: int) -> Any:
         if isinstance(self.crop_size, int):
-            crop_size = tf.fill([spatial_rank], tf.cast(self.crop_size, tf.int32))
+            crop_size = ops.full((spatial_rank,), self.crop_size, dtype="int32")
         else:
-            crop_size = tf.convert_to_tensor(self.crop_size, dtype=tf.int32)
+            crop_size = ops.convert_to_tensor(self.crop_size, dtype="int32")
             if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
                 raise ValueError(
                     f"Expected spatial rank in (2, 3) with crop_size length matching the "
@@ -264,46 +265,46 @@ class RandomSpatialCrop(RandomTransform):
 
         if self.random_shape:
             max_crop_size = (
-                tf.fill([spatial_rank], tf.cast(self.max_crop_size, tf.int32))
+                ops.full((spatial_rank,), self.max_crop_size, dtype="int32")
                 if isinstance(self.max_crop_size, int)
                 else (
-                    tf.convert_to_tensor(self.max_crop_size, dtype=tf.int32)
+                    ops.convert_to_tensor(self.max_crop_size, dtype="int32")
                     if self.max_crop_size is not None
                     else spatial_shape
                 )
             )
-            max_crop_size = tf.where(max_crop_size <= 0, spatial_shape, max_crop_size)
-            min_s = tf.where(crop_size <= 0, spatial_shape, crop_size)
-            max_s = tf.where(max_crop_size <= 0, spatial_shape, max_crop_size)
-            max_s = tf.minimum(max_s, spatial_shape)
-            min_s = tf.minimum(min_s, max_s)
+            max_crop_size = ops.where(max_crop_size <= 0, spatial_shape, max_crop_size)
+            min_s = ops.where(crop_size <= 0, spatial_shape, crop_size)
+            max_s = ops.where(max_crop_size <= 0, spatial_shape, max_crop_size)
+            max_s = ops.minimum(max_s, spatial_shape)
+            min_s = ops.minimum(min_s, max_s)
             span = max_s - min_s + 1
             random_unit = self.random_uniform(
                 shape=[spatial_rank],
                 minval=0.0,
                 maxval=1.0,
-                dtype=tf.float32,
+                dtype="float32",
             )
-            crop_size = min_s + tf.cast(tf.floor(random_unit * tf.cast(span, tf.float32)), tf.int32)
+            crop_size = min_s + ops.cast(ops.floor(random_unit * ops.cast(span, "float32")), "int32")
         else:
-            crop_size = tf.where(crop_size > 0, crop_size, spatial_shape)
-            crop_size = tf.minimum(crop_size, spatial_shape)
+            crop_size = ops.where(crop_size > 0, crop_size, spatial_shape)
+            crop_size = ops.minimum(crop_size, spatial_shape)
         return crop_size
 
     def _get_random_center(
-        self, spatial_shape: tf.Tensor, crop_size: tf.Tensor, spatial_rank: int
-    ) -> tf.Tensor:
+        self, spatial_shape: Any, crop_size: Any, spatial_rank: int
+    ) -> Any:
         if not self.random_center:
             return spatial_shape // 2
 
-        max_start = tf.maximum(spatial_shape - crop_size, 0)
+        max_start = ops.maximum(spatial_shape - crop_size, 0)
         random_start = self.random_integers(
             shape=[spatial_rank],
             minval=0,
-            maxval=tf.reduce_max(max_start) + 1,
-            dtype=tf.int32,
+            maxval=ops.max(max_start) + 1,
+            dtype="int32",
         )
-        random_start = tf.minimum(random_start, max_start)
+        random_start = ops.minimum(random_start, max_start)
         return random_start + crop_size // 2
 
     def _get_label_aware_center(
