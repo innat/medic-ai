@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
 import keras
 import tensorflow as tf
+from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..spatial.spatial_crop import SpatialCrop
@@ -193,7 +194,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             image_reference_batched,
             spatial_rank,
         )
-        crop_size = tf.convert_to_tensor(self.target_shape, dtype=tf.int32)
+        crop_size = ops.convert_to_tensor(self.target_shape, dtype="int32")
         if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
             raise ValueError(
                 f"`target_shape` must contain exactly {spatial_rank} values for input shape "
@@ -203,9 +204,9 @@ class RandomCropByPosNegLabel(RandomTransform):
             image_batched,
             input_layout=self.batch_input_layout,
         )
-        starts = tf.maximum(center - crop_size // 2, 0)
-        ends = tf.minimum(starts + crop_size, spatial_shape)
-        starts = tf.maximum(ends - crop_size, 0)
+        starts = ops.maximum(center - crop_size // 2, 0)
+        ends = ops.minimum(starts + crop_size, spatial_shape)
+        starts = ops.maximum(ends - crop_size, 0)
         return {
             "skip": False,
             "crop_start": starts,
@@ -250,7 +251,7 @@ class RandomCropByPosNegLabel(RandomTransform):
 
         original_shapes = {}
 
-        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_crop(tensor: Any, key: str) -> Any:
             original_shapes[key] = get_spatial_shape_for_layout(
                 tensor,
                 input_layout=self.input_layout,
@@ -283,7 +284,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         self,
         params: dict[str, object],
         present_keys: Sequence[str],
-        original_shapes: dict[str, tf.Tensor],
+        original_shapes: dict[str, Any],
     ) -> dict[str, object]:
         """Build random trace metadata for the current positive/negative crop."""
         return {
@@ -305,7 +306,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         crop_start = trace["params"].get("crop_start")
         original_shapes = trace["params"].get("original_shapes", {})
 
-        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_crop(tensor: Any, key: str) -> Any:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
@@ -340,7 +341,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             shape=(),
             minval=0.0,
             maxval=1.0,
-            dtype=tf.float32,
+            dtype="float32",
         ) < self.pos_ratio
         return tf.cond(
             positive,
@@ -396,10 +397,10 @@ class RandomCropByPosNegLabel(RandomTransform):
                 shape=(spatial_rank,),
                 minval=0.0,
                 maxval=1.0,
-                dtype=tf.float32,
+                dtype="float32",
             )
             random_coord = tf.cast(
-                tf.floor(random_unit * tf.cast(fallback_shape[:spatial_rank], tf.float32)),
+                ops.floor(random_unit * ops.cast(fallback_shape[:spatial_rank], "float32")),
                 tf.int32,
             )
             padding = tf.zeros([num_cols - spatial_rank], dtype=tf.int32)
@@ -411,7 +412,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             shape=(),
             minval=0,
             maxval=tf.shape(coords)[0],
-            dtype=tf.int32,
+            dtype="int32",
         )
         return tf.cast(coords[idx][:spatial_rank], tf.int32)
 
