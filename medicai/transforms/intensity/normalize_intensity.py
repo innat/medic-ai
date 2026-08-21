@@ -1,10 +1,12 @@
-from typing import Sequence
+from typing import Any, Sequence
 
 import tensorflow as tf
+from keras import ops
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
 from ..utils import (
+    custom_tf_boolean_mask,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -103,7 +105,7 @@ class NormalizeIntensity(KeyedTransform):
         scale=None,
         nonzero: bool = False,
         channel_wise: bool = False,
-        dtype=tf.float32,
+        dtype: Any = "float32",
         *,
         input_layout: str,
         allow_missing_keys: bool = False,
@@ -138,37 +140,43 @@ class NormalizeIntensity(KeyedTransform):
         )
         return bundle
 
-    def normalize_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
+    def normalize_tensor(self, tensor: Any) -> Any:
         """Normalize one tensor with the configured statistics policy."""
         self._validate_tensor_layout(tensor)
-        tensor = tf.cast(tensor, dtype=self.dtype or tensor.dtype)
+        tensor = ops.convert_to_tensor(tensor)
+        working_dtype = self.dtype or tensor.dtype
+        tensor = ops.cast(tensor, dtype=working_dtype)
         if self.channel_wise:
             normalized = self._normalize_channel_wise(tensor)
         else:
             normalized = self._normalize_global(tensor)
-        return tf.cast(normalized, self.dtype or tensor.dtype)
+        return ops.cast(normalized, working_dtype)
 
-    def _normalize_channel_wise(self, tensor: tf.Tensor) -> tf.Tensor:
-        mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
+    def _normalize_channel_wise(self, tensor: Any) -> Any:
+        mask = (
+            ops.not_equal(tensor, 0.0)
+            if self.nonzero
+            else ops.cast(ops.ones_like(tensor), "bool")
+        )
         num_dims = tf.rank(tensor)
         channel_axis = num_dims - 1
 
         def normalize_single_channel(channel_and_mask):
             channel, channel_mask = channel_and_mask
-            channel_masked = tf.boolean_mask(channel, channel_mask)
+            channel_masked = custom_tf_boolean_mask(channel, channel_mask, mode="extract")
             has_valid = tf.size(channel_masked) > 0
 
             def normalize_nonempty():
-                mean = tf.reduce_mean(channel_masked)
-                std = tf.math.reduce_std(channel_masked)
+                mean = ops.mean(channel_masked)
+                std = ops.std(channel_masked)
                 sub = self.offset if self.offset is not None else mean
                 div = self.scale if self.scale is not None else std
-                sub = tf.cast(sub, channel.dtype)
-                div = tf.cast(div, channel.dtype)
-                div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
+                sub = ops.cast(sub, channel.dtype)
+                div = ops.cast(div, channel.dtype)
+                div = ops.where(ops.equal(div, 0.0), ops.ones_like(div), div)
                 normalized = (channel - sub) / div
                 if self.nonzero:
-                    return tf.where(channel_mask, normalized, channel)
+                    return ops.where(channel_mask, normalized, channel)
                 return normalized
 
             return tf.cond(has_valid, normalize_nonempty, lambda: channel)
@@ -188,25 +196,29 @@ class NormalizeIntensity(KeyedTransform):
         )
         return tf.transpose(normalized_transposed, perm=inverse_permutation)
 
-    def _normalize_global(self, tensor: tf.Tensor) -> tf.Tensor:
-        mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
+    def _normalize_global(self, tensor: Any) -> Any:
+        mask = (
+            ops.not_equal(tensor, 0.0)
+            if self.nonzero
+            else ops.cast(ops.ones_like(tensor), "bool")
+        )
+        num_valid = ops.sum(ops.cast(mask, "int32"))
 
         def normalize():
-            vals = tf.boolean_mask(tensor, mask)
-            mean = tf.reduce_mean(vals)
-            std = tf.math.reduce_std(vals)
-            std = tf.where(std == 0.0, 1.0, std)
-            sub = mean if self.offset is None else tf.cast(self.offset, tensor.dtype)
-            div = std if self.scale is None else tf.cast(self.scale, tensor.dtype)
-            div = tf.where(div == 0.0, 1.0, div)
+            vals = custom_tf_boolean_mask(tensor, mask, mode="extract")
+            mean = ops.mean(vals)
+            std = ops.std(vals)
+            std = ops.where(ops.equal(std, 0.0), 1.0, std)
+            sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
+            div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
+            div = ops.where(ops.equal(div, 0.0), 1.0, div)
             if self.nonzero:
-                return tf.where(mask, (tensor - sub) / div, tensor)
+                return ops.where(mask, (tensor - sub) / div, tensor)
             return (tensor - sub) / div
 
         return tf.cond(num_valid > 0, normalize, lambda: tensor)
 
-    def _validate_tensor_layout(self, tensor: tf.Tensor) -> None:
+    def _validate_tensor_layout(self, tensor: Any) -> None:
         """Validate sample or batch channel-last layout for normalization."""
         validate_tensor_matches_layout(
             tensor,
