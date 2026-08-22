@@ -1,7 +1,7 @@
 from typing import Sequence
 
 import keras
-import tensorflow as tf
+from keras import ops
 
 from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
@@ -233,48 +233,47 @@ class RandomCutOut(RandomTransform):
 
     def apply_sample_cutout(
         self,
-        image: tf.Tensor,
-        label: tf.Tensor,
+        image,
+        label,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ):
         """Apply cutout to one sample tensor using a freshly generated mask."""
         mask = self.generate_cutout_mask(image, label, spatial_rank)
         return self.apply_cutout(image, mask)
 
     def apply_batch_cutout(
         self,
-        images: tf.Tensor,
-        labels: tf.Tensor,
+        images,
+        labels,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ):
         """Apply cutout independently to each sample of a batch."""
-        return tf.map_fn(
+        return ops.map(
             lambda elems: self.apply_sample_cutout(elems[0], elems[1], spatial_rank),
             (images, labels),
-            fn_output_signature=tf.TensorSpec(shape=images.shape[1:], dtype=images.dtype),
         )
 
-    def apply_cutout(self, image: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
+    def apply_cutout(self, image, mask):
         """Apply a generated cutout mask to the image tensor."""
-        mask_bool = tf.cast(mask, tf.bool)
+        mask_bool = ops.cast(mask, "bool")
         if self.fill_mode == "gaussian":
             noise = self.random_normal(
-                shape=tf.shape(image),
+                shape=ops.shape(image),
                 stddev=self.gaussian_std,
                 dtype=image.dtype,
             )
-            im_min = tf.reduce_min(image)
-            im_max = tf.reduce_max(image)
-            nz_min = tf.reduce_min(noise)
-            nz_max = tf.reduce_max(noise)
+            im_min = ops.min(image)
+            im_max = ops.max(image)
+            nz_min = ops.min(noise)
+            nz_max = ops.max(noise)
             fill = (im_max - im_min) * (noise - nz_min) / (nz_max - nz_min + 1e-8) + im_min
         else:
-            fill = tf.fill(tf.shape(image), tf.cast(self.fill_value, image.dtype))
-        return tf.where(mask_bool, image, fill)
+            fill = ops.zeros_like(image) + ops.cast(self.fill_value, image.dtype)
+        return ops.where(mask_bool, image, fill)
 
     def generate_cutout_mask(
-        self, volume: tf.Tensor, label: tf.Tensor, spatial_rank: int
-    ) -> tf.Tensor:
+        self, volume, label, spatial_rank: int
+    ):
         """Generate a cutout mask for a 2D or 3D sample tensor."""
         if spatial_rank == 2:
             if label.shape.rank == 3:
@@ -290,83 +289,83 @@ class RandomCutOut(RandomTransform):
             return self._cutout_mask_slice_wise(volume, label)
         return self._cutout_mask_volume_wise(volume, label)
 
-    def _cutout_mask_2d(self, image: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
-        shape = tf.shape(image)
+    def _cutout_mask_2d(self, image, label):
+        shape = ops.shape(image)
         height, width = shape[0], shape[1]
         mask_h, mask_w = self.mask_size
         y_lo = mask_h // 2
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        cutout_mask = tf.ones((height, width), tf.float32)
         valid_mask = (
-            tf.ones((height, width), tf.float32)
+            ops.ones((height, width), dtype="float32")
             if self.invalid_label is None
-            else tf.cast(label != self.invalid_label, tf.float32)
+            else ops.cast(label != self.invalid_label, "float32")
         )
-        y = tf.range(height)
-        x = tf.range(width)
+        cutout_mask = ops.ones_like(valid_mask)
+        y = ops.arange(height)
+        x = ops.arange(width)
 
         for _ in range(self.num_cuts):
-            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype=tf.int32)
-            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype=tf.int32)
+            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype="int32")
+            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype="int32")
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
-            rect = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32) * valid_mask
+            rect = ops.cast(y_mask[:, None] & x_mask[None, :], "float32") * valid_mask
             cutout_mask *= 1.0 - rect
 
         return cutout_mask[..., None]
 
-    def _cutout_mask_slice_wise(self, volume: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
-        shape = tf.shape(volume)
+    def _cutout_mask_slice_wise(self, volume, label):
+        shape = ops.shape(volume)
         depth, height, width = shape[0], shape[1], shape[2]
         mask_h, mask_w = self.mask_size
         y_lo = mask_h // 2
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        cutout_mask = tf.ones((depth, height, width), tf.float32)
         valid_mask = (
-            tf.ones((depth, height, width), tf.float32)
+            ops.ones((depth, height, width), dtype="float32")
             if self.invalid_label is None
-            else tf.cast(label != self.invalid_label, tf.float32)
+            else ops.cast(label != self.invalid_label, "float32")
         )
-        y = tf.range(height)[None, :]
-        x = tf.range(width)[None, :]
+        cutout_mask = ops.ones_like(valid_mask)
+        y = ops.arange(height)[None, :]
+        x = ops.arange(width)[None, :]
 
         for _ in range(self.num_cuts):
-            cy = self.random_integers(shape=[depth], minval=0, maxval=height, dtype=tf.int32)
-            cx = self.random_integers(shape=[depth], minval=0, maxval=width, dtype=tf.int32)
+            cy = self.random_integers(shape=[depth], minval=0, maxval=height, dtype="int32")
+            cx = self.random_integers(shape=[depth], minval=0, maxval=width, dtype="int32")
             y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
             x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
-            rect = tf.cast(y_mask[:, :, None] & x_mask[:, None, :], tf.float32) * valid_mask
+            rect = ops.cast(y_mask[:, :, None] & x_mask[:, None, :], "float32") * valid_mask
             cutout_mask *= 1.0 - rect
 
         return cutout_mask[..., None]
 
-    def _cutout_mask_volume_wise(self, volume: tf.Tensor, label: tf.Tensor) -> tf.Tensor:
-        shape = tf.shape(volume)
+    def _cutout_mask_volume_wise(self, volume, label):
+        shape = ops.shape(volume)
         depth, height, width = shape[0], shape[1], shape[2]
         mask_h, mask_w = self.mask_size
         y_lo = mask_h // 2
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        cutout_mask = tf.ones((depth, height, width), tf.float32)
         valid_mask = (
-            tf.ones((depth, height, width), tf.float32)
+            ops.ones((depth, height, width), dtype="float32")
             if self.invalid_label is None
-            else tf.cast(label != self.invalid_label, tf.float32)
+            else ops.cast(label != self.invalid_label, "float32")
         )
-        y = tf.range(height)
-        x = tf.range(width)
+        cutout_mask = ops.ones_like(valid_mask)
+        y = ops.arange(height)
+        x = ops.arange(width)
 
         for _ in range(self.num_cuts):
-            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype=tf.int32)
-            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype=tf.int32)
+            cy = self.random_integers(shape=(), minval=0, maxval=height, dtype="int32")
+            cx = self.random_integers(shape=(), minval=0, maxval=width, dtype="int32")
             y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
             x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
-            rect_hw = tf.cast(y_mask[:, None] & x_mask[None, :], tf.float32)
+            rect_hw = ops.cast(y_mask[:, None] & x_mask[None, :], "float32")
             rect = rect_hw[None, ...] * valid_mask
             cutout_mask *= 1.0 - rect
 
