@@ -438,7 +438,7 @@ def resolve_input_layout_axes(
 # Affine Utility
 
 
-def spacing_from_affine(affine: tf.Tensor) -> tf.Tensor:
+def spacing_from_affine(affine: Any) -> Any:
     """Extract voxel spacing magnitudes from a 4x4 affine matrix.
 
     The spacing is computed as the Euclidean norm of each spatial column in the
@@ -446,10 +446,10 @@ def spacing_from_affine(affine: tf.Tensor) -> tf.Tensor:
     """
     affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
-    return tf.norm(linear, axis=0)
+    return ops.norm(linear, axis=0)
 
 
-def direction_from_affine(affine: tf.Tensor) -> tf.Tensor:
+def direction_from_affine(affine: Any) -> Any:
     """Extract normalized direction columns from a 4x4 affine matrix.
 
     This returns the orientation component of the affine after removing voxel
@@ -458,14 +458,14 @@ def direction_from_affine(affine: tf.Tensor) -> tf.Tensor:
     affine = validate_affine_matrix(affine)
     linear = affine[:3, :3]
     spacing = spacing_from_affine(affine)
-    safe_spacing = tf.where(spacing > 0.0, spacing, tf.ones_like(spacing))
-    return linear / safe_spacing[tf.newaxis, :]
+    safe_spacing = ops.where(spacing > 0.0, spacing, ops.ones_like(spacing))
+    return linear / safe_spacing[None, :]
 
 
 def is_axis_aligned_affine(
-    affine: tf.Tensor,
+    affine: Any,
     atol: float = 1e-5,
-) -> tf.Tensor:
+) -> Any:
     """Return whether an affine preserves tensor axis order without rotation.
 
     This allows sign flips but rejects axis permutation and general rotation.
@@ -473,45 +473,45 @@ def is_axis_aligned_affine(
     affine-aware resampling.
     """
     direction = direction_from_affine(affine)
-    off_diagonal = direction - tf.linalg.diag(tf.linalg.diag_part(direction))
-    return tf.reduce_all(tf.abs(off_diagonal) <= tf.cast(atol, direction.dtype))
+    off_diagonal = direction - ops.diag(ops.diagonal(direction))
+    return ops.all(ops.abs(off_diagonal) <= ops.cast(atol, direction.dtype))
 
 
-def origin_from_affine(affine: tf.Tensor) -> tf.Tensor:
+def origin_from_affine(affine: Any) -> Any:
     """Extract the world-space origin from a 4x4 affine matrix."""
     affine = validate_affine_matrix(affine)
     return affine[:3, 3]
 
 
-def invert_affine(affine: tf.Tensor) -> tf.Tensor:
+def invert_affine(affine: Any) -> Any:
     """Invert a 4x4 affine matrix."""
     affine = validate_affine_matrix(affine)
-    return tf.linalg.inv(affine)
+    return ops.linalg.inv(affine)
 
 
 def build_affine(
-    spacing: tf.Tensor,
-    direction: tf.Tensor,
-    origin: tf.Tensor,
-) -> tf.Tensor:
+    spacing: Any,
+    direction: Any,
+    origin: Any,
+) -> Any:
     """Build a 4x4 affine matrix from spacing, direction, and origin."""
-    spacing = tf.cast(spacing, tf.float32)
-    direction = tf.cast(direction, tf.float32)
-    origin = tf.cast(origin, tf.float32)
+    spacing = ops.cast(spacing, "float32")
+    direction = ops.cast(direction, "float32")
+    origin = ops.cast(origin, "float32")
 
-    linear = direction * spacing[tf.newaxis, :]
-    bottom_row = tf.constant([[0.0, 0.0, 0.0, 1.0]], dtype=tf.float32)
-    top = tf.concat([linear, origin[:, tf.newaxis]], axis=1)
-    return tf.concat([top, bottom_row], axis=0)
+    linear = direction * spacing[None, :]
+    bottom_row = ops.convert_to_tensor([[0.0, 0.0, 0.0, 1.0]], dtype="float32")
+    top = ops.concatenate([linear, origin[:, None]], axis=1)
+    return ops.concatenate([top, bottom_row], axis=0)
 
 
-def affine_apply(affine: tf.Tensor, points: tf.Tensor) -> tf.Tensor:
+def affine_apply(affine: Any, points: Any) -> Any:
     """Apply a 4x4 affine matrix to points shaped ``(..., 3)``."""
     affine = validate_affine_matrix(affine)
-    points = tf.cast(points, tf.float32)
-    ones = tf.ones_like(points[..., :1])
-    homogeneous = tf.concat([points, ones], axis=-1)
-    transformed = tf.linalg.matvec(affine, homogeneous)
+    points = ops.cast(points, "float32")
+    ones = ops.ones_like(points[..., :1])
+    homogeneous = ops.concatenate([points, ones], axis=-1)
+    transformed = ops.matmul(homogeneous, ops.transpose(affine))
     return transformed[..., :3]
 
 
@@ -640,96 +640,96 @@ def reoriented_affine(
 # Resampling Utility
 
 
-def round_half_up(values: tf.Tensor) -> tf.Tensor:
+def round_half_up(values: Any) -> Any:
     """Round floating-point values with half-up semantics."""
-    return tf.floor(values + 0.5)
+    return ops.floor(values + 0.5)
 
 
 def compute_destination_affine(
-    src_affine: tf.Tensor,
-    pixdim: tf.Tensor,
+    src_affine: Any,
+    pixdim: Any,
     diagonal: bool = False,
-) -> tf.Tensor:
+) -> Any:
     """Compute a destination affine for resampling."""
-    src_affine = tf.cast(src_affine, tf.float32)
-    pixdim = tf.cast(pixdim, tf.float32)
+    src_affine = ops.cast(src_affine, "float32")
+    pixdim = ops.cast(pixdim, "float32")
     origin = origin_from_affine(src_affine)
-    direction = tf.eye(3, dtype=tf.float32) if diagonal else direction_from_affine(src_affine)
+    direction = ops.eye(3, dtype="float32") if diagonal else direction_from_affine(src_affine)
     return build_affine(pixdim, direction, origin)
 
 
 def compute_output_shape(
-    input_shape: tf.Tensor,
-    src_affine: tf.Tensor,
-    dst_affine: tf.Tensor,
+    input_shape: Any,
+    src_affine: Any,
+    dst_affine: Any,
     align_corners: bool = False,
-) -> tf.Tensor:
+) -> Any:
     """Compute an output shape from source and destination geometry.
 
     The output extent is derived from source-volume corner coordinates mapped
     into the destination index space, so it remains correct for both
     axis-aligned and permuted affines.
     """
-    input_shape = tf.cast(input_shape, tf.float32)
-    src_affine = tf.cast(src_affine, tf.float32)
-    dst_affine = tf.cast(dst_affine, tf.float32)
+    input_shape = ops.cast(input_shape, "float32")
+    src_affine = ops.cast(src_affine, "float32")
+    dst_affine = ops.cast(dst_affine, "float32")
 
     if align_corners:
-        max_corner = tf.maximum(input_shape - 1.0, 0.0)
-        src_corners = tf.stack(
-            tf.meshgrid(
-                tf.stack([0.0, max_corner[0]]),
-                tf.stack([0.0, max_corner[1]]),
-                tf.stack([0.0, max_corner[2]]),
+        max_corner = ops.maximum(input_shape - 1.0, 0.0)
+        src_corners = ops.stack(
+            ops.meshgrid(
+                ops.stack([0.0, max_corner[0]]),
+                ops.stack([0.0, max_corner[1]]),
+                ops.stack([0.0, max_corner[2]]),
                 indexing="ij",
             ),
             axis=-1,
         )
-        src_corners = tf.reshape(src_corners, [-1, 3])
+        src_corners = ops.reshape(src_corners, [-1, 3])
         dst_corners = affine_apply(
-            tf.linalg.matmul(invert_affine(dst_affine), src_affine), src_corners
+            ops.matmul(invert_affine(dst_affine), src_affine), src_corners
         )
-        min_corner = tf.reduce_min(dst_corners, axis=0)
-        max_corner = tf.reduce_max(dst_corners, axis=0)
-        output_shape = round_half_up(tf.maximum(max_corner - min_corner, 0.0)) + 1.0
+        min_corner = ops.min(dst_corners, axis=0)
+        max_corner = ops.max(dst_corners, axis=0)
+        output_shape = round_half_up(ops.maximum(max_corner - min_corner, 0.0)) + 1.0
     else:
-        max_corner = tf.maximum(input_shape, 0.0)
-        src_corners = tf.stack(
-            tf.meshgrid(
-                tf.stack([0.0, max_corner[0]]),
-                tf.stack([0.0, max_corner[1]]),
-                tf.stack([0.0, max_corner[2]]),
+        max_corner = ops.maximum(input_shape, 0.0)
+        src_corners = ops.stack(
+            ops.meshgrid(
+                ops.stack([0.0, max_corner[0]]),
+                ops.stack([0.0, max_corner[1]]),
+                ops.stack([0.0, max_corner[2]]),
                 indexing="ij",
             ),
             axis=-1,
         )
-        src_corners = tf.reshape(src_corners, [-1, 3])
+        src_corners = ops.reshape(src_corners, [-1, 3])
         dst_corners = affine_apply(
-            tf.linalg.matmul(invert_affine(dst_affine), src_affine), src_corners
+            ops.matmul(invert_affine(dst_affine), src_affine), src_corners
         )
-        min_corner = tf.reduce_min(dst_corners, axis=0)
-        max_corner = tf.reduce_max(dst_corners, axis=0)
-        output_shape = round_half_up(tf.maximum(max_corner - min_corner, 0.0))
+        min_corner = ops.min(dst_corners, axis=0)
+        max_corner = ops.max(dst_corners, axis=0)
+        output_shape = round_half_up(ops.maximum(max_corner - min_corner, 0.0))
 
-    return tf.maximum(tf.cast(output_shape, tf.int32), 1)
+    return ops.maximum(ops.cast(output_shape, "int32"), 1)
 
 
-def make_output_grid(output_shape: tf.Tensor) -> tf.Tensor:
+def make_output_grid(output_shape: Any) -> Any:
     """Create an output index grid shaped ``(N, 3)`` in ``(D, H, W)`` order."""
-    output_shape = tf.cast(output_shape, tf.int32)
-    d = tf.range(output_shape[0], dtype=tf.float32)
-    h = tf.range(output_shape[1], dtype=tf.float32)
-    w = tf.range(output_shape[2], dtype=tf.float32)
-    dd, hh, ww = tf.meshgrid(d, h, w, indexing="ij")
-    grid = tf.stack([dd, hh, ww], axis=-1)
-    return tf.reshape(grid, [-1, 3])
+    output_shape = ops.cast(output_shape, "int32")
+    d = ops.arange(output_shape[0], dtype="float32")
+    h = ops.arange(output_shape[1], dtype="float32")
+    w = ops.arange(output_shape[2], dtype="float32")
+    dd, hh, ww = ops.meshgrid(d, h, w, indexing="ij")
+    grid = ops.stack([dd, hh, ww], axis=-1)
+    return ops.reshape(grid, [-1, 3])
 
 
 def make_output_grid_chunk(
-    output_shape: tf.Tensor,
-    start: tf.Tensor,
-    size: tf.Tensor,
-) -> tf.Tensor:
+    output_shape: Any,
+    start: Any,
+    size: Any,
+) -> Any:
     """Create one chunk of an output index grid from flat voxel indices.
 
     Args:
@@ -739,20 +739,20 @@ def make_output_grid_chunk(
         size: Number of grid points to generate.
 
     Returns:
-        tf.Tensor: Float32 grid chunk shaped ``(size, 3)`` in ``(D, H, W)``
+        Tensor-like: Float32 grid chunk shaped ``(size, 3)`` in ``(D, H, W)``
         order.
     """
-    output_shape = tf.cast(output_shape, tf.int32)
-    start = tf.cast(start, tf.int32)
-    size = tf.cast(size, tf.int32)
+    output_shape = ops.cast(output_shape, "int32")
+    start = ops.cast(start, "int32")
+    size = ops.cast(size, "int32")
 
-    flat = tf.range(start, start + size, dtype=tf.int32)
+    flat = ops.arange(start, start + size, dtype="int32")
     hw = output_shape[1] * output_shape[2]
-    d = tf.math.floordiv(flat, hw)
-    rem = tf.math.floormod(flat, hw)
-    h = tf.math.floordiv(rem, output_shape[2])
-    w = tf.math.floormod(rem, output_shape[2])
-    return tf.cast(tf.stack([d, h, w], axis=1), tf.float32)
+    d = ops.floor_divide(flat, hw)
+    rem = ops.mod(flat, hw)
+    h = ops.floor_divide(rem, output_shape[2])
+    w = ops.mod(rem, output_shape[2])
+    return ops.cast(ops.stack([d, h, w], axis=1), "float32")
 
 
 # Spatial Utility

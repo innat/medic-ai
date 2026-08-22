@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import keras
-import tensorflow as tf
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
@@ -331,11 +330,11 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     def sample_center(
         self,
-        image: tf.Tensor,
-        label: tf.Tensor,
-        image_reference: tf.Tensor | None,
+        image,
+        label,
+        image_reference,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ):
         """Sample one crop center using positive/negative label sampling."""
         positive = self.random_uniform(
             shape=(),
@@ -343,14 +342,14 @@ class RandomCropByPosNegLabel(RandomTransform):
             maxval=1.0,
             dtype="float32",
         ) < self.pos_ratio
-        return tf.cond(
+        return ops.cond(
             positive,
             lambda: self._sample_positive_center(label, spatial_rank),
             lambda: self._sample_negative_center(image, label, image_reference, spatial_rank),
         )
 
-    def _sample_positive_center(self, label: tf.Tensor, spatial_rank: int) -> tf.Tensor:
-        coords = tf.where(tf.reduce_any(label > 0, axis=(0, -1)))
+    def _sample_positive_center(self, label, spatial_rank: int):
+        coords = ops.where(ops.any(label > 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
             fallback_shape=get_spatial_shape_for_layout(
@@ -362,18 +361,18 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     def _sample_negative_center(
         self,
-        image: tf.Tensor,
-        label: tf.Tensor,
-        image_reference: tf.Tensor | None,
+        image,
+        label,
+        image_reference,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ):
         if image_reference is not None and self.image_threshold is not None:
-            max_intensity_ref = tf.reduce_max(image_reference, axis=(0, -1))
-            label_is_zero = tf.reduce_any(label == 0, axis=(0, -1))
+            max_intensity_ref = ops.max(image_reference, axis=(0, -1))
+            label_is_zero = ops.any(label == 0, axis=(0, -1))
             valid_mask = label_is_zero & (max_intensity_ref > self.image_threshold)
-            coords = tf.where(valid_mask)
+            coords = ops.where(valid_mask)
         else:
-            coords = tf.where(tf.reduce_any(label == 0, axis=(0, -1)))
+            coords = ops.where(ops.any(label == 0, axis=(0, -1)))
         return self._sample_from_coords(
             coords,
             fallback_shape=get_spatial_shape_for_layout(
@@ -385,74 +384,100 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     def _sample_from_coords(
         self,
-        coords: tf.Tensor,
-        fallback_shape: tf.Tensor,
+        coords,
+        fallback_shape,
         spatial_rank: int,
-    ) -> tf.Tensor:
+    ):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
 
         def fallback_coords():
-            num_cols = coords.shape[1] if coords.shape[1] is not None else tf.shape(coords)[1]
+            num_cols = coords.shape[1] if coords.shape[1] is not None else ops.shape(coords)[1]
             random_unit = self.random_uniform(
                 shape=(spatial_rank,),
                 minval=0.0,
                 maxval=1.0,
                 dtype="float32",
             )
-            random_coord = tf.cast(
+            random_coord = ops.cast(
                 ops.floor(random_unit * ops.cast(fallback_shape[:spatial_rank], "float32")),
-                tf.int32,
+                "int32",
             )
-            padding = tf.zeros([num_cols - spatial_rank], dtype=tf.int32)
-            full_coord = tf.concat([random_coord, padding], axis=0)
-            return tf.expand_dims(tf.cast(full_coord, coords.dtype), axis=0)
+            padding = ops.zeros([num_cols - spatial_rank], dtype="int32")
+            full_coord = ops.concatenate([random_coord, padding], axis=0)
+            return ops.expand_dims(ops.cast(full_coord, coords.dtype), axis=0)
 
-        coords = tf.cond(tf.shape(coords)[0] > 0, lambda: coords, fallback_coords)
+        coords = ops.cond(ops.shape(coords)[0] > 0, lambda: coords, fallback_coords)
         idx = self.random_integers(
             shape=(),
             minval=0,
-            maxval=tf.shape(coords)[0],
+            maxval=ops.shape(coords)[0],
             dtype="int32",
         )
-        return tf.cast(coords[idx][:spatial_rank], tf.int32)
+        return ops.cast(coords[idx][:spatial_rank], "int32")
 
     def _get_last_random_crop_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)
 
     def crop_tensor(
         self,
-        tensor: tf.Tensor,
-        crop_start: tf.Tensor,
-        crop_size: tf.Tensor,
+        tensor,
+        crop_start,
+        crop_size,
         *,
         input_layout: str,
-    ) -> tf.Tensor:
+    ):
         """Crop one tensor using the provided layout contract."""
         layout = get_input_layout_info(input_layout)
         if layout.batched:
-            begin = tf.concat([[0], crop_start, [0]], axis=0)
-            size = tf.concat([[tf.shape(tensor)[0]], crop_size, [tf.shape(tensor)[-1]]], axis=0)
+            begin = ops.concatenate(
+                [
+                    ops.convert_to_tensor([0], dtype="int32"),
+                    crop_start,
+                    ops.convert_to_tensor([0], dtype="int32"),
+                ],
+                axis=0,
+            )
+            size = ops.concatenate(
+                [
+                    ops.reshape(ops.shape(tensor)[0], (1,)),
+                    crop_size,
+                    ops.reshape(ops.shape(tensor)[-1], (1,)),
+                ],
+                axis=0,
+            )
         else:
-            begin = tf.concat([crop_start, [0]], axis=0)
-            size = tf.concat([crop_size, [tf.shape(tensor)[-1]]], axis=0)
-        return tf.slice(tensor, begin=begin, size=size)
+            begin = ops.concatenate(
+                [
+                    crop_start,
+                    ops.convert_to_tensor([0], dtype="int32"),
+                ],
+                axis=0,
+            )
+            size = ops.concatenate(
+                [
+                    crop_size,
+                    ops.reshape(ops.shape(tensor)[-1], (1,)),
+                ],
+                axis=0,
+            )
+        return ops.slice(tensor, start_indices=begin, shape=size)
 
     def pad_to_original_shape(
         self,
-        tensor: tf.Tensor,
-        crop_start: tf.Tensor,
-        original_shape: tf.Tensor,
+        tensor,
+        crop_start,
+        original_shape,
         *,
         input_layout: str,
-    ) -> tf.Tensor:
+    ):
         """Pad one tensor back into its original spatial canvas."""
-        crop_start = tf.cast(crop_start, tf.int32)
-        original_shape = tf.cast(original_shape, tf.int32)
+        crop_start = ops.cast(crop_start, "int32")
+        original_shape = ops.cast(original_shape, "int32")
         current_shape = get_spatial_shape_for_layout(tensor, input_layout=input_layout)
         pad_before = crop_start
-        pad_after = tf.maximum(original_shape - crop_start - current_shape, 0)
+        pad_after = ops.maximum(original_shape - crop_start - current_shape, 0)
         paddings = [[0, 0]]
-        for before, after in zip(tf.unstack(pad_before), tf.unstack(pad_after), strict=True):
+        for before, after in zip(ops.unstack(pad_before), ops.unstack(pad_after), strict=True):
             paddings.append([before, after])
         paddings.append([0, 0])
-        return tf.pad(tensor, paddings)
+        return ops.pad(tensor, paddings)
