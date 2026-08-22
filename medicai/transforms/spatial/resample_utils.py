@@ -3,7 +3,6 @@
 from typing import Any, Mapping
 
 from keras import ops
-import tensorflow as tf
 
 from medicai.transforms.spatial.affine_utils import (
     affine_apply,
@@ -215,36 +214,28 @@ class SpatialResample:
         fill_value: float = 0.0,
     ) -> Any:
         """Resample one tensor using a precomputed output-to-source mapping."""
-        tensor = tf.convert_to_tensor(tensor)
+        tensor = ops.convert_to_tensor(tensor)
         index_mapping_affine = ops.cast(index_mapping_affine, "float32")
         num_points = ops.prod(output_shape)
-        chunk_size = tf.constant(self.max_points_per_chunk, dtype=tf.int32)
-        num_chunks = ops.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), "int32")
-        sampled_chunks = tf.TensorArray(dtype=tensor.dtype, size=num_chunks, infer_shape=False)
+        chunk_size = ops.convert_to_tensor(self.max_points_per_chunk, dtype="int32")
+        num_chunks = ops.floor_divide(num_points + chunk_size - 1, chunk_size)
+        chunk_starts = ops.arange(num_chunks, dtype="int32") * chunk_size
 
-        def loop_body(index: tf.Tensor, chunks: tf.TensorArray) -> tuple[tf.Tensor, tf.TensorArray]:
-            start = index * chunk_size
-            size = tf.minimum(chunk_size, num_points - start)
-            grid_chunk = make_output_grid_chunk(output_shape, start, size)
+        def sample_chunk(start: Any) -> Any:
+            grid_chunk = make_output_grid_chunk(output_shape, start, chunk_size)
             src_coords = affine_apply(index_mapping_affine, grid_chunk)
-            sampled_chunk = sample_volume(
+            return sample_volume(
                 tensor,
                 src_coords,
                 interpolation=interpolation,
                 padding_mode=padding_mode,
                 fill_value=fill_value,
             )
-            return index + 1, chunks.write(index, sampled_chunk)
 
-        _, sampled_chunks = tf.while_loop(
-            lambda index, _: index < num_chunks,
-            loop_body,
-            (tf.constant(0, dtype=tf.int32), sampled_chunks),
-            parallel_iterations=1,
-        )
-
-        sampled = sampled_chunks.concat()
+        sampled = ops.map(sample_chunk, chunk_starts)
         channels = ops.shape(tensor)[-1]
+        sampled = ops.reshape(sampled, ops.stack([-1, channels]))
+        sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels]))
         return ops.reshape(
             sampled,
             ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
@@ -266,46 +257,33 @@ class SpatialResample:
         tensor_items = list(tensors.items())
         index_mapping_affine = ops.cast(index_mapping_affine, "float32")
         num_points = ops.prod(output_shape)
-        chunk_size = tf.constant(self.max_points_per_chunk, dtype=tf.int32)
-        num_chunks = ops.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), "int32")
-
-        chunk_arrays = {
-            key: tf.TensorArray(dtype=tensor.dtype, size=num_chunks, infer_shape=False)
-            for key, tensor in tensor_items
-        }
-
-        def loop_body(
-            index: tf.Tensor,
-            *arrays: tf.TensorArray,
-        ):
-            start = index * chunk_size
-            size = tf.minimum(chunk_size, num_points - start)
-            grid_chunk = make_output_grid_chunk(output_shape, start, size)
-            src_coords = affine_apply(index_mapping_affine, grid_chunk)
-
-            updated_arrays = []
-            for array, (key, tensor) in zip(arrays, tensor_items):
-                sampled_chunk = sample_volume(
-                    tensor,
-                    src_coords,
-                    interpolation=interpolation[key],
-                    padding_mode=padding_mode,
-                    fill_value=fill_value,
-                )
-                updated_arrays.append(array.write(index, sampled_chunk))
-            return (index + 1, *updated_arrays)
-
-        _, *chunk_arrays_out = tf.while_loop(
-            lambda index, *_: index < num_chunks,
-            loop_body,
-            (tf.constant(0, dtype=tf.int32), *chunk_arrays.values()),
-            parallel_iterations=1,
+        chunk_size = ops.convert_to_tensor(self.max_points_per_chunk, dtype="int32")
+        num_chunks = ops.floor_divide(num_points + chunk_size - 1, chunk_size)
+        chunk_starts = ops.arange(num_chunks, dtype="int32") * chunk_size
+        grid_chunks = ops.map(
+            lambda start: make_output_grid_chunk(output_shape, start, chunk_size),
+            chunk_starts,
+        )
+        coordinate_chunks = ops.map(
+            lambda grid: affine_apply(index_mapping_affine, grid),
+            grid_chunks,
         )
 
         outputs = {}
-        for array, (key, tensor) in zip(chunk_arrays_out, tensor_items):
-            sampled = array.concat()
+        for key, tensor in tensor_items:
+            sampled_chunks = ops.map(
+                lambda coords: sample_volume(
+                    tensor,
+                    coords,
+                    interpolation=interpolation[key],
+                    padding_mode=padding_mode,
+                    fill_value=fill_value,
+                ),
+                coordinate_chunks,
+            )
             channels = ops.shape(tensor)[-1]
+            sampled = ops.reshape(sampled_chunks, ops.stack([-1, channels]))
+            sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels]))
             outputs[key] = ops.reshape(
                 sampled,
                 ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
