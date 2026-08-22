@@ -546,10 +546,8 @@ def test_scale_intensity_range_handles_flat_input():
     image = as_tensor(np.full((1, 2, 2), 5.0, dtype=np.float32))
     out = ScaleIntensityRange(
         keys=["image"],
-        input_min=5.0,
-        input_max=5.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(5.0, 5.0),
+        target_value_range=(0.0, 1.0),
         input_layout="HWC",
     )(TensorBundle({"image": image}))
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), 0.0, rtol=1e-6)
@@ -564,10 +562,8 @@ def test_scale_intensity_range_clips_and_preserves_dtype():
     image = as_tensor(np.array([[[-1.0], [0.5], [2.0]]], dtype=np.float32))
     out = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=0.0,
-        output_max=10.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(0.0, 10.0),
         clip=True,
         dtype=np.float32,
         input_layout="HWC",
@@ -585,18 +581,14 @@ def test_scale_intensity_range_supports_batch_mode():
 
     out_2d = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         input_layout="BHWC",
     )(TensorBundle({"image": image_2d}))
     out_3d = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=-1.0,
-        output_max=1.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
         input_layout="BDHWC",
     )(TensorBundle({"image": image_3d}))
 
@@ -610,10 +602,8 @@ def test_scale_intensity_range_accepts_input_layout():
 
     out = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         input_layout="BHWC",
     )(TensorBundle({"image": image}))
 
@@ -635,10 +625,8 @@ def test_scale_intensity_range_uses_same_pixel_kernel_for_sample_and_batch_modes
     )
     transform = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         input_layout="HWC",
     )
 
@@ -668,10 +656,8 @@ def test_scale_intensity_range_accepts_uint8_tensor_inputs():
     image = as_tensor(np.array([[[0], [128], [255]]], dtype=np.uint8))
     out = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         clip=True,
         input_layout="HWC",
     )(TensorBundle({"image": image}))
@@ -690,10 +676,8 @@ def test_scale_intensity_range_accepts_numpy_mapping_inputs():
 
     out = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         clip=True,
         input_layout="HWC",
     )({"image": image})
@@ -710,10 +694,8 @@ def test_scale_intensity_range_inverse_restores_affine_mapping():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=-1.0,
-        output_max=1.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
         input_layout="HWC",
     )
 
@@ -734,8 +716,7 @@ def test_scale_intensity_range_inverse_restores_normalized_mapping():
     image = as_tensor(np.array([[[0.0], [127.5], [255.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
+        source_value_range=(0.0, 255.0),
         input_layout="HWC",
     )
 
@@ -756,18 +737,14 @@ def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_i
         [
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=0.0,
-                input_max=1.0,
-                output_min=-1.0,
-                output_max=1.0,
+                source_value_range=(0.0, 1.0),
+                target_value_range=(-1.0, 1.0),
                 input_layout="HWC",
             ),
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=-1.0,
-                input_max=1.0,
-                output_min=0.0,
-                output_max=2.0,
+                source_value_range=(-1.0, 1.0),
+                target_value_range=(0.0, 2.0),
                 input_layout="HWC",
             ),
         ]
@@ -789,19 +766,15 @@ def test_scale_intensity_range_inverse_uses_recorded_trace_parameters():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=-1.0,
-        output_max=1.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
         input_layout="HWC",
     )
 
     forward = transform(TensorBundle({"image": image}))
 
-    transform.input_min = -10.0
-    transform.input_max = 10.0
-    transform.output_min = 5.0
-    transform.output_max = 15.0
+    transform.source_value_range = (-10.0, 10.0)
+    transform.target_value_range = (5.0, 15.0)
 
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
@@ -817,10 +790,8 @@ def test_scale_intensity_range_inverse_is_noop_when_clipped():
     image = as_tensor(np.array([[[-1.0], [0.5], [2.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=0.0,
-        output_max=10.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(0.0, 10.0),
         clip=True,
         input_layout="HWC",
     )
@@ -842,10 +813,8 @@ def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict
     label = as_tensor(np.array([[[1.0], [2.0], [3.0]]], dtype=np.float32))
     transform = ScaleIntensityRange(
         keys=["image", "label"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=-1.0,
-        output_max=1.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
         input_layout="HWC",
     )
 
@@ -857,12 +826,11 @@ def test_scale_intensity_range_inverse_raises_for_missing_traced_key_when_strict
 
 @pytest.mark.unit
 def test_scale_intensity_range_rejects_partial_target_range():
-    with pytest.raises(ValueError, match="must be provided together"):
+    with pytest.raises(ValueError, match="must contain exactly 2 values"):
         ScaleIntensityRange(
             keys=["image"],
-            input_min=0.0,
-            input_max=1.0,
-            output_min=0.0,
+            source_value_range=(0.0, 1.0),
+            target_value_range=(0.0,),
             input_layout="HWC",
         )
 

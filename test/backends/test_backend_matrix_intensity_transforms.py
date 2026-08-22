@@ -79,10 +79,8 @@ assert np.isfinite(ops.convert_to_numpy(normalized_image)).all()
 
 scaled = ScaleIntensityRange(
     keys=["image"],
-    input_min=0.0,
-    input_max=3.0,
-    output_min=-1.0,
-    output_max=1.0,
+    source_value_range=(0.0, 3.0),
+    target_value_range=(-1.0, 1.0),
     input_layout="HWC",
 )(TensorBundle({"image": as_tensor(np.array([[[0.0], [1.5], [3.0]]], dtype=np.float32))}))
 scaled_image = ops.convert_to_numpy(scaled["image"])

@@ -130,18 +130,14 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
         [
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=0.0,
-                input_max=1.0,
-                output_min=-1.0,
-                output_max=1.0,
+                source_value_range=(0.0, 1.0),
+                target_value_range=(-1.0, 1.0),
                 input_layout="HWC",
             ),
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=-1.0,
-                input_max=1.0,
-                output_min=0.0,
-                output_max=255.0,
+                source_value_range=(-1.0, 1.0),
+                target_value_range=(0.0, 255.0),
                 input_layout="HWC",
             ),
         ]

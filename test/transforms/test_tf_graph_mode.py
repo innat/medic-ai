@@ -219,7 +219,10 @@ def test_random_cutout_can_run_inside_custom_train_step():
 def test_intensity_transforms_run_under_tf_function():
     normalize = NormalizeIntensity(keys=["image"], nonzero=True, input_layout="HWC")
     scale = ScaleIntensityRange(
-        keys=["image"], input_min=0.0, input_max=1.0, output_min=-1.0, output_max=1.0, input_layout="HWC"
+        keys=["image"],
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
+        input_layout="HWC",
     )
     shift = ShiftIntensity(keys=["image"], offset=0.25, input_layout="HWC")
     fill = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")
@@ -568,18 +571,14 @@ def test_spatial_crop_accepts_input_layout_under_tf_function():
 def test_scale_intensity_range_supports_batch_mode_under_tf_function():
     scale_2d = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=255.0,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         input_layout="BHWC",
     )
     scale_3d = ScaleIntensityRange(
         keys=["image"],
-        input_min=0.0,
-        input_max=1.0,
-        output_min=-1.0,
-        output_max=1.0,
+        source_value_range=(0.0, 1.0),
+        target_value_range=(-1.0, 1.0),
         input_layout="BDHWC",
     )
 
