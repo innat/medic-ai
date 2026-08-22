@@ -1,7 +1,6 @@
 from typing import Any, Sequence
 
 import keras
-import tensorflow as tf
 from keras import ops
 
 from ..base import (
@@ -60,14 +59,11 @@ def rotate_volume(
     matrix = get_rotation_matrix(angle, h, w)
     matrices = ops.tile(ops.expand_dims(matrix, 0), [img_shape[0], 1])
 
-    # Keras Ops currently has no projective image transform equivalent. Keep
-    # this kernel isolated so the surrounding transform remains ops-based.
-    rotated = tf.raw_ops.ImageProjectiveTransformV3(
-        images=image,
-        transforms=matrices,
-        output_shape=[h, w],
-        interpolation=interpolation,
-        fill_mode="CONSTANT",
+    rotated = ops.image.affine_transform(
+        image,
+        matrices,
+        interpolation=interpolation.lower(),
+        fill_mode="constant",
         fill_value=ops.cast(fill_value, "float32"),
     )
     return ops.cast(rotated, original_dtype)
@@ -353,11 +349,19 @@ class RandomRotate(RandomTransform):
         method = "bilinear" if interpolation == "BILINEAR" else "nearest"
 
         flat_tensor = ops.reshape(tensor, [batch_size * depth, height, width, channels])
-        cropped = tf.image.central_crop(flat_tensor, crop_fraction)
-        resized = tf.image.resize(
+        crop_height = ops.cast(ops.floor(ops.cast(height, "float32") * crop_fraction), "int32")
+        crop_width = ops.cast(ops.floor(ops.cast(width, "float32") * crop_fraction), "int32")
+        top = ops.floor_divide(height - crop_height, 2)
+        left = ops.floor_divide(width - crop_width, 2)
+        cropped = ops.slice(
+            flat_tensor,
+            start_indices=[0, top, left, 0],
+            shape=[batch_size * depth, crop_height, crop_width, channels],
+        )
+        resized = ops.image.resize(
             cropped,
             [height, width],
-            method=method,
+            interpolation=method,
         )
         return ops.reshape(resized, [batch_size, depth, height, width, channels])
 
