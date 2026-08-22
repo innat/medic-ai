@@ -33,6 +33,11 @@ def _convert_numpy_mapping(mapping: Mapping[str, Any] | None) -> dict[str, Any]:
     return converted
 
 
+def _is_tensor_like(value: Any) -> bool:
+    """Return whether a value behaves like a backend tensor for control flow."""
+    return hasattr(value, "shape") and not isinstance(value, (np.ndarray, np.generic))
+
+
 def ensure_tensor_bundle(
     inputs: TensorBundle | Mapping[str, Any], meta: Mapping[str, Any] | None = None
 ) -> TensorBundle:
@@ -64,8 +69,8 @@ def _trace_applied_to_bool(applied: Any | bool) -> bool:
     """Convert a trace `applied` flag into a Python bool when possible."""
     if isinstance(applied, bool):
         return applied
-    if tf.is_tensor(applied):
-        static_value = _get_static_tensor_value(tf.cast(applied, tf.bool))
+    if _is_tensor_like(applied):
+        static_value = _get_static_tensor_value(ops.cast(applied, "bool"))
         if static_value is None:
             raise ValueError(
                 "Cannot evaluate a symbolic `applied` trace flag outside eager execution."
@@ -90,8 +95,8 @@ def _apply_if_applied(
     Returns:
         The value returned by whichever callback is selected.
     """
-    if tf.is_tensor(applied):
-        return tf.cond(tf.cast(applied, tf.bool), true_fn, false_fn)
+    if _is_tensor_like(applied):
+        return ops.cond(ops.cast(applied, "bool"), true_fn, false_fn)
     if _trace_applied_to_bool(applied):
         return true_fn()
     return false_fn()
@@ -151,7 +156,7 @@ def _get_static_tensor_value(value: Any) -> Any:
 
 def _require_static_value(value: Any, name: str) -> Any:
     """Convert a TensorFlow scalar/tensor to a Python-visible value when possible."""
-    if tf.is_tensor(value):
+    if _is_tensor_like(value):
         static_value = _get_static_tensor_value(value)
         if static_value is None:
             raise ValueError(
@@ -225,7 +230,7 @@ class Transform:
             class MarkSample(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     bundle["processed"] = True
-                    bundle["image"] = tf.identity(bundle["image"])
+                    bundle["image"] = ops.identity(bundle["image"])
                     return bundle
 
             image = tf.random.normal((64, 64, 1))
@@ -362,7 +367,7 @@ class RandomTransform(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     should_apply = self.sample_should_apply()
                     image = bundle["image"]
-                    bundle.data["image"] = tf.cond(
+                    bundle.data["image"] = ops.cond(
                         should_apply,
                         lambda: image + 1.0,
                         lambda: image,
@@ -767,7 +772,7 @@ class RandomChoice(RandomTransform):
     def _make_graph_branch(
         self,
         index: int,
-        current_outputs: tuple[tf.Tensor, ...],
+        current_outputs: tuple[Any, ...],
         data_keys: tuple[str, ...],
         meta: Mapping[str, Any],
     ):
@@ -913,7 +918,7 @@ class KeyedTransform(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor * tf.cast(self.factor, tensor.dtype),
+                        lambda tensor, _: tensor * ops.cast(self.factor, tensor.dtype),
                     )
                     return bundle
 
@@ -1017,7 +1022,7 @@ class InvertibleTransform(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor + tf.cast(self.value, tensor.dtype),
+                        lambda tensor, _: tensor + ops.cast(self.value, tensor.dtype),
                     )
                     self.record_transform(
                         bundle,
@@ -1031,7 +1036,7 @@ class InvertibleTransform(Transform):
                 def inverse(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor - tf.cast(self.value, tensor.dtype),
+                        lambda tensor, _: tensor - ops.cast(self.value, tensor.dtype),
                     )
                     return bundle
 
@@ -1127,7 +1132,7 @@ class LambdaTransform(KeyedTransform):
                 fn=lambda tensor, key: (
                     tensor / 255.0
                     if key == "image"
-                    else tf.cast(tensor, tf.float32)
+                    else ops.cast(tensor, "float32")
                 ),
                 name="prepare_pair",
             )
