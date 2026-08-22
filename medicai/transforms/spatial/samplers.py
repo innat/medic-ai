@@ -3,7 +3,6 @@
 from typing import Any
 
 from keras import ops
-import tensorflow as tf
 
 from medicai.transforms.utils import _get_static_shape_tuple, get_tensor_rank
 
@@ -36,7 +35,17 @@ def _gather_with_fill(
 ) -> Any:
     """Gather volume values and replace out-of-bounds samples with a fill value."""
     safe_indices = ops.where(valid[:, None], indices, ops.zeros_like(indices))
-    gathered = tf.gather_nd(volume, safe_indices)
+    shape = ops.shape(volume)
+    spatial_width = shape[2]
+    spatial_height = shape[1]
+    linear_indices = (
+        safe_indices[:, 0] * spatial_height * spatial_width
+        + safe_indices[:, 1] * spatial_width
+        + safe_indices[:, 2]
+    )
+    flat_shape = ops.stack([shape[0] * shape[1] * shape[2], shape[3]])
+    flat_volume = ops.reshape(volume, flat_shape)
+    gathered = ops.take(flat_volume, linear_indices, axis=0)
     return ops.where(valid[:, None], gathered, ops.cast(fill_value, output_dtype))
 
 
