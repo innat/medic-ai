@@ -6,7 +6,6 @@ from typing import Any, Mapping, Sequence
 
 import keras
 import numpy as np
-import tensorflow as tf
 from keras import ops
 
 from .tensor_bundle import TensorBundle
@@ -146,12 +145,16 @@ def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str,
 
 
 def _get_static_tensor_value(value: Any) -> Any:
-    """Return a Python-visible static value for a TensorFlow tensor when available.
+    """Return a Python-visible concrete value for a backend tensor when available.
 
-    This intentionally stays TensorFlow-specific because ``keras.ops`` does not
-    expose an equivalent utility for symbolic static-value extraction.
+    Keras Ops does not expose symbolic static-value extraction. Converting to
+    NumPy is sufficient for eager/concrete values and fails safely for symbolic
+    tensors, which preserves the caller's existing error handling.
     """
-    return tf.get_static_value(value)
+    try:
+        return ops.convert_to_numpy(value)
+    except (TypeError, ValueError, RuntimeError):
+        return None
 
 
 def _require_static_value(value: Any, name: str) -> Any:
@@ -175,7 +178,16 @@ def _require_static_value(value: Any, name: str) -> Any:
 
 
 def _is_tensorflow_eager_execution() -> bool:
-    """Return whether TensorFlow is currently executing eagerly."""
+    """Return whether the TensorFlow backend is currently executing eagerly.
+
+    RandomChoice still has a TensorFlow-specific eager/graph compatibility path.
+    Keep the optional import local so importing transforms under another Keras
+    backend does not require TensorFlow to be installed.
+    """
+    if keras.config.backend() != "tensorflow":
+        return True
+    import tensorflow as tf
+
     return tf.executing_eagerly()
 
 
