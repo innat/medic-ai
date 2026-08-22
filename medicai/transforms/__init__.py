@@ -19,7 +19,6 @@ from medicai.transforms.random.random_rotation import RandomRotate
 from medicai.transforms.random.random_shift_intensity import RandomShiftIntensity
 from medicai.transforms.random.random_spatial_crop import RandomSpatialCrop
 from medicai.transforms.spatial.crop_foreground import CropForeground
-from medicai.transforms.spatial.depth_interpolate import depth_interpolation_methods
 from medicai.transforms.spatial.flip import Flip
 from medicai.transforms.spatial.orientation import Orientation
 from medicai.transforms.spatial.resize import Resize
