@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Any, Sequence
 
 import keras
 import tensorflow as tf
@@ -20,18 +20,18 @@ from ..utils import (
 )
 
 
-def get_rotation_matrix(angle: tf.Tensor, h: tf.Tensor, w: tf.Tensor) -> tf.Tensor:
+def get_rotation_matrix(angle: Any, h: Any, w: Any) -> Any:
     """Compute a projective transform matrix for 2D rotation around the image center."""
-    h = tf.cast(h, tf.float32)
-    w = tf.cast(w, tf.float32)
+    h = ops.cast(h, "float32")
+    w = ops.cast(w, "float32")
 
     x0 = w / 2.0
     y0 = h / 2.0
 
-    cos_a = tf.cos(angle)
-    sin_a = tf.sin(angle)
+    cos_a = ops.cos(angle)
+    sin_a = ops.sin(angle)
 
-    return tf.stack(
+    return ops.stack(
         [
             cos_a,
             sin_a,
@@ -47,28 +47,30 @@ def get_rotation_matrix(angle: tf.Tensor, h: tf.Tensor, w: tf.Tensor) -> tf.Tens
 
 
 def rotate_volume(
-    image: tf.Tensor,
-    angle: tf.Tensor,
+    image: Any,
+    angle: Any,
     interpolation: str = "BILINEAR",
     fill_value: float = 0.0,
-) -> tf.Tensor:
+) -> Any:
     """Rotate a 4D ``(N, H, W, C)`` tensor slice-wise over the height-width plane."""
     original_dtype = image.dtype
-    image = tf.cast(image, tf.float32)
-    img_shape = tf.shape(image)
+    image = ops.cast(image, "float32")
+    img_shape = ops.shape(image)
     h, w = img_shape[1], img_shape[2]
     matrix = get_rotation_matrix(angle, h, w)
-    matrices = tf.tile(tf.expand_dims(matrix, 0), [img_shape[0], 1])
+    matrices = ops.tile(ops.expand_dims(matrix, 0), [img_shape[0], 1])
 
+    # Keras Ops currently has no projective image transform equivalent. Keep
+    # this kernel isolated so the surrounding transform remains ops-based.
     rotated = tf.raw_ops.ImageProjectiveTransformV3(
         images=image,
         transforms=matrices,
         output_shape=[h, w],
         interpolation=interpolation,
         fill_mode="CONSTANT",
-        fill_value=tf.cast(fill_value, tf.float32),
+        fill_value=ops.cast(fill_value, "float32"),
     )
-    return tf.cast(rotated, original_dtype)
+    return ops.cast(rotated, original_dtype)
 
 
 class RandomRotate(RandomTransform):
@@ -284,7 +286,7 @@ class RandomRotate(RandomTransform):
             bundle.data[key] = apply_inverse_rotate(tensor, key)
         return bundle
 
-    def rotate_tensor(self, tensor: tf.Tensor, key: str, angle) -> tf.Tensor:
+    def rotate_tensor(self, tensor: Any, key: str, angle) -> Any:
         """Rotate one tensor and apply optional center crop cleanup."""
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
             tensor,
@@ -294,7 +296,7 @@ class RandomRotate(RandomTransform):
         rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
         return restore_from_batch_axis(rotated, added_batch_axis)
 
-    def rotate_batch_tensor(self, tensor: tf.Tensor, key: str, angle) -> tf.Tensor:
+    def rotate_batch_tensor(self, tensor: Any, key: str, angle) -> Any:
         """Rotate one batch-layout tensor and apply optional center crop cleanup."""
         interpolation = "BILINEAR" if key == self.keys[0] else "NEAREST"
         fill_value = self.fill_value if key == self.keys[0] else 0.0
@@ -306,21 +308,21 @@ class RandomRotate(RandomTransform):
         )
         del layout
 
-        shape = tf.shape(tensor)
+        shape = ops.shape(tensor)
         batch_size = shape[0]
         depth = shape[1]
         height = shape[2]
         width = shape[3]
         channels = shape[4]
 
-        flat_tensor = tf.reshape(tensor, [batch_size * depth, height, width, channels])
+        flat_tensor = ops.reshape(tensor, [batch_size * depth, height, width, channels])
         flat_rotated = rotate_volume(
             flat_tensor,
             angle,
             interpolation=interpolation,
             fill_value=fill_value,
         )
-        rotated = tf.reshape(flat_rotated, [batch_size, depth, height, width, channels])
+        rotated = ops.reshape(flat_rotated, [batch_size, depth, height, width, channels])
 
         if self.fill_mode == "crop":
             rotated = self._crop_after_rotation(rotated, angle, interpolation)
@@ -328,12 +330,12 @@ class RandomRotate(RandomTransform):
 
     def _crop_after_rotation(
         self,
-        tensor: tf.Tensor,
-        angle: tf.Tensor,
+        tensor: Any,
+        angle: Any,
         interpolation: str,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Apply a Largest Rectangle Rotation style center crop after rotation."""
-        shape = tf.shape(tensor)
+        shape = ops.shape(tensor)
         batch_size = shape[0]
         depth = shape[1]
         height = shape[2]
@@ -341,32 +343,32 @@ class RandomRotate(RandomTransform):
         channels = shape[4]
         lrr_w, lrr_h = self._get_lrr_size(width, height, angle)
         crop_fraction = (
-            tf.minimum(
-                lrr_h / tf.cast(height, tf.float32),
-                lrr_w / tf.cast(width, tf.float32),
+            ops.minimum(
+                lrr_h / ops.cast(height, "float32"),
+                lrr_w / ops.cast(width, "float32"),
             )
             * 0.98
         )
         crop_fraction = ops.clip(crop_fraction, 1e-6, 1.0 - 1e-6)
         method = "bilinear" if interpolation == "BILINEAR" else "nearest"
 
-        flat_tensor = tf.reshape(tensor, [batch_size * depth, height, width, channels])
+        flat_tensor = ops.reshape(tensor, [batch_size * depth, height, width, channels])
         cropped = tf.image.central_crop(flat_tensor, crop_fraction)
         resized = tf.image.resize(
             cropped,
             [height, width],
             method=method,
         )
-        return tf.reshape(resized, [batch_size, depth, height, width, channels])
+        return ops.reshape(resized, [batch_size, depth, height, width, channels])
 
     def _get_lrr_size(
-        self, width: tf.Tensor, height: tf.Tensor, angle: tf.Tensor
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+        self, width: Any, height: Any, angle: Any
+    ) -> tuple[Any, Any]:
         """Compute Largest Rectangle Rotation size."""
-        angle = tf.abs(angle)
-        width = tf.cast(width, tf.float32)
-        height = tf.cast(height, tf.float32)
-        sin_a, cos_a = tf.sin(angle), tf.cos(angle)
+        angle = ops.abs(angle)
+        width = ops.cast(width, "float32")
+        height = ops.cast(height, "float32")
+        sin_a, cos_a = ops.sin(angle), ops.cos(angle)
 
         def width_limited():
             lrr_w = width / (sin_a + (width / height) * cos_a)
@@ -378,7 +380,7 @@ class RandomRotate(RandomTransform):
             lrr_w = (width / height) * lrr_h
             return lrr_w, lrr_h
 
-        return tf.cond(width <= height, width_limited, height_limited)
+        return ops.cond(width <= height, width_limited, height_limited)
 
     def _get_last_random_rotate_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)
