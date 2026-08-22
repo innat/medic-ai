@@ -185,12 +185,16 @@ class Orientation(KeyedTransform, InvertibleTransform):
             transform_info["perm_spatial"],
             transform_info["flip_axes"],
         )
+        try:
+            original_axcodes = orientation_from_affine(affine)
+        except (TypeError, ValueError):
+            original_axcodes = None
         self.record_transform(
             bundle,
             {
                 "keys": list(present_keys),
                 "original_affine": ops.identity(ops.cast(affine, "float32")),
-                "original_axcodes": orientation_from_affine(affine),
+                "original_axcodes": original_axcodes,
                 "target_axcodes": self.axcodes,
                 "target_tensor_axcodes": target_tensor_axcodes,
                 "perm_spatial": transform_info["perm_spatial"],

@@ -7,7 +7,7 @@ medicai.transforms.utils.
 from typing import Any
 
 from keras import ops
-import tensorflow as tf
+import numpy as np
 
 from medicai.transforms.utils import validate_affine_matrix
 
@@ -92,51 +92,61 @@ def affine_apply(affine: Any, points: Any) -> Any:
     return transformed[..., :3]
 
 
-def orientation_from_affine(affine: tf.Tensor) -> tf.Tensor:
-    """Infer a three-letter orientation code from a 4x4 affine matrix."""
-    matrix = ops.cast(validate_affine_matrix(affine)[:3, :3], "float32")
-    current_axes = ops.argmax(ops.abs(matrix), axis=0)
-    unique_axes, _, counts = tf.unique_with_counts(current_axes)
-    del unique_axes
-    if ops.any(counts > 1):
-        raise ValueError("Affine orientation is invalid: multiple output axes map to the same world axis.")
-    gather_indices = ops.stack([current_axes, ops.arange(3, dtype="int32")], axis=1)
-    signs = tf.gather_nd(matrix, gather_indices) >= 0
-
-    def axis_code(axis_index: tf.Tensor, sign: tf.Tensor) -> tf.Tensor:
-        return tf.case(
+def _raise_for_duplicate_axes(current_axes: Any) -> None:
+    """Raise for duplicate affine axes when the result is concrete."""
+    duplicate = ops.any(
+        ops.stack(
             [
-                (ops.equal(axis_index, 0), lambda: ops.where(sign, "R", "L")),
-                (ops.equal(axis_index, 1), lambda: ops.where(sign, "A", "P")),
-            ],
-            default=lambda: ops.where(sign, "S", "I"),
-            exclusive=True,
+                ops.equal(current_axes[0], current_axes[1]),
+                ops.equal(current_axes[0], current_axes[2]),
+                ops.equal(current_axes[1], current_axes[2]),
+            ]
+        )
+    )
+    try:
+        duplicate_value = bool(ops.convert_to_numpy(duplicate))
+    except (TypeError, ValueError):
+        return
+    if duplicate_value:
+        raise ValueError(
+            "Affine orientation is invalid: multiple output axes map to the same world axis."
         )
 
-    codes = tf.map_fn(
-        lambda pair: axis_code(pair[0], ops.cast(pair[1], "bool")),
-        (current_axes, ops.cast(signs, "int32")),
-        fn_output_signature=tf.string,
+
+def _selected_matrix_entries(matrix: Any, row_indices: Any) -> Any:
+    """Select one row from each matrix column without N-D gather operations."""
+    selectors = ops.one_hot(row_indices, num_classes=3, dtype=matrix.dtype)
+    return ops.sum(matrix * selectors, axis=0)
+
+
+def orientation_from_affine(affine: Any) -> str:
+    """Infer a three-letter orientation code from a concrete affine matrix."""
+    matrix = ops.cast(validate_affine_matrix(affine)[:3, :3], "float32")
+    current_axes = ops.argmax(ops.abs(matrix), axis=0)
+    _raise_for_duplicate_axes(current_axes)
+    signs = _selected_matrix_entries(matrix, current_axes) >= 0
+    axes = np.asarray(ops.convert_to_numpy(current_axes), dtype=np.int32)
+    signs = np.asarray(ops.convert_to_numpy(signs), dtype=bool)
+    codes = np.where(
+        axes == 0,
+        np.where(signs, "R", "L"),
+        np.where(axes == 1, np.where(signs, "A", "P"), np.where(signs, "S", "I")),
     )
-    return tf.strings.reduce_join(codes)
+    return "".join(codes.tolist())
 
 
 def compute_orientation_transform(
-    affine: tf.Tensor,
+    affine: Any,
     target_tensor_axcodes: str,
-) -> dict[str, tf.Tensor]:
+) -> dict[str, Any]:
     """Compute spatial permutation and flips for a target tensor orientation."""
     axis_to_world = {"R": 0, "L": 0, "A": 1, "P": 1, "S": 2, "I": 2}
     axis_to_sign = {"R": 1, "L": -1, "A": 1, "P": -1, "S": 1, "I": -1}
 
     matrix = ops.cast(validate_affine_matrix(affine)[:3, :3], "float32")
     current_axes = ops.argmax(ops.abs(matrix), axis=0)
-    unique_axes, _, counts = tf.unique_with_counts(current_axes)
-    del unique_axes
-    if ops.any(counts > 1):
-        raise ValueError("Affine orientation is invalid: multiple output axes map to the same world axis.")
-    gather_indices = ops.stack([current_axes, ops.arange(3, dtype="int32")], axis=1)
-    current_signs = ops.sign(tf.gather_nd(matrix, gather_indices))
+    _raise_for_duplicate_axes(current_axes)
+    current_signs = ops.sign(_selected_matrix_entries(matrix, current_axes))
     current_signs = ops.where(current_signs == 0, ops.ones_like(current_signs), current_signs)
 
     target_axes = [axis_to_world[code] for code in target_tensor_axcodes]
@@ -159,11 +169,11 @@ def compute_orientation_transform(
 
 
 def reoriented_affine(
-    affine: tf.Tensor,
-    input_spatial_shape: tf.Tensor,
-    perm_spatial: tuple[int, int, int] | tf.Tensor,
-    flip_axes: tuple[int, ...] | tf.Tensor,
-) -> tf.Tensor:
+    affine: Any,
+    input_spatial_shape: Any,
+    perm_spatial: tuple[int, int, int] | Any,
+    flip_axes: tuple[int, ...] | Any,
+) -> Any:
     """Update affine metadata for a spatial permutation and flips."""
     affine = ops.cast(validate_affine_matrix(affine), "float32")
     input_spatial_shape = ops.cast(input_spatial_shape, "float32")
@@ -177,24 +187,8 @@ def reoriented_affine(
     )
     signs = 1.0 - 2.0 * flipped_output_mask
 
-    transform = ops.eye(4, dtype="float32")
     spatial_block = ops.transpose(
         ops.one_hot(perm_spatial, num_classes=3, dtype="float32") * signs[:, None]
-    )
-    transform = tf.tensor_scatter_nd_update(
-        transform,
-        indices=[
-            [0, 0],
-            [0, 1],
-            [0, 2],
-            [1, 0],
-            [1, 1],
-            [1, 2],
-            [2, 0],
-            [2, 1],
-            [2, 2],
-        ],
-        updates=ops.reshape(spatial_block, [-1]),
     )
 
     flipped_input_mask = ops.scatter(
@@ -203,9 +197,9 @@ def reoriented_affine(
         shape=(3,),
     )
     translations = flipped_input_mask * (input_spatial_shape - 1.0)
-    transform = tf.tensor_scatter_nd_update(
-        transform,
-        indices=[[0, 3], [1, 3], [2, 3]],
-        updates=translations,
+    top = ops.concatenate([spatial_block, translations[:, None]], axis=1)
+    transform = ops.concatenate(
+        [top, ops.convert_to_tensor([[0.0, 0.0, 0.0, 1.0]], dtype="float32")],
+        axis=0,
     )
     return ops.matmul(affine, transform)
