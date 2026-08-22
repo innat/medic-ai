@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from keras import ops
-import tensorflow as tf
 
 
 # Backend-neutral layout and shape utilities
