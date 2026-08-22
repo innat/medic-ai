@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
-
-import tensorflow as tf
 from keras import ops
 
 from medicai.utils.image import resize_volumes
@@ -250,20 +248,14 @@ class Resize(KeyedTransform, InvertibleTransform):
         self,
         tensor: Any,
         key: str,
-        target_shape: Sequence[int] | Any,
+        target_shape: Sequence[int],
     ) -> Any:
         """Resize one tensor to the requested spatial shape."""
-        if isinstance(target_shape, tf.Tensor):
-            target_shape_tensor = target_shape
-            target_rank = target_shape.shape[0]
-            if target_rank is None:
-                raise ValueError("`target_shape` tensor must have a statically known length.")
-        else:
-            target_rank = len(target_shape)
-            target_shape_tensor = ops.convert_to_tensor(
-                ensure_spatial_tuple(target_shape, target_rank, "target_shape"),
-                dtype="int32",
-            )
+        target_rank = len(target_shape)
+        target_shape_tensor = ops.convert_to_tensor(
+            ensure_spatial_tuple(target_shape, target_rank, "target_shape"),
+            dtype="int32",
+        )
 
         layout = self._resolve_layout(tensor, target_rank)
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
