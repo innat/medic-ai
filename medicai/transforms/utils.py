@@ -759,10 +759,10 @@ def make_output_grid_chunk(
 
 
 def _validate_volume_and_coords(
-    volume: tf.Tensor, coords: tf.Tensor
-) -> tuple[tf.Tensor, tf.Tensor]:
-    volume = tf.convert_to_tensor(volume)
-    coords = tf.cast(tf.convert_to_tensor(coords), tf.float32)
+    volume: Any, coords: Any
+) -> tuple[Any, Any]:
+    volume = ops.convert_to_tensor(volume)
+    coords = ops.cast(ops.convert_to_tensor(coords), "float32")
 
     if get_tensor_rank(volume) != 4:
         raise ValueError(
@@ -775,24 +775,24 @@ def _validate_volume_and_coords(
 
 
 def _gather_with_fill(
-    volume: tf.Tensor,
-    indices: tf.Tensor,
-    valid: tf.Tensor,
+    volume: Any,
+    indices: Any,
+    valid: Any,
     fill_value: float,
-    output_dtype: tf.DType,
-) -> tf.Tensor:
+    output_dtype: Any,
+) -> Any:
     """Gather volume values and replace out-of-bounds samples with a fill value."""
-    safe_indices = tf.where(valid[:, tf.newaxis], indices, tf.zeros_like(indices))
+    safe_indices = ops.where(valid[:, None], indices, ops.zeros_like(indices))
     gathered = tf.gather_nd(volume, safe_indices)
-    return tf.where(valid[:, tf.newaxis], gathered, tf.cast(fill_value, output_dtype))
+    return ops.where(valid[:, None], gathered, ops.cast(fill_value, output_dtype))
 
 
 def sample_nearest(
-    volume: tf.Tensor,
-    coords: tf.Tensor,
+    volume: Any,
+    coords: Any,
     padding_mode: str = "constant",
     fill_value: float = 0.0,
-) -> tf.Tensor:
+) -> Any:
     """Sample a 3D volume at arbitrary coordinates using nearest neighbors."""
     if padding_mode != "constant":
         raise ValueError(
@@ -800,18 +800,18 @@ def sample_nearest(
         )
 
     volume, coords = _validate_volume_and_coords(volume, coords)
-    indices = tf.cast(tf.round(coords), tf.int32)
-    shape = tf.shape(volume)[:3]
-    valid = tf.reduce_all((indices >= 0) & (indices < shape), axis=1)
+    indices = ops.cast(ops.round(coords), "int32")
+    shape = ops.shape(volume)[:3]
+    valid = ops.all((indices >= 0) & (indices < shape), axis=1)
     return _gather_with_fill(volume, indices, valid, fill_value, volume.dtype)
 
 
 def sample_trilinear(
-    volume: tf.Tensor,
-    coords: tf.Tensor,
+    volume: Any,
+    coords: Any,
     padding_mode: str = "constant",
     fill_value: float = 0.0,
-) -> tf.Tensor:
+) -> Any:
     """Sample a 3D volume at arbitrary coordinates using trilinear interpolation.
 
     The eight neighboring voxel corners are gathered in one batched operation
@@ -825,34 +825,34 @@ def sample_trilinear(
 
     volume, coords = _validate_volume_and_coords(volume, coords)
     original_dtype = volume.dtype
-    output_dtype = original_dtype if original_dtype.is_floating else tf.float32
-    volume = tf.cast(volume, output_dtype)
+    output_dtype = original_dtype if original_dtype.is_floating else "float32"
+    volume = ops.cast(volume, output_dtype)
 
-    lower = tf.floor(coords)
+    lower = ops.floor(coords)
     upper = lower + 1.0
     frac = coords - lower
 
-    d0 = tf.cast(lower[:, 0], tf.int32)
-    h0 = tf.cast(lower[:, 1], tf.int32)
-    w0 = tf.cast(lower[:, 2], tf.int32)
-    d1 = tf.cast(upper[:, 0], tf.int32)
-    h1 = tf.cast(upper[:, 1], tf.int32)
-    w1 = tf.cast(upper[:, 2], tf.int32)
+    d0 = ops.cast(lower[:, 0], "int32")
+    h0 = ops.cast(lower[:, 1], "int32")
+    w0 = ops.cast(lower[:, 2], "int32")
+    d1 = ops.cast(upper[:, 0], "int32")
+    h1 = ops.cast(upper[:, 1], "int32")
+    w1 = ops.cast(upper[:, 2], "int32")
 
-    wd = tf.cast(frac[:, 0:1], output_dtype)
-    wh = tf.cast(frac[:, 1:2], output_dtype)
-    ww = tf.cast(frac[:, 2:3], output_dtype)
+    wd = ops.cast(frac[:, 0:1], output_dtype)
+    wh = ops.cast(frac[:, 1:2], output_dtype)
+    ww = ops.cast(frac[:, 2:3], output_dtype)
 
-    one = tf.cast(1.0, output_dtype)
-    shape = tf.shape(volume)[:3]
+    one = ops.cast(1.0, output_dtype)
+    shape = ops.shape(volume)[:3]
 
-    all_d = tf.concat([d0, d0, d0, d0, d1, d1, d1, d1], axis=0)
-    all_h = tf.concat([h0, h0, h1, h1, h0, h0, h1, h1], axis=0)
-    all_w = tf.concat([w0, w1, w0, w1, w0, w1, w0, w1], axis=0)
-    all_indices = tf.stack([all_d, all_h, all_w], axis=1)
-    all_valid = tf.reduce_all((all_indices >= 0) & (all_indices < shape), axis=1)
+    all_d = ops.concatenate([d0, d0, d0, d0, d1, d1, d1, d1], axis=0)
+    all_h = ops.concatenate([h0, h0, h1, h1, h0, h0, h1, h1], axis=0)
+    all_w = ops.concatenate([w0, w1, w0, w1, w0, w1, w0, w1], axis=0)
+    all_indices = ops.stack([all_d, all_h, all_w], axis=1)
+    all_valid = ops.all((all_indices >= 0) & (all_indices < shape), axis=1)
     all_gathered = _gather_with_fill(volume, all_indices, all_valid, fill_value, output_dtype)
-    c000, c001, c010, c011, c100, c101, c110, c111 = tf.split(all_gathered, 8, axis=0)
+    c000, c001, c010, c011, c100, c101, c110, c111 = ops.split(all_gathered, 8, axis=0)
 
     out = (
         c000 * (one - wd) * (one - wh) * (one - ww)
@@ -865,16 +865,16 @@ def sample_trilinear(
         + c111 * wd * wh * ww
     )
 
-    return tf.cast(out, original_dtype) if original_dtype != output_dtype else out
+    return ops.cast(out, original_dtype) if original_dtype != output_dtype else out
 
 
 def sample_volume(
-    volume: tf.Tensor,
-    coords: tf.Tensor,
+    volume: Any,
+    coords: Any,
     interpolation: str,
     padding_mode: str = "constant",
     fill_value: float = 0.0,
-) -> tf.Tensor:
+) -> Any:
     """Dispatch 3D volume sampling to the requested interpolation kernel."""
     if interpolation == "nearest":
         return sample_nearest(
@@ -905,18 +905,18 @@ class SpatialResample:
 
     def __call__(
         self,
-        tensor: tf.Tensor,
-        src_affine: tf.Tensor,
-        dst_affine: tf.Tensor,
-        output_shape: tf.Tensor,
+        tensor: Any,
+        src_affine: Any,
+        dst_affine: Any,
+        output_shape: Any,
         interpolation: str,
         padding_mode: str = "constant",
         fill_value: float = 0.0,
-    ) -> tf.Tensor:
-        tensor = tf.convert_to_tensor(tensor)
-        src_affine = tf.cast(src_affine, tf.float32)
-        dst_affine = tf.cast(dst_affine, tf.float32)
-        output_shape = tf.cast(output_shape, tf.int32)
+    ) -> Any:
+        tensor = ops.convert_to_tensor(tensor)
+        src_affine = ops.cast(src_affine, "float32")
+        dst_affine = ops.cast(dst_affine, "float32")
+        output_shape = ops.cast(output_shape, "int32")
 
         if get_tensor_rank(tensor) != 4:
             raise ValueError(
@@ -926,7 +926,7 @@ class SpatialResample:
         if len(output_shape_static) != 1 or output_shape_static[0] != 3:
             raise ValueError(f"Expected output_shape shaped (3,), got {output_shape.shape}.")
 
-        index_mapping_affine = tf.linalg.matmul(invert_affine(src_affine), dst_affine)
+        index_mapping_affine = ops.matmul(invert_affine(src_affine), dst_affine)
         return self._resample_from_mapping(
             tensor=tensor,
             index_mapping_affine=index_mapping_affine,
@@ -938,14 +938,14 @@ class SpatialResample:
 
     def resample_many(
         self,
-        tensors: Mapping[str, tf.Tensor],
-        src_affine: tf.Tensor,
-        dst_affine: tf.Tensor,
-        output_shape: tf.Tensor,
+        tensors: Mapping[str, Any],
+        src_affine: Any,
+        dst_affine: Any,
+        output_shape: Any,
         interpolation: Mapping[str, str],
         padding_mode: str = "constant",
         fill_value: float = 0.0,
-    ) -> dict[str, tf.Tensor]:
+    ) -> dict[str, Any]:
         """Resample multiple volumes while sharing the same coordinate mapping.
 
         This is useful for image-label pairs that live in the same physical
@@ -953,11 +953,11 @@ class SpatialResample:
         shared across tensors, while each key still uses its own interpolation
         mode.
         """
-        src_affine = tf.cast(src_affine, tf.float32)
-        dst_affine = tf.cast(dst_affine, tf.float32)
-        output_shape = tf.cast(output_shape, tf.int32)
-        index_mapping_affine = tf.linalg.matmul(invert_affine(src_affine), dst_affine)
-        tensors = {key: tf.convert_to_tensor(tensor) for key, tensor in tensors.items()}
+        src_affine = ops.cast(src_affine, "float32")
+        dst_affine = ops.cast(dst_affine, "float32")
+        output_shape = ops.cast(output_shape, "int32")
+        index_mapping_affine = ops.matmul(invert_affine(src_affine), dst_affine)
+        tensors = {key: ops.convert_to_tensor(tensor) for key, tensor in tensors.items()}
         return self._resample_many_from_mapping(
             tensors=tensors,
             index_mapping_affine=index_mapping_affine,
@@ -969,19 +969,19 @@ class SpatialResample:
 
     def _resample_from_mapping(
         self,
-        tensor: tf.Tensor,
-        index_mapping_affine: tf.Tensor,
-        output_shape: tf.Tensor,
+        tensor: Any,
+        index_mapping_affine: Any,
+        output_shape: Any,
         interpolation: str,
         padding_mode: str = "constant",
         fill_value: float = 0.0,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Resample one tensor using a precomputed output-to-source mapping."""
         tensor = tf.convert_to_tensor(tensor)
-        index_mapping_affine = tf.cast(index_mapping_affine, tf.float32)
-        num_points = tf.reduce_prod(output_shape)
+        index_mapping_affine = ops.cast(index_mapping_affine, "float32")
+        num_points = ops.prod(output_shape)
         chunk_size = tf.constant(self.max_points_per_chunk, dtype=tf.int32)
-        num_chunks = tf.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), tf.int32)
+        num_chunks = ops.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), "int32")
         sampled_chunks = tf.TensorArray(dtype=tensor.dtype, size=num_chunks, infer_shape=False)
 
         def loop_body(index: tf.Tensor, chunks: tf.TensorArray) -> tuple[tf.Tensor, tf.TensorArray]:
@@ -1006,27 +1006,30 @@ class SpatialResample:
         )
 
         sampled = sampled_chunks.concat()
-        channels = tf.shape(tensor)[-1]
-        return tf.reshape(sampled, tf.concat([output_shape, [channels]], axis=0))
+        channels = ops.shape(tensor)[-1]
+        return ops.reshape(
+            sampled,
+            ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
+        )
 
     def _resample_many_from_mapping(
         self,
-        tensors: Mapping[str, tf.Tensor],
-        index_mapping_affine: tf.Tensor,
-        output_shape: tf.Tensor,
+        tensors: Mapping[str, Any],
+        index_mapping_affine: Any,
+        output_shape: Any,
         interpolation: Mapping[str, str],
         padding_mode: str = "constant",
         fill_value: float = 0.0,
-    ) -> dict[str, tf.Tensor]:
+    ) -> dict[str, Any]:
         """Resample multiple tensors while sharing per-chunk coordinates."""
         if not tensors:
             return {}
 
         tensor_items = list(tensors.items())
-        index_mapping_affine = tf.cast(index_mapping_affine, tf.float32)
-        num_points = tf.reduce_prod(output_shape)
+        index_mapping_affine = ops.cast(index_mapping_affine, "float32")
+        num_points = ops.prod(output_shape)
         chunk_size = tf.constant(self.max_points_per_chunk, dtype=tf.int32)
-        num_chunks = tf.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), tf.int32)
+        num_chunks = ops.cast(tf.math.floordiv(num_points + chunk_size - 1, chunk_size), "int32")
 
         chunk_arrays = {
             key: tf.TensorArray(dtype=tensor.dtype, size=num_chunks, infer_shape=False)
@@ -1064,6 +1067,9 @@ class SpatialResample:
         outputs = {}
         for array, (key, tensor) in zip(chunk_arrays_out, tensor_items):
             sampled = array.concat()
-            channels = tf.shape(tensor)[-1]
-            outputs[key] = tf.reshape(sampled, tf.concat([output_shape, [channels]], axis=0))
+            channels = ops.shape(tensor)[-1]
+            outputs[key] = ops.reshape(
+                sampled,
+                ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
+            )
         return outputs
