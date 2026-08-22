@@ -1,7 +1,6 @@
 from typing import Callable, Optional, Sequence, Union
 
 from keras import ops
-import tensorflow as tf
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
@@ -237,7 +236,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             allow_missing_keys=self.allow_missing_keys,
         )
 
-        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_crop(tensor: object, key: str) -> object:
             original_shapes[key] = get_spatial_shape_for_layout(
                 tensor,
                 input_layout=self.input_layout,
@@ -278,7 +277,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             allow_missing_keys=self.allow_missing_keys,
         )
 
-        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_crop(tensor: object, key: str) -> object:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
@@ -293,40 +292,53 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
     def find_bounding_box(
         self,
-        image: tf.Tensor,
+        image: object,
         select_fn: Callable,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Find the bounding box of the foreground in the image."""
         mask = ops.any(select_fn(image), axis=-1)
-        coords = tf.where(mask)
-        coord_dtype = coords.dtype
+        has_foreground = ops.any(mask)
+        spatial_shape = ops.cast(
+            get_spatial_shape_for_layout(image, input_layout=self.input_layout),
+            "int32",
+        )
 
         def empty_bbox():
             return (
-                ops.zeros((spatial_rank,), dtype=coord_dtype),
-                ops.cast(
-                    get_spatial_shape_for_layout(image, input_layout=self.input_layout),
-                    coord_dtype,
-                ),
+                ops.zeros((spatial_rank,), dtype="int32"),
+                spatial_shape,
             )
 
         def foreground_bbox():
-            min_coords = ops.cast(ops.min(coords[:, :spatial_rank], axis=0), coord_dtype)
-            max_coords = ops.cast(ops.max(coords[:, :spatial_rank], axis=0) + 1, coord_dtype)
+            min_coords = []
+            max_coords = []
+            for axis in range(spatial_rank):
+                other_axes = tuple(i for i in range(spatial_rank) if i != axis)
+                axis_presence = (
+                    ops.any(mask, axis=other_axes) if other_axes else mask
+                )
+                axis_presence_i32 = ops.cast(axis_presence, "int32")
+                axis_size = ops.shape(axis_presence_i32)[0]
+                start = ops.argmax(axis_presence_i32, axis=0)
+                end = axis_size - ops.argmax(ops.flip(axis_presence_i32, axis=0), axis=0)
+                min_coords.append(ops.cast(start, "int32"))
+                max_coords.append(ops.cast(end, "int32"))
+            min_coords = ops.stack(min_coords, axis=0)
+            max_coords = ops.stack(max_coords, axis=0)
             return min_coords, max_coords
 
-        return ops.cond(ops.shape(coords)[0] > 0, foreground_bbox, empty_bbox)
+        return ops.cond(has_foreground, foreground_bbox, empty_bbox)
 
     def add_margin(
         self,
-        min_coords: tf.Tensor,
-        max_coords: tf.Tensor,
+        min_coords: object,
+        max_coords: object,
         margin: Union[Sequence[int], int],
-        image_shape: tf.Tensor,
+        image_shape: object,
         allow_smaller: bool,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Add margin to the bounding box while staying inside image bounds."""
         margin = ops.convert_to_tensor(
             ensure_spatial_tuple(margin, spatial_rank, "margin"),
@@ -346,12 +358,12 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
     def make_divisible(
         self,
-        min_coords: tf.Tensor,
-        max_coords: tf.Tensor,
+        min_coords: object,
+        max_coords: object,
         k_divisible: Union[Sequence[int], int],
-        image_shape: tf.Tensor,
+        image_shape: object,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Expand the bounding box so its size is divisible by ``k_divisible``."""
         k_divisible = ops.convert_to_tensor(
             ensure_spatial_tuple(k_divisible, spatial_rank, "k_divisible"),
