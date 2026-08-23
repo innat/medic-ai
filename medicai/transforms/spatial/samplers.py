@@ -44,8 +44,10 @@ def _gather_with_fill(
         + safe_indices[:, 1] * spatial_width
         + safe_indices[:, 2]
     )
-    flat_shape = ops.stack([shape[0] * shape[1] * shape[2], shape[3]])
-    flat_volume = ops.reshape(volume, flat_shape)
+    channels = _get_static_shape_tuple(volume)[-1]
+    if channels is None:
+        raise ValueError("Volume channel count must be statically known for sampling.")
+    flat_volume = ops.reshape(volume, [-1, channels])
     gathered = ops.take(flat_volume, linear_indices, axis=0)
     return ops.where(valid[:, None], gathered, ops.cast(fill_value, output_dtype))
 

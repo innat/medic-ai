@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import tensorflow as tf
+import keras
 from keras import ops
 
 from medicai.transforms.utils import SpatialResample, build_affine
@@ -80,6 +81,10 @@ def test_spatial_resample_upscales_with_destination_spacing_change():
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    keras.config.backend() != "tensorflow",
+    reason="This test exercises TensorFlow-specific tf.function tracing.",
+)
 def test_spatial_resample_runs_under_tf_function():
     tensor = as_tensor(np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1))
     affine = as_tensor(np.eye(4, dtype=np.float32))

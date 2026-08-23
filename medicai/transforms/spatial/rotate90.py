@@ -18,6 +18,16 @@ from ..utils import (
 )
 
 
+def _concrete_quarter_turn(value: Any) -> int | None:
+    """Return a concrete quarter-turn value when one is available."""
+    if isinstance(value, int):
+        return value % 4
+    try:
+        return int(ops.convert_to_numpy(ops.cast(value, "int32"))) % 4
+    except (TypeError, ValueError, RuntimeError):
+        return None
+
+
 class Rotate90(KeyedTransform, InvertibleTransform):
     """Rotate selected tensors by quarter turns in a spatial plane.
 
@@ -241,6 +251,18 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         axes = self._resolve_axes(tensor, spatial_axis=spatial_axis)
+        effective_k = _concrete_quarter_turn(self.k if k is None else k)
+        if effective_k is not None:
+            if effective_k == 0:
+                return tensor
+            if effective_k == 1:
+                return self._rotate_once(tensor, axes)
+            if effective_k == 2:
+                return ops.flip(tensor, axis=axes)
+            return self._rotate_once(
+                self._rotate_once(self._rotate_once(tensor, axes), axes), axes
+            )
+
         effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
         if not self.layout_info.batched:
             return ops.switch(
@@ -284,6 +306,18 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 else get_batched_input_layout(self.input_layout)
             ),
         )
+        effective_k = _concrete_quarter_turn(self.k if k is None else k)
+        if effective_k is not None:
+            if effective_k == 0:
+                return tensor
+            if effective_k == 1:
+                return self._rotate_once(tensor, axes)
+            if effective_k == 2:
+                return ops.flip(tensor, axis=axes)
+            return self._rotate_once(
+                self._rotate_once(self._rotate_once(tensor, axes), axes), axes
+            )
+
         effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
 
         return ops.switch(
