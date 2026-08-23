@@ -12,6 +12,7 @@ from ..utils import (
     ensure_batch_axis_for_layout,
     get_input_layout_info,
     get_spatial_shape_for_layout,
+    get_tensor_rank,
     resolve_input_layout,
     restore_from_batch_axis,
     validate_tensor_matches_layout,
@@ -194,7 +195,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             spatial_rank,
         )
         crop_size = ops.convert_to_tensor(self.target_shape, dtype="int32")
-        if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
+        if get_tensor_rank(crop_size) != 1 or crop_size.shape[0] != spatial_rank:
             raise ValueError(
                 f"`target_shape` must contain exactly {spatial_rank} values for input shape "
                 f"{image.shape}; received {self.target_shape}."

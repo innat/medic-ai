@@ -4,6 +4,11 @@ import pytest
 import tensorflow as tf
 from keras import ops
 
+pytestmark = pytest.mark.skipif(
+    keras.config.backend() != "tensorflow",
+    reason="This module exercises TensorFlow-specific graph-mode behavior.",
+)
+
 from medicai.transforms import (
     Compose,
     CropForeground,

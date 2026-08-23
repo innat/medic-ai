@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import tensorflow as tf
+import keras
 from keras import ops
 
 from medicai.transforms.utils import (
@@ -117,6 +118,10 @@ def test_sample_trilinear_preserves_float_dtype():
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    keras.config.backend() != "tensorflow",
+    reason="This test exercises TensorFlow-specific tf.function tracing.",
+)
 def test_sample_volume_runs_under_tf_function():
     volume = as_tensor(np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1))
     coords = as_tensor([[0.5, 0.5, 0.5], [1.0, 1.0, 1.0]], dtype="float32")

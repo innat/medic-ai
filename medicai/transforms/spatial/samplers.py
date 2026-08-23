@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import keras
 from keras import ops
 
 from medicai.transforms.utils import _get_static_shape_tuple, get_tensor_rank
@@ -63,7 +64,7 @@ def sample_nearest(
 
     volume, coords = _validate_volume_and_coords(volume, coords)
     indices = ops.cast(ops.round(coords), "int32")
-    shape = ops.shape(volume)[:3]
+    shape = ops.cast(ops.convert_to_tensor(ops.shape(volume)[:3]), indices.dtype)
     valid = ops.all((indices >= 0) & (indices < shape), axis=1)
     return _gather_with_fill(volume, indices, valid, fill_value, volume.dtype)
 
@@ -86,8 +87,12 @@ def sample_trilinear(
         )
 
     volume, coords = _validate_volume_and_coords(volume, coords)
-    original_dtype = volume.dtype
-    output_dtype = original_dtype if original_dtype.is_floating else "float32"
+    original_dtype = keras.backend.standardize_dtype(volume.dtype)
+    output_dtype = (
+        original_dtype
+        if original_dtype in {"float16", "float32", "float64", "bfloat16"}
+        else "float32"
+    )
     volume = ops.cast(volume, output_dtype)
 
     lower = ops.floor(coords)
@@ -106,7 +111,7 @@ def sample_trilinear(
     ww = ops.cast(frac[:, 2:3], output_dtype)
 
     one = ops.cast(1.0, output_dtype)
-    shape = ops.shape(volume)[:3]
+    shape = ops.cast(ops.convert_to_tensor(ops.shape(volume)[:3]), d0.dtype)
 
     all_d = ops.concatenate([d0, d0, d0, d0, d1, d1, d1, d1], axis=0)
     all_h = ops.concatenate([h0, h0, h1, h1, h0, h0, h1, h1], axis=0)

@@ -842,7 +842,7 @@ class RandomChoice(RandomTransform):
                 maxval=1.0,
                 dtype="float32",
             )
-            return ops.argsort(scores, axis=-1, direction="descending")
+            return ops.argsort(-scores, axis=-1)
 
         weights = ops.convert_to_tensor(self.weights, dtype="float32")
         uniforms = self.random_uniform(
@@ -856,7 +856,7 @@ class RandomChoice(RandomTransform):
         safe_weights = ops.where(valid, weights, 1e-9)
         scores = ops.log(safe_weights) + gumbels
         scores = ops.where(valid, scores, -1e9)
-        return ops.argsort(scores, axis=-1, direction="descending")
+        return ops.argsort(-scores, axis=-1)
 
     def _normalize_num_choices(self, num_choices: int | tuple[int, int]) -> tuple[int, int]:
         if isinstance(num_choices, int):

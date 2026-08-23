@@ -124,7 +124,7 @@ def make_output_grid_chunk(
     start = ops.cast(start, "int32")
     size = ops.cast(size, "int32")
 
-    flat = ops.arange(start, start + size, dtype="int32")
+    flat = ops.arange(0, size, dtype="int32") + start
     hw = output_shape[1] * output_shape[2]
     d = ops.floor_divide(flat, hw)
     rem = ops.mod(flat, hw)

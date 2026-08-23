@@ -11,7 +11,7 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
-from ..utils import resolve_input_layout
+from ..utils import get_tensor_rank, resolve_input_layout
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -150,7 +150,7 @@ class RandomShiftIntensity(RandomTransform):
 
         def apply_shift(tensor, key: str):
             if params["channel_wise"]:
-                offset_shape = [1] * (tensor.shape.rank - 1) + [tensor.shape[-1]]
+                offset_shape = [1] * (get_tensor_rank(tensor) - 1) + [tensor.shape[-1]]
                 offsets = self.random_uniform(
                     shape=offset_shape,
                     minval=params["offset"][0],

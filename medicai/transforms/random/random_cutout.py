@@ -7,6 +7,7 @@ from ..base import RandomTransform, _apply_if_applied
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     get_input_layout_info,
+    get_tensor_rank,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -276,13 +277,13 @@ class RandomCutOut(RandomTransform):
     ):
         """Generate a cutout mask for a 2D or 3D sample tensor."""
         if spatial_rank == 2:
-            if label.shape.rank == 3:
+            if get_tensor_rank(label) == 3:
                 label = label[..., 0]
             return self._cutout_mask_2d(volume, label)
 
-        if label.shape.rank == 4:
+        if get_tensor_rank(label) == 4:
             label = label[..., 0]
-        if volume.shape.rank == 3:
+        if get_tensor_rank(volume) == 3:
             volume = volume[..., None]
 
         if self.cutout_mode == "slice":

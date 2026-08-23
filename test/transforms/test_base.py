@@ -220,6 +220,10 @@ def test_validate_tensor_matches_layout_rejects_mismatched_rank():
 
 
 @pytest.mark.unit
+@pytest.mark.skipif(
+    keras.config.backend() != "tensorflow",
+    reason="This test exercises TensorFlow-specific tf.function tracing.",
+)
 def test_apply_if_applied_handles_tensor_flags_under_tf_function():
     @tf.function
     def apply(flag):
@@ -349,7 +353,7 @@ def test_random_transform_accepts_integer_seed_contract():
     transform = SeedAwareRandomTransform(prob=0.5, seed=13)
     out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
 
-    assert "should_apply" in out.data
+    assert "should_apply" in out.meta
 
 
 @pytest.mark.unit
@@ -363,7 +367,7 @@ def test_random_transform_accepts_seed_generator_contract():
     transform = SeedAwareRandomTransform(prob=0.5, seed=seed)
     out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
 
-    assert "should_apply" in out.data
+    assert "should_apply" in out.meta
 
 
 @pytest.mark.unit

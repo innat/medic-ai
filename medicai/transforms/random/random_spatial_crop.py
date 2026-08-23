@@ -8,6 +8,7 @@ from ..spatial.spatial_crop import SpatialCrop
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     get_spatial_shape_for_layout,
+    get_tensor_rank,
     resolve_input_layout,
     validate_tensor_matches_layout,
 )
@@ -256,7 +257,7 @@ class RandomSpatialCrop(RandomTransform):
             crop_size = ops.full((spatial_rank,), self.crop_size, dtype="int32")
         else:
             crop_size = ops.convert_to_tensor(self.crop_size, dtype="int32")
-            if crop_size.shape.rank != 1 or crop_size.shape[0] != spatial_rank:
+            if get_tensor_rank(crop_size) != 1 or crop_size.shape[0] != spatial_rank:
                 raise ValueError(
                     f"Expected spatial rank in (2, 3) with crop_size length matching the "
                     f"input spatial rank {spatial_rank}, got crop_size={self.crop_size!r}."
@@ -309,7 +310,7 @@ class RandomSpatialCrop(RandomTransform):
     def _get_label_aware_center(
         self, spatial_shape: Any, crop_size: Any, label: Any, spatial_rank: int
     ) -> Any:
-        if label.shape.rank is not None and label.shape.rank > spatial_rank:
+        if get_tensor_rank(label) > spatial_rank:
             valid_mask = ops.any(label != self.invalid_label, axis=-1)
         else:
             valid_mask = label != self.invalid_label
@@ -348,7 +349,7 @@ class RandomSpatialCrop(RandomTransform):
             starts = ops.maximum(current_center - crop_size // 2, 0)
             ends = ops.minimum(starts + crop_size, spatial_shape)
             starts = ops.maximum(ends - crop_size, 0)
-            if label.shape.rank is not None and label.shape.rank > spatial_rank:
+            if get_tensor_rank(label) > spatial_rank:
                 begin = ops.concatenate(
                     [starts, ops.convert_to_tensor([0], dtype="int32")],
                     axis=0,

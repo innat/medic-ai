@@ -10,6 +10,7 @@ from ..utils import (
     ensure_batch_axis_for_layout,
     get_batched_input_layout,
     get_input_layout_info,
+    get_tensor_rank,
     resolve_input_layout,
     resolve_input_layout_axes,
     restore_from_batch_axis,
@@ -298,7 +299,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         )
 
     def _rotate_once(self, tensor: Any, axes: tuple[int, int]) -> Any:
-        perm = [axis for axis in range(tensor.shape.rank) if axis not in axes] + list(axes)
+        perm = [axis for axis in range(get_tensor_rank(tensor)) if axis not in axes] + list(axes)
         transposed = ops.transpose(tensor, axes=perm)
         perm_len = len(perm)
         rotated = ops.transpose(
