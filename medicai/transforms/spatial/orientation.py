@@ -193,7 +193,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
             bundle,
             {
                 "keys": list(present_keys),
-                "original_affine": ops.identity(ops.cast(affine, "float32")),
+                "original_affine": ops.cast(affine, "float32"),
                 "original_axcodes": original_axcodes,
                 "target_axcodes": self.axcodes,
                 "target_tensor_axcodes": target_tensor_axcodes,

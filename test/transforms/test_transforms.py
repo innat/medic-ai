@@ -422,6 +422,7 @@ def test_spacing_records_static_original_shapes_as_python_lists():
 
     spacing = Spacing(keys=["image"], pixdim=(0.5, 0.5, 0.5))
     forward = spacing(TensorBundle({"image": image}, {"affine": affine}))
+
     trace = forward.get_applied_transforms()[-1]
 
     assert trace["params"]["original_shapes"]["image"] == [4, 5, 6]
@@ -434,6 +435,13 @@ def test_spacing_updates_affine_metadata_and_inverse_restores_it():
 
     spacing = Spacing(keys=["image"], pixdim=(1.0, 1.5, 2.0))
     forward = spacing(TensorBundle({"image": image}, {"affine": affine}))
+
+    trace = forward.get_applied_transforms()[-1]
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(trace["params"]["original_affine"]),
+        ops.convert_to_numpy(affine),
+        rtol=1e-6,
+    )
 
     np.testing.assert_allclose(
         ops.convert_to_numpy(forward.meta["pixdim"]),
@@ -500,6 +508,11 @@ def test_orientation_flip_only_restores_original_layout_and_affine():
 
     trace = forward.get_applied_transforms()[-1]
     assert trace["params"]["target_tensor_axcodes"] == "SAR"
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(trace["params"]["original_affine"]),
+        ops.convert_to_numpy(affine),
+        rtol=1e-6,
+    )
 
     restored = orientation.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 

@@ -242,7 +242,7 @@ class Transform:
             class MarkSample(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     bundle["processed"] = True
-                    bundle["image"] = ops.identity(bundle["image"])
+                    bundle["image"] = ops.convert_to_tensor(bundle["image"])
                     return bundle
 
             image = tf.random.normal((64, 64, 1))

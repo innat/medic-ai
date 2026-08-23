@@ -272,7 +272,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         bundle.meta["pixdim"] = target_pixdim
         original_affine = None
         if affine is not None:
-            original_affine = ops.identity(ops.cast(affine, "float32"))
+            original_affine = ops.cast(affine, "float32")
             bundle.meta["affine"] = ops.cast(destination_affine, "float32")
         self.record_transform(
             bundle,
@@ -282,7 +282,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 "original_spacing": original_spacing,
                 "original_affine": original_affine,
                 "output_affine": (
-                    ops.identity(destination_affine) if destination_affine is not None else None
+                    ops.cast(destination_affine, "float32")
+                    if destination_affine is not None
+                    else None
                 ),
                 "original_shapes": original_shapes,
                 "interpolation": {key: self.interpolation[key] for key in present_keys},
