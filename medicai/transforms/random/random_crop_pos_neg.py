@@ -343,16 +343,15 @@ class RandomCropByPosNegLabel(RandomTransform):
             maxval=1.0,
             dtype="float32",
         ) < self.pos_ratio
-        return ops.cond(
-            positive,
-            lambda: self._sample_positive_center(label, spatial_rank),
-            lambda: self._sample_negative_center(image, label, image_reference, spatial_rank),
+        positive_center = self._sample_positive_center(label, spatial_rank)
+        negative_center = self._sample_negative_center(
+            image, label, image_reference, spatial_rank
         )
+        return ops.where(positive, positive_center, negative_center)
 
     def _sample_positive_center(self, label, spatial_rank: int):
-        coords = ops.where(ops.any(label > 0, axis=(0, -1)))
-        return self._sample_from_coords(
-            coords,
+        return self._sample_from_mask(
+            ops.any(label > 0, axis=(0, -1)),
             fallback_shape=get_spatial_shape_for_layout(
                 label,
                 input_layout=self.batch_input_layout,
@@ -371,11 +370,10 @@ class RandomCropByPosNegLabel(RandomTransform):
             max_intensity_ref = ops.max(image_reference, axis=(0, -1))
             label_is_zero = ops.any(label == 0, axis=(0, -1))
             valid_mask = label_is_zero & (max_intensity_ref > self.image_threshold)
-            coords = ops.where(valid_mask)
         else:
-            coords = ops.where(ops.any(label == 0, axis=(0, -1)))
-        return self._sample_from_coords(
-            coords,
+            valid_mask = ops.any(label == 0, axis=(0, -1))
+        return self._sample_from_mask(
+            valid_mask,
             fallback_shape=get_spatial_shape_for_layout(
                 image,
                 input_layout=self.batch_input_layout,
@@ -383,38 +381,42 @@ class RandomCropByPosNegLabel(RandomTransform):
             spatial_rank=spatial_rank,
         )
 
-    def _sample_from_coords(
+    def _sample_from_mask(
         self,
-        coords,
+        valid_mask,
         fallback_shape,
         spatial_rank: int,
     ):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
-
-        def fallback_coords():
-            num_cols = coords.shape[1] if coords.shape[1] is not None else ops.shape(coords)[1]
-            random_unit = self.random_uniform(
-                shape=(spatial_rank,),
-                minval=0.0,
-                maxval=1.0,
-                dtype="float32",
-            )
-            random_coord = ops.cast(
-                ops.floor(random_unit * ops.cast(fallback_shape[:spatial_rank], "float32")),
-                "int32",
-            )
-            padding = ops.zeros([num_cols - spatial_rank], dtype="int32")
-            full_coord = ops.concatenate([random_coord, padding], axis=0)
-            return ops.expand_dims(ops.cast(full_coord, coords.dtype), axis=0)
-
-        coords = ops.cond(ops.shape(coords)[0] > 0, lambda: coords, fallback_coords)
-        idx = self.random_integers(
+        axes = [ops.arange(fallback_shape[index]) for index in range(spatial_rank)]
+        grid = ops.meshgrid(*axes, indexing="ij")
+        coords = ops.reshape(ops.stack(grid, axis=-1), (-1, spatial_rank))
+        valid_flat = ops.reshape(valid_mask, (-1,))
+        valid_int = ops.cast(valid_flat, "int32")
+        num_valid = ops.sum(valid_int)
+        ranks = ops.cumsum(valid_int) - 1
+        valid_rank = self.random_integers(
             shape=(),
             minval=0,
-            maxval=ops.shape(coords)[0],
+            maxval=ops.maximum(num_valid, 1),
             dtype="int32",
         )
-        return ops.cast(coords[idx][:spatial_rank], "int32")
+        selected_index = ops.argmax(
+            ops.cast((valid_int > 0) & (ranks == valid_rank), "int32"),
+            axis=0,
+        )
+        selected = ops.cast(coords[selected_index], "int32")
+        random_unit = self.random_uniform(
+            shape=(spatial_rank,),
+            minval=0.0,
+            maxval=1.0,
+            dtype="float32",
+        )
+        fallback = ops.cast(
+            ops.floor(random_unit * ops.cast(fallback_shape[:spatial_rank], "float32")),
+            "int32",
+        )
+        return ops.where(num_valid > 0, selected, fallback)
 
     def _get_last_random_crop_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

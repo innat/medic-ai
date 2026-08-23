@@ -1712,7 +1712,7 @@ def test_random_spatial_crop_accepts_plain_numpy_inputs():
     )({"image": image})
 
     assert tuple(ops.shape(out["image"])) == (3, 4, 1)
-    assert tf.is_tensor(out["image"])
+    assert ops.is_tensor(out["image"])
 
 
 @pytest.mark.unit

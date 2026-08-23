@@ -315,20 +315,32 @@ class RandomSpatialCrop(RandomTransform):
         else:
             valid_mask = label != self.invalid_label
         valid_coords = ops.where(valid_mask)
+        if isinstance(valid_coords, (tuple, list)):
+            valid_coords = ops.stack(valid_coords, axis=-1)
 
         def fallback():
             return self._get_random_center(spatial_shape, crop_size, spatial_rank)
 
-        def sample_valid_center():
-            idx = self.random_integers(
-                shape=(),
-                minval=0,
-                maxval=ops.shape(valid_coords)[0],
-                dtype="int32",
-            )
-            return ops.cast(valid_coords[idx][:spatial_rank], "int32")
-
-        center = ops.cond(ops.shape(valid_coords)[0] > 0, sample_valid_center, fallback)
+        num_valid = ops.shape(valid_coords)[0]
+        safe_coords = ops.concatenate(
+            [
+                ops.cast(valid_coords, "int32"),
+                ops.zeros((1, spatial_rank), dtype="int32"),
+            ],
+            axis=0,
+        )
+        idx = self.random_integers(
+            shape=(),
+            minval=0,
+            maxval=ops.maximum(num_valid, 1),
+            dtype="int32",
+        )
+        selected = ops.cast(safe_coords[idx][:spatial_rank], "int32")
+        center = ops.where(
+            num_valid > 0,
+            selected,
+            fallback(),
+        )
 
         if self.min_valid_ratio > 0:
             center = self._enforce_min_valid_ratio(
