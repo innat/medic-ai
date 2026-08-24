@@ -172,18 +172,18 @@ class Orientation(KeyedTransform, InvertibleTransform):
         sample_tensor = bundle.data[sample_key]
         target_tensor_axcodes = self._target_tensor_axcodes(self.axcodes)
         transform_info = compute_orientation_transform(affine, target_tensor_axcodes)
+        perm_spatial = self._as_static_axes(transform_info["perm_spatial"])
+        flip_axes = self._as_static_axes(transform_info["flip_axes"])
 
         def apply_orientation(tensor: Any, _: str) -> Any:
-            return self.orient_tensor(
-                tensor, transform_info["perm_spatial"], transform_info["flip_axes"]
-            )
+            return self.orient_tensor(tensor, perm_spatial, flip_axes)
 
         present_keys = self.apply_to_present_keys(bundle, apply_orientation)
         bundle.meta["affine"] = reoriented_affine(
             affine,
             ops.shape(sample_tensor)[:3],
-            transform_info["perm_spatial"],
-            transform_info["flip_axes"],
+            perm_spatial,
+            flip_axes,
         )
         try:
             original_axcodes = orientation_from_affine(affine)
@@ -197,8 +197,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 "original_axcodes": original_axcodes,
                 "target_axcodes": self.axcodes,
                 "target_tensor_axcodes": target_tensor_axcodes,
-                "perm_spatial": transform_info["perm_spatial"],
-                "flip_axes": transform_info["flip_axes"],
+                "perm_spatial": perm_spatial,
+                "flip_axes": flip_axes,
                 "input_layout": self.input_layout,
             },
         )
@@ -220,8 +220,8 @@ class Orientation(KeyedTransform, InvertibleTransform):
         flip_axes = trace["params"].get("flip_axes")
         if perm_spatial is None or flip_axes is None:
             return bundle
-        perm_spatial = ops.cast(ops.convert_to_tensor(perm_spatial), "int32")
-        flip_axes = ops.cast(ops.convert_to_tensor(flip_axes), "int32")
+        perm_spatial = self._as_static_axes(perm_spatial)
+        flip_axes = self._as_static_axes(flip_axes)
 
         def apply_inverse_orientation(tensor: Any, _: str) -> Any:
             return self.inverse_orient_tensor(tensor, perm_spatial, flip_axes)
@@ -266,16 +266,10 @@ class Orientation(KeyedTransform, InvertibleTransform):
         flip_axes: tuple[int, ...] | Any,
     ) -> Any:
         """Reorient one tensor using a spatial permutation followed by flips."""
-        perm_spatial = ops.cast(ops.convert_to_tensor(perm_spatial), "int32")
-        perm = ops.concatenate([perm_spatial, ops.convert_to_tensor([3], dtype="int32")], axis=0)
+        perm_spatial = tuple(perm_spatial)
+        perm = (*perm_spatial, 3)
         reoriented = ops.transpose(tensor, axes=perm)
-
-        flip_axes = ops.cast(ops.convert_to_tensor(flip_axes), "int32")
-        return ops.cond(
-            ops.shape(flip_axes)[0] > 0,
-            lambda: ops.flip(reoriented, axis=flip_axes),
-            lambda: reoriented,
-        )
+        return ops.flip(reoriented, axis=flip_axes) if flip_axes else reoriented
 
     def inverse_orient_tensor(
         self,
@@ -284,22 +278,19 @@ class Orientation(KeyedTransform, InvertibleTransform):
         flip_axes: tuple[int, ...] | Any,
     ) -> Any:
         """Invert a spatial permutation and flips applied by ``orient_tensor``."""
-        perm_spatial = ops.cast(ops.convert_to_tensor(perm_spatial), "int32")
-        flip_axes = ops.cast(ops.convert_to_tensor(flip_axes), "int32")
-        restored = ops.cond(
-            ops.shape(flip_axes)[0] > 0,
-            lambda: ops.flip(tensor, axis=flip_axes),
-            lambda: tensor,
-        )
-        inverse_perm_spatial = ops.scatter(
-            indices=ops.expand_dims(perm_spatial, axis=1),
-            values=ops.arange(3, dtype="int32"),
-            shape=(3,),
-        )
-        inverse_perm = ops.concatenate(
-            [inverse_perm_spatial, ops.convert_to_tensor([3], dtype="int32")], axis=0
-        )
+        perm_spatial = tuple(perm_spatial)
+        flip_axes = tuple(flip_axes)
+        restored = ops.flip(tensor, axis=flip_axes) if flip_axes else tensor
+        inverse_perm_spatial = [0, 0, 0]
+        for output_axis, input_axis in enumerate(perm_spatial):
+            inverse_perm_spatial[input_axis] = output_axis
+        inverse_perm = (*inverse_perm_spatial, 3)
         return ops.transpose(restored, axes=inverse_perm)
+
+    @staticmethod
+    def _as_static_axes(value: Any) -> tuple[int, ...]:
+        """Convert a concrete axis tensor to a Python tuple for backend APIs."""
+        return tuple(int(axis) for axis in ops.convert_to_numpy(value).reshape(-1))
 
     def _target_tensor_axcodes(self, axcodes: str) -> str:
         """Map anatomical axis-code order to Medic-AI's depth-first tensor order."""

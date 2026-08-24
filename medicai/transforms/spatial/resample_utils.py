@@ -18,6 +18,14 @@ from medicai.transforms.utils import _get_static_shape_tuple, get_tensor_rank
 # Resampling Utility
 
 
+def _concrete_int_tuple(value: Any) -> tuple[int, ...] | None:
+    """Return concrete integer values when a runtime shape is available."""
+    try:
+        return tuple(int(item) for item in ops.convert_to_numpy(value).reshape(-1))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def round_half_up(values: Any) -> Any:
     """Round floating-point values with half-up semantics."""
     return ops.floor(values + 0.5)
@@ -233,12 +241,22 @@ class SpatialResample:
             )
 
         sampled = ops.map(sample_chunk, chunk_starts)
-        channels = ops.shape(tensor)[-1]
-        sampled = ops.reshape(sampled, ops.stack([-1, channels]))
-        sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels]))
+        channels = _get_static_shape_tuple(tensor)[-1]
+        concrete_output_shape = _concrete_int_tuple(output_shape)
+        if channels is not None and concrete_output_shape is not None:
+            num_points_value = 1
+            for dimension in concrete_output_shape:
+                num_points_value *= dimension
+            sampled = ops.reshape(sampled, (-1, channels))
+            sampled = ops.slice(sampled, [0, 0], [num_points_value, channels])
+            return ops.reshape(sampled, (*concrete_output_shape, channels))
+
+        channels_tensor = ops.shape(tensor)[-1]
+        sampled = ops.reshape(sampled, ops.stack([-1, channels_tensor]))
+        sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels_tensor]))
         return ops.reshape(
             sampled,
-            ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
+            ops.concatenate([output_shape, ops.reshape(channels_tensor, (1,))], axis=0),
         )
 
     def _resample_many_from_mapping(
@@ -281,11 +299,22 @@ class SpatialResample:
                 ),
                 coordinate_chunks,
             )
-            channels = ops.shape(tensor)[-1]
-            sampled = ops.reshape(sampled_chunks, ops.stack([-1, channels]))
-            sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels]))
+            channels = _get_static_shape_tuple(tensor)[-1]
+            concrete_output_shape = _concrete_int_tuple(output_shape)
+            if channels is not None and concrete_output_shape is not None:
+                num_points_value = 1
+                for dimension in concrete_output_shape:
+                    num_points_value *= dimension
+                sampled = ops.reshape(sampled_chunks, (-1, channels))
+                sampled = ops.slice(sampled, [0, 0], [num_points_value, channels])
+                outputs[key] = ops.reshape(sampled, (*concrete_output_shape, channels))
+                continue
+
+            channels_tensor = ops.shape(tensor)[-1]
+            sampled = ops.reshape(sampled_chunks, ops.stack([-1, channels_tensor]))
+            sampled = ops.slice(sampled, [0, 0], ops.stack([num_points, channels_tensor]))
             outputs[key] = ops.reshape(
                 sampled,
-                ops.concatenate([output_shape, ops.reshape(channels, (1,))], axis=0),
+                ops.concatenate([output_shape, ops.reshape(channels_tensor, (1,))], axis=0),
             )
         return outputs

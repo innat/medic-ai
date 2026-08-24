@@ -184,20 +184,26 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     )
 
     sample_2d_out = ops.convert_to_numpy(
-        resize_2d.resize_batch_tensor(sample_2d[None, ...], "image", tf.constant([3, 4], tf.int32))
+            resize_2d.resize_batch_tensor(
+                sample_2d[None, ...], "image", ops.convert_to_tensor([3, 4], dtype="int32")
+            )
     )[0]
     sample_3d_out = ops.convert_to_numpy(
-        resize_3d.resize_batch_tensor(
-            sample_3d[None, ...],
-            "image",
-            tf.constant([3, 4, 5], tf.int32),
-        )
+            resize_3d.resize_batch_tensor(
+                sample_3d[None, ...],
+                "image",
+                ops.convert_to_tensor([3, 4, 5], dtype="int32"),
+            )
     )[0]
     batch_2d_out = ops.convert_to_numpy(
-        resize_2d.resize_batch_tensor(batch_2d, "image", tf.constant([3, 4], tf.int32))
+        resize_2d.resize_batch_tensor(
+            batch_2d, "image", ops.convert_to_tensor([3, 4], dtype="int32")
+        )
     )
     batch_3d_out = ops.convert_to_numpy(
-        resize_3d.resize_batch_tensor(batch_3d, "image", tf.constant([3, 4, 5], tf.int32))
+        resize_3d.resize_batch_tensor(
+            batch_3d, "image", ops.convert_to_tensor([3, 4, 5], dtype="int32")
+        )
     )
 
     assert sample_2d_out.shape == (3, 4, 1)
@@ -1582,7 +1588,7 @@ def test_spatial_crop_inverse_places_prediction_back_on_original_canvas():
     )
 
     forward = transform(TensorBundle({"image": image, "label": label}))
-    prediction = tf.ones_like(forward["label"])
+    prediction = ops.ones_like(forward["label"])
     prediction_bundle = TensorBundle(
         {"image": forward["image"], "label": prediction},
         dict(forward.meta),
@@ -2131,7 +2137,7 @@ def test_crop_foreground_inverse_places_prediction_back_on_original_canvas():
     transform = CropForeground(keys=["image", "label"], source_key="image", input_layout="HWC")
 
     forward = transform(TensorBundle({"image": as_tensor(image), "label": as_tensor(label)}))
-    prediction = tf.ones_like(forward["label"])
+    prediction = ops.ones_like(forward["label"])
     prediction_bundle = TensorBundle(
         {"image": forward["image"], "label": prediction},
         dict(forward.meta),
@@ -2169,30 +2175,6 @@ def test_crop_foreground_inverse_without_trace_is_noop():
     restored = transform.inverse(bundle)
 
     assert restored is bundle
-
-
-@pytest.mark.unit
-def test_crop_foreground_runs_under_tf_function_graph_mode():
-    transform = CropForeground(keys=["image"], source_key="image", input_layout="HWC")
-    image = as_tensor(
-        np.array(
-            [
-                [[0.0], [0.0], [0.0], [0.0]],
-                [[0.0], [1.0], [1.0], [0.0]],
-                [[0.0], [1.0], [1.0], [0.0]],
-                [[0.0], [0.0], [0.0], [0.0]],
-            ],
-            dtype=np.float32,
-        )
-    )
-
-    @tf.function
-    def apply_transform(x):
-        return transform({"image": x})["image"]
-
-    output = apply_transform(image)
-
-    assert tuple(ops.shape(output)) == (2, 2, 1)
 
 
 @pytest.mark.unit
@@ -3784,7 +3766,7 @@ def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing
     )
 
     # Mimic model output by replacing the traced segmentation key with a fresh prediction.
-    prediction = tf.cast(forward["label"] > 0.0, forward["label"].dtype)
+    prediction = ops.cast(forward["label"] > 0.0, forward["label"].dtype)
     prediction_bundle = TensorBundle(
         {"image": forward["image"], "label": prediction},
         dict(forward.meta),

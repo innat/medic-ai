@@ -317,6 +317,8 @@ class RandomSpatialCrop(RandomTransform):
         valid_coords = ops.where(valid_mask)
         if isinstance(valid_coords, (tuple, list)):
             valid_coords = ops.stack(valid_coords, axis=-1)
+        elif valid_coords.shape[0] == spatial_rank:
+            valid_coords = ops.transpose(valid_coords, axes=(1, 0))
 
         def fallback():
             return self._get_random_center(spatial_shape, crop_size, spatial_rank)

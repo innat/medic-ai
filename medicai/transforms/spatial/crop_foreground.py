@@ -315,9 +315,12 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             max_coords = []
             for axis in range(spatial_rank):
                 other_axes = tuple(i for i in range(spatial_rank) if i != axis)
-                axis_presence = (
-                    ops.any(mask, axis=other_axes) if other_axes else mask
-                )
+                axis_presence = mask
+                # Reduce one axis at a time in descending order. Some Keras
+                # backends do not support a tuple of reduction axes, and the
+                # descending order keeps the target axis index stable.
+                for reduce_axis in reversed(other_axes):
+                    axis_presence = ops.any(axis_presence, axis=reduce_axis)
                 axis_presence_i32 = ops.cast(axis_presence, "int32")
                 axis_size = ops.shape(axis_presence_i32)[0]
                 start = ops.argmax(axis_presence_i32, axis=0)
