@@ -31,6 +31,8 @@ def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
         if len(value) != 2:
             raise ValueError("Each rotation range must contain exactly two values.")
         return float(value[0]), float(value[1])
+    if float(value) < 0:
+        raise ValueError(f"`factor` must be non-negative. Received {value}.")
     return -float(value), float(value)
 
 
