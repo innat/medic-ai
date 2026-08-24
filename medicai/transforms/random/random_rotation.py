@@ -1,3 +1,12 @@
+"""Backend-neutral batched random rotation kernels.
+
+The implementation has two 3D paths. Single-axis rotations fold the batch and
+the untouched spatial axis into one 2D affine-transform batch. Multi-axis
+rotations build a batched 3x3 matrix and use coordinate sampling for genuine
+3D linear interpolation. Both paths preserve channel-last layouts and use
+Keras random streams so they remain dispatchable across supported backends.
+"""
+
 from typing import Any, Sequence
 
 import keras
@@ -38,6 +47,7 @@ def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
 
 
 def _apply_anisotropy_policy(ranges, spacing, threshold):
+    """Restrict 3D rotations to the coarsest axis for highly anisotropic data."""
     if spacing is None or max(spacing) / min(spacing) <= threshold:
         return dict(ranges)
     coarse_axis = AXES[list(spacing).index(max(spacing))]
@@ -87,7 +97,11 @@ def rotate_2d(
     fill_mode: str = "constant",
     fill_value: float = 0.0,
 ) -> Any:
-    """Rotate a ``(B, H, W, C)`` batch with Keras' affine image kernel."""
+    """Rotate a ``(B, H, W, C)`` batch with Keras' affine image kernel.
+
+    The angle is a ``(B,)`` tensor, allowing each batch item to receive its
+    own sampled rotation while preserving one shared kernel invocation.
+    """
     original_dtype = images.dtype
     images = ops.cast(images, "float32")
     shape = ops.shape(images)
@@ -121,7 +135,11 @@ def rotate_single_axis(
     fill_mode: str = "constant",
     fill_value: float = 0.0,
 ) -> Any:
-    """Rotate a ``(B, D, H, W, C)`` batch about one 3D axis."""
+    """Rotate a ``(B, D, H, W, C)`` batch about one 3D axis.
+
+    The untouched spatial axis is folded into the affine kernel's batch axis,
+    so every 2D plane for one volume receives the same angle.
+    """
     original_dtype = volumes.dtype
     volumes = ops.cast(volumes, "float32")
     batch, depth, height, width, channels = volumes.shape
@@ -156,6 +174,7 @@ def rotate_single_axis(
 
 
 def _rotation_matrix_3d(angle_d, angle_h, angle_w):
+    """Compose batched D, H, and W rotations in voxel-axis order."""
     one, zero = ops.ones_like(angle_d), ops.zeros_like(angle_d)
     cd, sd = ops.cos(angle_d), ops.sin(angle_d)
     ch, sh = ops.cos(angle_h), ops.sin(angle_h)
@@ -188,11 +207,18 @@ def _rotation_matrix_3d(angle_d, angle_h, angle_w):
 
 
 def _spacing_scale_matrix(spacing, dtype):
+    """Build the voxel-to-physical spacing correction for 3D rotations."""
     spacing = ops.convert_to_tensor(spacing, dtype=dtype)
     return ops.outer(1.0 / spacing, spacing)
 
 
 def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_value):
+    """Sample one volume using an output-to-input 3D coordinate matrix.
+
+    ``interpolation="bilinear"`` is the public Keras image vocabulary; with
+    three coordinate axes this corresponds to order-1, commonly called
+    trilinear interpolation. ``nearest`` uses order 0 for discrete labels.
+    """
     depth, height, width, channels = volume.shape
     if channels is None:
         raise ValueError("RandomRotate requires a statically known channel dimension.")
@@ -239,7 +265,11 @@ def rotate_multi_axis(
     fill_value=0.0,
     precomputed_matrix=None,
 ):
-    """Rotate a ``(B, D, H, W, C)`` batch with 3D linear interpolation."""
+    """Rotate a ``(B, D, H, W, C)`` batch with batched 3D sampling.
+
+    ``precomputed_matrix`` is used by inverse paths so the exact sampled
+    forward matrix is reused instead of reconstructing it from angles.
+    """
     original_dtype = volumes.dtype
     volumes = ops.cast(volumes, "float32")
     matrix = (
@@ -273,6 +303,12 @@ class RandomRotate(RandomTransform):
     zero angles and is therefore an exact identity. Selected keys share the
     same sampled angles so images, masks, and labels remain aligned.
 
+    The forward operation is a resampling transform. ``inverse()`` reuses the
+    recorded angles and reverses the geometry, but arbitrary-angle image
+    interpolation can introduce small numerical differences; it is not an
+    exact voxel-for-voxel round trip. ``fill_mode="constant"`` is typically
+    the most predictable choice for medical images.
+
     Args:
         keys: Tensor keys to rotate together.
         factor: A non-negative maximum angle, a ``(min, max)`` range, or a
@@ -280,7 +316,9 @@ class RandomRotate(RandomTransform):
             radians.
         prob: Per-sample probability of applying the rotation.
         spacing: Optional 3D voxel spacing used for physical-space correction.
-        anisotropy_threshold: Reserved for the anisotropy policy.
+        anisotropy_threshold: If the largest spacing divided by the smallest
+            spacing exceeds this value, restrict rotation to the coarsest
+            physical axis. This applies only when ``spacing`` is provided.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
             Supported modes are ``"bilinear"`` and ``"nearest"``.
         fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
@@ -290,6 +328,12 @@ class RandomRotate(RandomTransform):
         input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
         seed: Optional integer or ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
+
+    Notes:
+        The trace stores sampled per-item angles in bundle metadata, so inverse
+        execution can work after the model replaces transformed tensors with
+        predictions. Reuse the returned ``TensorBundle`` when calling
+        ``inverse()``.
     """
 
     def __init__(
@@ -404,6 +448,8 @@ class RandomRotate(RandomTransform):
             )
         else:
             active = [axis for axis in AXES if axis in angles]
+            # Torch uses coordinate sampling for single-axis 3D rotations
+            # because its affine kernel does not cover this case.
             if len(active) == 1 and keras.config.backend() != "torch":
                 rotated = rotate_single_axis(
                     batched,
