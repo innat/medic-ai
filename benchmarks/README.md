@@ -28,5 +28,19 @@ Example:
 
 ```bash
 python benchmarks/transforms.py --group cpu+gpu --device both \
-  --layout BDHWC --iterations 50 --warmup 10 --json /tmp/medicai.json
+  --layout BDHWC --sizes 64 96 128 160 --batch-size 1 \
+  --iterations 50 --warmup 10 --json /tmp/medicai.json
 ```
+
+Common image-size profiles:
+
+```bash
+# 2D: (B, H, W, C), with H=W in each run.
+python benchmarks/transforms.py --layout BHWC --sizes 224 512 1024 --batch-size 1
+
+# 3D: (B, D, H, W, C), with D=H=W in each run.
+python benchmarks/transforms.py --layout BDHWC --sizes 64 96 128 160 --batch-size 1
+```
+
+Use a smaller `--batch-size` or fewer sizes when measuring large 3D volumes;
+memory use grows cubically with the 3D size.

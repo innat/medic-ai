@@ -82,15 +82,17 @@ def _devices(requested: str) -> list[str]:
     raise ValueError(f"Unknown device selection: {requested!r}")
 
 
-def _make_case(layout: str, device: str) -> TensorBundle:
+def _make_case(layout: str, device: str, spatial_size: int, batch_size: int, channels: int) -> TensorBundle:
     """Create a small aligned image/label case on the selected device."""
-    shapes = {
-        "HWC": (64, 64, 1),
-        "DHWC": (12, 32, 32, 1),
-        "BHWC": (4, 64, 64, 1),
-        "BDHWC": (2, 12, 32, 32, 1),
-    }
-    if layout not in shapes:
+    if layout in ("HWC", "BHWC"):
+        shape = (spatial_size, spatial_size, channels)
+        if layout == "BHWC":
+            shape = (batch_size, *shape)
+    elif layout in ("DHWC", "BDHWC"):
+        shape = (spatial_size, spatial_size, spatial_size, channels)
+        if layout == "BDHWC":
+            shape = (batch_size, *shape)
+    else:
         raise ValueError(f"Unsupported benchmark layout: {layout!r}")
     with keras.device(device):
         image = ops.convert_to_tensor(
@@ -103,11 +105,12 @@ def _make_case(layout: str, device: str) -> TensorBundle:
         return TensorBundle({"image": image, "label": label}, meta)
 
 
-def _factory_table(layout: str) -> list[BenchmarkSpec]:
+def _factory_table(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
     """Return representative CPU-only and tensor-only transform cases."""
     is_3d = layout in ("DHWC", "BDHWC")
     axis = 1 if layout.startswith("B") else 0
-    crop_shape = (8, 24, 24) if is_3d else (48, 48)
+    crop_extent = max(8, spatial_size - spatial_size // 8)
+    crop_shape = (crop_extent, crop_extent, crop_extent) if is_3d else (crop_extent, crop_extent)
     specs = [
         BenchmarkSpec(
             "NormalizeIntensity", "cpu+gpu",
@@ -208,16 +211,16 @@ def _factory_table(layout: str) -> list[BenchmarkSpec]:
     return specs
 
 
-def _profile(spec, layout, device, iterations, warmup, seed):
+def _profile(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, seed):
     transform = spec.factory(layout, seed)
     for _ in range(warmup):
-        _sync(transform(_make_case(layout, device)))
+        _sync(transform(_make_case(layout, device, spatial_size, batch_size, channels)))
 
     forward_times = []
     inverse_times = []
     for _ in range(iterations):
         start = time.perf_counter()
-        result = transform(_make_case(layout, device))
+        result = transform(_make_case(layout, device, spatial_size, batch_size, channels))
         _sync(result)
         forward_times.append((time.perf_counter() - start) * 1000.0)
         if spec.inverse:
@@ -228,6 +231,10 @@ def _profile(spec, layout, device, iterations, warmup, seed):
         "backend": keras.config.backend(),
         "device": device,
         "layout": layout,
+        "spatial_size": spatial_size,
+        "batch_size": batch_size,
+        "channels": channels,
+        "input_shape": list(result["image"].shape),
         "forward_median_ms": statistics.median(forward_times),
         "forward_p95_ms": float(np.percentile(forward_times, 95)),
         "inverse_median_ms": statistics.median(inverse_times) if inverse_times else None,
@@ -241,25 +248,50 @@ def main() -> None:
     parser.add_argument("--device", choices=("cpu", "gpu", "both"), default="cpu")
     parser.add_argument("--group", choices=("cpu", "cpu+gpu", "all"), default="all")
     parser.add_argument("--layout", choices=("HWC", "DHWC", "BHWC", "BDHWC"), default="BDHWC")
+    parser.add_argument(
+        "--sizes",
+        type=int,
+        nargs="+",
+        help="Square 2D or cubic 3D spatial sizes. Defaults to 224 for 2D and 96 for 3D.",
+    )
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--channels", type=int, default=1)
     parser.add_argument("--iterations", type=int, default=30)
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
 
+    if args.batch_size < 1 or args.channels < 1:
+        parser.error("--batch-size and --channels must be positive.")
+    default_size = 224 if args.layout in ("HWC", "BHWC") else 96
+    sizes = args.sizes or [default_size]
     results = []
-    for spec in _factory_table(args.layout):
-        if args.group != "all" and spec.group != args.group:
-            continue
-        for device in _devices(args.device):
-            result = _profile(spec, args.layout, device, args.iterations, args.warmup, args.seed)
-            result.update(transform=spec.name, group=spec.group)
-            results.append(result)
-            inverse = result["inverse_median_ms"] or 0.0
-            print(
-                f"{spec.name:24} {device:10} {args.layout:6} "
-                f"forward={result['forward_median_ms']:.2f} ms inverse={inverse:.2f} ms"
-            )
+    for spatial_size in sizes:
+        if spatial_size < 1:
+            parser.error("--sizes must contain positive integers.")
+        for spec in _factory_table(args.layout, spatial_size):
+            if args.group != "all" and spec.group != args.group:
+                continue
+            for device in _devices(args.device):
+                result = _profile(
+                    spec,
+                    args.layout,
+                    device,
+                    spatial_size,
+                    args.batch_size,
+                    args.channels,
+                    args.iterations,
+                    args.warmup,
+                    args.seed,
+                )
+                result.update(transform=spec.name, group=spec.group)
+                results.append(result)
+                inverse = result["inverse_median_ms"] or 0.0
+                print(
+                    f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
+                    f"forward={result['forward_median_ms']:.2f} ms inverse={inverse:.2f} ms"
+                )
     if args.json:
         args.json.write_text(json.dumps(results, indent=2) + "\n")
 
