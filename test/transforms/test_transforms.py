@@ -3154,6 +3154,54 @@ def test_random_rotate_supports_2d_sample_and_batch_layouts():
 
 
 @pytest.mark.unit
+def test_random_rotate_replays_with_same_integer_seed():
+    image = as_tensor(np.random.randn(2, 8, 9, 1).astype(np.float32))
+
+    first = RandomRotate(
+        keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17
+    )(TensorBundle({"image": image}))
+    second = RandomRotate(
+        keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17
+    )(TensorBundle({"image": image}))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(first["image"]), ops.convert_to_numpy(second["image"])
+    )
+
+
+@pytest.mark.unit
+def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
+    image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
+    transform = RandomRotate(
+        keys=["image"],
+        factor={"h": (-0.1, 0.1), "W": 0.1},
+        prob=1.0,
+        input_layout="BDHWC",
+        seed=3,
+    )
+
+    out = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(out["image"])) == (2, 4, 5, 6, 1)
+    assert set(out.get_applied_transforms()[-1]["params"]["angles"]) == {"H", "W"}
+
+
+@pytest.mark.unit
+def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value():
+    transform = RandomRotate(
+        keys=["image", "label"],
+        input_layout="DHWC",
+        interpolation={"image": "BILINEAR", "label": "NEAREST"},
+        fill_mode={"image": "reflect", "label": "constant"},
+        fill_value={"image": -1.0, "label": 2.0},
+    )
+
+    assert transform.interpolation == {"image": "bilinear", "label": "nearest"}
+    assert transform.fill_mode == {"image": "reflect", "label": "constant"}
+    assert transform.fill_value == {"image": -1.0, "label": 2.0}
+
+
+@pytest.mark.unit
 def test_random_rotate_supports_batch_mode_and_records_input_mode():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
@@ -3230,7 +3278,6 @@ def test_random_rotate_inverse_is_noop_when_not_applied():
     np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image))
 
 
-@pytest.mark.unit
 @pytest.mark.unit
 def test_random_rotate_supports_integer_label_tensors():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
