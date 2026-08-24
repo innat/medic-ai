@@ -113,7 +113,7 @@ def rotate_2d(
         matrix,
         interpolation=interpolation.lower(),
         fill_mode=fill_mode,
-        fill_value=ops.cast(fill_value, "float32"),
+        fill_value=fill_value,
     )
     return ops.cast(rotated, original_dtype)
 
@@ -164,7 +164,7 @@ def rotate_single_axis(
         matrices,
         interpolation=interpolation.lower(),
         fill_mode=fill_mode,
-        fill_value=ops.cast(fill_value, "float32"),
+        fill_value=fill_value,
     )
     rotated = ops.reshape(rotated, (-1, folded, dim0, dim1, channels))
 
