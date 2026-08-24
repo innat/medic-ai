@@ -96,7 +96,7 @@ def _make_case(layout: str, device: str, spatial_size: int, batch_size: int, cha
         raise ValueError(f"Unsupported benchmark layout: {layout!r}")
     with keras.device(device):
         image = ops.convert_to_tensor(
-            np.random.default_rng(7).normal(size=shapes[layout]), dtype="float32"
+            np.random.default_rng(7).normal(size=shape), dtype="float32"
         )
         label = ops.cast(image > 0.0, "int32")
         meta = {}
