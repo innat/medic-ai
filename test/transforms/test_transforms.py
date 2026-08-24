@@ -3543,10 +3543,9 @@ def test_random_cutout_supports_slice_mode_gaussian_mode_and_allow_missing_keys(
 
 
 @pytest.mark.unit
-def test_random_cutout_2d_supports_slice_mode_and_invalid_label():
+def test_random_cutout_2d_supports_slice_mode():
     image = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
-    label = np.zeros((8, 8, 1), dtype=np.float32)
-    label[2:6, 2:6, 0] = 1.0
+    label = as_tensor(np.ones((8, 8, 1), dtype=np.float32))
 
     out = RandomCutOut(
         keys=["image", "label"],
@@ -3554,9 +3553,8 @@ def test_random_cutout_2d_supports_slice_mode_and_invalid_label():
         num_cuts=1,
         prob=1.0,
         cutout_mode="slice",
-        invalid_label=0.0,
         input_layout="HWC",
-    )(TensorBundle({"image": image, "label": as_tensor(label)}))
+    )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (8, 8, 1)
 

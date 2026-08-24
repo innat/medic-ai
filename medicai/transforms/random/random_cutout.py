@@ -27,8 +27,8 @@ class RandomCutOut(RandomTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    The paired label tensor can optionally be used to avoid masking invalid
-    regions.
+    The paired label tensor is validated for layout compatibility and passed
+    through unchanged.
 
     Args:
         keys: Two keys containing the image tensor and label tensor.
@@ -44,7 +44,6 @@ class RandomCutOut(RandomTransform):
             full batch, while cutout masks are generated per sample.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
-        invalid_label: Optional label value marking invalid regions.
         cutout_mode: Either ``"slice"`` for slice-wise masks or ``"volume"``
             for the same mask across all depth slices. For 2D inputs, both
             modes behave identically because there is no depth axis.
@@ -109,7 +108,6 @@ class RandomCutOut(RandomTransform):
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
-        invalid_label=None,
         cutout_mode: str = "volume",
         allow_missing_keys: bool = False,
     ):
@@ -146,7 +144,6 @@ class RandomCutOut(RandomTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
-        self.invalid_label = invalid_label
         self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
 
@@ -188,7 +185,6 @@ class RandomCutOut(RandomTransform):
         return {
             "skip": False,
             "image": image,
-            "label": label,
             "spatial_rank": spatial_rank,
             "should_apply": should_apply,
             "centers": centers,
@@ -206,7 +202,6 @@ class RandomCutOut(RandomTransform):
                 params["should_apply"],
                 lambda: self.apply_batch_cutout(
                     params["image"],
-                    params["label"],
                     params["spatial_rank"],
                     params["centers"],
                     params["noise"],
@@ -218,7 +213,6 @@ class RandomCutOut(RandomTransform):
                 params["should_apply"],
                 lambda: self.apply_sample_cutout(
                     params["image"],
-                    params["label"],
                     params["spatial_rank"],
                     params["centers"],
                     params["noise"],
@@ -247,19 +241,17 @@ class RandomCutOut(RandomTransform):
     def apply_sample_cutout(
         self,
         image,
-        label,
         spatial_rank: int,
         centers,
         noise,
     ):
         """Apply cutout to one sample tensor using sampled mask parameters."""
-        mask = self.generate_cutout_mask(image, label, spatial_rank, centers)
+        mask = self.generate_cutout_mask(image, spatial_rank, centers)
         return self.apply_cutout(image, mask, noise)
 
     def apply_batch_cutout(
         self,
         images,
-        labels,
         spatial_rank: int,
         centers,
         noise,
@@ -267,9 +259,9 @@ class RandomCutOut(RandomTransform):
         """Apply cutout independently to each sample of a batch."""
         return ops.map(
             lambda elems: self.apply_sample_cutout(
-                elems[0], elems[1], spatial_rank, elems[2], elems[3]
+                elems[0], spatial_rank, elems[1], elems[2]
             ),
-            (images, labels, centers, noise),
+            (images, centers, noise),
         )
 
     def apply_cutout(self, image, mask, noise):
@@ -285,23 +277,17 @@ class RandomCutOut(RandomTransform):
             fill = ops.zeros_like(image) + ops.cast(self.fill_value, image.dtype)
         return ops.where(mask_bool, image, fill)
 
-    def generate_cutout_mask(
-        self, volume, label, spatial_rank: int, centers
-    ):
+    def generate_cutout_mask(self, volume, spatial_rank: int, centers):
         """Generate a cutout mask for a 2D or 3D sample tensor."""
         if spatial_rank == 2:
-            if get_tensor_rank(label) == 3:
-                label = label[..., 0]
-            return self._cutout_mask_2d(volume, label, centers)
+            return self._cutout_mask_2d(volume, centers)
 
-        if get_tensor_rank(label) == 4:
-            label = label[..., 0]
         if get_tensor_rank(volume) == 3:
             volume = volume[..., None]
 
         if self.cutout_mode == "slice":
-            return self._cutout_mask_slice_wise(volume, label, centers)
-        return self._cutout_mask_volume_wise(volume, label, centers)
+            return self._cutout_mask_slice_wise(volume, centers)
+        return self._cutout_mask_volume_wise(volume, centers)
 
     def _sample_cutout_centers(self, image, spatial_rank: int):
         """Sample all cutout centers before conditional application."""
@@ -335,7 +321,7 @@ class RandomCutOut(RandomTransform):
         )
         return ops.cast(ops.floor(random_unit * ops.cast(spatial_shape, "float32")), "int32")
 
-    def _cutout_mask_2d(self, image, label, centers):
+    def _cutout_mask_2d(self, image, centers):
         shape = ops.shape(image)
         height, width = shape[0], shape[1]
         mask_h, mask_w = self.mask_size
@@ -343,51 +329,15 @@ class RandomCutOut(RandomTransform):
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        valid_mask = (
-            ops.ones((height, width), dtype="float32")
-            if self.invalid_label is None
-            else ops.cast(label != self.invalid_label, "float32")
-        )
-        cutout_mask = ops.ones_like(valid_mask)
-        y = ops.arange(height)
-        x = ops.arange(width)
-
-        for index in range(self.num_cuts):
-            cy, cx = centers[index, 0], centers[index, 1]
-            y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
-            x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
-            rect = ops.cast(y_mask[:, None] & x_mask[None, :], "float32") * valid_mask
-            cutout_mask *= 1.0 - rect
-
-        return cutout_mask[..., None]
-
-    def _cutout_mask_slice_wise(self, volume, label, centers):
-        shape = ops.shape(volume)
-        depth, height, width = shape[0], shape[1], shape[2]
-        mask_h, mask_w = self.mask_size
-        y_lo = mask_h // 2
-        y_hi = mask_h - y_lo
-        x_lo = mask_w // 2
-        x_hi = mask_w - x_lo
-        valid_mask = (
-            ops.ones((depth, height, width), dtype="float32")
-            if self.invalid_label is None
-            else ops.cast(label != self.invalid_label, "float32")
-        )
-        cutout_mask = ops.ones_like(valid_mask)
         y = ops.arange(height)[None, :]
         x = ops.arange(width)[None, :]
+        cy, cx = centers[:, 0], centers[:, 1]
+        y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
+        x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
+        cut_any = ops.any(y_mask[:, :, None] & x_mask[:, None, :], axis=0)
+        return ops.logical_not(cut_any)[..., None]
 
-        for index in range(self.num_cuts):
-            cy, cx = centers[index, :, 0], centers[index, :, 1]
-            y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
-            x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
-            rect = ops.cast(y_mask[:, :, None] & x_mask[:, None, :], "float32") * valid_mask
-            cutout_mask *= 1.0 - rect
-
-        return cutout_mask[..., None]
-
-    def _cutout_mask_volume_wise(self, volume, label, centers):
+    def _cutout_mask_slice_wise(self, volume, centers):
         shape = ops.shape(volume)
         depth, height, width = shape[0], shape[1], shape[2]
         mask_h, mask_w = self.mask_size
@@ -395,21 +345,27 @@ class RandomCutOut(RandomTransform):
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        valid_mask = (
-            ops.ones((depth, height, width), dtype="float32")
-            if self.invalid_label is None
-            else ops.cast(label != self.invalid_label, "float32")
-        )
-        cutout_mask = ops.ones_like(valid_mask)
-        y = ops.arange(height)
-        x = ops.arange(width)
+        y = ops.arange(height)[None, :]
+        x = ops.arange(width)[None, :]
+        cy, cx = centers[:, :, 0], centers[:, :, 1]
+        y_mask = (y >= cy[:, :, None] - y_lo) & (y < cy[:, :, None] + y_hi)
+        x_mask = (x >= cx[:, :, None] - x_lo) & (x < cx[:, :, None] + x_hi)
+        cut_any = ops.any(y_mask[:, :, :, None] & x_mask[:, :, None, :], axis=0)
+        return ops.logical_not(cut_any)[..., None]
 
-        for index in range(self.num_cuts):
-            cy, cx = centers[index, 0], centers[index, 1]
-            y_mask = (y >= cy - y_lo) & (y < cy + y_hi)
-            x_mask = (x >= cx - x_lo) & (x < cx + x_hi)
-            rect_hw = ops.cast(y_mask[:, None] & x_mask[None, :], "float32")
-            rect = rect_hw[None, ...] * valid_mask
-            cutout_mask *= 1.0 - rect
-
-        return cutout_mask[..., None]
+    def _cutout_mask_volume_wise(self, volume, centers):
+        shape = ops.shape(volume)
+        depth, height, width = shape[0], shape[1], shape[2]
+        mask_h, mask_w = self.mask_size
+        y_lo = mask_h // 2
+        y_hi = mask_h - y_lo
+        x_lo = mask_w // 2
+        x_hi = mask_w - x_lo
+        y = ops.arange(height)[None, :]
+        x = ops.arange(width)[None, :]
+        cy, cx = centers[:, 0], centers[:, 1]
+        y_mask = (y >= cy[:, None] - y_lo) & (y < cy[:, None] + y_hi)
+        x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
+        cut_any_hw = ops.any(y_mask[:, :, None] & x_mask[:, None, :], axis=0)
+        cut_any = ops.broadcast_to(cut_any_hw[None, ...], (depth, height, width))
+        return ops.logical_not(cut_any)[..., None]
