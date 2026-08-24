@@ -1,3 +1,4 @@
+from numbers import Number
 from typing import Any, Sequence, Union
 
 from keras import ops
@@ -145,7 +146,13 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         This kernel is agnostic to sample vs batch layout because it performs
         only elementwise addition with TensorFlow broadcasting.
         """
-        offset_value = ops.cast(self.offset if offset is None else offset, dtype=tensor.dtype)
+        offset_value = self.offset if offset is None else offset
+        # Keep Python numeric scalars as scalars. In the Torch backend, casting
+        # them first can create a CPU tensor which cannot be added to a CUDA
+        # input tensor.
+        if isinstance(offset_value, Number):
+            return tensor + offset_value
+        offset_value = ops.cast(offset_value, dtype=tensor.dtype)
         return tensor + offset_value
 
     def _validate_tensor_layout(self, tensor: Any) -> None:

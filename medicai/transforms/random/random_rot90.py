@@ -11,6 +11,8 @@ from ..base import (
 )
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
+
+
 class RandomRotate90(RandomTransform):
     """Randomly rotate selected tensors by quarter turns.
 
