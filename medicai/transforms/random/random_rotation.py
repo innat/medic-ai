@@ -425,6 +425,8 @@ class RandomRotate(RandomTransform):
         return angles, ops.any(apply_mask > 0)
 
     def _apply_tensor(self, tensor, key, angles):
+        if not angles:
+            return tensor
         batched, added_batch = ensure_batch_axis_for_layout(
             tensor,
             input_layout=self.input_layout,
@@ -517,6 +519,35 @@ class RandomRotate(RandomTransform):
                 if self.allow_missing_keys:
                     continue
                 raise KeyError(f"Key {key!r} not found in input data.")
-            inverse_angles = {axis: -value for axis, value in angles.items()}
-            bundle.data[key] = self._apply_tensor(bundle.data[key], key, inverse_angles)
+            active = [axis for axis in AXES if axis in angles]
+            if len(active) > 1 and self.layout_info.spatial_rank == 3:
+                reference = bundle.data[key]
+                batched, added_batch = ensure_batch_axis_for_layout(
+                    reference,
+                    input_layout=self.input_layout,
+                    allowed_spatial_ranks=(3,),
+                )
+                batch_size = ops.shape(batched)[0]
+                zero = ops.zeros((batch_size,), dtype="float32")
+                forward_matrix = _rotation_matrix_3d(
+                    angles.get("D", zero),
+                    angles.get("H", zero),
+                    angles.get("W", zero),
+                )
+                inverse_matrix = ops.transpose(forward_matrix, (0, 2, 1))
+                restored = rotate_multi_axis(
+                    batched,
+                    zero,
+                    zero,
+                    zero,
+                    spacing=self.spacing,
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
+                    precomputed_matrix=inverse_matrix,
+                )
+                bundle.data[key] = restore_from_batch_axis(restored, added_batch)
+            else:
+                inverse_angles = {axis: -value for axis, value in angles.items()}
+                bundle.data[key] = self._apply_tensor(bundle.data[key], key, inverse_angles)
         return bundle

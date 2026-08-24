@@ -3187,6 +3187,27 @@ def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
 
 
 @pytest.mark.unit
+def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
+    image = as_tensor(np.random.randn(1, 4, 5, 6, 1).astype(np.float32))
+    transform = RandomRotate(
+        keys=["image"],
+        factor={"h": 0.1, "w": 0.1},
+        prob=1.0,
+        input_layout="BDHWC",
+        seed=11,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(
+        TensorBundle({"image": forward["image"]}, forward.meta)
+    )
+
+    assert tuple(ops.shape(restored["image"])) == tuple(ops.shape(image))
+    assert np.isfinite(ops.convert_to_numpy(restored["image"])).all()
+    assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
 def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value():
     transform = RandomRotate(
         keys=["image", "label"],
