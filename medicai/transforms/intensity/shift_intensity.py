@@ -106,9 +106,18 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             return bundle
 
         offset = trace["params"].get("offset", self.offset)
+
+        def inverse_shift(tensor: Any, _: str) -> Any:
+            inverse_offset = (
+                -offset
+                if isinstance(offset, Number)
+                else -ops.cast(offset, tensor.dtype)
+            )
+            return self.shift_tensor(tensor, offset=inverse_offset)
+
         self.apply_to_present_keys(
             bundle,
-            lambda tensor, _: self.shift_tensor(tensor, offset=-ops.cast(offset, tensor.dtype)),
+            inverse_shift,
             keys=trace["params"].get("keys", []),
         )
         return bundle
