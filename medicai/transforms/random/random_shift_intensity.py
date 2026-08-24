@@ -1,3 +1,4 @@
+from numbers import Number
 from typing import Any, Sequence, Tuple, Union
 
 import keras
@@ -194,10 +195,18 @@ class RandomShiftIntensity(RandomTransform):
             offset = sampled_offsets.get(key)
             if offset is None:
                 return tensor
+
+            # TODO: Revisit device placement for sampled Keras random tensors
+            # when this standalone transform is called on Torch CUDA tensors.
+            inverse_offset = (
+                -offset
+                if isinstance(offset, Number)
+                else -ops.cast(offset, tensor.dtype)
+            )
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor, offset=offset: self.shift.shift_tensor(
-                    tensor, offset=-ops.cast(offset, tensor.dtype)
+                lambda tensor=tensor, offset=inverse_offset: self.shift.shift_tensor(
+                    tensor, offset=offset
                 ),
                 lambda tensor=tensor: tensor,
             )
