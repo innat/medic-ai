@@ -3,12 +3,7 @@ from typing import Any, Sequence
 import keras
 from keras import ops
 
-from ..base import (
-    RandomTransform,
-    _apply_if_applied,
-    _normalize_keys,
-    _pop_last_transform_trace,
-)
+from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -18,18 +13,58 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+AXES = ("D", "H", "W")
+FILL_MODES = ("constant", "nearest", "wrap", "mirror", "reflect")
 
-def get_rotation_matrix(angle: Any, h: Any, w: Any) -> Any:
-    """Compute a projective transform matrix for 2D rotation around the image center."""
-    h = ops.cast(h, "float32")
-    w = ops.cast(w, "float32")
 
-    x0 = w / 2.0
-    y0 = h / 2.0
+def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
+    if isinstance(value, (tuple, list)):
+        if len(value) != 2:
+            raise ValueError("Each rotation range must contain exactly two values.")
+        return float(value[0]), float(value[1])
+    return -float(value), float(value)
 
-    cos_a = ops.cos(angle)
-    sin_a = ops.sin(angle)
 
+def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
+    if isinstance(factor, dict):
+        ranges = {}
+        for axis, value in factor.items():
+            axis = str(axis).upper()
+            if axis not in AXES:
+                raise ValueError(f"Rotation axes must be drawn from {AXES}. Received {axis!r}.")
+            ranges[axis] = _as_range(value)
+        return ranges
+    return {"D": _as_range(factor)}
+
+
+def _apply_anisotropy_policy(ranges, spacing, threshold):
+    if spacing is None or max(spacing) / min(spacing) <= threshold:
+        return dict(ranges)
+    coarse_axis = AXES[list(spacing).index(max(spacing))]
+    return {axis: value for axis, value in ranges.items() if axis == coarse_axis}
+
+
+def _resolve_per_key(keys, value, default_fn, name):
+    if value is None:
+        return {key: default_fn(key, index) for index, key in enumerate(keys)}
+    if isinstance(value, dict):
+        missing = [key for key in keys if key not in value]
+        if missing:
+            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
+        return {key: value[key] for key in keys}
+    if isinstance(value, (tuple, list)):
+        if len(value) != len(keys):
+            raise ValueError(f"`{name}` must have one value per key.")
+        return dict(zip(keys, value))
+    return {key: value for key in keys}
+
+
+def _rotation_matrix_2d(angle: Any, height: Any, width: Any) -> Any:
+    height = ops.cast(height - 1, angle.dtype)
+    width = ops.cast(width - 1, angle.dtype)
+    y0, x0 = height / 2.0, width / 2.0
+    cos_a, sin_a = ops.cos(angle), ops.sin(angle)
+    zeros = ops.zeros_like(angle)
     return ops.stack(
         [
             cos_a,
@@ -38,353 +73,402 @@ def get_rotation_matrix(angle: Any, h: Any, w: Any) -> Any:
             -sin_a,
             cos_a,
             y0 - y0 * cos_a + x0 * sin_a,
-            0.0,
-            0.0,
+            zeros,
+            zeros,
         ],
-        axis=0,
+        axis=-1,
     )
 
 
-def rotate_volume(
-    image: Any,
-    angle: Any,
-    interpolation: str = "BILINEAR",
+def rotate_2d(
+    images: Any,
+    angles: Any,
+    interpolation: str = "bilinear",
+    fill_mode: str = "constant",
     fill_value: float = 0.0,
 ) -> Any:
-    """Rotate a 4D ``(N, H, W, C)`` tensor slice-wise over the height-width plane."""
-    original_dtype = image.dtype
-    image = ops.cast(image, "float32")
-    img_shape = ops.shape(image)
-    h, w = img_shape[1], img_shape[2]
-    matrix = get_rotation_matrix(angle, h, w)
-    matrices = ops.tile(ops.expand_dims(matrix, 0), [img_shape[0], 1])
-
+    """Rotate a ``(B, H, W, C)`` batch with Keras' affine image kernel."""
+    original_dtype = images.dtype
+    images = ops.cast(images, "float32")
+    shape = ops.shape(images)
+    matrix = _rotation_matrix_2d(angles, shape[1], shape[2])
     rotated = ops.image.affine_transform(
-        image,
-        matrices,
+        images,
+        matrix,
         interpolation=interpolation.lower(),
-        fill_mode="constant",
+        fill_mode=fill_mode,
         fill_value=ops.cast(fill_value, "float32"),
     )
     return ops.cast(rotated, original_dtype)
 
 
+def _plane_dims(shape, axis):
+    _, depth, height, width, _ = shape
+    if axis == "D":
+        return (height, width), depth
+    if axis == "H":
+        return (depth, width), height
+    if axis == "W":
+        return (depth, height), width
+    raise ValueError(axis)
+
+
+def rotate_single_axis(
+    volumes: Any,
+    angles: Any,
+    axis: str,
+    interpolation: str = "bilinear",
+    fill_mode: str = "constant",
+    fill_value: float = 0.0,
+) -> Any:
+    """Rotate a ``(B, D, H, W, C)`` batch about one 3D axis."""
+    original_dtype = volumes.dtype
+    volumes = ops.cast(volumes, "float32")
+    batch, depth, height, width, channels = volumes.shape
+    if channels is None:
+        raise ValueError("RandomRotate requires a statically known channel dimension.")
+    (dim0, dim1), folded = _plane_dims((batch, depth, height, width, channels), axis)
+
+    if axis == "D":
+        transposed = volumes
+    elif axis == "H":
+        transposed = ops.transpose(volumes, (0, 2, 1, 3, 4))
+    else:
+        transposed = ops.transpose(volumes, (0, 3, 1, 2, 4))
+
+    merged = ops.reshape(transposed, (-1, dim0, dim1, channels))
+    repeated_angles = ops.repeat(angles, folded, axis=0)
+    matrices = _rotation_matrix_2d(repeated_angles, dim0, dim1)
+    rotated = ops.image.affine_transform(
+        merged,
+        matrices,
+        interpolation=interpolation.lower(),
+        fill_mode=fill_mode,
+        fill_value=ops.cast(fill_value, "float32"),
+    )
+    rotated = ops.reshape(rotated, (-1, folded, dim0, dim1, channels))
+
+    if axis == "H":
+        rotated = ops.transpose(rotated, (0, 2, 1, 3, 4))
+    elif axis == "W":
+        rotated = ops.transpose(rotated, (0, 2, 3, 1, 4))
+    return ops.cast(rotated, original_dtype)
+
+
+def _rotation_matrix_3d(angle_d, angle_h, angle_w):
+    one, zero = ops.ones_like(angle_d), ops.zeros_like(angle_d)
+    cd, sd = ops.cos(angle_d), ops.sin(angle_d)
+    ch, sh = ops.cos(angle_h), ops.sin(angle_h)
+    cw, sw = ops.cos(angle_w), ops.sin(angle_w)
+    rotation_d = ops.stack(
+        [
+            ops.stack([one, zero, zero], axis=-1),
+            ops.stack([zero, cd, sd], axis=-1),
+            ops.stack([zero, -sd, cd], axis=-1),
+        ],
+        axis=-2,
+    )
+    rotation_h = ops.stack(
+        [
+            ops.stack([ch, zero, sh], axis=-1),
+            ops.stack([zero, one, zero], axis=-1),
+            ops.stack([-sh, zero, ch], axis=-1),
+        ],
+        axis=-2,
+    )
+    rotation_w = ops.stack(
+        [
+            ops.stack([cw, sw, zero], axis=-1),
+            ops.stack([-sw, cw, zero], axis=-1),
+            ops.stack([zero, zero, one], axis=-1),
+        ],
+        axis=-2,
+    )
+    return rotation_w @ rotation_h @ rotation_d
+
+
+def _spacing_scale_matrix(spacing, dtype):
+    spacing = ops.convert_to_tensor(spacing, dtype=dtype)
+    return ops.outer(1.0 / spacing, spacing)
+
+
+def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_value):
+    depth, height, width, channels = volume.shape
+    if channels is None:
+        raise ValueError("RandomRotate requires a statically known channel dimension.")
+    z, y, x = ops.meshgrid(
+        ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij"
+    )
+    coordinates = ops.stack(
+        [
+            ops.cast(z, inverse_matrix.dtype),
+            ops.cast(y, inverse_matrix.dtype),
+            ops.cast(x, inverse_matrix.dtype),
+        ],
+        axis=0,
+    )
+    center = ops.cast(
+        ops.convert_to_tensor([depth - 1, height - 1, width - 1]), inverse_matrix.dtype
+    ) / 2.0
+    centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
+    input_coordinates = ops.einsum("ij,jdhw->idhw", inverse_matrix, centered)
+    input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
+    channels_out = []
+    order = 1 if interpolation.lower() == "bilinear" else 0
+    for channel in range(channels):
+        channels_out.append(
+            ops.image.map_coordinates(
+                volume[..., channel],
+                input_coordinates,
+                order=order,
+                fill_mode=fill_mode,
+                fill_value=fill_value,
+            )
+        )
+    return ops.stack(channels_out, axis=-1)
+
+
+def rotate_multi_axis(
+    volumes,
+    angle_d,
+    angle_h,
+    angle_w,
+    spacing=None,
+    interpolation="bilinear",
+    fill_mode="constant",
+    fill_value=0.0,
+    precomputed_matrix=None,
+):
+    """Rotate a ``(B, D, H, W, C)`` batch with 3D linear interpolation."""
+    original_dtype = volumes.dtype
+    volumes = ops.cast(volumes, "float32")
+    matrix = (
+        precomputed_matrix
+        if precomputed_matrix is not None
+        else _rotation_matrix_3d(angle_d, angle_h, angle_w)
+    )
+    inverse_matrix = ops.transpose(matrix, (0, 2, 1))
+    if spacing is not None:
+        inverse_matrix = inverse_matrix * _spacing_scale_matrix(
+            spacing, inverse_matrix.dtype
+        )[None, :, :]
+
+    def rotate_one(args):
+        volume, matrix_one = args
+        return _rotate_one_volume(volume, matrix_one, interpolation, fill_mode, fill_value)
+
+    rotated = ops.vectorized_map(rotate_one, (volumes, inverse_matrix))
+    return ops.cast(rotated, original_dtype)
+
+
 class RandomRotate(RandomTransform):
-    """Randomly rotate 3D volumes using slice-wise 2D projection transforms.
+    """Apply random 2D or 3D rotations to channel-last sample or batch tensors.
 
-    ``RandomRotate`` samples an angle and rotates each depth slice in the
-    height-width plane. The first key is treated like an image tensor and uses
-    bilinear interpolation, while the optional second key is treated like a
-    label tensor and uses nearest-neighbor interpolation.
+    The transform accepts ``HWC``, ``DHWC``, ``BHWC``, and ``BDHWC`` layouts.
+    A scalar or two-value ``factor`` rotates around the depth axis (the H-W
+    plane). A dictionary can specify independent ranges for ``D``, ``H``, and
+    ``W`` axes. In 2D, only the ``D`` rotation axis is valid.
 
-    When ``fill_mode="constant"``, the transform exposes an inverse path that
-    rotates by the negated sampled angle using the recorded trace. This is
-    useful for geometric bookkeeping, but for non-zero arbitrary angles it is
-    still a resampling-based, best-effort inverse rather than an exact
-    round-trip reconstruction.
-
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 3D tensors shaped ``(D, H, W, C)`` with ``input_layout="DHWC"``
-    - batch 3D tensors shaped ``(B, D, H, W, C)`` with ``input_layout="BDHWC"``
+    ``prob`` is sampled independently for each batch item. A skipped item gets
+    zero angles and is therefore an exact identity. Selected keys share the
+    same sampled angles so images, masks, and labels remain aligned.
 
     Args:
-        keys: One or two keys. When two keys are provided, they are typically
-            image then label.
-        factor: Maximum absolute sampled rotation angle in radians.
-        prob: Probability of applying the rotation.
-        fill_value: Constant fill value for the primary image key when
-            ``fill_mode="constant"``.
-        fill_mode: Either ``"constant"`` or ``"crop"``.
-        input_layout: Channel-last tensor layout. Supported values are
-            ``"DHWC"`` and ``"BDHWC"``.
-        seed: Optional random seed. Supports ``None``, an integer seed, or a
-            ``keras.random.SeedGenerator``.
-        allow_missing_keys: If ``True``, missing keys are skipped.
-
-    Example:
-        Randomly rotate a 3D image-label pair using a raw Python dictionary:
-
-        .. code-block:: python
-
-            import tensorflow as tf
-            from medicai.transforms import RandomRotate
-
-            transform = RandomRotate(
-                keys=["image", "label"],
-                factor=0.2,
-                prob=0.5,
-                input_layout="DHWC",
-            )
-            image = tf.random.normal((32, 64, 64, 1))
-            label = tf.cast(image > 0, tf.int32)
-            result = transform({"image": image, "label": label})
-            output = result["image"]
-            print(output.shape)
-
-        Randomly rotate a 3D image-label pair stored in a ``TensorBundle``:
-
-        .. code-block:: python
-
-            import tensorflow as tf
-            from medicai.transforms import RandomRotate, TensorBundle
-
-            transform = RandomRotate(
-                keys=["image", "label"],
-                factor=0.2,
-                prob=0.5,
-                input_layout="DHWC",
-            )
-            image = tf.random.normal((32, 64, 64, 1))
-            label = tf.cast(image > 0, tf.int32)
-            bundle = TensorBundle({"image": image, "label": label})
-            result = transform(bundle)
-            output = result["image"]
-            print(output.shape)
+        keys: Tensor keys to rotate together.
+        factor: A non-negative maximum angle, a ``(min, max)`` range, or a
+            mapping from ``D``, ``H``, and ``W`` to either form. Angles are in
+            radians.
+        prob: Per-sample probability of applying the rotation.
+        spacing: Optional 3D voxel spacing used for physical-space correction.
+        anisotropy_threshold: Reserved for the anisotropy policy.
+        interpolation: One mode, one mode per key, or a key-to-mode mapping.
+            Supported modes are ``"bilinear"`` and ``"nearest"``.
+        fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
+            ``"wrap"``, ``"mirror"``, or ``"reflect"``. LR-crop mode is not
+            supported.
+        fill_value: One value, one value per key, or a key-to-value mapping.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        seed: Optional integer or ``keras.random.SeedGenerator``.
+        allow_missing_keys: If ``True``, missing requested keys are skipped.
     """
 
     def __init__(
         self,
         keys: Sequence[str],
-        factor: float = 0.1,
+        factor: float | Sequence[float] | dict[str, Any] = 0.1,
         prob: float = 0.8,
-        fill_value: float = 0.0,
-        fill_mode: str = "constant",
+        spacing: Sequence[float] | None = None,
+        anisotropy_threshold: float = 3.0,
+        interpolation=None,
+        fill_mode="constant",
+        fill_value=None,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
-        normalized_keys = _normalize_keys(keys)
-        if len(normalized_keys) not in (1, 2):
-            raise ValueError("`keys` must have length 1 or 2.")
-        if factor < 0:
-            raise ValueError(f"`factor` must be non-negative. Received {factor}.")
-        if fill_mode not in {"crop", "constant"}:
-            raise ValueError("fill_mode must be either 'crop' or 'constant'.")
-
-        self.keys = normalized_keys
-        self.factor = factor
-        self.fill_value = fill_value
-        self.fill_mode = fill_mode
+        self.keys = _normalize_keys(keys)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
-            allowed_layouts=("DHWC", "BDHWC"),
+            allowed_layouts=("HWC", "DHWC", "BHWC", "BDHWC"),
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
-        self.batch_input_layout = "BDHWC"
         self.allow_missing_keys = allow_missing_keys
+        self.ranges = _resolve_axis_ranges(factor)
+        if any(low > high for low, high in self.ranges.values()):
+            raise ValueError("Each rotation range must have lower bound <= upper bound.")
+        if self.layout_info.spatial_rank == 2 and set(self.ranges) != {"D"}:
+            raise ValueError("2D RandomRotate supports only the `D` rotation axis.")
+        if spacing is not None:
+            if self.layout_info.spatial_rank != 3 or len(spacing) != 3:
+                raise ValueError(
+                    "`spacing` is supported only for 3D layouts and must have length 3."
+                )
+            spacing = tuple(float(value) for value in spacing)
+            if any(value <= 0 for value in spacing):
+                raise ValueError("`spacing` values must be positive.")
+        self.spacing = spacing
+        self.anisotropy_threshold = float(anisotropy_threshold)
+        self.ranges = _apply_anisotropy_policy(
+            self.ranges, self.spacing, self.anisotropy_threshold
+        )
+        self.interpolation = _resolve_per_key(
+            self.keys,
+            interpolation,
+            lambda _, index: "bilinear" if index == 0 else "nearest",
+            "interpolation",
+        )
+        self.fill_mode = _resolve_per_key(
+            self.keys, fill_mode, lambda *_: "constant", "fill_mode"
+        )
+        self.fill_value = _resolve_per_key(
+            self.keys, fill_value, lambda *_: 0.0, "fill_value"
+        )
+        for key in self.keys:
+            mode = str(self.interpolation[key]).lower()
+            if mode not in ("bilinear", "nearest"):
+                raise ValueError(f"Unsupported interpolation for key {key!r}.")
+            fill_mode_key = str(self.fill_mode[key]).lower()
+            if fill_mode_key not in FILL_MODES:
+                raise ValueError(
+                    f"Unsupported fill_mode {fill_mode_key!r}; use one of {FILL_MODES}."
+                )
+            self.interpolation[key] = mode
+            self.fill_mode[key] = fill_mode_key
 
     @property
     def invertible(self) -> bool:
-        return self.fill_mode == "constant"
+        return True
 
-    def apply(self, bundle: TensorBundle) -> TensorBundle:
-        params = self.get_random_params(bundle)
-        if params["skip"]:
-            return bundle
-        return self.apply_with_params(bundle, params)
+    def _sample_angles(self, batch_size, dtype="float32"):
+        apply_mask = ops.cast(
+            self.random_uniform(
+                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
+            )
+            < self.prob,
+            dtype,
+        )
+        angles = {}
+        for axis, (low, high) in self.ranges.items():
+            sampled = self.random_uniform(
+                shape=(batch_size,), minval=low, maxval=high, dtype=dtype
+            )
+            angles[axis] = sampled * apply_mask
+        return angles, ops.any(apply_mask > 0)
 
-    def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample one rotation configuration shared across selected keys."""
-        present_keys = []
-        for key in self.keys:
-            if key in bundle.data:
-                present_keys.append(key)
-            elif not self.allow_missing_keys:
-                raise KeyError(f"Key '{key}' not found in input data.")
-
-        if not present_keys:
-            return {"skip": True}
-
-        sample_tensor = bundle.data[present_keys[0]]
+    def _apply_tensor(self, tensor, key, angles):
+        batched, added_batch = ensure_batch_axis_for_layout(
+            tensor,
+            input_layout=self.input_layout,
+            allowed_spatial_ranks=(2, 3),
+        )
         validate_tensor_matches_layout(
-            sample_tensor,
-            self.input_layout,
+            batched,
+            "BHWC" if self.layout_info.spatial_rank == 2 else "BDHWC",
             transform_name=type(self).__name__,
         )
-
-        should_rotate = self.sample_should_apply()
-        angle = self.random_uniform(
-            shape=(),
-            minval=-self.factor,
-            maxval=self.factor,
-            dtype="float32",
-        )
-        return {
-            "skip": False,
-            "keys": list(present_keys),
-            "should_apply": should_rotate,
-            "angle": angle,
-            "factor": self.factor,
-            "fill_mode": self.fill_mode,
-            "input_layout": self.input_layout,
-        }
-
-    def apply_with_params(
-        self,
-        bundle: TensorBundle,
-        params: dict[str, object],
-    ) -> TensorBundle:
-        """Apply the sampled rotation configuration to all selected keys."""
-        for key in params["keys"]:
-            tensor = bundle.data[key]
-            bundle.data[key] = _apply_if_applied(
-                params["should_apply"],
-                lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, params["angle"]),
-                lambda tensor=tensor: tensor,
+        batch_size = ops.shape(batched)[0]
+        angle_d = angles.get("D")
+        if angle_d is None:
+            angle_d = ops.zeros((batch_size,), dtype="float32")
+        zero = ops.zeros_like(angle_d)
+        if self.layout_info.spatial_rank == 2:
+            rotated = rotate_2d(
+                batched,
+                angle_d,
+                interpolation=self.interpolation[key],
+                fill_mode=self.fill_mode[key],
+                fill_value=self.fill_value[key],
             )
+        else:
+            active = [axis for axis in AXES if axis in angles]
+            if len(active) == 1:
+                rotated = rotate_single_axis(
+                    batched,
+                    angles[active[0]],
+                    active[0],
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
+                )
+            else:
+                rotated = rotate_multi_axis(
+                    batched,
+                    angle_d,
+                    angles.get("H", zero),
+                    angles.get("W", zero),
+                    spacing=self.spacing,
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
+                )
+        return restore_from_batch_axis(rotated, added_batch)
 
+    def apply(self, bundle: TensorBundle) -> TensorBundle:
+        present = []
+        for key in self.keys:
+            if key in bundle.data:
+                present.append(key)
+            elif not self.allow_missing_keys:
+                raise KeyError(f"Key {key!r} not found in input data.")
+        if not present:
+            return bundle
+
+        reference = bundle.data[present[0]]
+        validate_tensor_matches_layout(
+            reference, self.input_layout, transform_name=type(self).__name__
+        )
+        batch_size = ops.shape(reference)[0] if self.layout_info.batched else 1
+        angles, applied = self._sample_angles(batch_size, dtype="float32")
+        for key in present:
+            bundle.data[key] = self._apply_tensor(bundle.data[key], key, angles)
         self.record_random_transform(
             bundle,
-            params=self.build_trace_params(params),
-            applied=params["should_apply"],
+            params={
+                "keys": present,
+                "angles": angles,
+                "input_layout": self.input_layout,
+                "interpolation": dict(self.interpolation),
+                "fill_mode": dict(self.fill_mode),
+                "fill_value": dict(self.fill_value),
+            },
+            applied=applied,
             kernel="rotate_volume",
         )
         return bundle
 
-    def build_trace_params(self, params: dict[str, object]) -> dict[str, object]:
-        """Build random trace metadata for the current rotation."""
-        return {
-            "keys": params["keys"],
-            "factor": params["factor"],
-            "angle": params["angle"],
-            "fill_mode": params["fill_mode"],
-            "input_layout": params["input_layout"],
-        }
-
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
-        if not self.invertible:
-            return bundle
-
-        trace = self._get_last_random_rotate_trace(bundle)
+        trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle
-
-        applied = trace.get("applied", False)
-        angle = trace["params"].get("angle")
-
-        def apply_inverse_rotate(tensor, key: str):
-            return _apply_if_applied(
-                applied,
-                lambda tensor=tensor, key=key: self.rotate_tensor(tensor, key, -angle),
-                lambda tensor=tensor: tensor,
-            )
-
+        angles = trace["params"].get("angles", {})
         for key in trace["params"].get("keys", []):
             if key not in bundle.data:
                 if self.allow_missing_keys:
                     continue
-                raise KeyError(f"Key '{key}' not found in input data.")
-            tensor = bundle.data[key]
-            bundle.data[key] = apply_inverse_rotate(tensor, key)
+                raise KeyError(f"Key {key!r} not found in input data.")
+            inverse_angles = {axis: -value for axis, value in angles.items()}
+            bundle.data[key] = self._apply_tensor(bundle.data[key], key, inverse_angles)
         return bundle
-
-    def rotate_tensor(self, tensor: Any, key: str, angle) -> Any:
-        """Rotate one tensor and apply optional center crop cleanup."""
-        batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
-            tensor,
-            input_layout=self.input_layout,
-            allowed_spatial_ranks=(3,),
-        )
-        rotated = self.rotate_batch_tensor(batched_tensor, key, angle)
-        return restore_from_batch_axis(rotated, added_batch_axis)
-
-    def rotate_batch_tensor(self, tensor: Any, key: str, angle) -> Any:
-        """Rotate one batch-layout tensor and apply optional center crop cleanup."""
-        interpolation = "BILINEAR" if key == self.keys[0] else "NEAREST"
-        fill_value = self.fill_value if key == self.keys[0] else 0.0
-
-        layout = validate_tensor_matches_layout(
-            tensor,
-            input_layout=self.batch_input_layout,
-            transform_name=type(self).__name__,
-        )
-        del layout
-
-        shape = ops.shape(tensor)
-        batch_size = shape[0]
-        depth = shape[1]
-        height = shape[2]
-        width = shape[3]
-        channels = shape[4]
-
-        flat_tensor = ops.reshape(tensor, [batch_size * depth, height, width, channels])
-        flat_rotated = rotate_volume(
-            flat_tensor,
-            angle,
-            interpolation=interpolation,
-            fill_value=fill_value,
-        )
-        rotated = ops.reshape(flat_rotated, [batch_size, depth, height, width, channels])
-
-        if self.fill_mode == "crop":
-            rotated = self._crop_after_rotation(rotated, angle, interpolation)
-        return rotated
-
-    def _crop_after_rotation(
-        self,
-        tensor: Any,
-        angle: Any,
-        interpolation: str,
-    ) -> Any:
-        """Apply a Largest Rectangle Rotation style center crop after rotation."""
-        shape = ops.shape(tensor)
-        batch_size = shape[0]
-        depth = shape[1]
-        height = shape[2]
-        width = shape[3]
-        channels = shape[4]
-        lrr_w, lrr_h = self._get_lrr_size(width, height, angle)
-        crop_fraction = (
-            ops.minimum(
-                lrr_h / ops.cast(height, "float32"),
-                lrr_w / ops.cast(width, "float32"),
-            )
-            * 0.98
-        )
-        crop_fraction = ops.clip(crop_fraction, 1e-6, 1.0 - 1e-6)
-        method = "bilinear" if interpolation == "BILINEAR" else "nearest"
-
-        flat_tensor = ops.reshape(tensor, [batch_size * depth, height, width, channels])
-        crop_height = ops.cast(ops.floor(ops.cast(height, "float32") * crop_fraction), "int32")
-        crop_width = ops.cast(ops.floor(ops.cast(width, "float32") * crop_fraction), "int32")
-        top = ops.floor_divide(height - crop_height, 2)
-        left = ops.floor_divide(width - crop_width, 2)
-        cropped = ops.slice(
-            flat_tensor,
-            start_indices=[0, top, left, 0],
-            shape=[batch_size * depth, crop_height, crop_width, channels],
-        )
-        resized = ops.image.resize(
-            cropped,
-            [height, width],
-            interpolation=method,
-        )
-        return ops.reshape(resized, [batch_size, depth, height, width, channels])
-
-    def _get_lrr_size(
-        self, width: Any, height: Any, angle: Any
-    ) -> tuple[Any, Any]:
-        """Compute Largest Rectangle Rotation size."""
-        angle = ops.abs(angle)
-        width = ops.cast(width, "float32")
-        height = ops.cast(height, "float32")
-        sin_a, cos_a = ops.sin(angle), ops.cos(angle)
-
-        def width_limited():
-            lrr_w = width / (sin_a + (width / height) * cos_a)
-            lrr_h = (height / width) * lrr_w
-            return lrr_w, lrr_h
-
-        def height_limited():
-            lrr_h = height / (sin_a + (height / width) * cos_a)
-            lrr_w = (width / height) * lrr_h
-            return lrr_w, lrr_h
-
-        return ops.cond(width <= height, width_limited, height_limited)
-
-    def _get_last_random_rotate_trace(self, bundle: TensorBundle):
-        return _pop_last_transform_trace(bundle, type(self).__name__)
