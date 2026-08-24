@@ -1,6 +1,7 @@
 from numbers import Number
 from typing import Any, Sequence, Union
 
+import keras
 from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
@@ -161,6 +162,17 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         # input tensor.
         if isinstance(offset_value, Number):
             return tensor + offset_value
+
+        if keras.config.backend() == "torch":
+            # Standalone transforms do not inherit a Keras layer device scope.
+            # Keras random tensors can therefore be created on CPU while the
+            # input is on CUDA; align only this backend-specific tensor here.
+            import torch
+
+            if isinstance(offset_value, torch.Tensor):
+                offset_value = offset_value.to(device=tensor.device, dtype=tensor.dtype)
+                return tensor + offset_value
+
         offset_value = ops.cast(offset_value, dtype=tensor.dtype)
         return tensor + offset_value
 

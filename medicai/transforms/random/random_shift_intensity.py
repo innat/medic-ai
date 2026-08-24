@@ -196,8 +196,6 @@ class RandomShiftIntensity(RandomTransform):
             if offset is None:
                 return tensor
 
-            # TODO: Revisit device placement for sampled Keras random tensors
-            # when this standalone transform is called on Torch CUDA tensors.
             inverse_offset = (
                 -offset
                 if isinstance(offset, Number)
