@@ -450,6 +450,38 @@ def test_random_choice_records_eager_trace_metadata():
 
 
 @pytest.mark.unit
+def test_random_choice_replays_selection_with_same_integer_seed():
+    def draw_sequence():
+        choice = RandomChoice(
+            transforms=[
+                ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
+                Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+                ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
+            ],
+            num_choices=(1, 2),
+            prob=1.0,
+            seed=101,
+        )
+        image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+        bundle = TensorBundle({"image": image})
+        selections = []
+        outputs = []
+        for _ in range(6):
+            result = choice(bundle)
+            trace = result.get_applied_transforms()[-1]
+            selections.append(tuple(trace["params"]["selected_indices"]))
+            outputs.append(as_numpy(result["image"]))
+        return selections, outputs
+
+    first_selections, first_outputs = draw_sequence()
+    second_selections, second_outputs = draw_sequence()
+
+    assert first_selections == second_selections
+    for first, second in zip(first_outputs, second_outputs):
+        np.testing.assert_allclose(first, second)
+
+
+@pytest.mark.unit
 def test_random_choice_inverse_replays_selected_invertible_transforms():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
     choice = RandomChoice(
