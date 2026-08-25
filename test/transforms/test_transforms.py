@@ -2947,19 +2947,29 @@ def test_random_rotate90_preserves_shape():
 
 
 @pytest.mark.unit
+def test_random_rotate90_rejects_rectangular_rotation_plane():
+    image = as_tensor(np.zeros((2, 3, 1), dtype=np.float32))
+
+    with pytest.raises(ValueError, match="equal sizes for the selected rotation axes"):
+        RandomRotate90(keys=["image"], prob=1.0, input_layout="HWC")(
+            TensorBundle({"image": image})
+        )
+
+
+@pytest.mark.unit
 def test_random_rotate90_supports_batch_mode_and_records_input_mode():
-    image = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(18, dtype=np.float32).reshape(2, 3, 3, 1))
     out = RandomRotate90(keys=["image"], prob=1.0, max_k=3, input_layout="BHWC")(
         TensorBundle({"image": image})
     )
 
-    assert tuple(ops.shape(out["image"])) in {(2, 4, 3, 1), (2, 3, 4, 1)}
+    assert tuple(ops.shape(out["image"])) == (2, 3, 3, 1)
     assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
 def test_random_flip_and_random_rotate90_accept_input_layout():
-    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
 
     flip_out = RandomFlip(
         keys=["image"],
@@ -2977,15 +2987,15 @@ def test_random_flip_and_random_rotate90_accept_input_layout():
         seed=5,
     )(TensorBundle({"image": image}))
 
-    assert tuple(ops.shape(flip_out["image"])) == (2, 3, 4, 1)
-    assert tuple(ops.shape(rotate_out["image"])) in {(2, 4, 3, 1), (2, 3, 4, 1)}
+    assert tuple(ops.shape(flip_out["image"])) == (2, 3, 3, 1)
+    assert tuple(ops.shape(rotate_out["image"])) == (2, 3, 3, 1)
     assert flip_out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
     assert rotate_out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
 
 
 @pytest.mark.unit
 def test_random_rotate90_replays_with_same_integer_seed():
-    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
 
     first = RandomRotate90(keys=["image"], prob=1.0, max_k=3, seed=5, input_layout="HWC")(
         TensorBundle({"image": image})
@@ -3002,7 +3012,7 @@ def test_random_rotate90_replays_with_same_integer_seed():
 
 @pytest.mark.unit
 def test_random_rotate90_shares_sampled_rotation_across_batched_input():
-    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
     transform = RandomRotate90(
         keys=["image"],
         prob=1.0,
@@ -3022,7 +3032,7 @@ def test_random_rotate90_shares_sampled_rotation_across_batched_input():
 
 @pytest.mark.unit
 def test_random_rotate90_inverse_restores_batched_input():
-    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
     transform = RandomRotate90(
         keys=["image"],
         prob=1.0,
@@ -3056,7 +3066,7 @@ def test_random_rotate90_inverse_restores_when_applied():
 
 @pytest.mark.unit
 def test_random_rotate90_inverse_is_noop_when_not_applied():
-    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))
     transform = RandomRotate90(keys=["image"], prob=0.0, max_k=3, input_layout="HWC")
 
     forward = transform(TensorBundle({"image": image}))
@@ -3080,7 +3090,7 @@ def test_random_rotate90_inverse_without_trace_is_noop():
 
 @pytest.mark.unit
 def test_random_rotate90_prob_zero_records_no_application():
-    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
+    image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))
     out = RandomRotate90(keys=["image"], prob=0.0, max_k=3, input_layout="HWC")(
         TensorBundle({"image": image})
     )

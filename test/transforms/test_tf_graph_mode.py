@@ -374,7 +374,7 @@ def test_spatial_rank_agnostic_transforms_run_under_tf_function():
     cropped, flipped, rotated, resized, foregrounded = apply_transforms(image)
 
     assert tuple(ops.shape(cropped)) == (3, 4, 1)
-    assert tuple(ops.shape(flipped)) == (5, 6, 1)
+    assert tuple(ops.shape(flipped)) == (5, 5, 1)
     assert tuple(ops.shape(rotated)) == (6, 5, 1)
     assert tuple(ops.shape(resized)) == (4, 5, 1)
     assert tuple(ops.shape(foregrounded)) == (3, 4, 1)
@@ -454,7 +454,7 @@ def test_random_flip_and_rotate90_support_batch_mode_under_tf_function():
         input_layout="BHWC",
     )
 
-    image = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(18, dtype=np.float32).reshape(2, 3, 3, 1))
 
     @tf.function
     def apply_transforms(x):
@@ -792,7 +792,7 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
     )
     random_shift = RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="HWC")
 
-    image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
+    image = as_tensor(np.random.randn(5, 5, 1).astype(np.float32))
 
     @tf.function
     def apply_transforms(x):
@@ -805,9 +805,9 @@ def test_random_rank_agnostic_transforms_run_under_tf_function():
     flipped, rotated, cropped, shifted = apply_transforms(image)
 
     assert tuple(ops.shape(flipped)) == (5, 6, 1)
-    assert tuple(ops.shape(rotated)) == (6, 5, 1) or tuple(ops.shape(rotated)) == (5, 6, 1)
+    assert tuple(ops.shape(rotated)) == (5, 5, 1)
     assert tuple(ops.shape(cropped)) == (3, 4, 1)
-    assert tuple(ops.shape(shifted)) == (5, 6, 1)
+    assert tuple(ops.shape(shifted)) == (5, 5, 1)
 
 
 @pytest.mark.unit
@@ -820,7 +820,7 @@ def test_random_flip_and_rotate90_inverse_support_batch_mode_under_tf_function()
         spatial_axis=(1, 2),
         input_layout="BHWC",
     )
-    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
 
     @tf.function
     def apply_and_inverse(x):
@@ -858,7 +858,7 @@ def test_compose_random_flip_and_rotate90_inverse_supports_batch_mode_under_tf_f
             ),
         ]
     )
-    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
 
     @tf.function
     def apply_and_inverse(x):

@@ -30,6 +30,12 @@ class RandomRotate90(RandomTransform):
     In batch mode, one quarter-turn count ``k`` is sampled per transform call
     and that same rotation is applied across the whole batch.
 
+    For graph execution, the two selected rotation axes must have equal
+    lengths. A 90- or 270-degree rotation swaps those axes, and graph control
+    flow requires the applied and skipped branches to return the same shape.
+    For example, axial rotation of ``(D, H, W, C)`` requires ``H == W``;
+    ``D == H == W`` is not required unless all three planes are used.
+
     Args:
         keys: Keys of the tensors to rotate.
         prob: Probability of applying the rotation.
@@ -161,7 +167,9 @@ class RandomRotate90(RandomTransform):
             inverse_k = ops.mod(-ops.cast(k, "int32"), 4)
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor: self.rotate.rotate_tensor(tensor, k=inverse_k),
+                lambda tensor=tensor: self._rotate_with_dynamic_k(
+                    tensor, inverse_k, trace["params"].get("spatial_axis")
+                ),
                 lambda tensor=tensor: tensor,
             )
 
@@ -178,15 +186,65 @@ class RandomRotate90(RandomTransform):
     ):
         """Apply the sampled rotation conditionally to one tensor."""
         del key
+        self._validate_square_rotation_plane(tensor, params["spatial_axis"])
         return _apply_if_applied(
             params["should_apply"],
-            lambda tensor=tensor: self.rotate.rotate_tensor(
+            lambda tensor=tensor: self._rotate_with_dynamic_k(
                 tensor,
-                k=params["k"],
-                spatial_axis=params["spatial_axis"],
+                params["k"],
+                params["spatial_axis"],
             ),
             lambda tensor=tensor: tensor,
         )
+
+    def _rotate_with_dynamic_k(
+        self,
+        tensor,
+        k,
+        spatial_axis: Sequence[int] | None,
+    ):
+        """Dispatch dynamic quarter turns through shape-compatible branches."""
+        effective_k = ops.mod(ops.cast(k, "int32"), 4)
+
+        def rotate(k_value: int):
+            return self.rotate.rotate_tensor(
+                tensor,
+                k=k_value,
+                spatial_axis=spatial_axis,
+            )
+
+        # Keep k as a Python integer inside each leaf. This avoids passing a
+        # symbolic value to the rotation kernel while remaining graph-safe.
+        return ops.cond(
+            ops.greater(effective_k, 1),
+            lambda: ops.cond(
+                ops.equal(effective_k, 3),
+                lambda: rotate(3),
+                lambda: rotate(2),
+            ),
+            lambda: ops.cond(
+                ops.equal(effective_k, 1),
+                lambda: rotate(1),
+                lambda: rotate(0),
+            ),
+        )
+
+    def _validate_square_rotation_plane(
+        self,
+        tensor,
+        spatial_axis: Sequence[int] | None,
+    ) -> None:
+        """Require equal static lengths for the selected graph rotation plane."""
+        axes = self.rotate._resolve_axes(tensor, spatial_axis=spatial_axis)
+        shape = tensor.shape
+        first_size, second_size = shape[axes[0]], shape[axes[1]]
+        if first_size is not None and second_size is not None and first_size != second_size:
+            raise ValueError(
+                "RandomRotate90 requires equal sizes for the selected rotation "
+                f"axes in graph mode, but got {first_size} and {second_size} "
+                f"for axes {axes}. Use square patches or deterministic Rotate90 "
+                "for rectangular inputs."
+            )
 
     def build_trace_params(
         self,
