@@ -18,7 +18,7 @@ from medicai.transforms import (
     TensorBundle,
     Transform,
 )
-from medicai.transforms.base import _apply_if_applied, _is_tensorflow_eager_execution, ensure_tensor_bundle
+from medicai.transforms.base import _apply_if_applied, ensure_tensor_bundle
 from medicai.transforms.utils import (
     LayoutInfo,
     ensure_batch_axis_for_layout,
@@ -235,11 +235,6 @@ def test_apply_if_applied_handles_tensor_flags_under_tf_function():
 
     assert int(ops.convert_to_numpy(apply(tf.constant(True)))) == 1
     assert int(ops.convert_to_numpy(apply(tf.constant(False)))) == 0
-
-
-@pytest.mark.unit
-def test_is_tensorflow_eager_execution_reports_eager_state():
-    assert _is_tensorflow_eager_execution() is True
 
 
 @pytest.mark.unit

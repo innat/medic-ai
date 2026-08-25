@@ -177,20 +177,6 @@ def _require_static_value(value: Any, name: str) -> Any:
     return value
 
 
-def _is_tensorflow_eager_execution() -> bool:
-    """Return whether the TensorFlow backend is currently executing eagerly.
-
-    RandomChoice still has a TensorFlow-specific eager/graph compatibility path.
-    Keep the optional import local so importing transforms under another Keras
-    backend does not require TensorFlow to be installed.
-    """
-    if keras.config.backend() != "tensorflow":
-        return True
-    import tensorflow as tf
-
-    return tf.executing_eagerly()
-
-
 def _normalize_random_dtype(dtype: Any) -> str:
     """Normalize dtype values for Keras random ops across backends.
 
@@ -555,11 +541,11 @@ class RandomChoice(RandomTransform):
     transform to be eligible multiple times, they can include multiple
     instances of that transform in ``transforms``.
 
-    For eager execution, ``RandomChoice`` supports the full API including
-    multi-transform sampling and inverse bookkeeping. Under symbolic graph
-    execution such as ``tf.data`` pipelines, ``RandomChoice`` uses a
-    graph-safe forward path that statically unrolls up to ``max_choices``
-    sequential dispatch steps with ``tf.switch_case``.
+    When its random values are concrete, ``RandomChoice`` supports the full
+    API including multi-transform sampling and inverse bookkeeping. Under
+    symbolic execution, it uses a backend-neutral graph-safe forward path that
+    statically unrolls up to ``max_choices`` sequential dispatch steps with
+    ``ops.cond`` and ``ops.switch``.
 
     This graph-safe path focuses on forward tensor transformation and assumes
     that every candidate transform preserves the same key structure, shape, and
@@ -573,10 +559,9 @@ class RandomChoice(RandomTransform):
         1. Graph-mode support is intended for forward execution only. Bundles
            produced through the graph-safe path do not preserve the eager-style
            wrapper trace bookkeeping needed for reliable ``inverse()`` support.
-        2. Graph-mode transform pools should contain shape-preserving
-           transforms. If candidate transforms return different key
-           structures, dtypes, ranks, or static shapes, TensorFlow branch
-           dispatch may fail under ``tf.function`` / ``tf.data`` tracing.
+        2. Symbolic transform pools should contain shape-preserving transforms.
+           If candidate transforms return different key structures, dtypes,
+           ranks, or static shapes, backend graph dispatch may fail.
 
     When to use this:
         Use ``RandomChoice`` when an augmentation pipeline should sample from a
@@ -686,16 +671,24 @@ class RandomChoice(RandomTransform):
         return any(getattr(transform, "invertible", False) for transform in self.transforms)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        if not _is_tensorflow_eager_execution():
-            return self._apply_graph_choice(bundle)
+        should_apply = self.sample_should_apply()
+        try:
+            _trace_applied_to_bool(should_apply)
+        except ValueError:
+            return self._apply_graph_choice(bundle, should_apply=should_apply)
 
-        params = self.get_random_params(bundle)
+        params = self.get_random_params(bundle, should_apply=should_apply)
         return self.apply_with_params(bundle, params)
 
-    def get_random_params(self, bundle: TensorBundle) -> dict[str, Any]:
+    def get_random_params(
+        self,
+        bundle: TensorBundle,
+        should_apply: Any | None = None,
+    ) -> dict[str, Any]:
         """Sample eager-mode child-transform selection parameters."""
         del bundle
-        should_apply = self.sample_should_apply()
+        if should_apply is None:
+            should_apply = self.sample_should_apply()
         should_apply_bool = _trace_applied_to_bool(should_apply)
 
         selected_indices: list[int] = []
@@ -739,12 +732,17 @@ class RandomChoice(RandomTransform):
             "num_choices": params["num_choices"],
         }
 
-    def _apply_graph_choice(self, bundle: TensorBundle) -> TensorBundle:
+    def _apply_graph_choice(
+        self,
+        bundle: TensorBundle,
+        should_apply: Any | None = None,
+    ) -> TensorBundle:
         data_keys = tuple(bundle.data.keys())
         if not data_keys:
             return bundle
 
-        should_apply = self.sample_should_apply()
+        if should_apply is None:
+            should_apply = self.sample_should_apply()
         permutation = self._sample_permutation_graph()
         num_to_apply = self._sample_num_choices()
 
