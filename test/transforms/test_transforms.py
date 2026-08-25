@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 from keras import ops
 
 from medicai.transforms import (
@@ -51,7 +50,7 @@ def test_resize_validates_rank_and_interpolation(interpolation, target_shape, er
 
 
 @pytest.mark.unit
-def test_resize_accepts_mapping_mode_and_allow_missing_keys():
+def test_resize_accepts_mapping_interpolation_and_allow_missing_keys():
     image = as_tensor(np.random.randn(5, 6, 1).astype(np.float32))
     transform = Resize(
         keys=["image", "label"],
@@ -130,7 +129,7 @@ def test_resize_transform_for_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_resize_supports_batch_mode_for_3d_and_records_input_mode():
+def test_resize_supports_batch_layout_for_3d_and_records_input_layout():
     image = as_tensor(np.random.randn(2, 8, 10, 12, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 8, 10, 12, 1)).astype(np.float32))
 
@@ -167,8 +166,8 @@ def test_resize_accepts_input_layout():
 def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample_2d = as_tensor(np.random.randn(6, 8, 1).astype(np.float32))
     sample_3d = as_tensor(np.random.randn(5, 6, 7, 1).astype(np.float32))
-    batch_2d = as_tensor(np.random.randn(2, 6, 8, 1).astype(np.float32))
-    batch_3d = as_tensor(np.random.randn(2, 5, 6, 7, 1).astype(np.float32))
+    batch_2d = ops.stack([sample_2d, sample_2d * 2.0], axis=0)
+    batch_3d = ops.stack([sample_3d, sample_3d * 2.0], axis=0)
 
     resize_2d = Resize(
         keys=["image"],
@@ -184,16 +183,16 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     )
 
     sample_2d_out = ops.convert_to_numpy(
-            resize_2d.resize_batch_tensor(
-                sample_2d[None, ...], "image", ops.convert_to_tensor([3, 4], dtype="int32")
-            )
+        resize_2d.resize_batch_tensor(
+            sample_2d[None, ...], "image", ops.convert_to_tensor([3, 4], dtype="int32")
+        )
     )[0]
     sample_3d_out = ops.convert_to_numpy(
-            resize_3d.resize_batch_tensor(
-                sample_3d[None, ...],
-                "image",
-                ops.convert_to_tensor([3, 4, 5], dtype="int32"),
-            )
+        resize_3d.resize_batch_tensor(
+            sample_3d[None, ...],
+            "image",
+            ops.convert_to_tensor([3, 4, 5], dtype="int32"),
+        )
     )[0]
     batch_2d_out = ops.convert_to_numpy(
         resize_2d.resize_batch_tensor(
@@ -210,6 +209,10 @@ def test_resize_uses_same_batch_kernel_for_sample_and_batch_modes():
     assert sample_3d_out.shape == (3, 4, 5, 1)
     assert batch_2d_out.shape == (2, 3, 4, 1)
     assert batch_3d_out.shape == (2, 3, 4, 5, 1)
+    np.testing.assert_allclose(batch_2d_out[0], sample_2d_out)
+    np.testing.assert_allclose(batch_2d_out[1], sample_2d_out * 2.0)
+    np.testing.assert_allclose(batch_3d_out[0], sample_3d_out)
+    np.testing.assert_allclose(batch_3d_out[1], sample_3d_out * 2.0)
 
 
 @pytest.mark.unit
@@ -280,7 +283,7 @@ def test_spacing_rejects_2d_inputs_with_clear_error():
 
 
 @pytest.mark.unit
-def test_sample_only_spatial_transforms_reject_batch_layouts_or_input_mode():
+def test_sample_only_spatial_transforms_reject_batch_layouts():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         CropForeground(keys=["image"], input_layout="BHWC")
 
@@ -328,7 +331,7 @@ def test_spacing_uses_default_spacing_when_affine_missing():
 
 
 @pytest.mark.unit
-def test_spacing_validates_pixdim_and_mode():
+def test_spacing_validates_pixdim_and_interpolation():
     with pytest.raises(ValueError, match="`pixdim` must be 3D"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0))
 
@@ -1995,7 +1998,12 @@ def test_crop_foreground_supports_2d_and_3d_channel_last_tensors():
 
 @pytest.mark.unit
 def test_crop_foreground_accepts_input_layout_and_rejects_batch_layout():
-    image = tf.pad(tf.ones((4, 4, 1)), paddings=[[2, 2], [2, 2], [0, 0]])
+    image = as_tensor(
+        np.pad(
+            np.ones((4, 4, 1), dtype=np.float32),
+            ((2, 2), (2, 2), (0, 0)),
+        )
+    )
     out = CropForeground(keys=["image"], source_key="image", input_layout="HWC")(
         TensorBundle({"image": image})
     )
@@ -2957,7 +2965,7 @@ def test_random_rotate90_rejects_rectangular_rotation_plane():
 
 
 @pytest.mark.unit
-def test_random_rotate90_supports_batch_mode_and_records_input_mode():
+def test_random_rotate90_supports_batch_layout_and_records_input_layout():
     image = as_tensor(np.arange(18, dtype=np.float32).reshape(2, 3, 3, 1))
     out = RandomRotate90(keys=["image"], prob=1.0, max_k=3, input_layout="BHWC")(
         TensorBundle({"image": image})
@@ -3215,7 +3223,7 @@ def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value()
 
 
 @pytest.mark.unit
-def test_random_rotate_supports_batch_mode_and_records_input_mode():
+def test_random_rotate_supports_batch_layout_and_records_input_layout():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
 
@@ -3248,7 +3256,7 @@ def test_random_rotate_accepts_input_layout():
 @pytest.mark.unit
 def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
     sample = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
-    batch = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
+    batch = ops.stack([sample, sample], axis=0)
     sample_angles = ops.ones((1,), dtype="float32") * 0.1
     batch_angles = ops.ones((2,), dtype="float32") * 0.1
 
@@ -3263,6 +3271,8 @@ def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
 
     assert sample_out.shape == (4, 5, 6, 1)
     assert batch_out.shape == (2, 4, 5, 6, 1)
+    np.testing.assert_allclose(batch_out[0], sample_out)
+    np.testing.assert_allclose(batch_out[1], sample_out)
 
 
 @pytest.mark.unit
@@ -3302,6 +3312,9 @@ def test_random_rotate_supports_integer_label_tensors():
 
     assert out["label"].dtype == label.dtype
     assert tuple(ops.shape(out["label"])) == (4, 5, 6, 1)
+    assert set(np.unique(ops.convert_to_numpy(out["label"]))).issubset(
+        set(np.unique(ops.convert_to_numpy(label)))
+    )
 
 
 @pytest.mark.unit
@@ -3394,7 +3407,7 @@ def test_random_cutout_supports_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_random_cutout_supports_batch_mode_and_records_input_mode():
+def test_random_cutout_supports_batch_layout_and_records_input_layout():
     image_2d = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
     label_2d = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
     image_3d = as_tensor(np.ones((2, 4, 8, 8, 1), dtype=np.float32))
@@ -3612,7 +3625,7 @@ def test_random_flip_records_random_trace():
 
 
 @pytest.mark.unit
-def test_random_flip_supports_batch_mode_and_records_input_mode():
+def test_random_flip_supports_batch_layout_and_records_input_layout():
     image = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
     out = RandomFlip(keys=["image"], prob=1.0, spatial_axis=2, input_layout="BHWC")(
         TensorBundle({"image": image})
