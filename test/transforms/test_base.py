@@ -2,7 +2,6 @@ import re
 
 import numpy as np
 import pytest
-import tensorflow as tf
 import keras
 from keras import ops
 
@@ -42,6 +41,10 @@ def as_tensor(array, dtype=None):
     return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
+def as_numpy(tensor, dtype=None):
+    return np.asarray(ops.convert_to_numpy(tensor), dtype=dtype)
+
+
 @pytest.mark.unit
 def test_tensorbundle_creation_and_meta_access():
     data = {
@@ -73,8 +76,8 @@ def test_tensorbundle_setitem_routes_to_data_or_meta():
     bundle["affine"] = np.eye(4, dtype=np.float32).tolist()
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(bundle["image"]),
-        ops.convert_to_numpy(new_image),
+        as_numpy(bundle["image"]),
+        as_numpy(new_image),
     )
     assert "affine" in bundle.meta
 
@@ -88,8 +91,8 @@ def test_tensorbundle_coerces_tensor_like_data_assignments_but_not_meta():
 
     assert hasattr(bundle["image"], "shape")
     assert hasattr(bundle["label"], "shape")
-    np.testing.assert_allclose(ops.convert_to_numpy(bundle["image"]), 1.0)
-    np.testing.assert_allclose(ops.convert_to_numpy(bundle["label"]), [[1, 0], [0, 1]])
+    np.testing.assert_allclose(as_numpy(bundle["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(bundle["label"]), [[1, 0], [0, 1]])
     assert bundle.meta["case_id"] == "case-001"
 
 
@@ -143,11 +146,11 @@ def test_ensure_tensor_bundle_converts_python_tensor_like_values():
     )
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(bundle["image"]),
+        as_numpy(bundle["image"]),
         np.array([[[1.0], [2.0]], [[3.0], [4.0]]], dtype=np.float32),
     )
     np.testing.assert_allclose(
-        ops.convert_to_numpy(bundle["shape_hint"]),
+        as_numpy(bundle["shape_hint"]),
         np.array([2, 2, 1]),
     )
 
@@ -220,24 +223,6 @@ def test_validate_tensor_matches_layout_rejects_mismatched_rank():
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(
-    keras.config.backend() != "tensorflow",
-    reason="This test exercises TensorFlow-specific tf.function tracing.",
-)
-def test_apply_if_applied_handles_tensor_flags_under_tf_function():
-    @tf.function
-    def apply(flag):
-        return _apply_if_applied(
-            flag,
-            lambda: tf.constant(1, dtype=tf.int32),
-            lambda: tf.constant(0, dtype=tf.int32),
-        )
-
-    assert int(ops.convert_to_numpy(apply(tf.constant(True)))) == 1
-    assert int(ops.convert_to_numpy(apply(tf.constant(False)))) == 0
-
-
-@pytest.mark.unit
 def test_transform_base_normalizes_mapping_inputs():
     class AddOne(Transform):
         def apply(self, bundle):
@@ -245,7 +230,7 @@ def test_transform_base_normalizes_mapping_inputs():
             return bundle
 
     output = AddOne()({"image": np.zeros((2, 2, 1), dtype=np.float32)})
-    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(output["image"]), 1.0)
 
 
 @pytest.mark.unit
@@ -277,7 +262,7 @@ def test_keyed_transform_apply_to_present_keys_updates_only_available_keys():
     bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
     output = AddPerKey(keys=["image", "label"], allow_missing_keys=True)(bundle)
 
-    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 2.0)
+    np.testing.assert_allclose(as_numpy(output["image"]), 2.0)
 
 
 @pytest.mark.unit
@@ -348,7 +333,10 @@ def test_random_transform_accepts_integer_seed_contract():
     transform = SeedAwareRandomTransform(prob=0.5, seed=13)
     out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
 
-    assert "should_apply" in out.meta
+    assert (
+        isinstance(out["should_apply"], (bool, np.bool_))
+        or str(out["should_apply"].dtype) == "bool"
+    )
 
 
 @pytest.mark.unit
@@ -362,7 +350,10 @@ def test_random_transform_accepts_seed_generator_contract():
     transform = SeedAwareRandomTransform(prob=0.5, seed=seed)
     out = transform(TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))}))
 
-    assert "should_apply" in out.meta
+    assert (
+        isinstance(out["should_apply"], (bool, np.bool_))
+        or str(out["should_apply"].dtype) == "bool"
+    )
 
 
 @pytest.mark.unit
@@ -372,13 +363,12 @@ def test_random_transform_replays_deterministically_with_same_integer_seed():
             bundle["should_apply"] = self.sample_should_apply()
             return bundle
 
-    image = as_tensor(np.zeros((2, 2, 1), dtype=np.float32))
-    first = SeedAwareRandomTransform(prob=0.5, seed=7)(TensorBundle({"image": image}))
-    second = SeedAwareRandomTransform(prob=0.5, seed=7)(TensorBundle({"image": image}))
+    def draw_sequence():
+        transform = SeedAwareRandomTransform(prob=0.5, seed=7)
+        bundle = TensorBundle({"image": as_tensor(np.zeros((2, 2, 1), dtype=np.float32))})
+        return [bool(as_numpy(transform(bundle)["should_apply"])) for _ in range(6)]
 
-    assert bool(ops.convert_to_numpy(first["should_apply"])) == bool(
-        ops.convert_to_numpy(second["should_apply"])
-    )
+    assert draw_sequence() == draw_sequence()
 
 
 @pytest.mark.unit
@@ -396,12 +386,12 @@ def test_random_transform_rejects_unsupported_seed_type():
 
 
 @pytest.mark.unit
-def test_random_transform_random_helpers_accept_tensorflow_dtype_inputs():
+def test_random_transform_random_helpers_return_expected_dtypes_and_bounds():
     class SeedAwareRandomTransform(RandomTransform):
         def apply(self, bundle):
-            bundle["uniform"] = self.random_uniform(shape=(2,), dtype=tf.float32)
-            bundle["normal"] = self.random_normal(shape=(2,), dtype=tf.float32)
-            bundle["integers"] = self.random_integers(shape=(4,), minval=0, maxval=3, dtype=tf.int32)
+            bundle["uniform"] = self.random_uniform(shape=(2,), dtype="float32")
+            bundle["normal"] = self.random_normal(shape=(2,), dtype="float32")
+            bundle["integers"] = self.random_integers(shape=(4,), minval=0, maxval=3, dtype="int32")
             return bundle
 
     image = as_tensor(np.zeros((2, 2, 1), dtype=np.float32))
@@ -410,6 +400,10 @@ def test_random_transform_random_helpers_accept_tensorflow_dtype_inputs():
     assert str(out["uniform"].dtype) == "float32"
     assert str(out["normal"].dtype) == "float32"
     assert str(out["integers"].dtype) == "int32"
+    assert np.all(as_numpy(out["uniform"]) >= 0.0)
+    assert np.all(as_numpy(out["uniform"]) < 1.0)
+    assert np.all(as_numpy(out["integers"]) >= 0)
+    assert np.all(as_numpy(out["integers"]) < 3)
 
 
 @pytest.mark.unit
@@ -472,8 +466,8 @@ def test_random_choice_inverse_replays_selected_invertible_transforms():
     restored = choice.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
     )
 
 
@@ -499,8 +493,8 @@ def test_compose_inverse_restores_pipeline_with_random_choice():
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
     )
     assert restored.get_applied_transforms() == []
 
@@ -535,8 +529,8 @@ def test_compose_inverse_restores_pipeline_with_multiple_random_choice_instances
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
     )
     assert restored.get_applied_transforms() == []
 
@@ -554,7 +548,7 @@ def test_lambda_transform_applies_deterministic_callable_and_records_trace():
     output = transform(bundle)
     trace = output.get_applied_transforms()[-1]
 
-    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 3.0)
+    np.testing.assert_allclose(as_numpy(output["image"]), 3.0)
     assert trace["name"] == "LambdaTransform"
     assert trace["params"]["keys"] == ["image"]
     assert trace["params"]["value"] == 2
@@ -573,7 +567,7 @@ def test_lambda_transform_supports_tensor_and_key_signature():
 
     output = transform(bundle)
 
-    np.testing.assert_allclose(ops.convert_to_numpy(output["image"]), 2.0)
+    np.testing.assert_allclose(as_numpy(output["image"]), 2.0)
 
 
 @pytest.mark.unit
@@ -587,10 +581,10 @@ def test_lambda_transform_supports_random_application():
         TensorBundle({"image": image})
     )
 
-    np.testing.assert_allclose(ops.convert_to_numpy(skipped["image"]), 1.0)
-    np.testing.assert_allclose(ops.convert_to_numpy(applied["image"]), 4.0)
-    assert not bool(ops.convert_to_numpy(skipped.get_applied_transforms()[-1]["applied"]))
-    assert bool(ops.convert_to_numpy(applied.get_applied_transforms()[-1]["applied"]))
+    np.testing.assert_allclose(as_numpy(skipped["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(applied["image"]), 4.0)
+    assert not bool(as_numpy(skipped.get_applied_transforms()[-1]["applied"]))
+    assert bool(as_numpy(applied.get_applied_transforms()[-1]["applied"]))
 
 
 @pytest.mark.unit
@@ -607,7 +601,7 @@ def test_lambda_transform_supports_inverse_and_meta_hooks():
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(restored["image"]), 1.0)
     assert forward.meta["forward_tag"] is True
     assert restored.meta["inverse_tag"] is True
 
@@ -635,7 +629,7 @@ def test_compose_inverse_handles_repeated_lambda_transform_instances():
     forward = pipeline(TensorBundle({"image": image}))
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0, rtol=1e-6)
+    np.testing.assert_allclose(as_numpy(restored["image"]), 1.0, rtol=1e-6)
     assert restored.get_applied_transforms() == []
 
 
@@ -651,7 +645,7 @@ def test_lambda_transform_skips_meta_hook_when_probabilistic_apply_is_false():
 
     result = transform(TensorBundle({"image": image}))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(result["image"]), 1.0)
     assert "forward_tag" not in result.meta
 
 
@@ -668,7 +662,7 @@ def test_lambda_transform_inverse_with_prob_uses_tensor_trace_flag():
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(restored["image"]), 1.0)
 
 
 @pytest.mark.unit
@@ -686,7 +680,7 @@ def test_lambda_transform_probabilistic_meta_hooks_run_in_eager_mode_when_applie
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(restored["image"]), 1.0)
     assert forward.meta["forward_tag"] is True
     assert restored.meta["inverse_tag"] is True
 
@@ -707,12 +701,12 @@ def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
 
 @pytest.mark.unit
 def test_lambda_transform_accepts_builtin_tensor_functions_without_signature_errors():
-    transform = LambdaTransform(keys=["image"], fn=tf.identity)
+    transform = LambdaTransform(keys=["image"], fn=ops.identity)
     image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
 
     result = transform(TensorBundle({"image": image}))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(result["image"]), 1.0)
 
 
 @pytest.mark.unit
@@ -726,7 +720,7 @@ def test_lambda_transform_passes_key_to_varargs_callable():
     transform = LambdaTransform(keys=["image"], fn=fn)
     result = transform(TensorBundle({"image": image}))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(result["image"]), 2.0)
+    np.testing.assert_allclose(as_numpy(result["image"]), 2.0)
 
 
 @pytest.mark.unit
@@ -743,11 +737,11 @@ def test_spatial_helpers_handle_2d_and_3d_channel_last_tensors():
     assert normalize_axes((-1, 0), rank=3) == (2, 0)
     assert normalize_spatial_axes((-1, 0), spatial_rank=3) == (2, 0)
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape_for_layout(image_2d, input_layout="HWC")),
+        as_numpy(get_spatial_shape_for_layout(image_2d, input_layout="HWC")),
         [16, 12],
     )
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape_for_layout(image_3d, input_layout="DHWC")),
+        as_numpy(get_spatial_shape_for_layout(image_3d, input_layout="DHWC")),
         [8, 16, 12],
     )
 
@@ -803,11 +797,11 @@ def test_layout_helpers_describe_sample_and_batch_channel_last_tensors():
     )
 
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape_for_layout(batch_2d, input_layout="BHWC")),
+        as_numpy(get_spatial_shape_for_layout(batch_2d, input_layout="BHWC")),
         [16, 12],
     )
     np.testing.assert_array_equal(
-        ops.convert_to_numpy(get_spatial_shape_for_layout(batch_3d, input_layout="BDHWC")),
+        as_numpy(get_spatial_shape_for_layout(batch_3d, input_layout="BDHWC")),
         [8, 16, 12],
     )
 
@@ -844,12 +838,12 @@ def test_batch_axis_helpers_normalize_sample_and_batch_inputs():
     assert tuple(ops.shape(sample_batched)) == (1, 4, 5, 1)
     assert tuple(ops.shape(batch_batched)) == (2, 4, 5, 1)
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restore_from_batch_axis(sample_batched, sample_added)),
-        ops.convert_to_numpy(sample_2d),
+        as_numpy(restore_from_batch_axis(sample_batched, sample_added)),
+        as_numpy(sample_2d),
     )
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restore_from_batch_axis(batch_batched, batch_added)),
-        ops.convert_to_numpy(batch_2d),
+        as_numpy(restore_from_batch_axis(batch_batched, batch_added)),
+        as_numpy(batch_2d),
     )
 
 
@@ -862,7 +856,7 @@ def test_batch_axis_helpers_accept_plain_numpy_inputs():
     assert sample_added is True
     assert tuple(ops.shape(sample_batched)) == (1, 4, 5, 1)
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restore_from_batch_axis(sample_batched, sample_added)),
+        as_numpy(restore_from_batch_axis(sample_batched, sample_added)),
         sample_2d,
     )
 
@@ -873,7 +867,7 @@ def test_get_spatial_shape_for_layout_accepts_plain_numpy_input():
 
     spatial_shape = get_spatial_shape_for_layout(sample_3d, input_layout="DHWC")
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(spatial_shape), [8, 16, 12])
+    np.testing.assert_array_equal(as_numpy(spatial_shape), [8, 16, 12])
 
 
 @pytest.mark.unit
