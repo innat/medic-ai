@@ -28,6 +28,25 @@ def test_spacing_from_affine_extracts_diagonal_spacing():
 
 
 @pytest.mark.unit
+def test_spacing_from_affine_extracts_column_norms_from_non_diagonal_affine():
+    direction = np.array(
+        [
+            [0.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    spacing = np.array([2.0, 3.0, 4.0], dtype=np.float32)
+    affine = np.eye(4, dtype=np.float32)
+    affine[:3, :3] = direction * spacing[None, :]
+
+    extracted = spacing_from_affine(as_tensor(affine))
+
+    np.testing.assert_allclose(ops.convert_to_numpy(extracted), spacing, rtol=1e-6)
+
+
+@pytest.mark.unit
 def test_direction_from_affine_extracts_normalized_columns():
     affine = as_tensor(
         np.array(
@@ -143,11 +162,39 @@ def test_is_axis_aligned_affine_accepts_diagonal_and_rejects_permuted_axes():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "off_diagonal, expected",
+    [(2e-6, True), (1e-3, False)],
+    ids=["below_atol", "above_atol"],
+)
+def test_is_axis_aligned_affine_respects_atol(off_diagonal, expected):
+    affine = np.diag([2.0, 3.0, 4.0, 1.0]).astype(np.float32)
+    affine[0, 1] = off_diagonal
+
+    result = is_axis_aligned_affine(as_tensor(affine), atol=1e-5)
+
+    assert bool(ops.convert_to_numpy(result)) is expected
+
+
+@pytest.mark.unit
 def test_spacing_from_affine_rejects_non_4x4_matrices():
     affine = as_tensor(np.eye(3, dtype=np.float32))
 
     with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
         spacing_from_affine(affine)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "shape",
+    [(3, 3), (4, 3), (3, 4), (4,), ()],
+    ids=["3x3", "4x3", "3x4", "rank_1", "scalar"],
+)
+def test_validate_affine_matrix_rejects_malformed_shapes(shape):
+    affine = np.zeros(shape, dtype=np.float32)
+
+    with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
+        validate_affine_matrix(affine)
 
 
 @pytest.mark.unit
@@ -157,3 +204,40 @@ def test_validate_affine_matrix_accepts_plain_numpy_input():
     validated = validate_affine_matrix(affine)
 
     np.testing.assert_allclose(ops.convert_to_numpy(validated), affine)
+
+
+@pytest.mark.unit
+def test_validate_affine_matrix_normalizes_dtype_to_float32():
+    affine = np.eye(4, dtype=np.float64)
+
+    validated = validate_affine_matrix(affine)
+
+    assert ops.convert_to_numpy(validated).dtype == np.float32
+
+
+@pytest.mark.unit
+def test_affine_apply_supports_batched_points():
+    affine = as_tensor(
+        np.array(
+            [
+                [1.0, 0.0, 0.0, 10.0],
+                [0.0, 1.0, 0.0, 20.0],
+                [0.0, 0.0, 1.0, 30.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    point_values = np.array(
+        [
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]],
+            [[6.0, 7.0, 8.0], [9.0, 10.0, 11.0]],
+        ],
+        dtype=np.float32,
+    )
+    points = as_tensor(point_values)
+
+    transformed = affine_apply(affine, points)
+    expected = point_values + np.array([10.0, 20.0, 30.0], dtype=np.float32)
+
+    np.testing.assert_allclose(ops.convert_to_numpy(transformed), expected, rtol=1e-6)
