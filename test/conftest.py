@@ -10,7 +10,7 @@ def deterministic_seed():
 
 
 def _gpu_available_for_backend() -> bool:
-    backend = keras.backend.backend()
+    backend = keras.config.backend()
     try:
         if backend == "tensorflow":
             import tensorflow as tf
