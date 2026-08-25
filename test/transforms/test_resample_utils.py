@@ -15,6 +15,10 @@ def as_tensor(array, dtype=None):
     return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
+def as_numpy(tensor, dtype=None):
+    return np.asarray(ops.convert_to_numpy(tensor), dtype=dtype)
+
+
 @pytest.mark.unit
 def test_compute_destination_affine_preserves_direction_and_origin_by_default():
     src_affine = as_tensor(
@@ -32,13 +36,13 @@ def test_compute_destination_affine_preserves_direction_and_origin_by_default():
     dst_affine = compute_destination_affine(src_affine, pixdim=as_tensor([1.0, 1.5, 2.0]))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(direction_from_affine(dst_affine)),
-        ops.convert_to_numpy(direction_from_affine(src_affine)),
+        as_numpy(direction_from_affine(dst_affine)),
+        as_numpy(direction_from_affine(src_affine)),
         rtol=1e-6,
     )
     np.testing.assert_allclose(
-        ops.convert_to_numpy(origin_from_affine(dst_affine)),
-        ops.convert_to_numpy(origin_from_affine(src_affine)),
+        as_numpy(origin_from_affine(dst_affine)),
+        as_numpy(origin_from_affine(src_affine)),
         rtol=1e-6,
     )
 
@@ -64,7 +68,7 @@ def test_compute_destination_affine_supports_diagonal_output():
     )
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(dst_affine),
+        as_numpy(dst_affine),
         np.array(
             [
                 [1.0, 0.0, 0.0, 10.0],
@@ -89,7 +93,7 @@ def test_compute_output_shape_matches_identity_destination_affine():
         dst_affine=src_affine,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([4, 5, 6]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([4, 5, 6]))
 
 
 @pytest.mark.unit
@@ -104,7 +108,7 @@ def test_compute_output_shape_scales_isotropic_spacing_change():
         dst_affine=dst_affine,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([8, 10, 12]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([8, 10, 12]))
 
 
 @pytest.mark.unit
@@ -119,7 +123,7 @@ def test_compute_output_shape_scales_anisotropic_spacing_change():
         dst_affine=dst_affine,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([8, 10, 12]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([8, 10, 12]))
 
 
 @pytest.mark.unit
@@ -134,7 +138,7 @@ def test_compute_output_shape_uses_half_up_rounding_for_half_voxels():
         dst_affine=dst_affine,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([151, 3, 3]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([151, 3, 3]))
 
 
 @pytest.mark.unit
@@ -159,7 +163,7 @@ def test_compute_output_shape_respects_basis_change_for_diagonal_destination():
         dst_affine=dst_affine,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([24, 10, 4]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([24, 10, 4]))
 
 
 @pytest.mark.unit
@@ -175,7 +179,7 @@ def test_compute_output_shape_align_corners_uses_shape_minus_one_extent():
         align_corners=True,
     )
 
-    np.testing.assert_array_equal(ops.convert_to_numpy(output_shape), np.array([7, 9, 11]))
+    np.testing.assert_array_equal(as_numpy(output_shape), np.array([7, 9, 11]))
 
 
 @pytest.mark.unit
@@ -184,7 +188,7 @@ def test_make_output_grid_returns_expected_shape_and_axis_order():
 
     assert tuple(ops.shape(grid)) == (24, 3)
     np.testing.assert_allclose(
-        ops.convert_to_numpy(grid[:6]),
+        as_numpy(grid[:6]),
         np.array(
             [
                 [0.0, 0.0, 0.0],

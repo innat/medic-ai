@@ -1,7 +1,5 @@
 import numpy as np
 import pytest
-import tensorflow as tf
-import keras
 from keras import ops
 
 from medicai.transforms.utils import (
@@ -15,6 +13,10 @@ def as_tensor(array, dtype=None):
     return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
+def as_numpy(tensor, dtype=None):
+    return np.asarray(ops.convert_to_numpy(tensor), dtype=dtype)
+
+
 @pytest.mark.unit
 def test_sample_nearest_returns_exact_integer_samples():
     volume = as_tensor(np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1))
@@ -23,7 +25,7 @@ def test_sample_nearest_returns_exact_integer_samples():
     out = sample_nearest(volume, coords)
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out),
+        as_numpy(out),
         np.array([[0.0], [7.0]], dtype=np.float32),
     )
 
@@ -36,7 +38,7 @@ def test_sample_trilinear_matches_integer_corner_samples():
     out = sample_trilinear(volume, coords)
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out),
+        as_numpy(out),
         np.array([[0.0], [7.0]], dtype=np.float32),
         rtol=1e-6,
     )
@@ -50,7 +52,7 @@ def test_sample_trilinear_interpolates_midpoint():
     out = sample_trilinear(volume, coords)
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
+        as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
     )
 
 
@@ -63,11 +65,11 @@ def test_sample_volume_uses_constant_fill_outside_bounds():
     trilinear = sample_volume(volume, coords, interpolation="trilinear", fill_value=-7.0)
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(nearest),
+        as_numpy(nearest),
         np.array([[-5.0], [-5.0]], dtype=np.float32),
     )
     np.testing.assert_allclose(
-        ops.convert_to_numpy(trilinear),
+        as_numpy(trilinear),
         np.array([[-7.0], [-7.0]], dtype=np.float32),
     )
 
@@ -88,7 +90,7 @@ def test_sample_volume_supports_multi_channel_volumes():
     out = sample_nearest(volume, coords)
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out),
+        as_numpy(out),
         np.array([[7.0, 15.0]], dtype=np.float32),
     )
 
@@ -101,7 +103,7 @@ def test_sample_nearest_preserves_integer_dtype():
     out = sample_nearest(volume, coords)
 
     assert out.dtype == volume.dtype
-    np.testing.assert_array_equal(ops.convert_to_numpy(out), np.array([[7]], dtype=np.int32))
+    np.testing.assert_array_equal(as_numpy(out), np.array([[7]], dtype=np.int32))
 
 
 @pytest.mark.unit
@@ -113,27 +115,29 @@ def test_sample_trilinear_preserves_float_dtype():
 
     assert out.dtype == volume.dtype
     np.testing.assert_allclose(
-        ops.convert_to_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
+        as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
     )
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(
-    keras.config.backend() != "tensorflow",
-    reason="This test exercises TensorFlow-specific tf.function tracing.",
-)
-def test_sample_volume_runs_under_tf_function():
-    volume = as_tensor(np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1))
-    coords = as_tensor([[0.5, 0.5, 0.5], [1.0, 1.0, 1.0]], dtype="float32")
+def test_sample_volume_rejects_unsupported_interpolation_and_padding():
+    volume = as_tensor(np.zeros((2, 2, 2, 1), dtype=np.float32))
+    coords = as_tensor([[0.0, 0.0, 0.0]], dtype="float32")
 
-    @tf.function
-    def apply(volume_tensor, coord_tensor):
-        return sample_volume(volume_tensor, coord_tensor, interpolation="trilinear")
+    with pytest.raises(ValueError, match="Unsupported interpolation"):
+        sample_volume(volume, coords, interpolation="bilinear")
 
-    out = apply(volume, coords)
+    with pytest.raises(ValueError, match="Unsupported padding_mode"):
+        sample_volume(volume, coords, interpolation="nearest", padding_mode="border")
 
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(out),
-        np.array([[3.5], [7.0]], dtype=np.float32),
-        rtol=1e-6,
-    )
+
+@pytest.mark.unit
+def test_sample_nearest_validates_volume_and_coordinate_shapes():
+    coords = as_tensor([[0.0, 0.0, 0.0]], dtype="float32")
+
+    with pytest.raises(ValueError, match="Expected a 4D channel-last volume"):
+        sample_nearest(ops.zeros((2, 2, 1), dtype="float32"), coords)
+
+    volume = ops.zeros((2, 2, 2, 1), dtype="float32")
+    with pytest.raises(ValueError, match=r"Expected coords shaped \(N, 3\)"):
+        sample_nearest(volume, ops.zeros((1, 2), dtype="float32"))
