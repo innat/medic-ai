@@ -345,7 +345,17 @@ def ensure_batch_axis_for_layout(
 
 
 def restore_from_batch_axis(tensor: Any, added_batch_axis: bool) -> Any:
-    """Remove a temporary singleton batch axis added by :func:`ensure_batch_axis`."""
+    """Remove a temporary singleton batch axis added by
+    :func:`ensure_batch_axis_for_layout`.
+
+    Args:
+        tensor: Tensor in batched view.
+        added_batch_axis: Whether this helper previously inserted the axis.
+
+    Returns:
+        Any: The original sample-shaped tensor when an axis was added;
+        otherwise ``tensor`` unchanged.
+    """
     if added_batch_axis:
         return ops.squeeze(tensor, axis=0)
     return tensor

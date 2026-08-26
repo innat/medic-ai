@@ -158,7 +158,7 @@ def _get_static_tensor_value(value: Any) -> Any:
 
 
 def _require_static_value(value: Any, name: str) -> Any:
-    """Convert a TensorFlow scalar/tensor to a Python-visible value when possible."""
+    """Convert a backend scalar/tensor to a Python-visible value when possible."""
     if _is_tensor_like(value):
         static_value = _get_static_tensor_value(value)
         if static_value is None:
@@ -222,7 +222,7 @@ class Transform:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import TensorBundle, Transform
 
             class MarkSample(Transform):
@@ -231,7 +231,7 @@ class Transform:
                     bundle["image"] = ops.convert_to_tensor(bundle["image"])
                     return bundle
 
-            image = tf.random.normal((64, 64, 1))
+            image = ops.ones((64, 64, 1))
             output = MarkSample()({"image": image})
             print(output["processed"])
     """
@@ -296,7 +296,7 @@ class Transform:
         Args:
             params: Optional transform-specific metadata to store.
             applied: Whether the transform was actually applied. Random
-                transforms may store this as a TensorFlow boolean tensor.
+                transforms may store this as a backend boolean tensor.
             random: Whether the transform is stochastic.
             invertible: Optional override for the invertibility flag. When
                 omitted, the transform's ``invertible`` property is used.
@@ -320,13 +320,12 @@ class Transform:
 
 
 class RandomTransform(Transform):
-    """Base class for random TensorFlow-native transforms.
+    """Base class for random backend-neutral transforms.
 
     ``RandomTransform`` adds probability-driven behavior on top of
     :class:`~medicai.transforms.Transform`. It is intended for transforms that
-    sample whether to apply an operation using TensorFlow ops so the transform
-    remains compatible with eager execution, ``tf.function``, and
-    ``tf.data`` pipelines.
+    sample whether to apply an operation using Keras random operations so the
+    transform can run with the configured Keras backend.
 
     Args:
         prob: Probability of applying the random transform. Must be in
@@ -338,10 +337,9 @@ class RandomTransform(Transform):
 
     When to use this:
         Use ``RandomTransform`` when a transform needs probabilistic behavior
-        implemented with TensorFlow ops so it stays compatible with
-        ``tf.function`` and ``tf.data``. It is most useful as a base for
+        implemented with Keras operations. It is most useful as a base for
         random augmentations that decide whether to apply themselves per
-        sample.
+        sample or batch, according to the concrete transform's contract.
 
     Current batch semantics:
         ``RandomTransform`` itself does not enforce per-item or per-batch
@@ -358,7 +356,7 @@ class RandomTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import RandomTransform, TensorBundle
 
             class RandomAddOne(RandomTransform):
@@ -377,7 +375,7 @@ class RandomTransform(Transform):
                     )
                     return bundle
 
-            image = tf.zeros((32, 32, 1), dtype=tf.float32)
+            image = ops.zeros((32, 32, 1), dtype="float32")
             output = RandomAddOne(prob=0.5)({"image": image})
             result = output['image']
 
@@ -386,7 +384,7 @@ class RandomTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import RandomTransform, TensorBundle
 
             class RandomBias(RandomTransform):
@@ -395,15 +393,18 @@ class RandomTransform(Transform):
                         shape=(),
                         minval=-1.0,
                         maxval=1.0,
-                        dtype=tf.float32,
+                        dtype="float32",
                     )
                     bundle["bias"] = bias
                     return bundle
 
-            image = tf.zeros((8, 8, 1), dtype=tf.float32)
+            image = ops.zeros((8, 8, 1), dtype="float32")
             first = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
             second = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
-            print(first["bias"].numpy() == second["bias"].numpy())
+            print(
+                ops.convert_to_numpy(first["bias"])
+                == ops.convert_to_numpy(second["bias"])
+            )
     """
 
     def __init__(
@@ -600,7 +601,7 @@ class RandomChoice(RandomTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import keras
             from medicai.transforms import RandomChoice, RandomRotate, RandomRotate90
 
             transform = RandomChoice(
@@ -612,14 +613,14 @@ class RandomChoice(RandomTransform):
                 prob=1.0,
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
+            image = keras.random.normal((32, 64, 64, 1), seed=7)
             result = transform({"image": image})
 
         Pick between one and two transforms from a pool:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import keras
             from medicai.transforms import Flip, RandomChoice, ShiftIntensity
 
             transform = RandomChoice(
@@ -632,7 +633,7 @@ class RandomChoice(RandomTransform):
                 weights=[1.0, 1.0, 0.5],
             )
 
-            image = tf.random.normal((64, 64, 1))
+            image = keras.random.normal((64, 64, 1), seed=7)
             result = transform({"image": image})
     """
 
@@ -917,7 +918,7 @@ class KeyedTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import KeyedTransform, TensorBundle
 
             class Multiply(KeyedTransform):
@@ -932,7 +933,7 @@ class KeyedTransform(Transform):
                     )
                     return bundle
 
-            image = tf.ones((16, 16, 1), dtype=tf.float32)
+            image = ops.ones((16, 16, 1), dtype="float32")
             output = Multiply(keys=["image"], factor=2.0)({"image": image})
     """
 
@@ -1019,7 +1020,7 @@ class InvertibleTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import (
                 InvertibleTransform, KeyedTransform, TensorBundle
             )
@@ -1050,7 +1051,7 @@ class InvertibleTransform(Transform):
                     )
                     return bundle
 
-            image = tf.ones((8, 8, 1), dtype=tf.float32)
+            image = ops.ones((8, 8, 1), dtype="float32")
             transform = AddValue(keys=["image"], value=5.0)
             forward = transform(TensorBundle({"image": image}))
             restored = transform.inverse(forward)
@@ -1115,8 +1116,8 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import LambdaTransform, TensorBundle
+            from keras import ops
+            from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
                 keys=["image"],
@@ -1125,7 +1126,7 @@ class LambdaTransform(KeyedTransform):
                 name="add_two",
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            image = ops.ones((32, 32, 1), dtype="float32")
             forward = transform({"image": image})
             restored = transform.inverse(forward)
             output = restored['image']
@@ -1134,7 +1135,7 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
@@ -1147,8 +1148,8 @@ class LambdaTransform(KeyedTransform):
                 name="prepare_pair",
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32) * 255.0
-            label = tf.ones((32, 32, 1), dtype=tf.int32)
+            image = ops.ones((32, 32, 1), dtype="float32") * 255.0
+            label = ops.ones((32, 32, 1), dtype="int32")
             output = transform(
                 {
                     "image": image,
@@ -1160,8 +1161,8 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import LambdaTransform, TensorBundle
+            from keras import ops
+            from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
                 keys=["image"],
@@ -1170,7 +1171,7 @@ class LambdaTransform(KeyedTransform):
                 trace_params={"kind": "scale"},
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            image = ops.ones((32, 32, 1), dtype="float32")
             result = transform({"image": image})
             output = result['image']
     """
@@ -1323,7 +1324,7 @@ class Compose(Transform):
 
     ``Compose`` is the entry point for building a transformation pipeline in
     ``medicai.transforms``. It accepts raw sample dictionaries, converts any
-    NumPy arrays into TensorFlow tensors, wraps the result in a
+    NumPy arrays into backend-aware tensors, wraps the result in a
     ``TensorBundle``, and then applies each transform sequentially.
 
     This gives every transform a consistent container interface:
@@ -1345,7 +1346,6 @@ class Compose(Transform):
     Example:
         .. code-block:: python
 
-            import numpy as np
             from medicai.transforms import (
                 Compose,
                 Resize,
@@ -1355,25 +1355,25 @@ class Compose(Transform):
             transform = Compose([
                 ScaleIntensityRange(
                     keys=["image"],
-                    input_min=-175,
-                    input_max=250,
-                    output_min=0.0,
-                    output_max=1.0,
+                    source_value_range=(-175, 250),
+                    target_value_range=(0.0, 1.0),
                     clip=True,
+                    input_layout="DHWC",
                 ),
                 Resize(
                     keys=["image", "label"],
                     target_shape=(96, 96, 96),
-                    interpolation=("trilinear", "nearest")
+                    interpolation=("trilinear", "nearest"),
+                    input_layout="DHWC",
                 )
             ])
 
-            image = np.random.randn(
-                128, 128, 128, 1
-            ).astype(np.float32)
-            label = np.random.randint(
-                0, 2, (128, 128, 128, 1)
-            ).astype(np.float32)
+            import keras
+
+            image = keras.random.normal((128, 128, 128, 1), seed=7)
+            label = keras.random.uniform(
+                (128, 128, 128, 1), minval=0, maxval=2, dtype="float32", seed=7
+            )
 
             data = {
                 "image": image,
@@ -1382,29 +1382,30 @@ class Compose(Transform):
             output = transform(data)
             processed_image, processed_label = output["image"], output["label"]
             processed_image.shape, processed_label.shape
-            # (TensorShape([96, 96, 96, 1]), TensorShape([96, 96, 96, 1]))
+            # (96, 96, 96, 1), (96, 96, 96, 1)
 
         Invert an already-applied pipeline when its transforms support
         ``inverse()``:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Compose, Flip, Resize, TensorBundle
+            import keras
+            from medicai.transforms import Compose, Flip, Resize
 
             pipeline = Compose(
                 [
-                    Flip(keys=["image"], spatial_axis=1),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
                     Resize(
                         keys=["image"],
                         interpolation="bilinear",
-                        target_shape=(32, 32)
+                        target_shape=(32, 32),
+                        input_layout="HWC",
                     ),
                 ]
             )
 
-            image = tf.random.normal((64, 64, 1))
-            forward = pipeline(TensorBundle({"image": image}))
+            image = keras.random.normal((64, 64, 1), seed=7)
+            forward = pipeline({"image": image})
             restored = pipeline.inverse(forward)
 
     Returns:

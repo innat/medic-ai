@@ -35,12 +35,12 @@ class TensorBundle:
     Example:
         Create a bundle with image data and affine metadata::
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import TensorBundle
 
             bundle = TensorBundle(
-                data={"image": tf.random.normal((64, 64, 64, 1))},
-                meta={"affine": tf.eye(4)},
+                data={"image": ops.ones((64, 64, 64, 1), dtype="float32")},
+                meta={"affine": ops.eye(4)},
             )
 
             image = bundle["image"]
