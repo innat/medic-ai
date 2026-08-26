@@ -51,9 +51,7 @@ def test_sample_trilinear_interpolates_midpoint():
 
     out = sample_trilinear(volume, coords)
 
-    np.testing.assert_allclose(
-        as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
-    )
+    np.testing.assert_allclose(as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6)
 
 
 @pytest.mark.unit
@@ -114,9 +112,7 @@ def test_sample_trilinear_preserves_float_dtype():
     out = sample_trilinear(volume, coords)
 
     assert out.dtype == volume.dtype
-    np.testing.assert_allclose(
-        as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6
-    )
+    np.testing.assert_allclose(as_numpy(out), np.array([[3.5]], dtype=np.float32), rtol=1e-6)
 
 
 @pytest.mark.unit

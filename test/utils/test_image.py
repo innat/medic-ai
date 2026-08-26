@@ -20,9 +20,7 @@ def test_resize_volumes_trilinear_shape_and_dtype():
 
 @pytest.mark.unit
 def test_resize_volumes_nearest_shape_and_dtype():
-    volumes = as_tensor(
-        np.random.default_rng(7).integers(0, 10, (1, 5, 5, 5, 2), dtype=np.int32)
-    )
+    volumes = as_tensor(np.random.default_rng(7).integers(0, 10, (1, 5, 5, 5, 2), dtype=np.int32))
     out = resize_volumes(volumes, depth=3, height=4, width=2, method="nearest")
 
     assert out.shape == (1, 3, 4, 2, 2)

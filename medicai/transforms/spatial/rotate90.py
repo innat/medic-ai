@@ -272,9 +272,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 return self._rotate_once(tensor, axes)
             if effective_k == 2:
                 return ops.flip(tensor, axis=axes)
-            return self._rotate_once(
-                self._rotate_once(self._rotate_once(tensor, axes), axes), axes
-            )
+            return self._rotate_once(self._rotate_once(self._rotate_once(tensor, axes), axes), axes)
 
         effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
         if not self.layout_info.batched:
@@ -327,9 +325,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
                 return self._rotate_once(tensor, axes)
             if effective_k == 2:
                 return ops.flip(tensor, axis=axes)
-            return self._rotate_once(
-                self._rotate_once(self._rotate_once(tensor, axes), axes), axes
-            )
+            return self._rotate_once(self._rotate_once(self._rotate_once(tensor, axes), axes), axes)
 
         effective_k = ops.mod(ops.cast(self.k if k is None else k, "int32"), 4)
 

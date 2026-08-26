@@ -14,7 +14,6 @@ from medicai.transforms.spatial.affine_utils import (
 from medicai.transforms.spatial.samplers import sample_volume
 from medicai.transforms.utils import _get_static_shape_tuple, get_tensor_rank
 
-
 # Resampling Utility
 
 
@@ -72,9 +71,7 @@ def compute_output_shape(
             axis=-1,
         )
         src_corners = ops.reshape(src_corners, [-1, 3])
-        dst_corners = affine_apply(
-            ops.matmul(invert_affine(dst_affine), src_affine), src_corners
-        )
+        dst_corners = affine_apply(ops.matmul(invert_affine(dst_affine), src_affine), src_corners)
         min_corner = ops.min(dst_corners, axis=0)
         max_corner = ops.max(dst_corners, axis=0)
         output_shape = round_half_up(ops.maximum(max_corner - min_corner, 0.0)) + 1.0
@@ -90,9 +87,7 @@ def compute_output_shape(
             axis=-1,
         )
         src_corners = ops.reshape(src_corners, [-1, 3])
-        dst_corners = affine_apply(
-            ops.matmul(invert_affine(dst_affine), src_affine), src_corners
-        )
+        dst_corners = affine_apply(ops.matmul(invert_affine(dst_affine), src_affine), src_corners)
         min_corner = ops.min(dst_corners, axis=0)
         max_corner = ops.max(dst_corners, axis=0)
         output_shape = round_half_up(ops.maximum(max_corner - min_corner, 0.0))
@@ -139,6 +134,7 @@ def make_output_grid_chunk(
     h = ops.floor_divide(rem, output_shape[2])
     w = ops.mod(rem, output_shape[2])
     return ops.cast(ops.stack([d, h, w], axis=1), "float32")
+
 
 class SpatialResample:
     """Internal affine-aware 3D resampling primitive."""

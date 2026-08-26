@@ -141,9 +141,5 @@ def test_spatial_resample_many_matches_individual_calls():
         interpolation={"image": "trilinear", "label": "nearest"},
     )
 
-    np.testing.assert_allclose(
-        as_numpy(batched["image"]), as_numpy(image_out), rtol=1e-6
-    )
-    np.testing.assert_allclose(
-        as_numpy(batched["label"]), as_numpy(label_out), rtol=1e-6
-    )
+    np.testing.assert_allclose(as_numpy(batched["image"]), as_numpy(image_out), rtol=1e-6)
+    np.testing.assert_allclose(as_numpy(batched["label"]), as_numpy(label_out), rtol=1e-6)

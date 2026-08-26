@@ -2,12 +2,14 @@ import warnings
 from typing import Any, Mapping, Sequence
 
 from keras import ops
+
 from medicai.utils.image import resize_volumes
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     SpatialResample,
+    _get_static_shape_tuple,
     compute_destination_affine,
     compute_output_shape,
     get_spatial_rank,
@@ -15,7 +17,6 @@ from ..utils import (
     resolve_input_layout,
     round_half_up,
     spacing_from_affine,
-    _get_static_shape_tuple,
     validate_tensor_matches_layout,
 )
 
@@ -370,9 +371,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         )
         return self._resize_to_shape(tensor, new_shape, interpolation)
 
-    def _resize_to_shape(
-        self, tensor: Any, spatial_shape: Any, interpolation: str
-    ) -> Any:
+    def _resize_to_shape(self, tensor: Any, spatial_shape: Any, interpolation: str) -> Any:
         tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,

@@ -6,11 +6,10 @@ medicai.transforms.utils.
 
 from typing import Any
 
-from keras import ops
 import numpy as np
+from keras import ops
 
 from medicai.transforms.utils import validate_affine_matrix
-
 
 # Affine Utility
 

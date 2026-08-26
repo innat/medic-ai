@@ -312,15 +312,15 @@ class RandomSpatialCrop(RandomTransform):
                 maxval=1.0,
                 dtype="float32",
             )
-            crop_size = min_s + ops.cast(ops.floor(random_unit * ops.cast(span, "float32")), "int32")
+            crop_size = min_s + ops.cast(
+                ops.floor(random_unit * ops.cast(span, "float32")), "int32"
+            )
         else:
             crop_size = ops.where(crop_size > 0, crop_size, spatial_shape)
             crop_size = ops.minimum(crop_size, spatial_shape)
         return crop_size
 
-    def _get_random_center(
-        self, spatial_shape: Any, crop_size: Any, spatial_rank: int
-    ) -> Any:
+    def _get_random_center(self, spatial_shape: Any, crop_size: Any, spatial_rank: int) -> Any:
         if not self.random_center:
             return spatial_shape // 2
 

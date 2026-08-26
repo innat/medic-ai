@@ -187,9 +187,7 @@ class NormalizeIntensity(KeyedTransform):
 
     def _normalize_channel_wise(self, tensor: Any) -> Any:
         mask = (
-            ops.not_equal(tensor, 0.0)
-            if self.nonzero
-            else ops.cast(ops.ones_like(tensor), "bool")
+            ops.not_equal(tensor, 0.0) if self.nonzero else ops.cast(ops.ones_like(tensor), "bool")
         )
         num_dims = len(ops.shape(tensor))
         spatial_axes = tuple(range(num_dims - 1))
@@ -213,9 +211,7 @@ class NormalizeIntensity(KeyedTransform):
 
     def _normalize_global(self, tensor: Any) -> Any:
         mask = (
-            ops.not_equal(tensor, 0.0)
-            if self.nonzero
-            else ops.cast(ops.ones_like(tensor), "bool")
+            ops.not_equal(tensor, 0.0) if self.nonzero else ops.cast(ops.ones_like(tensor), "bool")
         )
         mask_f = ops.cast(mask, tensor.dtype)
         count = ops.sum(mask_f)

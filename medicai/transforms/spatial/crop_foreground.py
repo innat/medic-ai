@@ -209,7 +209,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         )
         layout_info = get_input_layout_info(self.input_layout)
         if layout_info.batched:
-            raise ValueError(f"{type(self).__name__} supports only sample layouts 'HWC' and 'DHWC'.")
+            raise ValueError(
+                f"{type(self).__name__} supports only sample layouts 'HWC' and 'DHWC'."
+            )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:

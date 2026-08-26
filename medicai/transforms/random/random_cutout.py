@@ -290,9 +290,7 @@ class RandomCutOut(RandomTransform):
     ):
         """Apply cutout independently to each sample of a batch."""
         return ops.map(
-            lambda elems: self.apply_sample_cutout(
-                elems[0], spatial_rank, elems[1], elems[2]
-            ),
+            lambda elems: self.apply_sample_cutout(elems[0], spatial_rank, elems[1], elems[2]),
             (images, centers, noise),
         )
 
@@ -344,7 +342,9 @@ class RandomCutOut(RandomTransform):
             center_shape = ops.concatenate(
                 [prefix, ops.convert_to_tensor([2], dtype="int32")], axis=0
             )
-        spatial_shape = ops.stack([shape[-3 if spatial_rank == 3 else -2], shape[-2 if spatial_rank == 3 else -1]])
+        spatial_shape = ops.stack(
+            [shape[-3 if spatial_rank == 3 else -2], shape[-2 if spatial_rank == 3 else -1]]
+        )
         random_unit = self.random_uniform(
             shape=center_shape,
             minval=0.0,

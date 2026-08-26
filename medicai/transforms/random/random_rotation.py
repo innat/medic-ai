@@ -224,9 +224,7 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
     depth, height, width, channels = volume.shape
     if channels is None:
         raise ValueError("RandomRotate requires a statically known channel dimension.")
-    z, y, x = ops.meshgrid(
-        ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij"
-    )
+    z, y, x = ops.meshgrid(ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij")
     coordinates = ops.stack(
         [
             ops.cast(z, inverse_matrix.dtype),
@@ -235,9 +233,10 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
         ],
         axis=0,
     )
-    center = ops.cast(
-        ops.convert_to_tensor([depth - 1, height - 1, width - 1]), inverse_matrix.dtype
-    ) / 2.0
+    center = (
+        ops.cast(ops.convert_to_tensor([depth - 1, height - 1, width - 1]), inverse_matrix.dtype)
+        / 2.0
+    )
     centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
     input_coordinates = ops.einsum("ij,jdhw->idhw", inverse_matrix, centered)
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
@@ -281,9 +280,9 @@ def rotate_multi_axis(
     )
     inverse_matrix = ops.transpose(matrix, (0, 2, 1))
     if spacing is not None:
-        inverse_matrix = inverse_matrix * _spacing_scale_matrix(
-            spacing, inverse_matrix.dtype
-        )[None, :, :]
+        inverse_matrix = (
+            inverse_matrix * _spacing_scale_matrix(spacing, inverse_matrix.dtype)[None, :, :]
+        )
 
     def rotate_one(args):
         volume, matrix_one = args
@@ -442,21 +441,15 @@ class RandomRotate(RandomTransform):
                 raise ValueError("`spacing` values must be positive.")
         self.spacing = spacing
         self.anisotropy_threshold = float(anisotropy_threshold)
-        self.ranges = _apply_anisotropy_policy(
-            self.ranges, self.spacing, self.anisotropy_threshold
-        )
+        self.ranges = _apply_anisotropy_policy(self.ranges, self.spacing, self.anisotropy_threshold)
         self.interpolation = _resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: "bilinear" if index == 0 else "nearest",
             "interpolation",
         )
-        self.fill_mode = _resolve_per_key(
-            self.keys, fill_mode, lambda *_: "constant", "fill_mode"
-        )
-        self.fill_value = _resolve_per_key(
-            self.keys, fill_value, lambda *_: 0.0, "fill_value"
-        )
+        self.fill_mode = _resolve_per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
+        self.fill_value = _resolve_per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
             if mode not in ("bilinear", "nearest"):
@@ -475,17 +468,13 @@ class RandomRotate(RandomTransform):
 
     def _sample_angles(self, batch_size, dtype="float32"):
         apply_mask = ops.cast(
-            self.random_uniform(
-                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
-            )
+            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
             < self.prob,
             dtype,
         )
         angles = {}
         for axis, (low, high) in self.ranges.items():
-            sampled = self.random_uniform(
-                shape=(batch_size,), minval=low, maxval=high, dtype=dtype
-            )
+            sampled = self.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
             angles[axis] = sampled * apply_mask
         return angles, ops.any(apply_mask > 0)
 

@@ -3,7 +3,6 @@ from typing import Any, Mapping, Sequence
 
 from keras import ops
 
-
 # Backend-neutral layout and shape utilities
 
 
@@ -219,6 +218,7 @@ def get_batched_input_layout(input_layout: str) -> str:
         return "BDHWC"
     return normalized
 
+
 def resolve_input_layout(
     *,
     input_layout: str,
@@ -271,6 +271,7 @@ def validate_tensor_matches_layout(
         )
     return layout
 
+
 def get_spatial_rank(tensor: Any) -> int:
     """Return the number of spatial dimensions in a channel-last sample tensor."""
     rank = get_tensor_rank(tensor)
@@ -312,6 +313,7 @@ def get_spatial_shape_for_layout(tensor: Any, *, input_layout: str) -> Any:
     """
     layout = validate_tensor_matches_layout(tensor, input_layout)
     return ops.take(ops.shape(tensor), layout.spatial_axes)
+
 
 def ensure_batch_axis_for_layout(
     tensor: Any,
@@ -437,8 +439,6 @@ def resolve_input_layout_axes(
     return normalized
 
 
-
-
 # Compatibility exports
 #
 # Spatial helpers moved to focused modules, but these lazy exports preserve the
@@ -452,14 +452,26 @@ _SPATIAL_HELPERS = {
     "invert_affine": ("medicai.transforms.spatial.affine_utils", "invert_affine"),
     "build_affine": ("medicai.transforms.spatial.affine_utils", "build_affine"),
     "affine_apply": ("medicai.transforms.spatial.affine_utils", "affine_apply"),
-    "orientation_from_affine": ("medicai.transforms.spatial.affine_utils", "orientation_from_affine"),
-    "compute_orientation_transform": ("medicai.transforms.spatial.affine_utils", "compute_orientation_transform"),
+    "orientation_from_affine": (
+        "medicai.transforms.spatial.affine_utils",
+        "orientation_from_affine",
+    ),
+    "compute_orientation_transform": (
+        "medicai.transforms.spatial.affine_utils",
+        "compute_orientation_transform",
+    ),
     "reoriented_affine": ("medicai.transforms.spatial.affine_utils", "reoriented_affine"),
     "round_half_up": ("medicai.transforms.spatial.resample_utils", "round_half_up"),
-    "compute_destination_affine": ("medicai.transforms.spatial.resample_utils", "compute_destination_affine"),
+    "compute_destination_affine": (
+        "medicai.transforms.spatial.resample_utils",
+        "compute_destination_affine",
+    ),
     "compute_output_shape": ("medicai.transforms.spatial.resample_utils", "compute_output_shape"),
     "make_output_grid": ("medicai.transforms.spatial.resample_utils", "make_output_grid"),
-    "make_output_grid_chunk": ("medicai.transforms.spatial.resample_utils", "make_output_grid_chunk"),
+    "make_output_grid_chunk": (
+        "medicai.transforms.spatial.resample_utils",
+        "make_output_grid_chunk",
+    ),
     "sample_nearest": ("medicai.transforms.spatial.samplers", "sample_nearest"),
     "sample_trilinear": ("medicai.transforms.spatial.samplers", "sample_trilinear"),
     "sample_volume": ("medicai.transforms.spatial.samplers", "sample_volume"),

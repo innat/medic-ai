@@ -7,13 +7,10 @@ from keras import ops
 
 from medicai.transforms.utils import _get_static_shape_tuple, get_tensor_rank
 
-
 # Spatial Utility
 
 
-def _validate_volume_and_coords(
-    volume: Any, coords: Any
-) -> tuple[Any, Any]:
+def _validate_volume_and_coords(volume: Any, coords: Any) -> tuple[Any, Any]:
     volume = ops.convert_to_tensor(volume)
     coords = ops.cast(ops.convert_to_tensor(coords), "float32")
 

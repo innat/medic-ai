@@ -371,16 +371,17 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ):
         """Sample one crop center using positive/negative label sampling."""
-        positive = self.random_uniform(
-            shape=(),
-            minval=0.0,
-            maxval=1.0,
-            dtype="float32",
-        ) < self.pos_ratio
-        positive_center = self._sample_positive_center(label, spatial_rank)
-        negative_center = self._sample_negative_center(
-            image, label, image_reference, spatial_rank
+        positive = (
+            self.random_uniform(
+                shape=(),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.pos_ratio
         )
+        positive_center = self._sample_positive_center(label, spatial_rank)
+        negative_center = self._sample_negative_center(image, label, image_reference, spatial_rank)
         return ops.where(positive, positive_center, negative_center)
 
     def _sample_positive_center(self, label, spatial_rank: int):

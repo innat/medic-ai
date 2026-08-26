@@ -11,4 +11,3 @@ import pytest
 @pytest.mark.skip(reason="JAX training scenarios are not defined yet.")
 def test_jax_training_placeholder():
     """Reserve the test entry point for JAX training coverage."""
-

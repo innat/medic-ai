@@ -1,8 +1,8 @@
 import re
 
+import keras
 import numpy as np
 import pytest
-import keras
 from keras import ops
 
 from medicai.transforms import (
@@ -23,17 +23,17 @@ from medicai.transforms.utils import (
     ensure_batch_axis_for_layout,
     ensure_spatial_tuple,
     get_input_layout_info,
-    get_tensor_rank,
     get_spatial_rank,
     get_spatial_shape_for_layout,
-    normalize_input_layout,
+    get_tensor_rank,
     normalize_axes,
+    normalize_input_layout,
     normalize_spatial_axes,
-    restore_from_batch_axis,
     resolve_input_layout_axes,
+    restore_from_batch_axis,
     validate_input_layout,
-    validate_tensor_matches_layout,
     validate_spatial_rank,
+    validate_tensor_matches_layout,
 )
 
 

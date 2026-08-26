@@ -157,7 +157,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
-        self.source_value_range = self._validate_value_range(source_value_range, "source_value_range")
+        self.source_value_range = self._validate_value_range(
+            source_value_range, "source_value_range"
+        )
         self.target_value_range = (
             None
             if target_value_range is None
@@ -273,8 +275,12 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         clip: bool | None = None,
     ) -> Any:
         """Scale a tensor with a kernel that is agnostic to sample vs batch layout."""
-        src_range = self.source_value_range if source_value_range is None else tuple(source_value_range)
-        tgt_range = self.target_value_range if target_value_range is None else tuple(target_value_range)
+        src_range = (
+            self.source_value_range if source_value_range is None else tuple(source_value_range)
+        )
+        tgt_range = (
+            self.target_value_range if target_value_range is None else tuple(target_value_range)
+        )
         in_min, in_max = src_range
         if tgt_range is None:
             out_min = out_max = None
@@ -283,11 +289,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         should_clip = self.clip if clip is None else clip
 
         if in_max == in_min:
-            result = (
-                tensor - in_min
-                if out_min is None
-                else tensor - in_min + out_min
-            )
+            result = tensor - in_min if out_min is None else tensor - in_min + out_min
             return ops.cast(result, dtype=self.dtype)
 
         tensor = (tensor - in_min) / (in_max - in_min)
@@ -306,8 +308,12 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         """Invert one sample or batch tensor from target range back to source range."""
         tensor = ops.cast(ops.convert_to_tensor(tensor), self.dtype)
 
-        src_range = self.source_value_range if source_value_range is None else tuple(source_value_range)
-        tgt_range = self.target_value_range if target_value_range is None else tuple(target_value_range)
+        src_range = (
+            self.source_value_range if source_value_range is None else tuple(source_value_range)
+        )
+        tgt_range = (
+            self.target_value_range if target_value_range is None else tuple(target_value_range)
+        )
         in_min, in_max = src_range
         if tgt_range is None:
             out_min = out_max = None
@@ -338,9 +344,7 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             raise ValueError(f"`{name}` must contain exactly 2 values, got {len(value_range)}.")
         lower, upper = value_range
         if lower > upper:
-            raise ValueError(
-                f"`{name}` must be ordered as (min, max), got ({lower}, {upper})."
-            )
+            raise ValueError(f"`{name}` must be ordered as (min, max), got ({lower}, {upper}).")
         return (float(lower), float(upper))
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):

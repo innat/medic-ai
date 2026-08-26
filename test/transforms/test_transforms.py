@@ -235,7 +235,9 @@ def test_resize_validates_input_layout_and_layout_contract():
 @pytest.mark.unit
 def test_resize_inverse_restores_original_spatial_shape():
     image = as_tensor(np.random.randn(6, 8, 1).astype(np.float32))
-    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(3, 4), input_layout="HWC")
+    resize = Resize(
+        keys=["image"], interpolation="bilinear", target_shape=(3, 4), input_layout="HWC"
+    )
 
     forward = resize(TensorBundle({"image": image}))
     restored = resize.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -247,7 +249,9 @@ def test_resize_inverse_restores_original_spatial_shape():
 @pytest.mark.unit
 def test_resize_inverse_without_trace_is_noop():
     bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
-    resize = Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC")
+    resize = Resize(
+        keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC"
+    )
 
     restored = resize.inverse(bundle)
 
@@ -872,7 +876,9 @@ def test_normalize_intensity_records_trace():
 @pytest.mark.unit
 def test_normalize_intensity_nonzero_preserves_zero_background():
     image = as_tensor(np.array([[[0.0], [1.0]], [[3.0], [0.0]]], dtype=np.float32))
-    out = NormalizeIntensity(keys=["image"], nonzero=True, input_layout="HWC")(TensorBundle({"image": image}))
+    out = NormalizeIntensity(keys=["image"], nonzero=True, input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     normalized = ops.convert_to_numpy(out["image"])
     assert normalized[0, 0, 0] == 0.0
@@ -967,7 +973,9 @@ def test_normalize_intensity_accepts_plain_numpy_inputs():
 @pytest.mark.unit
 def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
     image = as_tensor(np.array([[[np.nan], [np.inf]], [[-np.inf], [1.0]]], dtype=np.float32))
-    out = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     filled = ops.convert_to_numpy(out["image"])
     assert np.isfinite(filled).all()
@@ -980,7 +988,9 @@ def test_signal_fill_empty_replaces_invalid_values_and_records_trace():
 @pytest.mark.unit
 def test_signal_fill_empty_outputs_float32_tensor():
     image = as_tensor(np.array([[[np.nan], [1.0]]], dtype=np.float64))
-    out = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="HWC")(TensorBundle({"image": image}))
+    out = SignalFillEmpty(keys=["image"], fill_value=2.0, input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     assert ops.dtype(out["image"]) == "float32"
     np.testing.assert_allclose(
@@ -1058,7 +1068,9 @@ def test_signal_fill_empty_uses_same_pixel_kernel_for_sample_and_batch_modes():
 @pytest.mark.unit
 def test_shift_intensity_records_trace():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")(TensorBundle({"image": image}))
+    out = ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     trace = out.get_applied_transforms()[-1]
     assert trace["name"] == "ShiftIntensity"
@@ -1240,7 +1252,9 @@ def test_random_shift_intensity_inverse_restores_scalar_sample():
 @pytest.mark.unit
 def test_random_shift_intensity_inverse_restores_channel_wise_sample():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")
+    transform = RandomShiftIntensity(
+        keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC"
+    )
 
     forward = transform(TensorBundle({"image": image}))
     restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
@@ -1281,7 +1295,9 @@ def test_random_shift_intensity_inverse_without_trace_is_noop():
 def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_strict():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     label = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    transform = RandomShiftIntensity(keys=["image", "label"], offset=0.5, prob=1.0, input_layout="HWC")
+    transform = RandomShiftIntensity(
+        keys=["image", "label"], offset=0.5, prob=1.0, input_layout="HWC"
+    )
 
     forward = transform(TensorBundle({"image": image, "label": label}))
 
@@ -1292,9 +1308,9 @@ def test_random_shift_intensity_inverse_raises_for_missing_traced_key_when_stric
 @pytest.mark.unit
 def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
     image = as_tensor(np.ones((4, 4, 2), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")(
-        TensorBundle({"image": image})
-    )
+    out = RandomShiftIntensity(
+        keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC"
+    )(TensorBundle({"image": image}))
 
     trace = out.get_applied_transforms()[-1]
     offsets = trace["params"]["sampled_offsets"]["image"]
@@ -1304,7 +1320,9 @@ def test_random_shift_intensity_channel_wise_records_per_channel_offsets():
 @pytest.mark.unit
 def test_random_shift_intensity_prob_zero_is_noop():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0, input_layout="HWC")(TensorBundle({"image": image}))
+    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=0.0, input_layout="HWC")(
+        TensorBundle({"image": image})
+    )
 
     np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), ops.convert_to_numpy(image))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
@@ -1337,9 +1355,9 @@ def test_random_shift_intensity_supports_2d_and_3d_channel_last_tensors():
 def test_random_shift_intensity_channel_wise_samples_per_channel_values():
     image = as_tensor(np.ones((3, 4, 2), dtype=np.float32))
 
-    out = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC")(
-        TensorBundle({"image": image})
-    )
+    out = RandomShiftIntensity(
+        keys=["image"], offset=0.5, prob=1.0, channel_wise=True, input_layout="HWC"
+    )(TensorBundle({"image": image}))
 
     shifted = ops.convert_to_numpy(out["image"])
     trace = out.get_applied_transforms()[-1]
@@ -1483,9 +1501,7 @@ def test_spatial_crop_supports_2d_and_3d_channel_last_tensors():
         crop_size=(2, 3, 4),
         crop_center=(2, 2, 3),
         input_layout="DHWC",
-    )(
-        TensorBundle({"image": image_3d})
-    )
+    )(TensorBundle({"image": image_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (3, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 3, 4, 1)
@@ -1653,17 +1669,13 @@ def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
         crop_size=(3, 4),
         random_center=False,
         input_layout="HWC",
-    )(
-        TensorBundle({"image": image_2d})
-    )
+    )(TensorBundle({"image": image_2d}))
     out_3d = RandomSpatialCrop(
         keys=["image"],
         crop_size=(2, 3, 4),
         random_center=False,
         input_layout="DHWC",
-    )(
-        TensorBundle({"image": image_3d})
-    )
+    )(TensorBundle({"image": image_3d}))
 
     assert tuple(ops.shape(out_2d["image"])) == (3, 4, 1)
     assert tuple(ops.shape(out_3d["image"])) == (2, 3, 4, 1)
@@ -1894,7 +1906,9 @@ def test_random_spatial_crop_random_size_and_label_aware_modes():
 
 @pytest.mark.unit
 def test_random_spatial_crop_requires_label_for_label_aware_mode():
-    transform = RandomSpatialCrop(keys=["image"], crop_size=(2, 2), invalid_label=0, input_layout="HWC")
+    transform = RandomSpatialCrop(
+        keys=["image"], crop_size=(2, 2), invalid_label=0, input_layout="HWC"
+    )
 
     with pytest.raises(KeyError, match="`label` key is required"):
         transform(TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))}))
@@ -2491,7 +2505,9 @@ def test_random_crop_by_pos_neg_label_validates_arguments():
         )
 
     with pytest.raises(ValueError, match="requires a pair of image and label as keys"):
-        RandomCropByPosNegLabel(keys=["image"], target_shape=(2, 2, 2), pos=1, neg=1, input_layout="DHWC")
+        RandomCropByPosNegLabel(
+            keys=["image"], target_shape=(2, 2, 2), pos=1, neg=1, input_layout="DHWC"
+        )
 
     with pytest.raises(ValueError, match="currently supports only num_samples=1"):
         RandomCropByPosNegLabel(
@@ -2528,9 +2544,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
             pos=1,
             neg=1,
             input_layout="HWC",
-        )(
-            TensorBundle({"image": image_2d, "label": label_2d})
-        )
+        )(TensorBundle({"image": image_2d, "label": label_2d}))
 
     skip_transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
@@ -2811,7 +2825,9 @@ def test_rotate90_accepts_numpy_mapping_inputs():
 
     out = Rotate90(keys=["image"], k=1, input_layout="HWC")({"image": image})
 
-    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), np.rot90(image, k=1, axes=(0, 1)))
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(out["image"]), np.rot90(image, k=1, axes=(0, 1))
+    )
 
 
 @pytest.mark.unit
@@ -2959,9 +2975,7 @@ def test_random_rotate90_rejects_rectangular_rotation_plane():
     image = as_tensor(np.zeros((2, 3, 1), dtype=np.float32))
 
     with pytest.raises(ValueError, match="equal sizes for the selected rotation axes"):
-        RandomRotate90(keys=["image"], prob=1.0, input_layout="HWC")(
-            TensorBundle({"image": image})
-        )
+        RandomRotate90(keys=["image"], prob=1.0, input_layout="HWC")(TensorBundle({"image": image}))
 
 
 @pytest.mark.unit
@@ -3140,29 +3154,33 @@ def test_random_rotate_supports_2d_sample_and_batch_layouts():
     image = as_tensor(np.random.randn(8, 9, 1).astype(np.float32))
     batch = as_tensor(np.random.randn(2, 8, 9, 1).astype(np.float32))
 
-    sample_out = RandomRotate(
-        keys=["image"], factor=0.0, prob=1.0, input_layout="hwc", seed=7
-    )(TensorBundle({"image": image}))
-    batch_out = RandomRotate(
-        keys=["image"], factor=0.0, prob=1.0, input_layout="BHWc", seed=7
-    )(TensorBundle({"image": batch}))
+    sample_out = RandomRotate(keys=["image"], factor=0.0, prob=1.0, input_layout="hwc", seed=7)(
+        TensorBundle({"image": image})
+    )
+    batch_out = RandomRotate(keys=["image"], factor=0.0, prob=1.0, input_layout="BHWc", seed=7)(
+        TensorBundle({"image": batch})
+    )
 
     assert tuple(ops.shape(sample_out["image"])) == (8, 9, 1)
     assert tuple(ops.shape(batch_out["image"])) == (2, 8, 9, 1)
-    np.testing.assert_allclose(ops.convert_to_numpy(sample_out["image"]), ops.convert_to_numpy(image))
-    np.testing.assert_allclose(ops.convert_to_numpy(batch_out["image"]), ops.convert_to_numpy(batch))
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(sample_out["image"]), ops.convert_to_numpy(image)
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(batch_out["image"]), ops.convert_to_numpy(batch)
+    )
 
 
 @pytest.mark.unit
 def test_random_rotate_replays_with_same_integer_seed():
     image = as_tensor(np.random.randn(2, 8, 9, 1).astype(np.float32))
 
-    first = RandomRotate(
-        keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17
-    )(TensorBundle({"image": image}))
-    second = RandomRotate(
-        keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17
-    )(TensorBundle({"image": image}))
+    first = RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17)(
+        TensorBundle({"image": image})
+    )
+    second = RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="BHWC", seed=17)(
+        TensorBundle({"image": image})
+    )
 
     np.testing.assert_allclose(
         ops.convert_to_numpy(first["image"]), ops.convert_to_numpy(second["image"])
@@ -3198,9 +3216,7 @@ def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
     )
 
     forward = transform(TensorBundle({"image": image}))
-    restored = transform.inverse(
-        TensorBundle({"image": forward["image"]}, forward.meta)
-    )
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     assert tuple(ops.shape(restored["image"])) == tuple(ops.shape(image))
     assert np.isfinite(ops.convert_to_numpy(restored["image"])).all()
@@ -3262,7 +3278,9 @@ def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
 
     transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="DHWC")
 
-    sample_out = ops.convert_to_numpy(transform._apply_tensor(sample, "image", {"D": sample_angles}))
+    sample_out = ops.convert_to_numpy(
+        transform._apply_tensor(sample, "image", {"D": sample_angles})
+    )
     batch_out = ops.convert_to_numpy(
         RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="BDHWC")._apply_tensor(
             batch, "image", {"D": batch_angles}
@@ -3592,9 +3610,7 @@ def test_random_cutout_prob_zero_and_unsupported_rank_rejection():
         num_cuts=1,
         prob=0.0,
         input_layout="DHWC",
-    )(
-        TensorBundle({"image": image, "label": label})
-    )
+    )(TensorBundle({"image": image, "label": label}))
     assert not bool(ops.convert_to_numpy(out.get_applied_transforms()[-1]["applied"]))
 
     image_1d_like = as_tensor(np.ones((6, 1), dtype=np.float32))
@@ -3744,7 +3760,9 @@ def test_compose_inverse_skips_noninvertible_and_restores_invertible_transforms(
         [
             ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
             Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
-            Resize(keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC"),
+            Resize(
+                keys=["image"], interpolation="bilinear", target_shape=(2, 2), input_layout="HWC"
+            ),
         ]
     )
 

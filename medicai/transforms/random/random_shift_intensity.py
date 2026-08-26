@@ -224,9 +224,7 @@ class RandomShiftIntensity(RandomTransform):
                 return tensor
 
             inverse_offset = (
-                -offset
-                if isinstance(offset, Number)
-                else -ops.cast(offset, tensor.dtype)
+                -offset if isinstance(offset, Number) else -ops.cast(offset, tensor.dtype)
             )
             return _apply_if_applied(
                 applied,

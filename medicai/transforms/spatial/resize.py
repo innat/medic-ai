@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
+
 from keras import ops
 
 from medicai.utils.image import resize_volumes
@@ -196,7 +197,9 @@ class Resize(KeyedTransform, InvertibleTransform):
             return self.transform_tensor(tensor, key, params)
 
         present_keys = self.apply_to_present_keys(bundle, apply_resize)
-        self.record_transform(bundle, self.build_trace_params(params, present_keys, original_shapes))
+        self.record_transform(
+            bundle, self.build_trace_params(params, present_keys, original_shapes)
+        )
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -290,8 +293,10 @@ class Resize(KeyedTransform, InvertibleTransform):
         if effective_spatial_rank is None:
             layout = validate_tensor_matches_layout(
                 tensor,
-                input_layout=self.input_layout if self.layout_info.batched else (
-                    "BDHWC" if len(target_shape) == 3 else "BHWC"
+                input_layout=(
+                    self.input_layout
+                    if self.layout_info.batched
+                    else ("BDHWC" if len(target_shape) == 3 else "BHWC")
                 ),
                 transform_name=type(self).__name__,
             )

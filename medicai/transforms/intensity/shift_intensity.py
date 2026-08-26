@@ -136,9 +136,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
 
         def inverse_shift(tensor: Any, _: str) -> Any:
             inverse_offset = (
-                -offset
-                if isinstance(offset, Number)
-                else -ops.cast(offset, tensor.dtype)
+                -offset if isinstance(offset, Number) else -ops.cast(offset, tensor.dtype)
             )
             return self.shift_tensor(tensor, offset=inverse_offset)
 
@@ -174,9 +172,7 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             "input_layout": params["input_layout"],
         }
 
-    def shift_tensor(
-        self, tensor: Any, offset: Union[float, Any, None] = None
-    ) -> Any:
+    def shift_tensor(self, tensor: Any, offset: Union[float, Any, None] = None) -> Any:
         """Shift one tensor by a scalar or broadcastable offset.
 
         This kernel is agnostic to sample vs batch layout because it performs

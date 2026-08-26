@@ -11,4 +11,3 @@ import pytest
 @pytest.mark.skip(reason="Torch training scenarios are not defined yet.")
 def test_torch_training_placeholder():
     """Reserve the test entry point for Torch training coverage."""
-

@@ -117,9 +117,7 @@ def test_build_affine_round_trips_spacing_direction_and_origin():
     affine = build_affine(spacing, direction, origin)
 
     np.testing.assert_allclose(as_numpy(spacing_from_affine(affine)), [2.0, 3.0, 4.0])
-    np.testing.assert_allclose(
-        as_numpy(direction_from_affine(affine)), as_numpy(direction)
-    )
+    np.testing.assert_allclose(as_numpy(direction_from_affine(affine)), as_numpy(direction))
     np.testing.assert_allclose(as_numpy(origin_from_affine(affine)), [10.0, 20.0, 30.0])
 
 
@@ -141,9 +139,7 @@ def test_affine_apply_and_invert_affine_round_trip_points():
     world = affine_apply(affine, points)
     restored = affine_apply(invert_affine(affine), world)
 
-    np.testing.assert_allclose(
-        as_numpy(restored), as_numpy(points), rtol=1e-6
-    )
+    np.testing.assert_allclose(as_numpy(restored), as_numpy(points), rtol=1e-6)
 
 
 @pytest.mark.unit
