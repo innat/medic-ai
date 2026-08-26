@@ -53,9 +53,16 @@ class RandomCropByPosNegLabel(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Randomly crop a 2D image-label pair using a raw Python dictionary:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomCropByPosNegLabel
@@ -74,12 +81,17 @@ class RandomCropByPosNegLabel(RandomTransform):
             output = result["image"]
             print(output.shape)
 
-        Randomly crop a 3D image-label pair stored in a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import RandomCropByPosNegLabel, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import RandomCropByPosNegLabel
 
             transform = RandomCropByPosNegLabel(
                 keys=["image", "label"],
@@ -89,10 +101,37 @@ class RandomCropByPosNegLabel(RandomTransform):
                 input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            label = tf.cast(image > 0, tf.int32)
-            bundle = TensorBundle({"image": image, "label": label})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            label = jnp.asarray(image > 0, dtype=jnp.int32)
+            result = transform({"image": image, "label": label})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomCropByPosNegLabel
+
+            transform = RandomCropByPosNegLabel(
+                keys=["image", "label"],
+                target_shape=(32, 32),
+                pos=1,
+                neg=1,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            image = torch.randn((2, 64, 64, 1))
+            label = (image > 0).to(torch.int32)
+            result = transform({"image": image, "label": label})
             output = result["image"]
             print(output.shape)
     """

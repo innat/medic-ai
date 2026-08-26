@@ -50,10 +50,16 @@ class RandomCutOut(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Apply random cutout to a 2D image-label pair using a raw Python
-        dictionary:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomCutOut
@@ -72,13 +78,17 @@ class RandomCutOut(RandomTransform):
             output = result["image"]
             print(output.shape)
 
-        Apply random cutout to a 3D image-label pair stored in a
-        ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import RandomCutOut, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import RandomCutOut
 
             transform = RandomCutOut(
                 keys=["image", "label"],
@@ -88,10 +98,37 @@ class RandomCutOut(RandomTransform):
                 input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            label = tf.cast(image > 0, tf.int32)
-            bundle = TensorBundle({"image": image, "label": label})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            label = jnp.asarray(image > 0, dtype=jnp.int32)
+            result = transform({"image": image, "label": label})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomCutOut
+
+            transform = RandomCutOut(
+                keys=["image", "label"],
+                mask_size=(16, 16),
+                num_cuts=2,
+                prob=0.5,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            image = torch.randn((2, 64, 64, 1))
+            label = (image > 0).to(torch.int32)
+            result = transform({"image": image, "label": label})
             output = result["image"]
             print(output.shape)
     """
