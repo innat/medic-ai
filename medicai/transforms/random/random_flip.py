@@ -42,9 +42,16 @@ class RandomFlip(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Randomly flip a 2D image using a raw Python dictionary:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomFlip
@@ -60,12 +67,16 @@ class RandomFlip(RandomTransform):
             output = result["image"]
             print(output.shape)
 
-        Randomly flip a 3D image stored in a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import RandomFlip, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            from medicai.transforms import RandomFlip
 
             transform = RandomFlip(
                 keys=["image"],
@@ -73,9 +84,30 @@ class RandomFlip(RandomTransform):
                 spatial_axis=0,
                 input_layout="DHWC",
             )
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomFlip
+
+            transform = RandomFlip(
+                keys=["image"], prob=0.5, spatial_axis=1, input_layout="BHWC"
+            )
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
     """

@@ -331,6 +331,76 @@ class RandomRotate(RandomTransform):
         seed: Optional integer or ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
+    Example:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
+
+            import tensorflow as tf
+            from medicai.transforms import RandomRotate
+
+            transform = RandomRotate(
+                keys=["image"],
+                factor=0.1,
+                prob=0.5,
+                input_layout="HWC",
+            )
+            image = tf.random.normal((64, 64, 1), seed=7)
+            result = transform({"image": image})
+            print(result["image"].shape)
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            from medicai.transforms import RandomRotate
+
+            transform = RandomRotate(
+                keys=["image"],
+                factor={"H": 0.1, "W": 0.1},
+                prob=0.5,
+                input_layout="DHWC",
+            )
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
+            print(result["image"].shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomRotate
+
+            transform = RandomRotate(
+                keys=["image"],
+                factor=0.1,
+                prob=0.5,
+                input_layout="BHWC",
+            )
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
+            print(result["image"].shape)
+
     Notes:
         The trace stores sampled per-item angles in bundle metadata, so inverse
         execution can work after the model replaces transformed tensors with

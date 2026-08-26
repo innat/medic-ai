@@ -53,9 +53,16 @@ class RandomShiftIntensity(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Randomly shift a 2D image using a raw Python dictionary:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomShiftIntensity
@@ -71,12 +78,16 @@ class RandomShiftIntensity(RandomTransform):
             output = result["image"]
             print(output.shape)
 
-        Randomly shift a 3D image stored in a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import RandomShiftIntensity, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            from medicai.transforms import RandomShiftIntensity
 
             transform = RandomShiftIntensity(
                 keys=["image"],
@@ -84,9 +95,30 @@ class RandomShiftIntensity(RandomTransform):
                 prob=0.5,
                 input_layout="DHWC",
             )
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomShiftIntensity
+
+            transform = RandomShiftIntensity(
+                keys=["image"], offset=0.1, prob=0.5, input_layout="BHWC"
+            )
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
     """
