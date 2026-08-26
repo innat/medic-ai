@@ -54,15 +54,12 @@ class RandomRotate90(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Keras selects its backend before the first Keras import. Each example
-        below is an independent process.
 
         TensorFlow backend:
 
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
@@ -84,7 +81,6 @@ class RandomRotate90(RandomTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
@@ -108,7 +104,6 @@ class RandomRotate90(RandomTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
