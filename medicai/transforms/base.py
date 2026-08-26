@@ -150,6 +150,13 @@ def _get_static_tensor_value(value: Any) -> Any:
     Keras Ops does not expose symbolic static-value extraction. Converting to
     NumPy is sufficient for eager/concrete values and fails safely for symbolic
     tensors, which preserves the caller's existing error handling.
+
+    This helper is intended for small scalar or configuration values used by
+    validation, not runtime tensor data or hot transformation paths. In
+    ``tf.data`` or other graph execution, symbolic tensors return ``None``;
+    callers must keep the fallback path backend operations rather than relying
+    on Python or NumPy control flow. For eager device tensors, conversion may
+    synchronize the device and copy data to the host.
     """
     try:
         return ops.convert_to_numpy(value)
