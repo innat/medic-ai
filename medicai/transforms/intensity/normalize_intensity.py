@@ -40,17 +40,24 @@ class NormalizeIntensity(KeyedTransform):
             after normalization. For channel-wise normalization, nonzero values
             determine the statistics used for each channel.
         channel_wise: If ``True``, normalize each channel independently using
-            channel-specific statistics. If ``False``, normalize using one set
-            of statistics over the full tensor.
+            one statistic per channel. If ``False``, normalize using one set
+            of statistics over the full tensor. For ``BHWC`` and ``BDHWC``,
+            channel-wise statistics are shared across the batch rather than
+            computed independently for each sample. Use a sample layout when
+            normalizing one image or volume at a time.
         dtype: Output dtype used for computation and returned tensors.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Normalize a 2D image using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import NormalizeIntensity
@@ -62,28 +69,56 @@ class NormalizeIntensity(KeyedTransform):
                 input_layout="HWC",
             )
 
-            image = tf.random.normal((64, 64, 1))
+            image = tf.random.normal((64, 64, 1), seed=7)
             result = transform({"image": image})
             output = result["image"]
             print(output.shape)
 
-        Normalize a 3D image volume using a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import NormalizeIntensity, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import NormalizeIntensity
 
             transform = NormalizeIntensity(
                 keys=["image"],
                 nonzero=True,
-                channel_wise=False,
+                channel_wise=True,
                 input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1), dtype=jnp.float32
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import NormalizeIntensity
+
+            transform = NormalizeIntensity(
+                keys=["image"],
+                nonzero=True,
+                channel_wise=True,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1), dtype=torch.float32)
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 

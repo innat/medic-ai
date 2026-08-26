@@ -36,9 +36,13 @@ class SignalFillEmpty(KeyedTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Replace invalid values in a 2D image using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import SignalFillEmpty
@@ -50,24 +54,39 @@ class SignalFillEmpty(KeyedTransform):
             output = result["image"]
             print(output.shape)
 
-        Sanitize a 3D image volume using a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import SignalFillEmpty, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import SignalFillEmpty
 
             transform = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="DHWC")
 
-            image = tf.random.normal((16, 32, 32, 1))
-            image = tf.tensor_scatter_nd_update(
-                image,
-                indices=[[0, 0, 0, 0]],
-                updates=[float("nan")],
-            )
+            image = jnp.array([[[[jnp.nan]], [[1.0]]]], dtype=jnp.float32)
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
 
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import SignalFillEmpty
+
+            transform = SignalFillEmpty(keys=["image"], fill_value=0.0, input_layout="BHWC")
+
+            batch = torch.tensor(
+                [[[[float("nan")]], [[float("inf")]]]], dtype=torch.float32
+            )
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 

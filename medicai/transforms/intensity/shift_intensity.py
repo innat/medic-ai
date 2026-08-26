@@ -40,9 +40,13 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Add a fixed offset to a 2D image using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import ShiftIntensity
@@ -54,18 +58,40 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
             output = result["image"]
             print(output.shape)
 
-        Add a fixed offset to a 3D image volume using a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import ShiftIntensity, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            from medicai.transforms import ShiftIntensity
 
             transform = ShiftIntensity(keys=["image"], offset=0.1, input_layout="DHWC")
 
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import ShiftIntensity
+
+            transform = ShiftIntensity(keys=["image"], offset=0.1, input_layout="BHWC")
+
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 

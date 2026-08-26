@@ -45,9 +45,13 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Map a 2D image into ``[-1, 1]`` using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import ScaleIntensityRange
@@ -65,13 +69,16 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             output = result["image"]
             print(output.shape)
 
-        Map a 3D image volume from a clipped CT range into ``[0, 1]`` using a
-        ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import ScaleIntensityRange, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import ScaleIntensityRange
 
             transform = ScaleIntensityRange(
                 keys=["image"],
@@ -81,9 +88,38 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
                 input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.uniform(
+                jax.random.PRNGKey(7),
+                shape=(32, 64, 64, 1),
+                minval=-175.0,
+                maxval=250.0,
+                dtype=jnp.float32,
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import ScaleIntensityRange
+
+            transform = ScaleIntensityRange(
+                keys=["image"],
+                source_value_range=(0.0, 255.0),
+                target_value_range=(-1.0, 1.0),
+                clip=True,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            batch = torch.rand((2, 64, 64, 1)) * 255.0
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 
