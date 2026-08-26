@@ -67,14 +67,19 @@ class Orientation(KeyedTransform, InvertibleTransform):
             missing requested keys raise an error.
 
     Example:
-        Reorient an image-label pair to ``RAS`` and then restore the original
-        orientation:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
 
-            import numpy as np
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
+
             import tensorflow as tf
-            from medicai.transforms import Orientation, TensorBundle
+            from medicai.transforms import Orientation
 
             orient = Orientation(keys=["image", "label"], axcodes="RAS")
             image = tf.random.normal((32, 64, 64, 1))
@@ -89,34 +94,44 @@ class Orientation(KeyedTransform, InvertibleTransform):
                 dtype=tf.float32,
             )
 
-            bundle = TensorBundle(
-                {
-                    "image": image,
-                    "label": label
-                },
-                meta={
-                    "affine": affine
-                },
+            forward = orient(
+                {"image": image, "label": label},
+                {"affine": affine},
             )
-
-            forward = orient(bundle)
             restored = orient.inverse(forward)
-            print(np.all(restored["image"].numpy() == image.numpy())) # True
+            print(restored["image"].shape)
 
-        Reorient one volume and then map it back with ``inverse()``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Orientation, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import Orientation
 
             transform = Orientation(keys=["image"], axcodes="RAS")
-            image = tf.random.normal((16, 32, 32, 1))
-            affine = tf.eye(4)
+            image = jnp.ones((16, 32, 32, 1), dtype=jnp.float32)
+            result = transform({"image": image}, {"affine": jnp.eye(4)})
+            print(result["image"].shape)
 
-            bundle = TensorBundle({"image": image}, {"affine": affine})
-            forward = transform(bundle)
-            restored = transform.inverse(forward)
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import Orientation
+
+            transform = Orientation(keys=["image"], axcodes="RAS")
+            image = torch.ones((16, 32, 32, 1))
+            result = transform({"image": image}, {"affine": torch.eye(4)})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with selected tensors reoriented in

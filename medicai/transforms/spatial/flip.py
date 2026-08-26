@@ -44,51 +44,61 @@ class Flip(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Flip a 3D image-label pair along the depth axis:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import Flip
 
-            transform = Flip(keys=["image", "label"], spatial_axis=0, input_layout="DHWC")
-
-            image = tf.random.normal((32, 64, 64, 1))
-            label = tf.random.uniform(
-                (32, 64, 64, 1), maxval=2, dtype=tf.int32
-            )
-
-            result = transform({"image": image, "label": label})
-
-        Restore a flipped tensor with ``inverse()``:
-
-        .. code-block:: python
-
-            import tensorflow as tf
-            from medicai.transforms import Flip, TensorBundle
-
-            transform = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
-            image = tf.random.normal((64, 64, 1))
-
-            forward = transform({"image": image})
-            restored = transform.inverse(forward)
-
-            print(forward["image"].shape)
-            print(restored["image"].shape)
-
-        Flip a 2D image stored in a ``TensorBundle``:
-
-        .. code-block:: python
-
-            import tensorflow as tf
-            from medicai.transforms import Flip, TensorBundle
-
             transform = Flip(keys=["image"], spatial_axis=0, input_layout="HWC")
-            image = tf.random.normal((64, 64, 1))
+            image = tf.random.normal((64, 64, 1), seed=7)
 
             result = transform({"image": image})
-            output = result["image"]
-            print(output.shape)
+            restored = transform.inverse(result)
+            print(result["image"].shape, restored["image"].shape)
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            from medicai.transforms import Flip
+
+            transform = Flip(keys=["image"], spatial_axis=1, input_layout="DHWC")
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
+            print(result["image"].shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import Flip
+
+            transform = Flip(keys=["image"], spatial_axis=1, input_layout="BHWC")
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with flipped tensors and an

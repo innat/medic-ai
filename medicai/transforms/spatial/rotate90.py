@@ -62,51 +62,64 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Rotate a 2D image-label pair by 90 degrees:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import Rotate90
-
-            transform = Rotate90(keys=["image", "label"], k=1, input_layout="HWC")
-
-            image = tf.random.normal((128, 128, 1))
-            label = tf.random.uniform((128, 128, 1), maxval=2, dtype=tf.int32)
-
-            result = transform({"image": image, "label": label})
-
-        Rotate a tensor and then restore it with ``inverse()``:
-
-        .. code-block:: python
-
-            import tensorflow as tf
-            from medicai.transforms import Rotate90, TensorBundle
 
             transform = Rotate90(keys=["image"], k=1, input_layout="HWC")
+            image = tf.random.normal((128, 128, 1), seed=7)
+            result = transform({"image": image})
+            restored = transform.inverse(result)
+            print(result["image"].shape, restored["image"].shape)
 
-            image = tf.random.normal((64, 64, 1))
-            forward = transform({"image": image})
-            restored = transform.inverse(forward)
-            print(forward["image"].shape)
-            print(restored["image"].shape)
-
-        Rotate a 3D image-label pair by 90 degrees:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
             from medicai.transforms import Rotate90
 
-            transform = Rotate90(keys=["image", "label"], k=1, input_layout="DHWC")
-
-            image = tf.random.normal((64, 128, 128, 1))
-            label = tf.random.uniform(
-                (64, 128, 128, 1), maxval=2, dtype=tf.int32
+            transform = Rotate90(
+                keys=["image"], k=1, spatial_axis=(1, 2), input_layout="DHWC"
             )
-            result = transform({"image": image, "label": label})
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+            )
+            result = transform({"image": image})
             print(result["image"].shape)
-            print(result["label"].shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import Rotate90
+
+            transform = Rotate90(
+                keys=["image"], k=1, spatial_axis=(1, 2), input_layout="BHWC"
+            )
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with rotated tensors and an

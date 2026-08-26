@@ -92,9 +92,16 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 mammography vs. tighter anatomy-to-artifact spacing in 3D CT).
 
     Example:
-        Crop a 2D image-label pair using a raw Python dictionary:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import CropForeground
@@ -113,13 +120,16 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             cropped_image = result["image"]
             cropped_label = result["label"]
 
-        Crop a 3D image volume using a ``TensorBundle`` and inspect the stored
-        crop coordinates:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import CropForeground, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import CropForeground
 
             transform = CropForeground(
                 keys=["image"],
@@ -128,15 +138,27 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 input_layout="DHWC",
             )
 
-            image = tf.pad(
-                tf.ones((8, 16, 16, 1)),
-                paddings=[[4, 4], [8, 8], [8, 8], [0, 0]],
-            )
-            bundle = TensorBundle({"image": image})
+            image = jnp.ones((8, 16, 16, 1), dtype=jnp.float32)
+            result = transform({"image": image})
+            print(result["image"].shape)
 
-            result = transform(bundle)
-            start = result["foreground_start_coord"]
-            end = result["foreground_end_coord"]
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import CropForeground
+
+            transform = CropForeground(
+                keys=["image"], source_key="image", input_layout="BHWC"
+            )
+            image = torch.ones((2, 32, 32, 1))
+            result = transform({"image": image})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with cropped tensors, optional crop

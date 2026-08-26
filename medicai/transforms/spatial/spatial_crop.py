@@ -43,9 +43,16 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Crop a centered 3D patch from an image-label pair:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import SpatialCrop
@@ -66,11 +73,15 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             print(result["image"].shape)
             print(result["label"].shape)
 
-        Crop a centered 2D patch from an image-label pair:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
             from medicai.transforms import SpatialCrop
 
             transform = SpatialCrop(
@@ -80,14 +91,33 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 input_layout="HWC",
             )
 
-            image = tf.random.normal((96, 96, 1))
-            label = tf.random.uniform(
-                (96, 96, 1), maxval=2, dtype=tf.int32
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(96, 96, 1)
             )
-            result = transform({"image": image, "label": label})
-
+            result = transform({"image": image})
             print(result["image"].shape)
-            print(result["label"].shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import SpatialCrop
+
+            transform = SpatialCrop(
+                keys=["image"],
+                crop_size=(32, 32),
+                crop_center=(32, 32),
+                input_layout="BHWC",
+            )
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1))
+            result = transform({"image": batch})
+            print(result["image"].shape)
 
     ``inverse()`` is a placement inverse: it pads the cropped tensor back into
     its original spatial canvas using the recorded crop coordinates. This is

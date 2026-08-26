@@ -64,10 +64,16 @@ class Spacing(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Resample a 3D image-label pair to isotropic spacing using a raw Python
-        dictionary and affine metadata:
+        Keras selects its backend before the first Keras import. Each example
+        below is an independent process.
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import Spacing
@@ -95,41 +101,33 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 {"affine": affine}
             )
 
-        Resample a 3D image volume using a ``TensorBundle`` and restore its
-        prior spacing:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Spacing, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import Spacing
 
             transform = Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0))
 
-            image = tf.random.normal((24, 64, 64, 1))
-            affine = tf.constant(
-                [
-                    [0.0, 0.0, 2.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [3.0, 0.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                dtype=tf.float32,
-            )
+            image = jnp.ones((24, 64, 64, 1), dtype=jnp.float32)
+            result = transform({"image": image}, {"affine": jnp.eye(4)})
+            print(result["image"].shape)
 
-            bundle = TensorBundle(
-                {"image": image},
-                {"affine": affine}
-            )
-            forward = transform(bundle)
-            restored = transform.inverse(forward)
-
-        Resample an image-label pair and then map it back to the original
-        spatial shape:
+        Torch backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Spacing, TensorBundle
+            import os
+
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import Spacing
 
             transform = Spacing(
                 keys=["image", "label"],
@@ -137,15 +135,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 interpolation=("trilinear", "nearest"),
             )
 
-            image = tf.random.normal((12, 32, 32, 1))
-            label = tf.random.uniform((12, 32, 32, 1), maxval=2, dtype=tf.int32)
-            affine = tf.eye(4)
-
-            forward = transform(
-                {"image": image, "label": label},
-                {"affine": affine}
-            )
-            restored = transform.inverse(forward)
+            image = torch.ones((12, 32, 32, 1))
+            result = transform({"image": image}, {"affine": torch.eye(4)})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with resampled tensors, updated
