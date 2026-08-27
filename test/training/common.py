@@ -9,6 +9,9 @@ from medicai.transforms import (
     Compose,
     Flip,
     RandomChoice,
+    RandomFlip,
+    RandomRotate,
+    RandomRotate90,
     Rotate90,
     ScaleIntensityRange,
     SpatialCrop,
@@ -200,3 +203,37 @@ def apply_segmentation_pipeline(pipeline, image, label):
     """Apply one synchronized image/mask pipeline exactly once."""
     result = pipeline({"image": image, "label": label})
     return result["image"], result["label"]
+
+
+def build_gpu_random_pipeline(input_layout: str, *, segmentation: bool):
+    """Build a batch-layout pipeline for model-side random augmentation."""
+    keys = ["image", "label"] if segmentation else ["image"]
+    is_2d = input_layout == "BHWC"
+    flip_axis = 1
+    rotation_axes = (1, 2) if is_2d else (2, 3)
+    return Compose(
+        [
+            RandomFlip(
+                keys=keys,
+                prob=1.0,
+                spatial_axis=flip_axis,
+                input_layout=input_layout,
+                seed=11,
+            ),
+            RandomRotate90(
+                keys=keys,
+                prob=1.0,
+                max_k=3,
+                spatial_axis=rotation_axes,
+                input_layout=input_layout,
+                seed=13,
+            ),
+            RandomRotate(
+                keys=keys,
+                factor=0.1,
+                prob=1.0,
+                input_layout=input_layout,
+                seed=17,
+            ),
+        ]
+    )

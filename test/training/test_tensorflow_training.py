@@ -12,6 +12,7 @@ from test.training.common import (
     apply_segmentation_pipeline,
     build_classification_model,
     build_segmentation_model,
+    build_gpu_random_pipeline,
     build_transform_pipelines,
 )
 
@@ -107,7 +108,7 @@ def _fit_gpu_augmented_model(
     segmentation: bool,
 ):
     tf = _require_tensorflow()
-    pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[4]
+    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
         if segmentation:
