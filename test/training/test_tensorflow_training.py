@@ -15,6 +15,7 @@ from test.training.common import (
     build_segmentation_model,
     build_gpu_random_pipeline,
     build_transform_pipelines,
+    build_volume_geometry_pipeline,
 )
 
 
@@ -24,6 +25,47 @@ def _require_tensorflow():
     import tensorflow as tf
 
     return tf
+
+
+def _require_pygrain():
+    _require_tensorflow()
+    try:
+        import grain.python as pygrain
+    except ImportError:
+        pytest.skip("PyGrain is not installed.")
+    return pygrain
+
+
+class _ArraySource:
+    """Small PyGrain source that applies a sample transform per item."""
+
+    def __init__(self, images, labels, pipeline, affines=None):
+        self.images = images
+        self.labels = labels
+        self.pipeline = pipeline
+        self.affines = affines
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        data = {"image": self.images[index], "label": self.labels[index]}
+        meta = None if self.affines is None else {"affine": self.affines[index]}
+        result = self.pipeline(data, meta)
+        return result["image"], result["label"]
+
+    def __repr__(self):
+        return f"_ArraySource(size={len(self)})"
+
+
+def _make_pygrain_loader(images, labels, pipeline, affines=None):
+    pygrain = _require_pygrain()
+    return pygrain.load(
+        _ArraySource(images, labels, pipeline, affines=affines),
+        batch_size=2,
+        num_epochs=1,
+        worker_count=0,
+    )
 
 
 def _fit_tfdata_classification(
@@ -240,3 +282,84 @@ def test_tensorflow_tfdata_2d_classification_accepts_multi_device_strategy():
         pipeline_index=1,
         strategy=strategy,
     )
+
+
+@pytest.mark.integration
+def test_tensorflow_pygrain_accepts_classification_samples():
+    """Train a classifier from PyGrain samples transformed before batching."""
+    images, labels = make_dataset().classification_2d()
+    loader = _make_pygrain_loader(
+        images,
+        labels,
+        build_transform_pipelines("HWC", segmentation=False)[0],
+    )
+    model = build_classification_model((12, 12, 1))
+
+    history = model.fit(loader, epochs=1, verbose=0)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+def test_tensorflow_pygrain_accepts_segmentation_samples():
+    """Train a segmenter from PyGrain samples with aligned image/mask transforms."""
+    images, labels = make_dataset().segmentation_2d()
+    loader = _make_pygrain_loader(
+        images,
+        labels,
+        build_transform_pipelines("HWC", segmentation=True)[2],
+    )
+    model = build_segmentation_model((8, 8, 1))
+
+    history = model.fit(loader, epochs=1, verbose=0)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+def test_tensorflow_pygrain_accepts_orientation_and_spacing():
+    """Run affine-aware geometry transforms per sample in a PyGrain loader."""
+    images, labels, affines = make_dataset().segmentation_3d_with_affine()
+    loader = _make_pygrain_loader(
+        images,
+        labels,
+        build_volume_geometry_pipeline(),
+        affines=affines,
+    )
+    model = build_segmentation_model((3, 6, 6, 1))
+
+    history = model.fit(loader, epochs=1, verbose=0)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+def test_tensorflow_pygrain_accepts_model_side_random_transforms():
+    """Feed PyGrain batches into a model with random transforms in ``train_step``."""
+    images, labels = make_dataset().segmentation_2d()
+    loader = _make_pygrain_loader(
+        images,
+        labels,
+        build_transform_pipelines("HWC", segmentation=True)[0],
+    )
+    pipeline = build_gpu_random_pipeline("BHWC", segmentation=True)
+
+    def augment_data(image, label):
+        result = pipeline({"image": image, "label": label})
+        return result["image"], result["label"]
+
+    model = GPUAugmentedModel(build_segmentation_model((12, 12, 1)), augment_data)
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss="binary_crossentropy",
+        metrics=[keras.metrics.BinaryAccuracy()],
+        jit_compile=False,
+    )
+
+    history = model.fit(loader, epochs=1, verbose=0)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])

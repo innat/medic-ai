@@ -14,7 +14,9 @@ from medicai.transforms import (
     RandomRotate90,
     Rotate90,
     ScaleIntensityRange,
+    Orientation,
     SpatialCrop,
+    Spacing,
 )
 
 
@@ -74,6 +76,15 @@ class DatasetBuilder:
             0.0, 1.0, num=self.num_samples * depth * height * width, dtype=np.float32
         ).reshape(self.num_samples, depth, height, width, 1)
         return images, (images > 0.5).astype(np.float32)
+
+    def segmentation_3d_with_affine(
+        self, spatial_shape: tuple[int, int, int] = (6, 6, 6)
+    ):
+        """Return 3D segmentation samples and one identity affine per sample."""
+        images, labels = self.segmentation_3d(spatial_shape=spatial_shape)
+        affine = np.eye(4, dtype=np.float32)
+        affines = np.repeat(affine[None, ...], self.num_samples, axis=0)
+        return images, labels, affines
 
 
 def build_classification_model(input_shape):
@@ -251,6 +262,21 @@ def build_gpu_random_pipeline(input_layout: str, *, segmentation: bool):
                 prob=1.0,
                 input_layout=input_layout,
                 seed=17,
+            ),
+        ]
+    )
+
+
+def build_volume_geometry_pipeline():
+    """Build the sample-level affine-aware pipeline used by dataloader tests."""
+    return Compose(
+        [
+            Orientation(keys=["image", "label"], axcodes="RAS", input_layout="DHWC"),
+            Spacing(
+                keys=["image", "label"],
+                pixdim=(2.0, 1.0, 1.0),
+                interpolation=("trilinear", "nearest"),
+                input_layout="DHWC",
             ),
         ]
     )
