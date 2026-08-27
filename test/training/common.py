@@ -235,21 +235,32 @@ def apply_segmentation_pipeline(pipeline, image, label):
     return result["image"], result["label"]
 
 
-def build_gpu_random_pipeline(input_layout: str, *, segmentation: bool):
-    """Build a batch-layout pipeline for model-side random augmentation."""
+def build_gpu_random_pipeline(
+    input_layout: str,
+    *,
+    segmentation: bool,
+    include_rotate90: bool = True,
+):
+    """Build a batch-layout pipeline for model-side random augmentation.
+
+    ``RandomRotate90`` requires a square selected rotation plane. Callers using
+    rectangular fixtures can omit it while retaining ``RandomRotate`` coverage.
+    """
     keys = ["image", "label"] if segmentation else ["image"]
     is_2d = input_layout == "BHWC"
     flip_axis = 1
     rotation_axes = (1, 2) if is_2d else (2, 3)
-    return Compose(
-        [
-            RandomFlip(
-                keys=keys,
-                prob=1.0,
-                spatial_axis=flip_axis,
-                input_layout=input_layout,
-                seed=11,
-            ),
+    transforms = [
+        RandomFlip(
+            keys=keys,
+            prob=1.0,
+            spatial_axis=flip_axis,
+            input_layout=input_layout,
+            seed=11,
+        )
+    ]
+    if include_rotate90:
+        transforms.append(
             RandomRotate90(
                 keys=keys,
                 prob=1.0,
@@ -257,16 +268,18 @@ def build_gpu_random_pipeline(input_layout: str, *, segmentation: bool):
                 spatial_axis=rotation_axes,
                 input_layout=input_layout,
                 seed=13,
-            ),
-            RandomRotate(
-                keys=keys,
-                factor=0.1,
-                prob=1.0,
-                input_layout=input_layout,
-                seed=17,
-            ),
-        ]
+            )
+        )
+    transforms.append(
+        RandomRotate(
+            keys=keys,
+            factor=0.1,
+            prob=1.0,
+            input_layout=input_layout,
+            seed=17,
+        )
     )
+    return Compose(transforms)
 
 
 def build_volume_geometry_pipeline():

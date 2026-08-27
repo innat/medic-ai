@@ -341,7 +341,7 @@ def test_tensorflow_pygrain_accepts_orientation_and_spacing():
         build_volume_geometry_pipeline(),
         affines=affines,
     )
-    model = build_segmentation_model((4, 16, 16, 1))
+    model = build_segmentation_model((8, 16, 8, 1))
 
     history = model.fit(loader, epochs=1, verbose=0)
 
@@ -358,7 +358,9 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
         labels,
         build_transform_pipelines("HWC", segmentation=True)[0],
     )
-    pipeline = build_gpu_random_pipeline("BHWC", segmentation=True)
+    pipeline = build_gpu_random_pipeline(
+        "BHWC", segmentation=True, include_rotate90=False
+    )
 
     def augment_data(image, label):
         result = pipeline({"image": image, "label": label})
