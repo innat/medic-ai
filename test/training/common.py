@@ -223,13 +223,15 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
 
 def apply_classification_pipeline(pipeline, image, label):
     """Apply one image-only pipeline and keep its classification target."""
-    result = pipeline({"image": image})
+    with keras.device("cpu:0"):
+        result = pipeline({"image": image})
     return result["image"], label
 
 
 def apply_segmentation_pipeline(pipeline, image, label):
     """Apply one synchronized image/mask pipeline exactly once."""
-    result = pipeline({"image": image, "label": label})
+    with keras.device("cpu:0"):
+        result = pipeline({"image": image, "label": label})
     return result["image"], result["label"]
 
 

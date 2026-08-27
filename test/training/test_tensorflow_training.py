@@ -51,7 +51,8 @@ class _ArraySource:
     def __getitem__(self, index):
         data = {"image": self.images[index], "label": self.labels[index]}
         meta = None if self.affines is None else {"affine": self.affines[index]}
-        result = self.pipeline(data, meta)
+        with keras.device("cpu:0"):
+            result = self.pipeline(data, meta)
         return result["image"], result["label"]
 
     def __repr__(self):
