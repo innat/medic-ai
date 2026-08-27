@@ -284,13 +284,13 @@ def test_tensorflow_gpu_augmented_model_uses_all_available_gpus():
     if len(devices) < 2:
         pytest.skip("Multi-device TensorFlow coverage requires at least two GPUs.")
 
-    images, labels = make_dataset().classification_2d()
+    images, labels = make_dataset().classification_2d(spatial_shape=(32, 32))
     strategy = tf.distribute.MirroredStrategy(devices=devices)
     _fit_gpu_augmented_model(
         images,
         labels,
-        input_layout="HWC",
-        input_shape=(32, 48, 1),
+        input_layout="BHWC",
+        input_shape=(32, 32, 1),
         segmentation=False,
         strategy=strategy,
     )
