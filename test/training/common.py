@@ -109,6 +109,17 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     the backend-specific test decides how the returned samples are consumed.
     """
     keys = ["image", "label"] if segmentation else ["image"]
+    is_2d = input_layout in {"HWC", "BHWC"}
+    first_spatial_axis = 0 if input_layout in {"HWC", "DHWC"} else 1
+    rotation_axes = (
+        (0, 1)
+        if input_layout == "HWC"
+        else (1, 2)
+        if input_layout in {"DHWC", "BHWC"}
+        else (2, 3)
+    )
+    crop_size = (8, 8) if is_2d else (4, 4, 4)
+    crop_start = (2, 2) if is_2d else (1, 1, 1)
     return [
         Compose(
             [
@@ -122,28 +133,34 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             ]
         ),
         Compose(
-            [Flip(keys=keys, spatial_axis=0, input_layout=input_layout)]
+            [Flip(keys=keys, spatial_axis=first_spatial_axis, input_layout=input_layout)]
         ),
         Compose(
             [
                 SpatialCrop(
                     keys=keys,
-                    crop_size=(8, 8) if input_layout == "HWC" else (4, 4, 4),
-                    crop_start=(2, 2) if input_layout == "HWC" else (1, 1, 1),
+                    crop_size=crop_size,
+                    crop_start=crop_start,
                     input_layout=input_layout,
                 ),
-                Flip(keys=keys, spatial_axis=0, input_layout=input_layout),
+                Flip(
+                    keys=keys,
+                    spatial_axis=first_spatial_axis,
+                    input_layout=input_layout,
+                ),
             ]
         ),
         Compose(
             [
-                Flip(keys=keys, spatial_axis=0, input_layout=input_layout),
+                Flip(
+                    keys=keys,
+                    spatial_axis=first_spatial_axis,
+                    input_layout=input_layout,
+                ),
                 Rotate90(
                     keys=keys,
                     k=1,
-                    spatial_axis=(0, 1)
-                    if input_layout == "HWC"
-                    else (1, 2),
+                    spatial_axis=rotation_axes,
                     input_layout=input_layout,
                 ),
             ]
@@ -152,13 +169,15 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             [
                 RandomChoice(
                     transforms=[
-                        Flip(keys=keys, spatial_axis=0, input_layout=input_layout),
+                        Flip(
+                            keys=keys,
+                            spatial_axis=first_spatial_axis,
+                            input_layout=input_layout,
+                        ),
                         Rotate90(
                             keys=keys,
                             k=2,
-                            spatial_axis=(0, 1)
-                            if input_layout == "HWC"
-                            else (1, 2),
+                            spatial_axis=rotation_axes,
                             input_layout=input_layout,
                         ),
                     ],

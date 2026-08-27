@@ -4,6 +4,8 @@ import keras
 import numpy as np
 import pytest
 
+from medicai.losses import BinaryDiceLoss
+from medicai.metrics import BinaryDiceMetric
 from test.training.common import (
     DatasetBuilder as make_dataset,
     apply_classification_pipeline,
@@ -12,6 +14,23 @@ from test.training.common import (
     build_segmentation_model,
     build_transform_pipelines,
 )
+
+
+class GPUAugmentedModel(keras.Model):
+    """Wrap a model and apply a batch transform inside ``train_step``."""
+
+    def __init__(self, model, augment_data, **kwargs):
+        super().__init__(**kwargs)
+        self.model = model
+        self.augment_data = augment_data
+
+    def train_step(self, data):
+        x, y = data
+        x, y = self.augment_data(x, y)
+        return super().train_step((x, y))
+
+    def call(self, inputs, training=None):
+        return self.model(inputs, training=training)
 
 
 def _require_tensorflow():
@@ -73,6 +92,49 @@ def _fit_tfdata_segmentation(
     else:
         with strategy.scope():
             model = build_segmentation_model(input_shape)
+    history = model.fit(dataset, epochs=1, verbose=0)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])
+
+
+def _fit_gpu_augmented_model(
+    images,
+    labels,
+    *,
+    input_layout: str,
+    input_shape: tuple[int, ...],
+    segmentation: bool,
+):
+    tf = _require_tensorflow()
+    pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[4]
+
+    def augment_data(image, label):
+        if segmentation:
+            result = pipeline({"image": image, "label": label})
+            return result["image"], result["label"]
+        result = pipeline({"image": image})
+        return result["image"], label
+
+    dataset = tf.data.Dataset.from_tensor_slices((images, labels)).batch(2)
+    base_model = (
+        build_segmentation_model(input_shape)
+        if segmentation
+        else build_classification_model(input_shape)
+    )
+    model = GPUAugmentedModel(base_model, augment_data)
+    if segmentation:
+        loss = BinaryDiceLoss(from_logits=False, num_classes=1)
+        metrics = [BinaryDiceMetric(from_logits=False, num_classes=1)]
+    else:
+        loss = "binary_crossentropy"
+        metrics = [keras.metrics.BinaryAccuracy()]
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss=loss,
+        metrics=metrics,
+        jit_compile=False,
+    )
     history = model.fit(dataset, epochs=1, verbose=0)
 
     assert len(history.history["loss"]) == 1
@@ -143,6 +205,34 @@ def test_tensorflow_tfdata_2d_classification_accepts_random_choice_pipeline():
     images, labels = make_dataset().classification_2d()
     _fit_tfdata_classification(
         images, labels, input_layout="HWC", input_shape=(12, 12, 1), pipeline_index=4
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+def test_tensorflow_gpu_augmented_model_trains_2d_classification():
+    """Apply a batch ``RandomChoice`` pipeline inside a 2D model's train step."""
+    images, labels = make_dataset().classification_2d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BHWC",
+        input_shape=(12, 12, 1),
+        segmentation=False,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+def test_tensorflow_gpu_augmented_model_trains_3d_segmentation():
+    """Apply synchronized batch geometry inside a 3D segmenter's train step."""
+    images, labels = make_dataset().segmentation_3d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BDHWC",
+        input_shape=(6, 6, 6, 1),
+        segmentation=True,
     )
 
 
