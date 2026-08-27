@@ -91,7 +91,7 @@ def _fit_tfdata_classification(
     else:
         with strategy.scope():
             model = build_classification_model(input_shape)
-    history = model.fit(dataset, epochs=1, verbose=0)
+    history = model.fit(dataset, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -120,7 +120,7 @@ def _fit_tfdata_segmentation(
     else:
         with strategy.scope():
             model = build_segmentation_model(input_shape)
-    history = model.fit(dataset, epochs=1, verbose=0)
+    history = model.fit(dataset, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -175,7 +175,7 @@ def _fit_gpu_augmented_model(
     else:
         with strategy.scope():
             model = build_and_compile_model()
-    history = model.fit(dataset, epochs=1, verbose=0)
+    history = model.fit(dataset, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -308,7 +308,7 @@ def test_tensorflow_pygrain_accepts_classification_samples():
     )
     model = build_classification_model((32, 48, 1))
 
-    history = model.fit(loader, epochs=1, verbose=0)
+    history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -325,7 +325,7 @@ def test_tensorflow_pygrain_accepts_segmentation_samples():
     )
     model = build_segmentation_model((24, 24, 1))
 
-    history = model.fit(loader, epochs=1, verbose=0)
+    history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -343,7 +343,7 @@ def test_tensorflow_pygrain_accepts_orientation_and_spacing():
     )
     model = build_segmentation_model((8, 16, 8, 1))
 
-    history = model.fit(loader, epochs=1, verbose=0)
+    history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -372,7 +372,7 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
         jit_compile=False,
     )
 
-    history = model.fit(loader, epochs=1, verbose=0)
+    history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
