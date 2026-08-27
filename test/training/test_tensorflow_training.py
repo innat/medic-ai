@@ -1,20 +1,16 @@
-"""End-to-end TensorFlow training coverage for migrated transforms.
-
-The tests keep dataset mapping separate from model distribution. This makes
-the same transform pipeline usable with ordinary ``tf.data`` training,
-``OneDeviceStrategy``, and ``MirroredStrategy``.
-"""
+"""End-to-end TensorFlow training coverage for migrated transforms."""
 
 import keras
 import numpy as np
 import pytest
 
-from medicai.transforms import Compose, Flip, ScaleIntensityRange
-from test.training.data import (
-    make_classification_2d_samples,
-    make_classification_3d_samples,
-    make_segmentation_2d_samples,
-    make_segmentation_3d_samples,
+from test.training.common import (
+    DatasetBuilder as make_dataset,
+    apply_classification_pipeline,
+    apply_segmentation_pipeline,
+    build_classification_model,
+    build_segmentation_model,
+    build_transform_pipelines,
 )
 
 
@@ -26,83 +22,58 @@ def _require_tensorflow():
     return tf
 
 
-def _build_model(input_shape, *, segmentation):
-    inputs = keras.Input(shape=input_shape)
-    spatial_rank = len(input_shape) - 1
-    conv = keras.layers.Conv2D if spatial_rank == 2 else keras.layers.Conv3D
-    x = conv(4, 3, padding="same", activation="relu")(inputs)
-    if segmentation:
-        outputs = conv(1, 1, padding="same", activation="sigmoid")(x)
-    else:
-        pooling = (
-            keras.layers.GlobalAveragePooling2D
-            if spatial_rank == 2
-            else keras.layers.GlobalAveragePooling3D
-        )
-        outputs = keras.layers.Dense(1, activation="sigmoid")(pooling()(x))
-    model = keras.Model(inputs, outputs)
-    model.compile(
-        optimizer=keras.optimizers.Adam(1e-3),
-        loss="binary_crossentropy",
-        jit_compile=False,
-    )
-    return model
-
-
-def _pipeline(input_layout, keys=("image",)):
-    return Compose(
-        [
-            ScaleIntensityRange(
-                keys=["image"],
-                source_value_range=(0.0, 1.0),
-                target_value_range=(0.0, 1.0),
-                clip=True,
-                input_layout=input_layout,
-            ),
-            Flip(keys=list(keys), spatial_axis=0, input_layout=input_layout),
-        ]
-    )
-
-
-def _fit_tfdata_classification(images, labels, *, input_layout, input_shape, strategy=None):
+def _fit_tfdata_classification(
+    images,
+    labels,
+    *,
+    input_layout: str,
+    input_shape: tuple[int, ...],
+    pipeline_index: int,
+    strategy=None,
+):
     tf = _require_tensorflow()
-    pipeline = _pipeline(input_layout)
-
-    def map_sample(image, label):
-        result = pipeline({"image": image})
-        return result["image"], label
-
+    pipeline = build_transform_pipelines(input_layout, segmentation=False)[pipeline_index]
     dataset = tf.data.Dataset.from_tensor_slices((images, labels))
-    dataset = dataset.map(map_sample, num_parallel_calls=1).batch(2)
+    dataset = dataset.map(
+        lambda image, label: apply_classification_pipeline(pipeline, image, label),
+        num_parallel_calls=1,
+    ).batch(2)
+
     if strategy is None:
-        model = _build_model(input_shape, segmentation=False)
-        history = model.fit(dataset, epochs=1, verbose=0)
+        model = build_classification_model(input_shape)
     else:
         with strategy.scope():
-            model = _build_model(input_shape, segmentation=False)
-        history = model.fit(dataset, epochs=1, verbose=0)
+            model = build_classification_model(input_shape)
+    history = model.fit(dataset, epochs=1, verbose=0)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
 
 
-def _fit_tfdata_segmentation(images, labels, *, input_layout, input_shape, strategy=None):
+def _fit_tfdata_segmentation(
+    images,
+    labels,
+    *,
+    input_layout: str,
+    input_shape: tuple[int, ...],
+    pipeline_index: int,
+    strategy=None,
+):
     tf = _require_tensorflow()
-    pipeline = _pipeline(input_layout, keys=("image", "label"))
-
-    def map_sample(image, label):
-        result = pipeline({"image": image, "label": label})
-        return result["image"], result["label"]
+    pipeline = build_transform_pipelines(input_layout, segmentation=True)[pipeline_index]
 
     dataset = tf.data.Dataset.from_tensor_slices((images, labels))
-    dataset = dataset.map(map_sample, num_parallel_calls=1).batch(2)
+    dataset = dataset.map(
+        lambda image, label: apply_segmentation_pipeline(pipeline, image, label),
+        num_parallel_calls=1,
+    ).batch(2)
+
     if strategy is None:
-        model = _build_model(input_shape, segmentation=True)
-        history = model.fit(dataset, epochs=1, verbose=0)
+        model = build_segmentation_model(input_shape)
     else:
         with strategy.scope():
-            model = _build_model(input_shape, segmentation=True)
-        history = model.fit(dataset, epochs=1, verbose=0)
+            model = build_segmentation_model(input_shape)
+    history = model.fit(dataset, epochs=1, verbose=0)
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
@@ -111,63 +82,67 @@ def _fit_tfdata_segmentation(images, labels, *, input_layout, input_shape, strat
 @pytest.mark.integration
 def test_tensorflow_tfdata_2d_classification_accepts_migrated_transforms():
     """Train a 2D classifier after transforms run inside ``Dataset.map``."""
-    images, class_labels = make_classification_2d_samples()
+    images, labels = make_dataset().classification_2d()
     _fit_tfdata_classification(
-        images,
-        class_labels,
-        input_layout="HWC",
-        input_shape=(12, 12, 1),
+        images, labels, input_layout="HWC", input_shape=(12, 12, 1), pipeline_index=0
     )
 
 
 @pytest.mark.integration
-def test_tensorflow_tfdata_2d_segmentation_accepts_migrated_transforms():
-    """Train a 2D segmentation model with aligned image and label transforms."""
-    images, labels = make_segmentation_2d_samples()
+def test_tensorflow_tfdata_2d_segmentation_accepts_crop_flip_pipeline():
+    """Train a 2D segmenter with a crop and synchronized flip pipeline."""
+    images, labels = make_dataset().segmentation_2d()
     _fit_tfdata_segmentation(
-        images,
-        labels,
-        input_layout="HWC",
-        input_shape=(12, 12, 1),
+        images, labels, input_layout="HWC", input_shape=(8, 8, 1), pipeline_index=2
     )
 
 
 @pytest.mark.integration
-def test_tensorflow_tfdata_3d_classification_accepts_migrated_transforms():
-    """Train a 3D classifier after transforms run inside ``Dataset.map``."""
-    images, class_labels = make_classification_3d_samples()
+def test_tensorflow_tfdata_3d_classification_accepts_rotation_pipeline():
+    """Train a 3D classifier with a flip and 90-degree rotation pipeline."""
+    images, labels = make_dataset().classification_3d()
     _fit_tfdata_classification(
-        images,
-        class_labels,
-        input_layout="DHWC",
-        input_shape=(6, 6, 6, 1),
+        images, labels, input_layout="DHWC", input_shape=(6, 6, 6, 1), pipeline_index=3
     )
 
 
 @pytest.mark.integration
-def test_tensorflow_tfdata_3d_segmentation_accepts_migrated_transforms():
-    """Train a 3D segmentation model with aligned image and label transforms."""
-    images, labels = make_segmentation_3d_samples()
+def test_tensorflow_tfdata_3d_segmentation_accepts_random_choice_pipeline():
+    """Train a 3D segmenter with synchronized ``RandomChoice`` geometry."""
+    images, labels = make_dataset().segmentation_3d()
     _fit_tfdata_segmentation(
-        images,
-        labels,
-        input_layout="DHWC",
-        input_shape=(6, 6, 6, 1),
+        images, labels, input_layout="DHWC", input_shape=(6, 6, 6, 1), pipeline_index=4
     )
 
 
 @pytest.mark.integration
-def test_tensorflow_tfdata_2d_classification_accepts_single_device_strategy():
-    """Train through an explicit single-device TensorFlow strategy."""
-    tf = _require_tensorflow()
-    images, labels = make_classification_2d_samples()
-    strategy = tf.distribute.OneDeviceStrategy("/cpu:0")
+def test_tensorflow_tfdata_anisotropic_2d_segmentation_accepts_crop_pipeline():
+    """Train a 2D segmenter with unequal height and width dimensions."""
+    images, labels = make_dataset().segmentation_2d(spatial_shape=(8, 12))
+    _fit_tfdata_segmentation(
+        images, labels, input_layout="HWC", input_shape=(8, 8, 1), pipeline_index=2
+    )
+
+
+@pytest.mark.integration
+def test_tensorflow_tfdata_anisotropic_3d_classification_accepts_rotation_pipeline():
+    """Train a 3D classifier with unequal depth, height, and width dimensions."""
+    images, labels = make_dataset().classification_3d(spatial_shape=(4, 6, 8))
     _fit_tfdata_classification(
         images,
         labels,
-        input_layout="HWC",
-        input_shape=(12, 12, 1),
-        strategy=strategy,
+        input_layout="DHWC",
+        input_shape=(4, 8, 6, 1),
+        pipeline_index=3,
+    )
+
+
+@pytest.mark.integration
+def test_tensorflow_tfdata_2d_classification_accepts_random_choice_pipeline():
+    """Train a 2D classifier through the fifth reusable pipeline."""
+    images, labels = make_dataset().classification_2d()
+    _fit_tfdata_classification(
+        images, labels, input_layout="HWC", input_shape=(12, 12, 1), pipeline_index=4
     )
 
 
@@ -180,12 +155,13 @@ def test_tensorflow_tfdata_2d_classification_accepts_multi_device_strategy():
     if len(devices) < 2:
         pytest.skip("Multi-device TensorFlow coverage requires at least two GPUs.")
 
-    images, labels = make_classification_2d_samples()
+    images, labels = make_dataset().classification_2d()
     strategy = tf.distribute.MirroredStrategy(devices=devices[:2])
     _fit_tfdata_classification(
         images,
         labels,
         input_layout="HWC",
         input_shape=(12, 12, 1),
+        pipeline_index=1,
         strategy=strategy,
     )
