@@ -5,6 +5,12 @@ import numpy as np
 import pytest
 
 from medicai.transforms import Compose, Flip, ScaleIntensityRange
+from test.training.data import (
+    make_classification_2d_samples,
+    make_classification_3d_samples,
+    make_segmentation_2d_samples,
+    make_segmentation_3d_samples,
+)
 
 
 def _require_tensorflow():
@@ -32,17 +38,6 @@ def _build_model(input_shape, *, segmentation):
         jit_compile=False,
     )
     return model
-
-
-def _make_samples(spatial_shape, num_samples=4):
-    size = num_samples * int(np.prod(spatial_shape))
-    images = np.linspace(0.0, 1.0, num=size, dtype=np.float32).reshape(
-        (num_samples, *spatial_shape)
-    )
-    images = images[..., None]
-    labels = (images > 0.5).astype(np.float32)
-    class_labels = np.asarray([[0.0], [1.0], [0.0], [1.0]], dtype=np.float32)
-    return images, labels, class_labels[:num_samples]
 
 
 def _pipeline(input_layout, keys=("image",)):
@@ -84,7 +79,7 @@ def _fit_tfdata(images, targets, *, input_layout, input_shape, segmentation):
 @pytest.mark.integration
 def test_tensorflow_tfdata_2d_classification_accepts_migrated_transforms():
     """Train a 2D classifier after transforms run inside ``Dataset.map``."""
-    images, _, class_labels = _make_samples((12, 12))
+    images, class_labels = make_classification_2d_samples()
     _fit_tfdata(
         images,
         class_labels,
@@ -97,7 +92,7 @@ def test_tensorflow_tfdata_2d_classification_accepts_migrated_transforms():
 @pytest.mark.integration
 def test_tensorflow_tfdata_2d_segmentation_accepts_migrated_transforms():
     """Train a 2D segmentation model with aligned image and label transforms."""
-    images, labels, _ = _make_samples((12, 12))
+    images, labels = make_segmentation_2d_samples()
     _fit_tfdata(
         images,
         labels,
@@ -110,7 +105,7 @@ def test_tensorflow_tfdata_2d_segmentation_accepts_migrated_transforms():
 @pytest.mark.integration
 def test_tensorflow_tfdata_3d_classification_accepts_migrated_transforms():
     """Train a 3D classifier after transforms run inside ``Dataset.map``."""
-    images, _, class_labels = _make_samples((6, 6, 6))
+    images, class_labels = make_classification_3d_samples()
     _fit_tfdata(
         images,
         class_labels,
@@ -123,7 +118,7 @@ def test_tensorflow_tfdata_3d_classification_accepts_migrated_transforms():
 @pytest.mark.integration
 def test_tensorflow_tfdata_3d_segmentation_accepts_migrated_transforms():
     """Train a 3D segmentation model with aligned image and label transforms."""
-    images, labels, _ = _make_samples((6, 6, 6))
+    images, labels = make_segmentation_3d_samples()
     _fit_tfdata(
         images,
         labels,
