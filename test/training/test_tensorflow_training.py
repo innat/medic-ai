@@ -8,6 +8,7 @@ from medicai.losses import BinaryDiceLoss
 from medicai.metrics import BinaryDiceMetric
 from test.training.common import (
     DatasetBuilder as make_dataset,
+    GPUAugmentedModel,
     apply_classification_pipeline,
     apply_segmentation_pipeline,
     build_classification_model,
@@ -15,23 +16,6 @@ from test.training.common import (
     build_gpu_random_pipeline,
     build_transform_pipelines,
 )
-
-
-class GPUAugmentedModel(keras.Model):
-    """Wrap a model and apply a batch transform inside ``train_step``."""
-
-    def __init__(self, model, augment_data, **kwargs):
-        super().__init__(**kwargs)
-        self.model = model
-        self.augment_data = augment_data
-
-    def train_step(self, data):
-        x, y = data
-        x, y = self.augment_data(x, y)
-        return super().train_step((x, y))
-
-    def call(self, inputs, training=None):
-        return self.model(inputs, training=training)
 
 
 def _require_tensorflow():

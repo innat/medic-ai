@@ -18,6 +18,23 @@ from medicai.transforms import (
 )
 
 
+class GPUAugmentedModel(keras.Model):
+    """Wrap a model and apply a batch transform inside ``train_step``."""
+
+    def __init__(self, model, augment_data, **kwargs):
+        super().__init__(**kwargs)
+        self.model = model
+        self.augment_data = augment_data
+
+    def train_step(self, data):
+        x, y = data
+        x, y = self.augment_data(x, y)
+        return super().train_step((x, y))
+
+    def call(self, inputs, training=None):
+        return self.model(inputs, training=training)
+
+
 class DatasetBuilder:
     """Build small deterministic classification and segmentation fixtures."""
 
