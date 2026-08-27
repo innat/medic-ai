@@ -1,7 +1,8 @@
 """Placeholder for Torch end-to-end training coverage.
 
-Backend-specific tests will be added after the migrated transform set and
-training scenarios are finalized.
+Torch single-device training will be added first. Multi-device distribution
+is intentionally deferred until Keras exposes a stable Torch distribution
+API for this project.
 """
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 @pytest.mark.integration
 @pytest.mark.skip(reason="Torch training scenarios are not defined yet.")
 def test_torch_training_placeholder():
-    """Reserve the test entry point for Torch training coverage."""
+    """Reserve the entry point for Torch single-device training coverage."""
 
 '''
 Plans:

@@ -1,7 +1,7 @@
 """Placeholder for JAX end-to-end training coverage.
 
-Backend-specific tests will be added after the migrated transform set and
-training scenarios are finalized.
+JAX training should use Keras distribution APIs rather than backend-private
+distribution code once the shared scenarios are finalized.
 """
 
 import pytest
@@ -10,7 +10,7 @@ import pytest
 @pytest.mark.integration
 @pytest.mark.skip(reason="JAX training scenarios are not defined yet.")
 def test_jax_training_placeholder():
-    """Reserve the test entry point for JAX training coverage."""
+    """Reserve the entry point for Keras-distributed JAX training coverage."""
 
 '''
 Plans:
