@@ -132,6 +132,7 @@ def _fit_gpu_augmented_model(
     input_layout: str,
     input_shape: tuple[int, ...],
     segmentation: bool,
+    strategy=None,
 ):
     tf = _require_tensorflow()
     pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
@@ -144,24 +145,35 @@ def _fit_gpu_augmented_model(
         return result["image"], label
 
     dataset = tf.data.Dataset.from_tensor_slices((images, labels)).batch(2)
-    base_model = (
-        build_segmentation_model(input_shape)
-        if segmentation
-        else build_classification_model(input_shape)
-    )
-    model = GPUAugmentedModel(base_model, augment_data)
+    def build_base_model():
+        return (
+            build_segmentation_model(input_shape)
+            if segmentation
+            else build_classification_model(input_shape)
+        )
+
     if segmentation:
         loss = BinaryDiceLoss(from_logits=False, num_classes=1)
         metrics = [BinaryDiceMetric(from_logits=False, num_classes=1)]
     else:
         loss = "binary_crossentropy"
         metrics = [keras.metrics.BinaryAccuracy()]
-    model.compile(
-        optimizer=keras.optimizers.Adam(1e-3),
-        loss=loss,
-        metrics=metrics,
-        jit_compile=False,
-    )
+
+    def build_and_compile_model():
+        model = GPUAugmentedModel(build_base_model(), augment_data)
+        model.compile(
+            optimizer=keras.optimizers.Adam(1e-3),
+            loss=loss,
+            metrics=metrics,
+            jit_compile=False,
+        )
+        return model
+
+    if strategy is None:
+        model = build_and_compile_model()
+    else:
+        with strategy.scope():
+            model = build_and_compile_model()
     history = model.fit(dataset, epochs=1, verbose=0)
 
     assert len(history.history["loss"]) == 1
@@ -239,12 +251,12 @@ def test_tensorflow_tfdata_2d_classification_accepts_random_choice_pipeline():
 @pytest.mark.gpu
 def test_tensorflow_gpu_augmented_model_trains_2d_classification():
     """Apply a batch ``RandomChoice`` pipeline inside a 2D model's train step."""
-    images, labels = make_dataset().classification_2d()
+    images, labels = make_dataset().classification_2d(spatial_shape=(32, 32))
     _fit_gpu_augmented_model(
         images,
         labels,
         input_layout="BHWC",
-        input_shape=(32, 48, 1),
+        input_shape=(32, 32, 1),
         segmentation=False,
     )
 
@@ -265,21 +277,21 @@ def test_tensorflow_gpu_augmented_model_trains_3d_segmentation():
 
 @pytest.mark.integration
 @pytest.mark.gpu
-def test_tensorflow_tfdata_2d_classification_accepts_multi_device_strategy():
-    """Train through ``MirroredStrategy`` when at least two GPUs are available."""
+def test_tensorflow_gpu_augmented_model_uses_all_available_gpus():
+    """Train model-side augmentation through all available GPUs."""
     tf = _require_tensorflow()
     devices = [device.name for device in tf.config.list_logical_devices("GPU")]
     if len(devices) < 2:
         pytest.skip("Multi-device TensorFlow coverage requires at least two GPUs.")
 
     images, labels = make_dataset().classification_2d()
-    strategy = tf.distribute.MirroredStrategy(devices=devices[:2])
-    _fit_tfdata_classification(
+    strategy = tf.distribute.MirroredStrategy(devices=devices)
+    _fit_gpu_augmented_model(
         images,
         labels,
         input_layout="HWC",
         input_shape=(32, 48, 1),
-        pipeline_index=1,
+        segmentation=False,
         strategy=strategy,
     )
 
