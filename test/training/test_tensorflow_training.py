@@ -358,9 +358,7 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
         labels,
         build_transform_pipelines("HWC", segmentation=True)[0],
     )
-    pipeline = build_gpu_random_pipeline(
-        "BHWC", segmentation=True, include_rotate90=False
-    )
+    pipeline = build_gpu_random_pipeline("BHWC", segmentation=True)
 
     def augment_data(image, label):
         result = pipeline({"image": image, "label": label})

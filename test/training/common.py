@@ -11,7 +11,6 @@ from medicai.transforms import (
     RandomChoice,
     RandomFlip,
     RandomRotate,
-    RandomRotate90,
     Rotate90,
     ScaleIntensityRange,
     Orientation,
@@ -239,17 +238,10 @@ def build_gpu_random_pipeline(
     input_layout: str,
     *,
     segmentation: bool,
-    include_rotate90: bool = True,
 ):
-    """Build a batch-layout pipeline for model-side random augmentation.
-
-    ``RandomRotate90`` requires a square selected rotation plane. Callers using
-    rectangular fixtures can omit it while retaining ``RandomRotate`` coverage.
-    """
+    """Build a batch-layout pipeline for model-side random augmentation."""
     keys = ["image", "label"] if segmentation else ["image"]
-    is_2d = input_layout == "BHWC"
     flip_axis = 1
-    rotation_axes = (1, 2) if is_2d else (2, 3)
     transforms = [
         RandomFlip(
             keys=keys,
@@ -259,17 +251,6 @@ def build_gpu_random_pipeline(
             seed=11,
         )
     ]
-    if include_rotate90:
-        transforms.append(
-            RandomRotate90(
-                keys=keys,
-                prob=1.0,
-                max_k=3,
-                spatial_axis=rotation_axes,
-                input_layout=input_layout,
-                seed=13,
-            )
-        )
     transforms.append(
         RandomRotate(
             keys=keys,
