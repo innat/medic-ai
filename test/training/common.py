@@ -43,7 +43,7 @@ class DatasetBuilder:
     def __init__(self, num_samples: int = 4):
         self.num_samples = num_samples
 
-    def classification_2d(self, spatial_shape: tuple[int, int] = (12, 12)):
+    def classification_2d(self, spatial_shape: tuple[int, int] = (32, 48)):
         """Return ``(N, H, W, C)`` images and binary targets."""
         height, width = spatial_shape
         images = np.linspace(
@@ -52,7 +52,7 @@ class DatasetBuilder:
         labels = np.asarray([[0.0], [1.0], [0.0], [1.0]], dtype=np.float32)
         return images, labels[: self.num_samples]
 
-    def classification_3d(self, spatial_shape: tuple[int, int, int] = (6, 6, 6)):
+    def classification_3d(self, spatial_shape: tuple[int, int, int] = (8, 16, 16)):
         """Return ``(N, D, H, W, C)`` volumes and binary targets."""
         depth, height, width = spatial_shape
         images = np.linspace(
@@ -61,7 +61,7 @@ class DatasetBuilder:
         labels = np.asarray([[0.0], [1.0], [0.0], [1.0]], dtype=np.float32)
         return images, labels[: self.num_samples]
 
-    def segmentation_2d(self, spatial_shape: tuple[int, int] = (12, 12)):
+    def segmentation_2d(self, spatial_shape: tuple[int, int] = (32, 48)):
         """Return ``(N, H, W, C)`` images and aligned binary masks."""
         height, width = spatial_shape
         images = np.linspace(
@@ -69,7 +69,7 @@ class DatasetBuilder:
         ).reshape(self.num_samples, height, width, 1)
         return images, (images > 0.5).astype(np.float32)
 
-    def segmentation_3d(self, spatial_shape: tuple[int, int, int] = (6, 6, 6)):
+    def segmentation_3d(self, spatial_shape: tuple[int, int, int] = (8, 16, 16)):
         """Return ``(N, D, H, W, C)`` volumes and aligned binary masks."""
         depth, height, width = spatial_shape
         images = np.linspace(
@@ -78,7 +78,7 @@ class DatasetBuilder:
         return images, (images > 0.5).astype(np.float32)
 
     def segmentation_3d_with_affine(
-        self, spatial_shape: tuple[int, int, int] = (6, 6, 6)
+        self, spatial_shape: tuple[int, int, int] = (8, 16, 16)
     ):
         """Return 3D segmentation samples and one identity affine per sample."""
         images, labels = self.segmentation_3d(spatial_shape=spatial_shape)
@@ -149,8 +149,8 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
         if input_layout in {"DHWC", "BHWC"}
         else (2, 3)
     )
-    crop_size = (8, 8) if is_2d else (4, 4, 4)
-    crop_start = (2, 2) if is_2d else (1, 1, 1)
+    crop_size = (24, 24) if is_2d else (6, 12, 12)
+    crop_start = (4, 4) if is_2d else (1, 2, 2)
     return [
         Compose(
             [

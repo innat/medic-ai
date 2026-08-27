@@ -173,7 +173,7 @@ def test_tensorflow_tfdata_2d_classification_accepts_migrated_transforms():
     """Train a 2D classifier after transforms run inside ``Dataset.map``."""
     images, labels = make_dataset().classification_2d()
     _fit_tfdata_classification(
-        images, labels, input_layout="HWC", input_shape=(12, 12, 1), pipeline_index=0
+        images, labels, input_layout="HWC", input_shape=(32, 48, 1), pipeline_index=0
     )
 
 
@@ -182,7 +182,7 @@ def test_tensorflow_tfdata_2d_segmentation_accepts_crop_flip_pipeline():
     """Train a 2D segmenter with a crop and synchronized flip pipeline."""
     images, labels = make_dataset().segmentation_2d()
     _fit_tfdata_segmentation(
-        images, labels, input_layout="HWC", input_shape=(8, 8, 1), pipeline_index=2
+        images, labels, input_layout="HWC", input_shape=(24, 24, 1), pipeline_index=2
     )
 
 
@@ -191,7 +191,7 @@ def test_tensorflow_tfdata_3d_classification_accepts_rotation_pipeline():
     """Train a 3D classifier with a flip and 90-degree rotation pipeline."""
     images, labels = make_dataset().classification_3d()
     _fit_tfdata_classification(
-        images, labels, input_layout="DHWC", input_shape=(6, 6, 6, 1), pipeline_index=3
+        images, labels, input_layout="DHWC", input_shape=(8, 16, 16, 1), pipeline_index=3
     )
 
 
@@ -200,28 +200,28 @@ def test_tensorflow_tfdata_3d_segmentation_accepts_random_choice_pipeline():
     """Train a 3D segmenter with synchronized ``RandomChoice`` geometry."""
     images, labels = make_dataset().segmentation_3d()
     _fit_tfdata_segmentation(
-        images, labels, input_layout="DHWC", input_shape=(6, 6, 6, 1), pipeline_index=4
+        images, labels, input_layout="DHWC", input_shape=(8, 16, 16, 1), pipeline_index=4
     )
 
 
 @pytest.mark.integration
 def test_tensorflow_tfdata_anisotropic_2d_segmentation_accepts_crop_pipeline():
     """Train a 2D segmenter with unequal height and width dimensions."""
-    images, labels = make_dataset().segmentation_2d(spatial_shape=(8, 12))
+    images, labels = make_dataset().segmentation_2d(spatial_shape=(32, 48))
     _fit_tfdata_segmentation(
-        images, labels, input_layout="HWC", input_shape=(8, 8, 1), pipeline_index=2
+        images, labels, input_layout="HWC", input_shape=(24, 24, 1), pipeline_index=2
     )
 
 
 @pytest.mark.integration
 def test_tensorflow_tfdata_anisotropic_3d_classification_accepts_rotation_pipeline():
     """Train a 3D classifier with unequal depth, height, and width dimensions."""
-    images, labels = make_dataset().classification_3d(spatial_shape=(4, 6, 8))
+    images, labels = make_dataset().classification_3d(spatial_shape=(8, 12, 16))
     _fit_tfdata_classification(
         images,
         labels,
         input_layout="DHWC",
-        input_shape=(4, 8, 6, 1),
+        input_shape=(8, 16, 12, 1),
         pipeline_index=3,
     )
 
@@ -231,7 +231,7 @@ def test_tensorflow_tfdata_2d_classification_accepts_random_choice_pipeline():
     """Train a 2D classifier through the fifth reusable pipeline."""
     images, labels = make_dataset().classification_2d()
     _fit_tfdata_classification(
-        images, labels, input_layout="HWC", input_shape=(12, 12, 1), pipeline_index=4
+        images, labels, input_layout="HWC", input_shape=(32, 48, 1), pipeline_index=4
     )
 
 
@@ -244,7 +244,7 @@ def test_tensorflow_gpu_augmented_model_trains_2d_classification():
         images,
         labels,
         input_layout="BHWC",
-        input_shape=(12, 12, 1),
+        input_shape=(32, 48, 1),
         segmentation=False,
     )
 
@@ -258,7 +258,7 @@ def test_tensorflow_gpu_augmented_model_trains_3d_segmentation():
         images,
         labels,
         input_layout="BDHWC",
-        input_shape=(6, 6, 6, 1),
+        input_shape=(8, 16, 16, 1),
         segmentation=True,
     )
 
@@ -278,7 +278,7 @@ def test_tensorflow_tfdata_2d_classification_accepts_multi_device_strategy():
         images,
         labels,
         input_layout="HWC",
-        input_shape=(12, 12, 1),
+        input_shape=(32, 48, 1),
         pipeline_index=1,
         strategy=strategy,
     )
@@ -293,7 +293,7 @@ def test_tensorflow_pygrain_accepts_classification_samples():
         labels,
         build_transform_pipelines("HWC", segmentation=False)[0],
     )
-    model = build_classification_model((12, 12, 1))
+    model = build_classification_model((32, 48, 1))
 
     history = model.fit(loader, epochs=1, verbose=0)
 
@@ -310,7 +310,7 @@ def test_tensorflow_pygrain_accepts_segmentation_samples():
         labels,
         build_transform_pipelines("HWC", segmentation=True)[2],
     )
-    model = build_segmentation_model((8, 8, 1))
+    model = build_segmentation_model((24, 24, 1))
 
     history = model.fit(loader, epochs=1, verbose=0)
 
@@ -328,7 +328,7 @@ def test_tensorflow_pygrain_accepts_orientation_and_spacing():
         build_volume_geometry_pipeline(),
         affines=affines,
     )
-    model = build_segmentation_model((3, 6, 6, 1))
+    model = build_segmentation_model((4, 16, 16, 1))
 
     history = model.fit(loader, epochs=1, verbose=0)
 
@@ -351,7 +351,7 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
         result = pipeline({"image": image, "label": label})
         return result["image"], result["label"]
 
-    model = GPUAugmentedModel(build_segmentation_model((12, 12, 1)), augment_data)
+    model = GPUAugmentedModel(build_segmentation_model((32, 48, 1)), augment_data)
     model.compile(
         optimizer=keras.optimizers.Adam(1e-3),
         loss="binary_crossentropy",
