@@ -212,6 +212,34 @@ def test_torch_dataloader_trains_2d_segmentation_with_crop_pipeline():
 
 @pytest.mark.integration
 @pytest.mark.gpu
+def test_torch_gpu_augmented_model_trains_3d_classification():
+    """Apply batch random geometry inside a Torch 3D classifier's train step."""
+    images, labels = make_dataset().classification_3d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BDHWC",
+        input_shape=(8, 16, 16, 1),
+        segmentation=False,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+def test_torch_gpu_augmented_model_trains_2d_segmentation():
+    """Apply synchronized batch geometry inside a Torch 2D segmenter."""
+    images, labels = make_dataset().segmentation_2d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BHWC",
+        input_shape=(32, 48, 1),
+        segmentation=True,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
 def test_torch_gpu_augmented_model_trains_3d_segmentation():
     """Apply synchronized batch random geometry in a Torch segmenter."""
     images, labels = make_dataset().segmentation_3d()
