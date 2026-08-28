@@ -1,11 +1,9 @@
 import keras
-import numpy as np
 import pytest
 
 
 @pytest.fixture(autouse=True)
 def deterministic_seed():
-    np.random.seed(7)
     keras.utils.set_random_seed(7)
 
 
