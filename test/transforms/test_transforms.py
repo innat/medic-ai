@@ -3224,6 +3224,44 @@ def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
 
 
 @pytest.mark.unit
+def test_random_rotate_inverse_preserves_mixed_probability_batch(monkeypatch):
+    """Keep skipped items exact while restoring a rotated item in one batch."""
+    image = as_tensor(
+        np.arange(2 * 4 * 5 * 6, dtype=np.float32).reshape(2, 4, 5, 6, 1)
+    )
+    transform = RandomRotate(
+        keys=["image"],
+        factor=0.2,
+        prob=0.5,
+        input_layout="BDHWC",
+    )
+    calls = 0
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        nonlocal calls
+        calls += 1
+        values = [0.0, 1.0] if calls == 1 else [0.0, 1.0]
+        return as_tensor(values, dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    forward = transform(TensorBundle({"image": image}))
+    trace = forward.get_applied_transforms()[-1]
+    angles = ops.convert_to_numpy(trace["params"]["angles"]["D"])
+    assert np.allclose(angles[0], 0.0)
+    assert not np.isclose(angles[1], 0.0)
+    forward_image = ops.convert_to_numpy(forward["image"])
+    original_image = ops.convert_to_numpy(image)
+    np.testing.assert_array_equal(forward_image[0], original_image[0])
+
+    restored = transform.inverse(
+        TensorBundle({"image": forward["image"]}, forward.meta)
+    )
+    restored_image = ops.convert_to_numpy(restored["image"])
+    np.testing.assert_array_equal(restored_image[0], original_image[0])
+    np.testing.assert_allclose(restored_image[1], original_image[1], atol=0.5)
+
+
+@pytest.mark.unit
 def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value():
     transform = RandomRotate(
         keys=["image", "label"],

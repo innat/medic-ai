@@ -583,6 +583,8 @@ class RandomRotate(RandomTransform):
                 )
                 batch_size = ops.shape(batched)[0]
                 zero = ops.zeros((batch_size,), dtype="float32")
+                # Skipped batch items are represented by zero angles in the trace;
+                # rebuilding the matrix therefore preserves identity for them.
                 forward_matrix = _rotation_matrix_3d(
                     angles.get("D", zero),
                     angles.get("H", zero),
