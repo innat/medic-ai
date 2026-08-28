@@ -86,6 +86,29 @@ class DatasetBuilder:
         return images, labels, affines
 
 
+class PyGrainSource:
+    """Small backend-neutral PyGrain source for transformed CPU samples."""
+
+    def __init__(self, images, labels, pipeline, affines=None):
+        self.images = images
+        self.labels = labels
+        self.pipeline = pipeline
+        self.affines = affines
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        data = {"image": self.images[index], "label": self.labels[index]}
+        meta = None if self.affines is None else {"affine": self.affines[index]}
+        with keras.device("cpu:0"):
+            result = self.pipeline(data, meta)
+        return result["image"], result["label"]
+
+    def __repr__(self):
+        return f"PyGrainSource(size={len(self)})"
+
+
 def build_classification_model(input_shape):
     """Build and compile a small rank-aware binary classifier."""
     inputs = keras.Input(shape=input_shape)

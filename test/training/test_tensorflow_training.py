@@ -9,6 +9,7 @@ from medicai.metrics import BinaryDiceMetric
 from test.training.common import (
     DatasetBuilder as make_dataset,
     GPUAugmentedModel,
+    PyGrainSource,
     apply_classification_pipeline,
     apply_segmentation_pipeline,
     build_classification_model,
@@ -36,29 +37,6 @@ def _require_pygrain():
     return pygrain
 
 
-class _ArraySource:
-    """Small PyGrain source that applies a sample transform per item."""
-
-    def __init__(self, images, labels, pipeline, affines=None):
-        self.images = images
-        self.labels = labels
-        self.pipeline = pipeline
-        self.affines = affines
-
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, index):
-        data = {"image": self.images[index], "label": self.labels[index]}
-        meta = None if self.affines is None else {"affine": self.affines[index]}
-        with keras.device("cpu:0"):
-            result = self.pipeline(data, meta)
-        return result["image"], result["label"]
-
-    def __repr__(self):
-        return f"_ArraySource(size={len(self)})"
-
-
 def _make_pygrain_loader(
     images,
     labels,
@@ -76,7 +54,7 @@ def _make_pygrain_loader(
             prefetch_buffer_size=2,
         )
     return pygrain.load(
-        _ArraySource(images, labels, pipeline, affines=affines),
+        PyGrainSource(images, labels, pipeline, affines=affines),
         batch_size=2,
         num_epochs=1,
         worker_count=worker_count,
