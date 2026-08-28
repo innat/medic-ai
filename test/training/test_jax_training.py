@@ -48,10 +48,7 @@ def _make_pygrain_loader(images, labels, pipeline):
     def apply_transform(record):
         with keras.device("cpu:0"):
             result = pipeline(record)
-        return {
-            "image": result["image"],
-            "label": result["label"],
-        }
+        return result["image"], result["label"]
 
     dataset = (
         pygrain.MapDataset.source(records)
@@ -198,8 +195,14 @@ def _fit_distributed_sample_transformed(
         keras.distribution.DataParallel(devices=devices)
     )
 
+    is_2d = input_layout == "HWC"
     if segmentation:
-        images, labels = make_dataset().segmentation_2d()
+        if is_2d:
+            images, labels = make_dataset().segmentation_2d()
+        else:
+            images, labels = make_dataset().segmentation_3d()
+    elif is_2d:
+        images, labels = make_dataset().classification_2d()
     else:
         images, labels = make_dataset().classification_3d()
     pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[pipeline_index]
