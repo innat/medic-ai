@@ -59,13 +59,28 @@ class _ArraySource:
         return f"_ArraySource(size={len(self)})"
 
 
-def _make_pygrain_loader(images, labels, pipeline, affines=None):
+def _make_pygrain_loader(
+    images,
+    labels,
+    pipeline,
+    affines=None,
+    *,
+    worker_count=0,
+    num_threads=None,
+):
     pygrain = _require_pygrain()
+    read_options = None
+    if num_threads is not None:
+        read_options = pygrain.ReadOptions(
+            num_threads=num_threads,
+            prefetch_buffer_size=2,
+        )
     return pygrain.load(
         _ArraySource(images, labels, pipeline, affines=affines),
         batch_size=2,
         num_epochs=1,
-        worker_count=0,
+        worker_count=worker_count,
+        read_options=read_options,
     )
 
 
@@ -376,3 +391,43 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
+
+
+def _assert_pygrain_classification_batches(loader):
+    """Consume PyGrain batches and validate transformed host arrays."""
+    batches = list(loader)
+
+    assert len(batches) == 2
+    for images, labels in batches:
+        assert isinstance(images, np.ndarray)
+        assert isinstance(labels, np.ndarray)
+        assert images.shape == (2, 32, 48, 1)
+        assert labels.shape == (2, 1)
+        assert np.isfinite(images).all()
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_tensorflow_pygrain_supports_multiple_reader_threads():
+    """Run CPU transforms concurrently in multiple threads in one process."""
+    _assert_pygrain_classification_batches(
+        _make_pygrain_loader(
+            *make_dataset().classification_2d(),
+            build_transform_pipelines("HWC", segmentation=False)[0],
+            num_threads=2,
+        )
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_tensorflow_pygrain_supports_multiple_worker_processes():
+    """Run CPU transforms in multiple PyGrain worker processes."""
+    _assert_pygrain_classification_batches(
+        _make_pygrain_loader(
+            *make_dataset().classification_2d(),
+            build_transform_pipelines("HWC", segmentation=False)[0],
+            worker_count=2,
+            num_threads=1,
+        )
+    )
