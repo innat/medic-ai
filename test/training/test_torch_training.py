@@ -1,4 +1,4 @@
-"""End-to-end Torch training coverage for migrated transforms."""
+"""End-to-end Torch training coverage for transforms."""
 
 import os
 
@@ -169,7 +169,7 @@ def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segme
 
 
 @pytest.mark.integration
-def test_torch_dataloader_trains_2d_classification_with_migrated_transforms():
+def test_torch_dataloader_trains_2d_classification_with_transforms():
     """Train a 2D classifier from CPU Torch DataLoader samples."""
     images, labels = make_dataset().classification_2d()
     _fit_torch_dataset(

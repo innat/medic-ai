@@ -1,4 +1,4 @@
-"""End-to-end TensorFlow training coverage for migrated transforms."""
+"""End-to-end TensorFlow training coverage for transforms."""
 
 import keras
 import numpy as np
@@ -175,7 +175,7 @@ def _fit_gpu_augmented_model(
 
 
 @pytest.mark.integration
-def test_tensorflow_tfdata_2d_classification_accepts_migrated_transforms():
+def test_tensorflow_tfdata_2d_classification_accepts_transforms():
     """Train a 2D classifier after transforms run inside ``Dataset.map``."""
     images, labels = make_dataset().classification_2d()
     _fit_tfdata_classification(
