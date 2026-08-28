@@ -29,7 +29,7 @@ class GPUAugmentedModel(keras.Model):
 
     def train_step(self, *args, **kwargs):
         """Dispatch augmentation while preserving each backend's signature."""
-        backend = keras.backend.backend()
+        backend = keras.config.backend()
         if backend == "jax":
             return self._jax_train_step(*args, **kwargs)
         if backend == "tensorflow":

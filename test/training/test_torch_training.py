@@ -6,12 +6,16 @@ import keras
 import numpy as np
 import pytest
 
+from medicai.losses import BinaryDiceLoss
+from medicai.metrics import BinaryDiceMetric
 from test.training.common import (
     DatasetBuilder as make_dataset,
+    GPUAugmentedModel,
     PyGrainSource,
     apply_classification_pipeline,
     apply_segmentation_pipeline,
     build_classification_model,
+    build_gpu_random_pipeline,
     build_segmentation_model,
     build_transform_pipelines,
 )
@@ -39,7 +43,7 @@ def _require_pygrain():
 class _TorchDataset:
     """CPU dataset that applies a Medicai sample transform before batching."""
 
-    def __init__(self, images, labels, pipeline, *, segmentation):
+    def __init__(self, images, labels, pipeline=None, *, segmentation):
         self.images = images
         self.labels = labels
         self.pipeline = pipeline
@@ -53,7 +57,9 @@ class _TorchDataset:
         image = self.images[index]
         label = self.labels[index]
         with keras.device("cpu:0"):
-            if self.segmentation:
+            if self.pipeline is None:
+                result = (image, label)
+            elif self.segmentation:
                 result = apply_segmentation_pipeline(self.pipeline, image, label)
             else:
                 result = apply_classification_pipeline(self.pipeline, image, label)
@@ -110,6 +116,56 @@ def _fit_torch_dataset(
     )
 
 
+def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segmentation):
+    """Train a Torch model with batch transforms executed in ``train_step``."""
+    torch = _require_torch()
+    if not torch.cuda.is_available():
+        pytest.skip("GPU augmentation coverage requires a CUDA device.")
+    from torch.utils.data import DataLoader
+
+    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+
+    def augment_data(image, label):
+        result = pipeline(
+            {"image": image, "label": label}
+            if segmentation
+            else {"image": image}
+        )
+        return result["image"], result.get("label", label)
+
+    loader = DataLoader(
+        _TorchDataset(images, labels, segmentation=segmentation),
+        batch_size=2,
+        shuffle=False,
+        num_workers=0,
+    )
+    with keras.device("cuda:0"):
+        base_model = (
+            build_segmentation_model(input_shape)
+            if segmentation
+            else build_classification_model(input_shape)
+        )
+        model = GPUAugmentedModel(base_model, augment_data)
+        model.compile(
+            optimizer=keras.optimizers.Adam(1e-3),
+            loss=(
+                BinaryDiceLoss(from_logits=False, num_classes=1)
+                if segmentation
+                else "binary_crossentropy"
+            ),
+            metrics=(
+                [BinaryDiceMetric(from_logits=False, num_classes=1)]
+                if segmentation
+                else [keras.metrics.BinaryAccuracy()]
+            ),
+            jit_compile=False,
+        )
+    history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
+
+    assert len(history.history["loss"]) == 1
+    assert np.isfinite(history.history["loss"][0])
+
+
 @pytest.mark.integration
 def test_torch_dataloader_trains_2d_classification_with_migrated_transforms():
     """Train a 2D classifier from CPU Torch DataLoader samples."""
@@ -125,6 +181,20 @@ def test_torch_dataloader_trains_2d_classification_with_migrated_transforms():
 
 
 @pytest.mark.integration
+@pytest.mark.gpu
+def test_torch_gpu_augmented_model_trains_2d_classification():
+    """Apply batch random geometry inside a Torch model's train step."""
+    images, labels = make_dataset().classification_2d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BHWC",
+        input_shape=(32, 48, 1),
+        segmentation=False,
+    )
+
+
+@pytest.mark.integration
 def test_torch_dataloader_trains_2d_segmentation_with_crop_pipeline():
     """Train a 2D segmenter with synchronized crop and flip transforms."""
     images, labels = make_dataset().segmentation_2d()
@@ -134,6 +204,20 @@ def test_torch_dataloader_trains_2d_segmentation_with_crop_pipeline():
         input_layout="HWC",
         input_shape=(24, 24, 1),
         pipeline_index=2,
+        segmentation=True,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+def test_torch_gpu_augmented_model_trains_3d_segmentation():
+    """Apply synchronized batch random geometry in a Torch segmenter."""
+    images, labels = make_dataset().segmentation_3d()
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout="BDHWC",
+        input_shape=(8, 16, 16, 1),
         segmentation=True,
     )
 
