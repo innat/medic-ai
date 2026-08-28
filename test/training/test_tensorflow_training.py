@@ -159,7 +159,7 @@ def _fit_gpu_augmented_model(
             optimizer=keras.optimizers.Adam(1e-3),
             loss=loss,
             metrics=metrics,
-            jit_compile=False,
+            jit_compile="auto",
         )
         return model
 
@@ -362,7 +362,7 @@ def test_tensorflow_pygrain_accepts_model_side_random_transforms():
         optimizer=keras.optimizers.Adam(1e-3),
         loss="binary_crossentropy",
         metrics=[keras.metrics.BinaryAccuracy()],
-        jit_compile=False,
+        jit_compile="auto",
     )
 
     history = model.fit(loader, epochs=1, verbose=0, shuffle=False)

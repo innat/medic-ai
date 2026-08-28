@@ -147,7 +147,7 @@ def build_classification_model(input_shape):
         optimizer=keras.optimizers.Adam(1e-3),
         loss="binary_crossentropy",
         metrics=[keras.metrics.BinaryAccuracy()],
-        jit_compile=False,
+        jit_compile="auto",
     )
     return model
 
@@ -170,7 +170,7 @@ def build_segmentation_model(input_shape, *, use_medicai_objectives: bool = True
         optimizer=keras.optimizers.Adam(1e-3),
         loss=loss,
         metrics=metrics,
-        jit_compile=False,
+        jit_compile="auto",
     )
     return model
 

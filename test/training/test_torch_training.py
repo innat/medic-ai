@@ -160,7 +160,7 @@ def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segme
                 if segmentation
                 else [keras.metrics.BinaryAccuracy()]
             ),
-            jit_compile=False,
+            jit_compile="auto",
         )
     history = model.fit(loader, epochs=1, verbose=0, shuffle=False)
 
