@@ -20,14 +20,35 @@ from medicai.transforms import (
 
 
 class GPUAugmentedModel(keras.Model):
-    """Wrap a model and apply a batch transform inside ``train_step``."""
+    """Wrap a model and apply a batch transform inside backend-specific steps."""
 
     def __init__(self, model, augment_data, **kwargs):
         super().__init__(**kwargs)
         self.model = model
         self.augment_data = augment_data
 
-    def train_step(self, data):
+    def train_step(self, *args, **kwargs):
+        """Dispatch augmentation while preserving each backend's signature."""
+        backend = keras.backend.backend()
+        if backend == "jax":
+            return self._jax_train_step(*args, **kwargs)
+        if backend == "tensorflow":
+            return self._tensorflow_train_step(*args, **kwargs)
+        if backend == "torch":
+            return self._torch_train_step(*args, **kwargs)
+        raise ValueError(f"Unsupported Keras backend: {backend!r}")
+
+    def _jax_train_step(self, state, data):
+        x, y = data
+        x, y = self.augment_data(x, y)
+        return super().train_step(state, (x, y))
+
+    def _tensorflow_train_step(self, data):
+        x, y = data
+        x, y = self.augment_data(x, y)
+        return super().train_step((x, y))
+
+    def _torch_train_step(self, data):
         x, y = data
         x, y = self.augment_data(x, y)
         return super().train_step((x, y))
