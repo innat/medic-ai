@@ -131,7 +131,9 @@ def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segme
             if segmentation
             else {"image": image}
         )
-        return result["image"], result.get("label", label)
+        if segmentation:
+            return result["image"], result["label"]
+        return result["image"], label
 
     loader = DataLoader(
         _TorchDataset(images, labels, segmentation=segmentation),
