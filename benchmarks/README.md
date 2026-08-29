@@ -4,6 +4,26 @@ These scripts measure MedicAI transforms outside the test suite. They compare
 dataloader-style CPU execution with tensor-only transforms that can also run
 inside a model or GPU training step.
 
+## Organization
+
+The benchmark currently focuses only on transforms, but its internal layout is
+kept extensible for future benchmark suites:
+
+```text
+benchmarks/
+├── transforms.py                 # Stable CLI entry point
+└── transform_benchmark/
+    ├── cases.py                  # Synthetic 2D/3D input generation
+    ├── devices.py                # Backend-specific device discovery
+    ├── runner.py                 # Synchronization, compilation, and timing
+    └── specs.py                  # Transform benchmark definitions
+```
+
+Shared benchmark mechanics belong in `transform_benchmark/`; transform-specific
+cases belong in `specs.py`. If model or training benchmarks are added later,
+they can reuse the runner and device conventions without expanding this
+transform CLI module.
+
 Set the Keras backend before starting Python:
 
 ```bash
