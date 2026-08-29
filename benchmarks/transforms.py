@@ -336,10 +336,14 @@ def main() -> None:
                 )
                 result.update(transform=spec.name, group=spec.group)
                 results.append(result)
-                inverse = result["inverse_median_ms"] or 0.0
+                inverse = result["inverse_median_ms"]
+                inverse_display = (
+                    "non-invertible" if inverse is None else f"{inverse:.2f} ms"
+                )
                 print(
                     f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
-                    f"forward={result['forward_median_ms']:.2f} ms inverse={inverse:.2f} ms"
+                    f"forward={result['forward_median_ms']:.2f} ms "
+                    f"inverse={inverse_display}"
                 )
     if args.json:
         args.json.write_text(json.dumps(results, indent=2) + "\n")
