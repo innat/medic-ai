@@ -4,12 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
-try:
+if __package__:
     from .common.devices import devices
     from .common.reporting import format_result
     from .transform_benchmark.runner import profile
     from .transform_benchmark.specs import transform_specs
-except ImportError:
+else:
     from common.devices import devices
     from common.reporting import format_result
     from transform_benchmark.runner import profile
