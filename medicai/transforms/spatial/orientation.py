@@ -284,7 +284,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         perm_spatial = tuple(perm_spatial)
         perm = (*perm_spatial, 3)
         reoriented = ops.transpose(tensor, axes=perm)
-        return ops.flip(reoriented, axis=flip_axes) if flip_axes else reoriented
+        return self._flip_tensor_axes(reoriented, flip_axes)
 
     def inverse_orient_tensor(
         self,
@@ -294,13 +294,22 @@ class Orientation(KeyedTransform, InvertibleTransform):
     ) -> Any:
         """Invert a spatial permutation and flips applied by ``orient_tensor``."""
         perm_spatial = tuple(perm_spatial)
-        flip_axes = tuple(flip_axes)
-        restored = ops.flip(tensor, axis=flip_axes) if flip_axes else tensor
+        restored = self._flip_tensor_axes(tensor, flip_axes)
         inverse_perm_spatial = [0, 0, 0]
         for output_axis, input_axis in enumerate(perm_spatial):
             inverse_perm_spatial[input_axis] = output_axis
         inverse_perm = (*inverse_perm_spatial, 3)
         return ops.transpose(restored, axes=inverse_perm)
+
+    @staticmethod
+    def _flip_tensor_axes(tensor: Any, flip_axes: tuple[int, ...] | Any) -> Any:
+        """Flip one axis at a time for compatibility with older Keras releases."""
+        result = tensor
+        for axis in tuple(flip_axes):
+            # Keras 3.13 can forward a multi-axis tuple as a rank-2 TensorFlow
+            # ``dims`` value. A one-element tuple is consistently 1-D.
+            result = ops.flip(result, axis=(int(axis),))
+        return result
 
     @staticmethod
     def _as_static_axes(value: Any) -> tuple[int, ...]:

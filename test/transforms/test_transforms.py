@@ -538,6 +538,24 @@ def test_orientation_flip_only_restores_original_layout_and_affine():
 
 
 @pytest.mark.unit
+def test_orientation_supports_multiple_flip_axes():
+    image = as_tensor(np.arange(24, dtype=np.float32).reshape(2, 3, 4, 1))
+    affine = as_tensor(np.eye(4, dtype=np.float32))
+
+    orientation = Orientation(keys=["image"], axcodes="LPI")
+    forward = orientation(TensorBundle({"image": image}, {"affine": affine}))
+
+    assert tuple(ops.shape(forward["image"])) == (2, 3, 4, 1)
+    restored = orientation.inverse(
+        TensorBundle({"image": forward["image"]}, forward.meta)
+    )
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
     image = as_tensor(np.random.randn(2, 3, 4, 1).astype(np.float32))
     affine = as_tensor(
