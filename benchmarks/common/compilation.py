@@ -22,6 +22,5 @@ def compile_forward(transform, backend: str):
     if backend == "torch":
         import torch
 
-        # This is the compiler used by Keras when Torch models are compiled.
         return torch.compile(forward, backend="inductor", fullgraph=True)
     raise RuntimeError(f"Unsupported Keras backend for compilation: {backend!r}")
