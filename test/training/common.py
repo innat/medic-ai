@@ -6,16 +6,25 @@ import keras
 from medicai.losses import BinaryDiceLoss
 from medicai.metrics import BinaryDiceMetric
 from medicai.transforms import (
+    CropForeground,
     Compose,
     Flip,
     RandomChoice,
+    RandomCropByPosNegLabel,
+    RandomCutOut,
     RandomFlip,
     RandomRotate,
+    RandomRotate90,
+    RandomShiftIntensity,
+    RandomSpatialCrop,
+    NormalizeIntensity,
+    Resize,
     Rotate90,
     ScaleIntensityRange,
     Orientation,
     SpatialCrop,
     Spacing,
+    ShiftIntensity,
 )
 
 
