@@ -38,6 +38,8 @@ class RandomSpatialCrop(RandomTransform):
         and ``tf.data`` graph execution remain supported, including GPU
         execution when TensorFlow places the kernel there. See the related
         TensorFlow issue: https://github.com/tensorflow/tensorflow/issues/76070
+        When ``random_shape=True``, the output crop size is dynamic and remains
+        unsupported by JAX XLA, which requires a statically known slice size.
 
     Args:
         keys: Keys of the tensors to crop.
@@ -235,7 +237,12 @@ class RandomSpatialCrop(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            return self.crop.crop_tensor(tensor, params["crop_start"], params["crop_size"])
+            return self.crop.crop_tensor(
+                tensor,
+                params["crop_start"],
+                params["crop_size"],
+                static_size=not self.random_shape,
+            )
 
         present_keys = self.crop.apply_to_present_keys(
             bundle,

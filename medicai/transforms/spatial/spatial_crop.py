@@ -257,18 +257,47 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         starts = ops.maximum(ends - crop_size, 0)
         return starts, crop_size
 
-    def crop_tensor(self, tensor: Any, starts: Any, crop_size: Any) -> Any:
+    def _static_crop_shape(self, tensor: Any) -> tuple[int, ...] | None:
+        """Return a static output shape for fixed-size crops when available."""
+        tensor_shape = tuple(tensor.shape)
+        if any(dimension is None for dimension in tensor_shape):
+            return None
+
+        spatial_rank = self.layout_info.spatial_rank
+        configured_size = ensure_spatial_tuple(self.crop_size, spatial_rank, "crop_size")
+        spatial_axes = self.layout_info.spatial_axes
+        spatial_shape = [tensor_shape[axis] for axis in spatial_axes]
+        output_spatial = [
+            spatial if size <= 0 else min(size, spatial)
+            for size, spatial in zip(configured_size, spatial_shape)
+        ]
+        if self.layout_info.batched:
+            return (tensor_shape[0], *output_spatial, tensor_shape[-1])
+        return (*output_spatial, tensor_shape[-1])
+
+    def crop_tensor(
+        self,
+        tensor: Any,
+        starts: Any,
+        crop_size: Any,
+        *,
+        static_size: bool = True,
+    ) -> Any:
         """Crop one tensor using TensorFlow slicing.
 
         Args:
             tensor: Channel-last 2D or 3D sample tensor.
             starts: Start indices for each spatial dimension.
             crop_size: Crop size for each spatial dimension.
+            static_size: If ``True``, use a Python-visible output shape when
+                the configured crop size and input shape are static. This is
+                required by JAX XLA; dynamic crop sizes use the fallback path.
 
         Returns:
             ``tf.Tensor``: The cropped tensor with the original channel
             dimension preserved.
         """
+        static_shape = self._static_crop_shape(tensor) if static_size else None
         if self.layout_info.batched:
             begin = ops.concatenate(
                 [
@@ -278,12 +307,8 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 ],
                 axis=0,
             )
-            size = ops.concatenate(
-                [
-                    ops.reshape(ops.shape(tensor)[0], (1,)),
-                    crop_size,
-                    ops.reshape(ops.shape(tensor)[-1], (1,)),
-                ],
+            size = static_shape or ops.concatenate(
+                [ops.reshape(ops.shape(tensor)[0], (1,)), crop_size, ops.reshape(ops.shape(tensor)[-1], (1,))],
                 axis=0,
             )
         else:
@@ -291,9 +316,8 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 [starts, ops.convert_to_tensor([0], dtype="int32")],
                 axis=0,
             )
-            size = ops.concatenate(
-                [crop_size, ops.reshape(ops.shape(tensor)[-1], (1,))],
-                axis=0,
+            size = static_shape or ops.concatenate(
+                [crop_size, ops.reshape(ops.shape(tensor)[-1], (1,))], axis=0
             )
         return ops.slice(tensor, start_indices=begin, shape=size)
 
