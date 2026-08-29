@@ -203,7 +203,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     )
     crop_size = (24, 24) if is_2d else (6, 12, 12)
     crop_start = (4, 4) if is_2d else (1, 2, 2)
-    return [
+    pipelines = [
         Compose(
             [
                 ScaleIntensityRange(
@@ -271,6 +271,140 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             ]
         ),
     ]
+
+    # Keep the original five pipeline indices stable; append focused cases for
+    # the remaining concrete transforms so backend training tests can opt into
+    # them without changing existing callers.
+    pipelines.extend(
+        [
+            Compose(
+                [
+                    NormalizeIntensity(
+                        keys=["image"],
+                        channel_wise=True,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [ShiftIntensity(keys=["image"], offset=0.1, input_layout=input_layout)]
+            ),
+            Compose(
+                [
+                    RandomFlip(
+                        keys=keys,
+                        spatial_axis=first_spatial_axis,
+                        prob=1.0,
+                        seed=11,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomShiftIntensity(
+                        keys=["image"],
+                        offset=0.1,
+                        prob=1.0,
+                        seed=13,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomSpatialCrop(
+                        keys=keys,
+                        crop_size=crop_size,
+                        random_center=False,
+                        input_layout=input_layout,
+                        seed=17,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    Resize(
+                        keys=keys,
+                        interpolation=(
+                            ("bilinear", "nearest")
+                            if is_2d
+                            else ("trilinear", "nearest")
+                        )
+                        if segmentation
+                        else ("bilinear" if is_2d else "trilinear"),
+                        target_shape=crop_size,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+        ]
+    )
+
+    if input_layout in {"HWC", "DHWC"}:
+        pipelines.append(
+            Compose(
+                [
+                    CropForeground(
+                        keys=keys,
+                        source_key="image",
+                        k_divisible=(8, 8) if is_2d else (2, 4, 4),
+                        input_layout=input_layout,
+                    )
+                ]
+            )
+        )
+
+    if segmentation:
+        pipelines.append(
+            Compose(
+                [
+                    RandomCropByPosNegLabel(
+                        keys=["image", "label"],
+                        target_shape=crop_size,
+                        pos=1,
+                        neg=1,
+                        input_layout=input_layout,
+                        seed=19,
+                    )
+                ]
+            )
+        )
+        if is_2d:
+            pipelines.append(
+                Compose(
+                    [
+                        RandomCutOut(
+                            keys=["image", "label"],
+                            mask_size=(4, 4),
+                            num_cuts=1,
+                            prob=1.0,
+                            input_layout=input_layout,
+                            seed=23,
+                        )
+                    ]
+                )
+            )
+
+    if is_2d:
+        # This case is intended for square 2D fixtures because quarter-turn
+        # rotation preserves shape only when its spatial plane is square.
+        pipelines.append(
+            Compose(
+                [
+                    RandomRotate90(
+                        keys=keys,
+                        max_k=3,
+                        prob=1.0,
+                        spatial_axis=rotation_axes,
+                        input_layout=input_layout,
+                        seed=29,
+                    )
+                ]
+            )
+        )
+
+    return pipelines
 
 
 def apply_classification_pipeline(pipeline, image, label):
