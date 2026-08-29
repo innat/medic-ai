@@ -6,52 +6,16 @@ import time
 import keras
 import numpy as np
 
+try:
+    from benchmarks.common.compilation import compile_forward
+    from benchmarks.common.timing import sync
+except ImportError:
+    from common.compilation import compile_forward
+    from common.timing import sync
 from medicai.transforms import TensorBundle
 
 from .cases import make_case
 from .specs import BenchmarkSpec
-
-
-def sync(value) -> None:
-    """Materialize backend work, including tensors in a ``TensorBundle``."""
-    if isinstance(value, TensorBundle):
-        for tensor in value.data.values():
-            sync(tensor)
-        return
-    if isinstance(value, (dict, tuple, list)):
-        for item in value:
-            sync(item)
-        return
-    try:
-        keras.ops.convert_to_numpy(value)
-    except (TypeError, ValueError, AttributeError):
-        pass
-
-
-def compile_forward(transform, backend: str):
-    """Compile a tensor-only transform adapter for the active backend."""
-    def forward(image, label):
-        result = transform(TensorBundle({"image": image, "label": label}, {}))
-        return result["image"], result["label"]
-
-    if backend == "tensorflow":
-        import tensorflow as tf
-
-        return tf.function(forward, jit_compile=True)
-    if backend == "jax":
-        import jax
-
-        return jax.jit(forward)
-    if backend == "torch":
-        import importlib.util
-        import torch
-
-        if importlib.util.find_spec("torch_xla") is None:
-            raise RuntimeError(
-                "XLA unavailable: Torch compilation requires the optional `torch_xla` package."
-            )
-        return torch.compile(forward, backend="openxla", fullgraph=True)
-    raise RuntimeError(f"Unsupported Keras backend for compilation: {backend!r}")
 
 
 def _failed_result(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, case_setup_ms, compile_mode, compile_time_ms, error):

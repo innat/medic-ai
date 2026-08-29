@@ -12,17 +12,21 @@ kept extensible for future benchmark suites:
 ```text
 benchmarks/
 ├── transforms.py                 # Stable CLI entry point
+├── common/
+│   ├── devices.py                # Backend-specific device discovery
+│   ├── timing.py                 # Synchronization helpers
+│   ├── compilation.py            # Backend compilation adapters
+│   └── reporting.py              # Console result formatting
 └── transform_benchmark/
     ├── cases.py                  # Synthetic 2D/3D input generation
-    ├── devices.py                # Backend-specific device discovery
-    ├── runner.py                 # Synchronization, compilation, and timing
+    ├── runner.py                 # Transform profiling workflow
     └── specs.py                  # Transform benchmark definitions
 ```
 
-Shared benchmark mechanics belong in `transform_benchmark/`; transform-specific
-cases belong in `specs.py`. If model or training benchmarks are added later,
-they can reuse the runner and device conventions without expanding this
-transform CLI module.
+Shared benchmark mechanics belong in `common/`; transform-specific cases belong
+in `transform_benchmark/`. If model or training benchmarks are added later,
+they can reuse device, timing, compilation, and reporting conventions without
+expanding this transform CLI module.
 
 Set the Keras backend before starting Python:
 

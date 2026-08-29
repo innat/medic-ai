@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 
 try:
-    from .transform_benchmark.devices import devices
+    from .common.devices import devices
+    from .common.reporting import format_result
     from .transform_benchmark.runner import profile
     from .transform_benchmark.specs import transform_specs
 except ImportError:
-    from transform_benchmark.devices import devices
+    from common.devices import devices
+    from common.reporting import format_result
     from transform_benchmark.runner import profile
     from transform_benchmark.specs import transform_specs
 
@@ -60,27 +62,7 @@ def main() -> None:
                     print(f"SKIP {spec.name:24} {device:10}: {error}")
                     continue
                 results.append(result)
-                if result["forward_median_ms"] is None:
-                    print(
-                        f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
-                        f"forward={result['compile_status']} inverse={result['inverse_status']} "
-                        f"compile={result['compile_status']}"
-                    )
-                    continue
-                inverse = result["inverse_median_ms"]
-                inverse_display = (
-                    result["inverse_status"] if inverse is None else f"{inverse:.2f} ms"
-                )
-                compile_display = (
-                    "-"
-                    if result["compile_time_ms"] is None
-                    else f"{result['compile_time_ms']:.2f} ms"
-                )
-                print(
-                    f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
-                    f"forward={result['forward_median_ms']:.2f} ms "
-                    f"inverse={inverse_display} compile={compile_display}"
-                )
+                print(format_result(result))
     if args.json:
         args.json.write_text(json.dumps(results, indent=2) + "\n")
 
