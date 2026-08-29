@@ -328,12 +328,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             "int32",
         )
 
-        def empty_bbox():
-            return (
-                ops.zeros((spatial_rank,), dtype="int32"),
-                spatial_shape,
-            )
-
         def foreground_bbox():
             min_coords = []
             max_coords = []
@@ -355,7 +349,15 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             max_coords = ops.stack(max_coords, axis=0)
             return min_coords, max_coords
 
-        return ops.cond(has_foreground, foreground_bbox, empty_bbox)
+        foreground_min, foreground_max = foreground_bbox()
+        has_foreground = ops.cast(has_foreground, "bool")
+        foreground_min = ops.where(
+            has_foreground,
+            foreground_min,
+            ops.zeros((spatial_rank,), dtype="int32"),
+        )
+        foreground_max = ops.where(has_foreground, foreground_max, spatial_shape)
+        return foreground_min, foreground_max
 
     def add_margin(
         self,
