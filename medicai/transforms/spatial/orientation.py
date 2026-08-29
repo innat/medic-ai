@@ -303,12 +303,17 @@ class Orientation(KeyedTransform, InvertibleTransform):
 
     @staticmethod
     def _flip_tensor_axes(tensor: Any, flip_axes: tuple[int, ...] | Any) -> Any:
-        """Flip one axis at a time for compatibility with older Keras releases."""
+        """Reverse selected axes without relying on ``ops.flip`` axis parsing."""
         result = tensor
         for axis in tuple(flip_axes):
-            # Keras 3.13 wraps the axis internally as ``[axis]``. Passing a
-            # tuple here would therefore create a rank-2 TensorFlow ``dims``.
-            result = ops.flip(result, axis=int(axis))
+            axis = int(axis)
+            indices = ops.arange(
+                ops.shape(result)[axis] - 1,
+                -1,
+                -1,
+                dtype="int32",
+            )
+            result = ops.take(result, indices, axis=axis)
         return result
 
     @staticmethod
