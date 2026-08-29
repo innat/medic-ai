@@ -57,7 +57,7 @@ benchmark is a timing tool, not a correctness replacement for
 `--compile none` is the default and measures eager transform calls. With
 `--compile xla`, TensorFlow uses `tf.function(jit_compile=True)`, JAX uses
 `jax.jit`, and Torch uses `torch.compile` with the Keras-standard `inductor`
-backend. Compilation
+backend with its default graph-break behavior. Compilation
 time is reported separately as `compile_time_ms`. Metadata-dependent transforms
 are skipped because their Python-side metadata and dynamic geometry are not
 part of this compiled tensor-only benchmark. Invertible transforms report
