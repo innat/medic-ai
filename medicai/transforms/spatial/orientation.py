@@ -306,9 +306,9 @@ class Orientation(KeyedTransform, InvertibleTransform):
         """Flip one axis at a time for compatibility with older Keras releases."""
         result = tensor
         for axis in tuple(flip_axes):
-            # Keras 3.13 can forward a multi-axis tuple as a rank-2 TensorFlow
-            # ``dims`` value. A one-element tuple is consistently 1-D.
-            result = ops.flip(result, axis=(int(axis),))
+            # Keras 3.13 wraps the axis internally as ``[axis]``. Passing a
+            # tuple here would therefore create a rank-2 TensorFlow ``dims``.
+            result = ops.flip(result, axis=int(axis))
         return result
 
     @staticmethod
