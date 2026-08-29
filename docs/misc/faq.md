@@ -13,12 +13,9 @@ In practice:
 - Choose `torch` if your team primarily works in the PyTorch ecosystem.
 - Choose `jax` if you prefer JAX-native training and compilation workflows.
 
-One important detail is that the `medicai.transforms` API is currently
-implemented with TensorFlow ops. This is intentional so the same transform
-layer can integrate with `tf.data`, Python generators, and
-`keras.utils.PyDataset`, while still remaining usable in multi-backend Keras
-training workflows. This design also reflects a current Keras limitation tracked
-in [keras-team/keras#21785](https://github.com/keras-team/keras/issues/21785).
+The `medicai.transforms` API uses backend-native `keras.ops`, so transforms can
+run with the selected TensorFlow, PyTorch, or JAX backend. The data-loading API
+should match that backend when transforms are executed outside the model.
 
 If you want a fully backend-specific data pipeline, you can also mix `medicai`
 models with ecosystem-native tooling such as

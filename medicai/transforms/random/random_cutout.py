@@ -27,11 +27,8 @@ class RandomCutOut(RandomTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    The paired label tensor is validated for layout compatibility and passed
-    through unchanged.
-
     Args:
-        keys: Two keys containing the image tensor and label tensor.
+        keys: A single key containing the image tensor to modify.
         mask_size: Height-width mask size for each cutout window.
         num_cuts: Number of cutout windows to sample.
         prob: Probability of applying cutout.
@@ -62,7 +59,7 @@ class RandomCutOut(RandomTransform):
             from medicai.transforms import RandomCutOut
 
             transform = RandomCutOut(
-                keys=["image", "label"],
+                keys=["image"],
                 mask_size=(16, 16),
                 num_cuts=2,
                 prob=0.5,
@@ -87,7 +84,7 @@ class RandomCutOut(RandomTransform):
             from medicai.transforms import RandomCutOut
 
             transform = RandomCutOut(
-                keys=["image", "label"],
+                keys=["image"],
                 mask_size=(16, 16),
                 num_cuts=2,
                 prob=0.5,
@@ -113,7 +110,7 @@ class RandomCutOut(RandomTransform):
             from medicai.transforms import RandomCutOut
 
             transform = RandomCutOut(
-                keys=["image", "label"],
+                keys=["image"],
                 mask_size=(16, 16),
                 num_cuts=2,
                 prob=0.5,
@@ -144,10 +141,9 @@ class RandomCutOut(RandomTransform):
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
-        if len(keys) != 2:
+        if len(keys) != 1:
             raise ValueError(
-                "`keys` must have length 2 and should contain image and label keys. "
-                f"Got length {len(keys)}."
+                "`keys` must contain exactly one image key. " f"Got length {len(keys)}."
             )
         if not isinstance(mask_size, (list, tuple)) or len(mask_size) != 2:
             raise ValueError("`mask_size` must be a sequence of two integers: (height, width).")
@@ -165,7 +161,6 @@ class RandomCutOut(RandomTransform):
             )
 
         self.image_key = keys[0]
-        self.label_key = keys[1]
         self.mask_size = tuple(mask_size)
         self.num_cuts = num_cuts
         self.fill_mode = fill_mode
@@ -186,22 +181,15 @@ class RandomCutOut(RandomTransform):
         return self.apply_with_params(bundle, params)
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample one Bernoulli decision shared across the selected keys."""
-        if self.image_key not in bundle.data or self.label_key not in bundle.data:
+        """Sample one Bernoulli decision for the selected image key."""
+        if self.image_key not in bundle.data:
             if self.allow_missing_keys:
                 return {"skip": True}
-            missing = self.image_key if self.image_key not in bundle.data else self.label_key
-            raise KeyError(f"Key '{missing}' not found in input data.")
+            raise KeyError(f"Key '{self.image_key}' not found in input data.")
 
         image = bundle.data[self.image_key]
-        label = bundle.data[self.label_key]
         layout = validate_tensor_matches_layout(
             image,
-            self.input_layout,
-            transform_name=type(self).__name__,
-        )
-        validate_tensor_matches_layout(
-            label,
             self.input_layout,
             transform_name=type(self).__name__,
         )
@@ -262,7 +250,7 @@ class RandomCutOut(RandomTransform):
     def build_trace_params(self, params: dict[str, object]) -> dict[str, object]:
         """Build random trace metadata for the current cutout operation."""
         return {
-            "keys": [self.image_key, self.label_key],
+            "keys": [self.image_key],
             "mask_size": self.mask_size,
             "num_cuts": self.num_cuts,
             "fill_mode": self.fill_mode,

@@ -27,14 +27,16 @@ class RandomRotate90(RandomTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    In batch mode, one quarter-turn count ``k`` is sampled per transform call
-    and that same rotation is applied across the whole batch.
+    .. note::
 
-    For graph execution, the two selected rotation axes must have equal
-    lengths. A 90- or 270-degree rotation swaps those axes, and graph control
-    flow requires the applied and skipped branches to return the same shape.
-    For example, axial rotation of ``(D, H, W, C)`` requires ``H == W``;
-    ``D == H == W`` is not required unless all three planes are used.
+        In batch mode, one quarter-turn count ``k`` is sampled per transform call
+        and that same rotation is applied across the whole batch.
+
+        For graph execution, the two selected rotation axes must have equal
+        lengths. A 90- or 270-degree rotation swaps those axes, and graph control
+        flow requires the applied and skipped branches to return the same shape.
+        For example, axial rotation of ``(D, H, W, C)`` requires ``H == W``;
+        ``D == H == W`` is not required unless all three planes are used.
 
     Args:
         keys: Keys of the tensors to rotate.

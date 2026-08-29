@@ -26,9 +26,6 @@ class NormalizeIntensity(KeyedTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    Label tensors are usually not appropriate inputs unless a workflow
-    explicitly requires intensity-style normalization on them.
-
     Args:
         keys: Keys of the tensors to normalize.
         offset: Optional fixed value to subtract. If ``None``, the mean of

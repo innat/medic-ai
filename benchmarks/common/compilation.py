@@ -1,12 +1,11 @@
 """Backend compilation adapters for benchmarks."""
 
-import keras
-
 from medicai.transforms import TensorBundle
 
 
 def compile_forward(transform, backend: str):
     """Compile a tensor-only transform adapter for the active backend."""
+
     def forward(image, label):
         result = transform(TensorBundle({"image": image, "label": label}, {}))
         return result["image"], result["label"]

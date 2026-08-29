@@ -28,10 +28,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    It does not infer source ranges from the data; callers must provide
-    medically meaningful source bounds. Integer inputs such as ``uint8`` are
-    supported and are cast to ``dtype`` before scaling.
-
     Args:
         keys: Keys of the tensors to scale.
         source_value_range: Two-element source intensity range ``(min, max)``.

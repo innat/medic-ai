@@ -30,15 +30,12 @@ class RandomShiftIntensity(RandomTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    Offsets may be sampled once per tensor or separately per channel depending
-    on ``channel_wise``. During inversion, the transform uses the sampled
-    offsets stored in the transform trace and applies the inverse only to the
-    traced keys.
+    .. note::
 
-    In the current migrated dual-mode path, if this transform is used on a
-    batched tensor through a batch-capable wrapper setup, the sampled offset
-    values are shared across the full batch rather than drawn independently
-    per batch item.
+        Offsets may be sampled once per tensor or separately per channel depending
+        on ``channel_wise``. During inversion, the transform uses the sampled
+        offsets stored in the transform trace and applies the inverse only to the
+        traced keys.
 
     Args:
         keys: Keys of the tensors to shift.

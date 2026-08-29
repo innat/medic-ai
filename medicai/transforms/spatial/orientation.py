@@ -67,15 +67,12 @@ class Orientation(KeyedTransform, InvertibleTransform):
             missing requested keys raise an error.
 
     Example:
-        Keras selects its backend before the first Keras import. Each example
-        below is an independent process.
 
         TensorFlow backend:
 
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
@@ -106,7 +103,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "jax"
 
             import jax.numpy as jnp
@@ -122,7 +118,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "torch"
 
             import torch

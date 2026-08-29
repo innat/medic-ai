@@ -18,20 +18,57 @@ from .cases import make_case
 from .specs import BenchmarkSpec
 
 
-def _failed_result(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, case_setup_ms, compile_mode, compile_time_ms, error):
+def _failed_result(
+    spec,
+    layout,
+    device,
+    spatial_size,
+    batch_size,
+    channels,
+    iterations,
+    warmup,
+    case_setup_ms,
+    compile_mode,
+    compile_time_ms,
+    error,
+):
     return {
-        "backend": keras.config.backend(), "device": device, "layout": layout,
-        "spatial_size": spatial_size, "batch_size": batch_size, "channels": channels,
-        "input_shape": None, "forward_median_ms": None, "forward_p95_ms": None,
-        "inverse_median_ms": None, "case_setup_ms": case_setup_ms, "case_reused": True,
-        "compile_mode": compile_mode, "compile_time_ms": compile_time_ms,
-        "compile_status": "not-xla-compatible", "compile_error": f"{type(error).__name__}: {error}",
-        "inverse_status": "not-xla-compatible", "iterations": iterations, "warmup": warmup,
-        "transform": spec.name, "group": spec.group,
+        "backend": keras.config.backend(),
+        "device": device,
+        "layout": layout,
+        "spatial_size": spatial_size,
+        "batch_size": batch_size,
+        "channels": channels,
+        "input_shape": None,
+        "forward_median_ms": None,
+        "forward_p95_ms": None,
+        "inverse_median_ms": None,
+        "case_setup_ms": case_setup_ms,
+        "case_reused": True,
+        "compile_mode": compile_mode,
+        "compile_time_ms": compile_time_ms,
+        "compile_status": "not-xla-compatible",
+        "compile_error": f"{type(error).__name__}: {error}",
+        "inverse_status": "not-xla-compatible",
+        "iterations": iterations,
+        "warmup": warmup,
+        "transform": spec.name,
+        "group": spec.group,
     }
 
 
-def profile(spec: BenchmarkSpec, layout: str, device: str, spatial_size: int, batch_size: int, channels: int, iterations: int, warmup: int, seed: int, compile_mode: str) -> dict:
+def profile(
+    spec: BenchmarkSpec,
+    layout: str,
+    device: str,
+    spatial_size: int,
+    batch_size: int,
+    channels: int,
+    iterations: int,
+    warmup: int,
+    seed: int,
+    compile_mode: str,
+) -> dict:
     """Profile one transform case and return a JSON-serializable result."""
     transform = spec.factory(layout, seed)
     setup_start = time.perf_counter()
@@ -57,7 +94,20 @@ def profile(spec: BenchmarkSpec, layout: str, device: str, spatial_size: int, ba
             compile_status = "compiled"
         except Exception as error:
             compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
-            return _failed_result(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, case_setup_ms, compile_mode, compile_time_ms, error)
+            return _failed_result(
+                spec,
+                layout,
+                device,
+                spatial_size,
+                batch_size,
+                channels,
+                iterations,
+                warmup,
+                case_setup_ms,
+                compile_mode,
+                compile_time_ms,
+                error,
+            )
 
     for _ in range(warmup):
         if compiled_forward is None:
@@ -91,14 +141,29 @@ def profile(spec: BenchmarkSpec, layout: str, device: str, spatial_size: int, ba
 
     output_image = result[0] if compiled_forward is not None else result["image"]
     return {
-        "backend": keras.config.backend(), "device": device, "layout": layout,
-        "spatial_size": spatial_size, "batch_size": batch_size, "channels": channels,
-        "input_shape": list(output_image.shape), "forward_median_ms": statistics.median(forward_times),
+        "backend": keras.config.backend(),
+        "device": device,
+        "layout": layout,
+        "spatial_size": spatial_size,
+        "batch_size": batch_size,
+        "channels": channels,
+        "input_shape": list(output_image.shape),
+        "forward_median_ms": statistics.median(forward_times),
         "forward_p95_ms": float(np.percentile(forward_times, 95)),
         "inverse_median_ms": statistics.median(inverse_times) if inverse_times else None,
-        "case_setup_ms": case_setup_ms, "case_reused": True, "compile_mode": compile_mode,
-        "compile_time_ms": compile_time_ms, "compile_status": compile_status,
+        "case_setup_ms": case_setup_ms,
+        "case_reused": True,
+        "compile_mode": compile_mode,
+        "compile_time_ms": compile_time_ms,
+        "compile_status": compile_status,
         "compile_error": compile_error,
-        "inverse_status": "not-compiled" if spec.inverse and compile_mode == "xla" else "measured" if spec.inverse else "non-invertible",
-        "iterations": iterations, "warmup": warmup, "transform": spec.name, "group": spec.group,
+        "inverse_status": (
+            "not-compiled"
+            if spec.inverse and compile_mode == "xla"
+            else "measured" if spec.inverse else "non-invertible"
+        ),
+        "iterations": iterations,
+        "warmup": warmup,
+        "transform": spec.name,
+        "group": spec.group,
     }

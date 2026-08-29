@@ -310,7 +310,8 @@ class RandomRotate(RandomTransform):
     exact voxel-for-voxel round trip. ``fill_mode="constant"`` is typically
     the most predictable choice for medical images.
 
-    Note:
+    .. note::
+
         On the TensorFlow backend, the affine image kernel used by
         ``RandomRotate`` is not currently XLA-compatible. Regular eager and
         ``tf.data`` graph execution remain supported, including GPU execution
@@ -330,8 +331,7 @@ class RandomRotate(RandomTransform):
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
             Supported modes are ``"bilinear"`` and ``"nearest"``.
         fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
-            ``"wrap"``, ``"mirror"``, or ``"reflect"``. LR-crop mode is not
-            supported.
+            ``"wrap"``, ``"mirror"``, or ``"reflect"``.
         fill_value: One value, one value per key, or a key-to-value mapping.
         input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
         seed: Optional integer or ``keras.random.SeedGenerator``.

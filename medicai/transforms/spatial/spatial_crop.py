@@ -43,15 +43,12 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Keras selects its backend before the first Keras import. Each example
-        below is an independent process.
 
         TensorFlow backend:
 
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
@@ -78,7 +75,6 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
@@ -102,7 +98,6 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
@@ -219,8 +214,8 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
             tensor: Channel-last 2D or 3D sample tensor to crop.
 
         Returns:
-            tuple[tf.Tensor, tf.Tensor]: A pair ``(starts, crop_size)`` where
-            both tensors have one value per spatial dimension.
+            tuple[Any, Any]: A pair ``(starts, crop_size)`` where both backend
+            tensors have one value per spatial dimension.
         """
         layout = validate_tensor_matches_layout(
             tensor,
@@ -283,7 +278,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
         *,
         static_size: bool = True,
     ) -> Any:
-        """Crop one tensor using TensorFlow slicing.
+        """Crop one tensor using backend-native Keras slicing.
 
         Args:
             tensor: Channel-last 2D or 3D sample tensor.
@@ -294,8 +289,7 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 required by JAX XLA; dynamic crop sizes use the fallback path.
 
         Returns:
-            ``tf.Tensor``: The cropped tensor with the original channel
-            dimension preserved.
+            The cropped tensor with the original channel dimension preserved.
         """
         static_shape = self._static_crop_shape(tensor) if static_size else None
         if self.layout_info.batched:
@@ -308,7 +302,11 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
                 axis=0,
             )
             size = static_shape or ops.concatenate(
-                [ops.reshape(ops.shape(tensor)[0], (1,)), crop_size, ops.reshape(ops.shape(tensor)[-1], (1,))],
+                [
+                    ops.reshape(ops.shape(tensor)[0], (1,)),
+                    crop_size,
+                    ops.reshape(ops.shape(tensor)[-1], (1,)),
+                ],
                 axis=0,
             )
         else:

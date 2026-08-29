@@ -375,7 +375,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
                 Compose(
                     [
                         RandomCutOut(
-                            keys=["image", "label"],
+                            keys=["image"],
                             mask_size=(4, 4),
                             num_cuts=1,
                             prob=1.0,

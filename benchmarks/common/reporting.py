@@ -13,9 +13,7 @@ def format_result(result: dict) -> str:
         )
 
     inverse = result["inverse_median_ms"]
-    inverse_display = (
-        result["inverse_status"] if inverse is None else f"{inverse:.2f} ms"
-    )
+    inverse_display = result["inverse_status"] if inverse is None else f"{inverse:.2f} ms"
     compile_time = result["compile_time_ms"]
     compile_display = "-" if compile_time is None else f"{compile_time:.2f} ms"
     return (

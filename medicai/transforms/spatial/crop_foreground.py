@@ -63,44 +63,13 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             rejected because foreground detection is defined per sample.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
-        .. note::
-
-            * **When to use it**: only when ``select_fn`` is producing a
-                bounding box that includes content you don't want, or is
-                missing content it should include. If ``select_fn`` alone
-                gives a clean mask, leave this unset; it adds a mask-cleanup
-                pass that isn't free.
-            * **What it can do**: presets and custom callables operate purely
-                on the boolean mask, so any spatial-only cleanup is fair game,
-                discarding small disconnected regions, bridging fragmented
-                regions, filling internal holes, restricting to
-                border-touching regions, etc. Custom callables compose with
-                the rest of ``CropForeground`` (``margin``, ``allow_smaller``,
-                ``k_divisible``) exactly like the unmodified mask would.
-            * **Limitations**: it only sees the mask, not the source image's
-                pixel values or any other tensor in ``keys``. It cannot make
-                decisions based on intensity, texture, or content elsewhere in
-                the sample. It also cannot recover information that
-                ``select_fn`` already discarded. Built-in presets requiring
-                ``scipy`` are eager, host-side operations, so they run
-                per-sample rather than as traceable ops; fine for a
-                ``tf.data`` input pipeline, not intended for use inside a
-                model's forward pass. Preset defaults (e.g. bridging/closing
-                strength) are tuned heuristics, not guarantees -- verify on a
-                sample of your own data, since the right amount of bridging
-                differs by modality (thin gaps at soft tissue edges in 2D
-                mammography vs. tighter anatomy-to-artifact spacing in 3D CT).
-
     Example:
-        Keras selects its backend before the first Keras import. Each example
-        below is an independent process.
 
         TensorFlow backend:
 
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
@@ -125,7 +94,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "jax"
 
             import jax.numpy as jnp
@@ -147,7 +115,6 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "torch"
 
             import torch

@@ -579,8 +579,16 @@ class RandomChoice(RandomTransform):
 
     Args:
         transforms: Candidate transform objects to sample from.
-        num_choices: Either one integer for an exact number of transforms to
-            apply, or a ``(min, max)`` tuple specifying an inclusive range.
+        num_choices: Controls how many transforms are selected without
+            replacement. An integer selects exactly that many transforms: for
+            example, ``1`` selects one transform and ``2`` selects two
+            different transforms when the pool contains more than two. If the
+            value equals ``len(transforms)``, every transform is selected. A
+            value greater than ``len(transforms)`` raises ``ValueError``. A
+            ``(min, max)`` tuple samples an integer from that inclusive range
+            on each call, then selects that many different transforms. Both
+            bounds must be valid for the transform pool, so ``max`` cannot
+            exceed ``len(transforms)``.
         prob: Probability of applying any sampled transforms at all. When the
             probability gate is not passed, the input is returned unchanged and
             no candidate transform is executed.

@@ -17,8 +17,8 @@ from ..utils import (
 class Flip(KeyedTransform, InvertibleTransform):
     """Flip selected tensors along one or more spatial axes.
 
-    ``Flip`` deterministically reverses channel-last tensors using
-    TensorFlow's ``tf.reverse``. It can be applied to common Medic-AI
+    ``Flip`` deterministically reverses channel-last tensors using the
+    backend-native Keras operations. It can be applied to common Medic-AI
     dictionary-style samples such as image-label pairs. Depending on
     ``input_layout``, it supports:
 
@@ -27,7 +27,7 @@ class Flip(KeyedTransform, InvertibleTransform):
     - batch 2D tensors shaped ``(B, H, W, C)``
     - batch 3D tensors shaped ``(B, D, H, W, C)``
 
-    The transform is invertible because applying the same flip twice restores
+    The transform is invertible. Applying the same flip twice restores
     the original orientation. During :meth:`apply`, the normalized axes are
     recorded in the ``TensorBundle`` transform trace so downstream pipelines
     can inspect what was applied.
@@ -44,15 +44,12 @@ class Flip(KeyedTransform, InvertibleTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Keras selects its backend before the first Keras import. Each example
-        below is an independent process.
 
         TensorFlow backend:
 
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
@@ -70,7 +67,6 @@ class Flip(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
@@ -88,7 +84,6 @@ class Flip(KeyedTransform, InvertibleTransform):
         .. code-block:: python
 
             import os
-
             os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
@@ -211,7 +206,7 @@ class Flip(KeyedTransform, InvertibleTransform):
                 unchanged.
 
         Returns:
-            ``tf.Tensor``: The flipped tensor.
+            The flipped tensor, represented by the active Keras backend.
         """
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:

@@ -13,9 +13,7 @@ def devices(requested: str) -> list[str]:
         cpus = ["CPU:0"] if any(d.device_type == "CPU" for d in logical_devices) else []
         gpus = [
             f"GPU:{index}"
-            for index, device in enumerate(
-                d for d in logical_devices if d.device_type == "GPU"
-            )
+            for index, device in enumerate(d for d in logical_devices if d.device_type == "GPU")
         ]
     elif backend == "torch":
         import torch
@@ -29,9 +27,7 @@ def devices(requested: str) -> list[str]:
         cpus = ["cpu:0"] if any(d.platform == "cpu" for d in available) else []
         gpus = [
             f"gpu:{index}"
-            for index, device in enumerate(
-                d for d in available if d.platform in ("gpu", "cuda")
-            )
+            for index, device in enumerate(d for d in available if d.platform in ("gpu", "cuda"))
         ]
     else:
         raise RuntimeError(f"Unsupported Keras backend for device discovery: {backend!r}")

@@ -216,6 +216,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             if self.image_reference_key not in bundle.data:
                 raise KeyError(f"Key '{self.image_reference_key}' not found in input data.")
             image_reference = bundle.data[self.image_reference_key]
+
         image_reference_batched = None
         if image_reference is not None:
             image_reference_batched, _ = ensure_batch_axis_for_layout(
