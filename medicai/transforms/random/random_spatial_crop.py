@@ -31,6 +31,12 @@ class RandomSpatialCrop(RandomTransform):
     When ``invalid_label`` is provided, the crop center can be sampled using
     the ``"label"`` tensor to favor valid regions.
 
+    Note:
+        With ``random_center=True``, the sampled coordinates become runtime
+        slice offsets. TensorFlow XLA can execute this dynamic ``ops.slice``
+        path substantially slower than deterministic cropping. See the
+        related TensorFlow issue: https://github.com/tensorflow/tensorflow/issues/76070
+
     Args:
         keys: Keys of the tensors to crop.
         crop_size: Minimum or fixed crop size.
