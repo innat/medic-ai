@@ -61,16 +61,43 @@ def _sync(value) -> None:
 
 
 def _devices(requested: str) -> list[str]:
-    try:
-        available = list(keras.distribution.list_devices())
-    except AttributeError:
-        available = ["cpu:0"]
-    cpus = [device for device in available if "cpu" in device.lower()] or ["cpu:0"]
-    gpus = [
-        device
-        for device in available
-        if any(token in device.lower() for token in ("gpu", "cuda", "rocm"))
-    ]
+    """Return benchmark device names using the active backend runtime.
+
+    ``keras.distribution.list_devices`` is currently not a portable device
+    discovery API across all Keras backends, so backend runtimes are imported
+    locally and only by this benchmark module.
+    """
+    backend = keras.config.backend()
+    if backend == "tensorflow":
+        import tensorflow as tf
+
+        logical_devices = tf.config.list_logical_devices()
+        cpus = ["CPU:0"] if any(device.device_type == "CPU" for device in logical_devices) else []
+        gpus = [
+            f"GPU:{index}"
+            for index, device in enumerate(
+                device for device in logical_devices if device.device_type == "GPU"
+            )
+        ]
+    elif backend == "torch":
+        import torch
+
+        cpus = ["cpu:0"]
+        gpus = [f"cuda:{index}" for index in range(torch.cuda.device_count())]
+    elif backend == "jax":
+        import jax
+
+        cpus = ["cpu:0"] if any(device.platform == "cpu" for device in jax.devices()) else []
+        gpus = [
+            f"gpu:{index}"
+            for index, device in enumerate(
+                device for device in jax.devices() if device.platform in ("gpu", "cuda")
+            )
+        ]
+    else:
+        raise RuntimeError(f"Unsupported Keras backend for device discovery: {backend!r}")
+
+    cpus = cpus or ["cpu:0"]
     if requested == "cpu":
         return [cpus[0]]
     if requested == "gpu":
