@@ -325,12 +325,20 @@ class RandomSpatialCrop(RandomTransform):
             return spatial_shape // 2
 
         max_start = ops.maximum(spatial_shape - crop_size, 0)
-        random_start = self.random_integers(
+        # Scale one independent uniform draw by each axis's own valid range.
+        # A shared tensor-valued randint bound biases shorter axes toward their
+        # upper boundary and is an unnecessarily dynamic XLA dependency.
+        random_unit = self.random_uniform(
             shape=[spatial_rank],
-            minval=0,
-            maxval=ops.max(max_start) + 1,
-            dtype="int32",
+            minval=0.0,
+            maxval=1.0,
+            dtype="float32",
         )
+        random_start = ops.cast(
+            ops.floor(random_unit * ops.cast(max_start + 1, "float32")),
+            "int32",
+        )
+        # Guard against a backend returning the upper endpoint of [0, 1).
         random_start = ops.minimum(random_start, max_start)
         return random_start + crop_size // 2
 

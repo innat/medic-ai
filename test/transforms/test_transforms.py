@@ -1756,6 +1756,29 @@ def test_random_spatial_crop_shares_sampled_crop_across_batched_input():
 
 
 @pytest.mark.unit
+def test_random_spatial_crop_samples_each_axis_with_its_own_valid_range(monkeypatch):
+    transform = RandomSpatialCrop(
+        keys=["image"],
+        crop_size=(4, 3, 2),
+        random_center=True,
+        input_layout="DHWC",
+    )
+    spatial_shape = as_tensor([4, 5, 6], dtype="int32")
+    crop_size = as_tensor([4, 3, 2], dtype="int32")
+
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: as_tensor([0.0, 0.5, 1.0], dtype="float32"),
+    )
+
+    center = transform._get_random_center(spatial_shape, crop_size, spatial_rank=3)
+
+    # max_start is [0, 2, 4], so the sampled starts are [0, 1, 4].
+    np.testing.assert_array_equal(ops.convert_to_numpy(center), [2, 2, 5])
+
+
+@pytest.mark.unit
 def test_random_spatial_crop_inverse_restores_batched_input_canvas():
     image = as_tensor(np.zeros((2, 5, 6, 1), dtype=np.float32))
     image_np = ops.convert_to_numpy(image)
