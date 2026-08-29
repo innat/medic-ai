@@ -82,7 +82,14 @@ def _devices(requested: str) -> list[str]:
     raise ValueError(f"Unknown device selection: {requested!r}")
 
 
-def _make_case(layout: str, device: str, spatial_size: int, batch_size: int, channels: int) -> TensorBundle:
+def _make_case(
+    layout: str,
+    device: str,
+    spatial_size: int,
+    batch_size: int,
+    channels: int,
+    seed: int,
+) -> TensorBundle:
     """Create a small aligned image/label case on the selected device."""
     if layout in ("HWC", "BHWC"):
         shape = (spatial_size, spatial_size, channels)
@@ -96,7 +103,7 @@ def _make_case(layout: str, device: str, spatial_size: int, batch_size: int, cha
         raise ValueError(f"Unsupported benchmark layout: {layout!r}")
     with keras.device(device):
         image = ops.convert_to_tensor(
-            np.random.default_rng(7).normal(size=shape), dtype="float32"
+            np.random.default_rng(seed).normal(size=shape), dtype="float32"
         )
         label = ops.cast(image > 0.0, "int32")
         meta = {}
@@ -213,14 +220,27 @@ def _factory_table(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
 
 def _profile(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, seed):
     transform = spec.factory(layout, seed)
+    setup_start = time.perf_counter()
+    template = _make_case(layout, device, spatial_size, batch_size, channels, seed)
+    case_setup_ms = (time.perf_counter() - setup_start) * 1000.0
+
+    def fresh_case():
+        return TensorBundle(dict(template.data), dict(template.meta))
+
     for _ in range(warmup):
-        _sync(transform(_make_case(layout, device, spatial_size, batch_size, channels)))
+        _sync(transform(fresh_case()))
+
+    if spec.inverse:
+        for _ in range(warmup):
+            forward = transform(fresh_case())
+            _sync(forward)
+            _sync(transform.inverse(forward))
 
     forward_times = []
     inverse_times = []
     for _ in range(iterations):
         start = time.perf_counter()
-        result = transform(_make_case(layout, device, spatial_size, batch_size, channels))
+        result = transform(fresh_case())
         _sync(result)
         forward_times.append((time.perf_counter() - start) * 1000.0)
         if spec.inverse:
@@ -238,6 +258,8 @@ def _profile(spec, layout, device, spatial_size, batch_size, channels, iteration
         "forward_median_ms": statistics.median(forward_times),
         "forward_p95_ms": float(np.percentile(forward_times, 95)),
         "inverse_median_ms": statistics.median(inverse_times) if inverse_times else None,
+        "case_setup_ms": case_setup_ms,
+        "case_reused": True,
         "iterations": iterations,
         "warmup": warmup,
     }

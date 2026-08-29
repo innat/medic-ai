@@ -19,10 +19,13 @@ The registry uses two execution groups:
 - `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
   random augmentation transforms.
 
-The runner separates warm-up from measured iterations, creates fresh bundles
-for every call, synchronizes backend work before stopping the timer, and
-reports forward and optional inverse timings. It is a timing tool, not a
-correctness replacement for `test/transforms/`.
+The runner separates warm-up from measured iterations, reuses one prebuilt
+tensor case while creating a fresh bundle for every call, synchronizes backend
+work before stopping the timer, and reports forward and optional inverse
+timings. Input-case setup is reported separately as `case_setup_ms`; it is not
+included in transform timings. Inverse calls have their own warm-up phase. The
+benchmark is a timing tool, not a correctness replacement for
+`test/transforms/`.
 
 Example:
 
