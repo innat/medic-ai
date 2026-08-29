@@ -312,8 +312,10 @@ class RandomRotate(RandomTransform):
 
     Note:
         On the TensorFlow backend, the affine image kernel used by
-        ``RandomRotate`` is not currently XLA-compatible. Use eager execution
-        or disable ``jit_compile=True`` for this transform.
+        ``RandomRotate`` is not currently XLA-compatible. Regular eager and
+        ``tf.data`` graph execution remain supported, including GPU execution
+        when TensorFlow places the kernel there. Use ``jit_compile=False`` for
+        this transform rather than treating it as CPU-only.
 
     Args:
         keys: Tensor keys to rotate together.

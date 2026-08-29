@@ -34,8 +34,10 @@ class RandomSpatialCrop(RandomTransform):
     Note:
         With ``random_center=True``, the sampled coordinates become runtime
         slice offsets. TensorFlow XLA can execute this dynamic ``ops.slice``
-        path substantially slower than deterministic cropping. See the
-        related TensorFlow issue: https://github.com/tensorflow/tensorflow/issues/76070
+        path substantially slower than deterministic cropping. Regular eager
+        and ``tf.data`` graph execution remain supported, including GPU
+        execution when TensorFlow places the kernel there. See the related
+        TensorFlow issue: https://github.com/tensorflow/tensorflow/issues/76070
 
     Args:
         keys: Keys of the tensors to crop.
