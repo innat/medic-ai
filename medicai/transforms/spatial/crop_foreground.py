@@ -328,33 +328,34 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             "int32",
         )
 
-        min_coords = []
-        max_coords = []
-        for axis in range(spatial_rank):
-            other_axes = tuple(i for i in range(spatial_rank) if i != axis)
-            axis_presence = mask
-            # Reduce one axis at a time in descending order. Some Keras
-            # backends do not support a tuple of reduction axes, and the
-            # descending order keeps the target axis index stable.
-            for reduce_axis in reversed(other_axes):
-                axis_presence = ops.any(axis_presence, axis=reduce_axis)
-            axis_presence_i32 = ops.cast(axis_presence, "int32")
-            axis_size = ops.shape(axis_presence_i32)[0]
-            start = ops.argmax(axis_presence_i32, axis=0)
-            end = axis_size - ops.argmax(ops.flip(axis_presence_i32, axis=0), axis=0)
-            min_coords.append(ops.cast(start, "int32"))
-            max_coords.append(ops.cast(end, "int32"))
-        foreground_min = ops.stack(min_coords, axis=0)
-        foreground_max = ops.stack(max_coords, axis=0)
+        def empty_bbox():
+            return (
+                ops.zeros((spatial_rank,), dtype="int32"),
+                spatial_shape,
+            )
 
-        # Select the full image for an empty mask without backend-specific
-        # Python conditionals. This also avoids divergent eager behavior in
-        # Keras' Torch conditional implementation.
-        has_foreground = ops.cast(has_foreground, "bool")
-        empty_min = ops.zeros((spatial_rank,), dtype="int32")
-        foreground_min = ops.where(has_foreground, foreground_min, empty_min)
-        foreground_max = ops.where(has_foreground, foreground_max, spatial_shape)
-        return foreground_min, foreground_max
+        def foreground_bbox():
+            min_coords = []
+            max_coords = []
+            for axis in range(spatial_rank):
+                other_axes = tuple(i for i in range(spatial_rank) if i != axis)
+                axis_presence = mask
+                # Reduce one axis at a time in descending order. Some Keras
+                # backends do not support a tuple of reduction axes, and the
+                # descending order keeps the target axis index stable.
+                for reduce_axis in reversed(other_axes):
+                    axis_presence = ops.any(axis_presence, axis=reduce_axis)
+                axis_presence_i32 = ops.cast(axis_presence, "int32")
+                axis_size = ops.shape(axis_presence_i32)[0]
+                start = ops.argmax(axis_presence_i32, axis=0)
+                end = axis_size - ops.argmax(ops.flip(axis_presence_i32, axis=0), axis=0)
+                min_coords.append(ops.cast(start, "int32"))
+                max_coords.append(ops.cast(end, "int32"))
+            min_coords = ops.stack(min_coords, axis=0)
+            max_coords = ops.stack(max_coords, axis=0)
+            return min_coords, max_coords
+
+        return ops.cond(has_foreground, foreground_bbox, empty_bbox)
 
     def add_margin(
         self,
