@@ -20,12 +20,8 @@ def compile_forward(transform, backend: str):
 
         return jax.jit(forward)
     if backend == "torch":
-        import importlib.util
         import torch
 
-        if importlib.util.find_spec("torch_xla") is None:
-            raise RuntimeError(
-                "XLA unavailable: Torch compilation requires the optional `torch_xla` package."
-            )
-        return torch.compile(forward, backend="openxla", fullgraph=True)
+        # This is the compiler used by Keras when Torch models are compiled.
+        return torch.compile(forward, backend="inductor", fullgraph=True)
     raise RuntimeError(f"Unsupported Keras backend for compilation: {backend!r}")

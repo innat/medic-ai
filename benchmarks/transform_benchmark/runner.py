@@ -19,15 +19,14 @@ from .specs import BenchmarkSpec
 
 
 def _failed_result(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, case_setup_ms, compile_mode, compile_time_ms, error):
-    status = "xla-unavailable" if str(error).startswith("XLA unavailable:") else "not-xla-compatible"
     return {
         "backend": keras.config.backend(), "device": device, "layout": layout,
         "spatial_size": spatial_size, "batch_size": batch_size, "channels": channels,
         "input_shape": None, "forward_median_ms": None, "forward_p95_ms": None,
         "inverse_median_ms": None, "case_setup_ms": case_setup_ms, "case_reused": True,
         "compile_mode": compile_mode, "compile_time_ms": compile_time_ms,
-        "compile_status": status, "compile_error": f"{type(error).__name__}: {error}",
-        "inverse_status": status, "iterations": iterations, "warmup": warmup,
+        "compile_status": "not-xla-compatible", "compile_error": f"{type(error).__name__}: {error}",
+        "inverse_status": "not-xla-compatible", "iterations": iterations, "warmup": warmup,
         "transform": spec.name, "group": spec.group,
     }
 
