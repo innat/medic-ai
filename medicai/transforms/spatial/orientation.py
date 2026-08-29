@@ -284,7 +284,7 @@ class Orientation(KeyedTransform, InvertibleTransform):
         perm_spatial = tuple(perm_spatial)
         perm = (*perm_spatial, 3)
         reoriented = ops.transpose(tensor, axes=perm)
-        return self._flip_tensor_axes(reoriented, flip_axes)
+        return ops.flip(reoriented, axis=flip_axes) if flip_axes else reoriented
 
     def inverse_orient_tensor(
         self,
@@ -294,27 +294,13 @@ class Orientation(KeyedTransform, InvertibleTransform):
     ) -> Any:
         """Invert a spatial permutation and flips applied by ``orient_tensor``."""
         perm_spatial = tuple(perm_spatial)
-        restored = self._flip_tensor_axes(tensor, flip_axes)
+        flip_axes = tuple(flip_axes)
+        restored = ops.flip(tensor, axis=flip_axes) if flip_axes else tensor
         inverse_perm_spatial = [0, 0, 0]
         for output_axis, input_axis in enumerate(perm_spatial):
             inverse_perm_spatial[input_axis] = output_axis
         inverse_perm = (*inverse_perm_spatial, 3)
         return ops.transpose(restored, axes=inverse_perm)
-
-    @staticmethod
-    def _flip_tensor_axes(tensor: Any, flip_axes: tuple[int, ...] | Any) -> Any:
-        """Reverse selected axes without relying on ``ops.flip`` axis parsing."""
-        result = tensor
-        for axis in tuple(flip_axes):
-            axis = int(axis)
-            indices = ops.arange(
-                ops.shape(result)[axis] - 1,
-                -1,
-                -1,
-                dtype="int32",
-            )
-            result = ops.take(result, indices, axis=axis)
-        return result
 
     @staticmethod
     def _as_static_axes(value: Any) -> tuple[int, ...]:
