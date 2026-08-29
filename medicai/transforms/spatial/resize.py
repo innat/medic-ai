@@ -262,10 +262,10 @@ class Resize(KeyedTransform, InvertibleTransform):
     ) -> Any:
         """Resize one tensor to the requested spatial shape."""
         target_rank = len(target_shape)
-        target_shape_tensor = ops.convert_to_tensor(
-            ensure_spatial_tuple(target_shape, target_rank, "target_shape"),
-            dtype="int32",
-        )
+        # Keep output dimensions as Python integers. Keras/TensorFlow linspace
+        # requires its ``num`` argument to be statically known during XLA
+        # tracing, and target_shape is already a static transform parameter.
+        target_shape = ensure_spatial_tuple(target_shape, target_rank, "target_shape")
 
         layout = self._resolve_layout(tensor, target_rank)
         batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
@@ -276,7 +276,7 @@ class Resize(KeyedTransform, InvertibleTransform):
         resized = self.resize_batch_tensor(
             batched_tensor,
             key,
-            target_shape=target_shape_tensor,
+            target_shape=target_shape,
             spatial_rank=layout.spatial_rank,
         )
         return restore_from_batch_axis(resized, added_batch_axis)
