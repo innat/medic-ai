@@ -3227,20 +3227,22 @@ def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
 def test_random_rotate_inverse_preserves_mixed_probability_batch(monkeypatch):
     """Keep skipped items exact while restoring a rotated item in one batch."""
     image = as_tensor(
-        np.arange(2 * 4 * 5 * 6, dtype=np.float32).reshape(2, 4, 5, 6, 1)
+        np.arange(2 * 4 * 5 * 6, dtype=np.float32).reshape(2, 4, 5, 6, 1) / 255.0
     )
     transform = RandomRotate(
         keys=["image"],
         factor=0.2,
         prob=0.5,
         input_layout="BDHWC",
+        fill_mode="reflect",
     )
     calls = 0
 
     def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
         nonlocal calls
         calls += 1
-        values = [0.0, 1.0] if calls == 1 else [0.0, 1.0]
+        # The first draw gates application. Keep item 0 skipped and item 1 active.
+        values = [1.0, 0.0] if calls == 1 else [0.0, 1.0]
         return as_tensor(values, dtype=dtype)
 
     monkeypatch.setattr(transform, "random_uniform", sample_uniform)

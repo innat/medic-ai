@@ -335,7 +335,7 @@ def test_random_transform_accepts_integer_seed_contract():
 
     assert (
         isinstance(out["should_apply"], (bool, np.bool_))
-        or str(out["should_apply"].dtype) == "bool"
+        or as_numpy(out["should_apply"]).dtype.name == "bool"
     )
 
 
@@ -352,7 +352,7 @@ def test_random_transform_accepts_seed_generator_contract():
 
     assert (
         isinstance(out["should_apply"], (bool, np.bool_))
-        or str(out["should_apply"].dtype) == "bool"
+        or as_numpy(out["should_apply"]).dtype.name == "bool"
     )
 
 
@@ -397,9 +397,9 @@ def test_random_transform_random_helpers_return_expected_dtypes_and_bounds():
     image = as_tensor(np.zeros((2, 2, 1), dtype=np.float32))
     out = SeedAwareRandomTransform(prob=1.0, seed=7)(TensorBundle({"image": image}))
 
-    assert str(out["uniform"].dtype) == "float32"
-    assert str(out["normal"].dtype) == "float32"
-    assert str(out["integers"].dtype) == "int32"
+    assert as_numpy(out["uniform"]).dtype.name == "float32"
+    assert as_numpy(out["normal"]).dtype.name == "float32"
+    assert as_numpy(out["integers"]).dtype.name == "int32"
     assert np.all(as_numpy(out["uniform"]) >= 0.0)
     assert np.all(as_numpy(out["uniform"]) < 1.0)
     assert np.all(as_numpy(out["integers"]) >= 0)
@@ -733,7 +733,7 @@ def test_lambda_transform_respects_missing_key_policy_and_prob_validation():
 
 @pytest.mark.unit
 def test_lambda_transform_accepts_builtin_tensor_functions_without_signature_errors():
-    transform = LambdaTransform(keys=["image"], fn=ops.identity)
+    transform = LambdaTransform(keys=["image"], fn=ops.abs)
     image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
 
     result = transform(TensorBundle({"image": image}))

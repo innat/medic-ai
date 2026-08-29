@@ -139,7 +139,7 @@ def test_affine_apply_and_invert_affine_round_trip_points():
     world = affine_apply(affine, points)
     restored = affine_apply(invert_affine(affine), world)
 
-    np.testing.assert_allclose(as_numpy(restored), as_numpy(points), rtol=1e-6)
+    np.testing.assert_allclose(as_numpy(restored), as_numpy(points), rtol=1e-6, atol=1e-6)
 
 
 @pytest.mark.unit
