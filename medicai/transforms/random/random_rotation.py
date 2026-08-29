@@ -310,6 +310,11 @@ class RandomRotate(RandomTransform):
     exact voxel-for-voxel round trip. ``fill_mode="constant"`` is typically
     the most predictable choice for medical images.
 
+    Note:
+        On the TensorFlow backend, the affine image kernel used by
+        ``RandomRotate`` is not currently XLA-compatible. Use eager execution
+        or disable ``jit_compile=True`` for this transform.
+
     Args:
         keys: Tensor keys to rotate together.
         factor: A non-negative maximum angle, a ``(min, max)`` range, or a
