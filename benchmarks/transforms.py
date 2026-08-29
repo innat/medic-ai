@@ -64,7 +64,7 @@ def _compile_forward(transform, backend: str):
 
         if importlib.util.find_spec("torch_xla") is None:
             raise RuntimeError(
-                "Torch XLA compilation requires the optional `torch_xla` package."
+                "XLA unavailable: Torch compilation requires the optional `torch_xla` package."
             )
         return torch.compile(forward, backend="openxla", fullgraph=True)
     raise RuntimeError(f"Unsupported Keras backend for compilation: {backend!r}")
@@ -308,6 +308,11 @@ def _profile(
         except Exception as error:
             compile_error = f"{type(error).__name__}: {error}"
             compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
+            compile_status = (
+                "xla-unavailable"
+                if str(error).startswith("XLA unavailable:")
+                else "not-xla-compatible"
+            )
             return {
                 "backend": keras.config.backend(),
                 "device": device,
@@ -323,9 +328,9 @@ def _profile(
                 "case_reused": True,
                 "compile_mode": compile_mode,
                 "compile_time_ms": compile_time_ms,
-                "compile_status": "not-xla-compatible",
+                "compile_status": compile_status,
                 "compile_error": compile_error,
-                "inverse_status": "not-xla-compatible",
+                "inverse_status": compile_status,
                 "iterations": iterations,
                 "warmup": warmup,
             }
@@ -445,7 +450,7 @@ def main() -> None:
                 if result["forward_median_ms"] is None:
                     print(
                         f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
-                        f"forward=not-xla-compatible inverse={result['inverse_status']} "
+                        f"forward={result['compile_status']} inverse={result['inverse_status']} "
                         f"compile={result['compile_status']}"
                     )
                     continue
