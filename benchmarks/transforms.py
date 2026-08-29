@@ -44,6 +44,32 @@ class BenchmarkSpec:
     inverse: bool = False
 
 
+def _compile_forward(transform, backend: str):
+    """Compile a tensor-only transform adapter for the active backend."""
+    def forward(image, label):
+        result = transform(TensorBundle({"image": image, "label": label}, {}))
+        return result["image"], result["label"]
+
+    if backend == "tensorflow":
+        import tensorflow as tf
+
+        return tf.function(forward, jit_compile=True)
+    if backend == "jax":
+        import jax
+
+        return jax.jit(forward)
+    if backend == "torch":
+        import importlib.util
+        import torch
+
+        if importlib.util.find_spec("torch_xla") is None:
+            raise RuntimeError(
+                "Torch XLA compilation requires the optional `torch_xla` package."
+            )
+        return torch.compile(forward, backend="openxla", fullgraph=True)
+    raise RuntimeError(f"Unsupported Keras backend for compilation: {backend!r}")
+
+
 def _sync(value) -> None:
     """Materialize backend work, including tensors in a TensorBundle."""
     if isinstance(value, TensorBundle):
@@ -245,7 +271,18 @@ def _factory_table(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
     return specs
 
 
-def _profile(spec, layout, device, spatial_size, batch_size, channels, iterations, warmup, seed):
+def _profile(
+    spec,
+    layout,
+    device,
+    spatial_size,
+    batch_size,
+    channels,
+    iterations,
+    warmup,
+    seed,
+    compile_mode,
+):
     transform = spec.factory(layout, seed)
     setup_start = time.perf_counter()
     template = _make_case(layout, device, spatial_size, batch_size, channels, seed)
@@ -254,10 +291,25 @@ def _profile(spec, layout, device, spatial_size, batch_size, channels, iteration
     def fresh_case():
         return TensorBundle(dict(template.data), dict(template.meta))
 
-    for _ in range(warmup):
-        _sync(transform(fresh_case()))
+    compiled_forward = None
+    compile_time_ms = None
+    if compile_mode == "xla":
+        if spec.group == "cpu":
+            raise RuntimeError("Metadata-dependent transforms are not supported by --compile xla.")
+        compiled_forward = _compile_forward(transform, keras.config.backend())
+        compile_start = time.perf_counter()
+        case = fresh_case()
+        _sync(compiled_forward(case["image"], case["label"]))
+        compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
 
-    if spec.inverse:
+    for _ in range(warmup):
+        if compiled_forward is None:
+            _sync(transform(fresh_case()))
+        else:
+            case = fresh_case()
+            _sync(compiled_forward(case["image"], case["label"]))
+
+    if spec.inverse and compiled_forward is None:
         for _ in range(warmup):
             forward = transform(fresh_case())
             _sync(forward)
@@ -267,13 +319,19 @@ def _profile(spec, layout, device, spatial_size, batch_size, channels, iteration
     inverse_times = []
     for _ in range(iterations):
         start = time.perf_counter()
-        result = transform(fresh_case())
-        _sync(result)
+        if compiled_forward is None:
+            result = transform(fresh_case())
+            _sync(result)
+        else:
+            case = fresh_case()
+            result = compiled_forward(case["image"], case["label"])
+            _sync(result)
         forward_times.append((time.perf_counter() - start) * 1000.0)
-        if spec.inverse:
+        if spec.inverse and compiled_forward is None:
             start = time.perf_counter()
             _sync(transform.inverse(result))
             inverse_times.append((time.perf_counter() - start) * 1000.0)
+    output_image = result[0] if compiled_forward is not None else result["image"]
     return {
         "backend": keras.config.backend(),
         "device": device,
@@ -281,12 +339,19 @@ def _profile(spec, layout, device, spatial_size, batch_size, channels, iteration
         "spatial_size": spatial_size,
         "batch_size": batch_size,
         "channels": channels,
-        "input_shape": list(result["image"].shape),
+        "input_shape": list(output_image.shape),
         "forward_median_ms": statistics.median(forward_times),
         "forward_p95_ms": float(np.percentile(forward_times, 95)),
         "inverse_median_ms": statistics.median(inverse_times) if inverse_times else None,
         "case_setup_ms": case_setup_ms,
         "case_reused": True,
+        "compile_mode": compile_mode,
+        "compile_time_ms": compile_time_ms,
+        "inverse_status": (
+            "not-compiled"
+            if spec.inverse and compile_mode == "xla"
+            else "measured" if spec.inverse else "non-invertible"
+        ),
         "iterations": iterations,
         "warmup": warmup,
     }
@@ -307,6 +372,12 @@ def main() -> None:
     parser.add_argument("--channels", type=int, default=1)
     parser.add_argument("--iterations", type=int, default=30)
     parser.add_argument("--warmup", type=int, default=5)
+    parser.add_argument(
+        "--compile",
+        choices=("none", "xla"),
+        default="none",
+        help="Compilation mode. `xla` uses the active backend's XLA compiler.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
@@ -323,27 +394,38 @@ def main() -> None:
             if args.group != "all" and spec.group != args.group:
                 continue
             for device in _devices(args.device):
-                result = _profile(
-                    spec,
-                    args.layout,
-                    device,
-                    spatial_size,
-                    args.batch_size,
-                    args.channels,
-                    args.iterations,
-                    args.warmup,
-                    args.seed,
-                )
+                try:
+                    result = _profile(
+                        spec,
+                        args.layout,
+                        device,
+                        spatial_size,
+                        args.batch_size,
+                        args.channels,
+                        args.iterations,
+                        args.warmup,
+                        args.seed,
+                        args.compile,
+                    )
+                except RuntimeError as error:
+                    print(f"SKIP {spec.name:24} {device:10}: {error}")
+                    continue
                 result.update(transform=spec.name, group=spec.group)
                 results.append(result)
                 inverse = result["inverse_median_ms"]
                 inverse_display = (
-                    "non-invertible" if inverse is None else f"{inverse:.2f} ms"
+                    result["inverse_status"]
+                    if inverse is None
+                    else f"{inverse:.2f} ms"
+                )
+                compile_display = (
+                    "-" if result["compile_time_ms"] is None
+                    else f"{result['compile_time_ms']:.2f} ms"
                 )
                 print(
                     f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
                     f"forward={result['forward_median_ms']:.2f} ms "
-                    f"inverse={inverse_display}"
+                    f"inverse={inverse_display} compile={compile_display}"
                 )
     if args.json:
         args.json.write_text(json.dumps(results, indent=2) + "\n")

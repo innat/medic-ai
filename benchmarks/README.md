@@ -10,6 +10,9 @@ Set the Keras backend before starting Python:
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
+
+# Compare eager execution with the active backend's XLA path.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile xla
 ```
 
 The registry uses two execution groups:
@@ -26,6 +29,15 @@ timings. Input-case setup is reported separately as `case_setup_ms`; it is not
 included in transform timings. Inverse calls have their own warm-up phase. The
 benchmark is a timing tool, not a correctness replacement for
 `test/transforms/`.
+
+`--compile none` is the default and measures eager transform calls. With
+`--compile xla`, TensorFlow uses `tf.function(jit_compile=True)`, JAX uses
+`jax.jit`, and Torch uses the optional `torch_xla` OpenXLA backend. Compilation
+time is reported separately as `compile_time_ms`. Metadata-dependent transforms
+are skipped because their Python-side metadata and dynamic geometry are not
+part of this compiled tensor-only benchmark. Invertible transforms report
+`inverse_status=not-compiled` in this mode; their trace-based inverse remains
+an eager operation.
 
 Example:
 
