@@ -293,14 +293,42 @@ def _profile(
 
     compiled_forward = None
     compile_time_ms = None
+    compile_status = "not-requested"
+    compile_error = None
     if compile_mode == "xla":
         if spec.group == "cpu":
             raise RuntimeError("Metadata-dependent transforms are not supported by --compile xla.")
-        compiled_forward = _compile_forward(transform, keras.config.backend())
         compile_start = time.perf_counter()
-        case = fresh_case()
-        _sync(compiled_forward(case["image"], case["label"]))
-        compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
+        try:
+            compiled_forward = _compile_forward(transform, keras.config.backend())
+            case = fresh_case()
+            _sync(compiled_forward(case["image"], case["label"]))
+            compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
+            compile_status = "compiled"
+        except Exception as error:
+            compile_error = f"{type(error).__name__}: {error}"
+            compile_time_ms = (time.perf_counter() - compile_start) * 1000.0
+            return {
+                "backend": keras.config.backend(),
+                "device": device,
+                "layout": layout,
+                "spatial_size": spatial_size,
+                "batch_size": batch_size,
+                "channels": channels,
+                "input_shape": list(template["image"].shape),
+                "forward_median_ms": None,
+                "forward_p95_ms": None,
+                "inverse_median_ms": None,
+                "case_setup_ms": case_setup_ms,
+                "case_reused": True,
+                "compile_mode": compile_mode,
+                "compile_time_ms": compile_time_ms,
+                "compile_status": "not-xla-compatible",
+                "compile_error": compile_error,
+                "inverse_status": "not-xla-compatible",
+                "iterations": iterations,
+                "warmup": warmup,
+            }
 
     for _ in range(warmup):
         if compiled_forward is None:
@@ -347,6 +375,8 @@ def _profile(
         "case_reused": True,
         "compile_mode": compile_mode,
         "compile_time_ms": compile_time_ms,
+        "compile_status": compile_status,
+        "compile_error": compile_error,
         "inverse_status": (
             "not-compiled"
             if spec.inverse and compile_mode == "xla"
@@ -412,6 +442,13 @@ def main() -> None:
                     continue
                 result.update(transform=spec.name, group=spec.group)
                 results.append(result)
+                if result["forward_median_ms"] is None:
+                    print(
+                        f"{spec.name:24} {device:10} {args.layout:6} size={spatial_size:<4} "
+                        f"forward=not-xla-compatible inverse={result['inverse_status']} "
+                        f"compile={result['compile_status']}"
+                    )
+                    continue
                 inverse = result["inverse_median_ms"]
                 inverse_display = (
                     result["inverse_status"]

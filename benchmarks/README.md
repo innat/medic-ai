@@ -37,7 +37,9 @@ time is reported separately as `compile_time_ms`. Metadata-dependent transforms
 are skipped because their Python-side metadata and dynamic geometry are not
 part of this compiled tensor-only benchmark. Invertible transforms report
 `inverse_status=not-compiled` in this mode; their trace-based inverse remains
-an eager operation.
+an eager operation. If a transform uses an operation unsupported by the active
+backend's XLA compiler, it is recorded with `compile_status=not-xla-compatible`
+and the remaining benchmark continues.
 
 Example:
 
