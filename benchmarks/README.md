@@ -84,15 +84,11 @@ memory use grows cubically with the 3D size.
 
 ## Recorded Results
 
-The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and GPU with XLA tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in bold; `--` means no matching result or unsupported execution.
+The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and GPU with XLA tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in **bold**; `--` means no matching result or unsupported execution.
 
-Also the following benchmark is performed on Kaggle-Tesla T4 GPU.
+Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 
 ### CropForeground
-
-`CropForeground` supports both `HWC` and `DHWC` sample layouts. The current
-benchmark artifacts contain only `DHWC` measurements for this transform; no
-`HWC` timing values are available to report yet.
 
 #### CPU
 
