@@ -545,7 +545,9 @@ def test_orientation_supports_multiple_flip_axes():
     orientation = Orientation(keys=["image"], axcodes="LPI")
     forward = orientation(TensorBundle({"image": image}, {"affine": affine}))
 
-    assert tuple(ops.shape(forward["image"])) == (2, 3, 4, 1)
+    # ``LPI`` maps to tensor-axis order ``IPL``, so the spatial axes are
+    # permuted from ``(D, H, W)`` to ``(W, H, D)`` before flipping.
+    assert tuple(ops.shape(forward["image"])) == (4, 3, 2, 1)
     restored = orientation.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
     np.testing.assert_array_equal(
         ops.convert_to_numpy(restored["image"]),
