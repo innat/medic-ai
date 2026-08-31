@@ -128,7 +128,13 @@ model = SwinUNETR(encoder=custom_encoder)
 | [**TransUNet**](medicai/models/transunet/README.md) | 2D, 3D | Segmentation | Transformer |
 | [**SegFormer**](medicai/models/segformer/README.md) | 2D, 3D | Segmentation | Transformer |
 
-**Available Transformation**: The following preprocessing and transformation methods are supported for volumetric data. The following layers are implemented with **TensorFlow** operations. It can be used in the `tf.data` API or a Python data generator and is fully compatible with multiple backends, `tf`, `torch`, `jax` in training and inference, supporting both GPUs and TPUs.
+**Available Transformations**: The following preprocessing and augmentation
+transforms are implemented with backend-native `keras.ops` and support common
+2D and 3D channel-last layouts. Transforms declare whether they accept sample
+inputs (`HWC`, `DHWC`), batch inputs (`BHWC`, `BDHWC`), or both. Most transforms
+can run on either CPU or GPU, depending on the active backend and execution
+context. Many transforms are also compatible with XLA compilation; any
+backend-specific XLA limitations are documented by the individual transform.
 
 ```bash
 CropForeground
@@ -146,20 +152,63 @@ ScaleIntensityRange
 Spacing
 ```
 
+**Available Components**: Reusable Keras layers and building blocks for 2D and
+3D medical imaging models include:
 
-# 📚 Documentation
+```bash
+AdaptiveAveragePooling2D
+AdaptiveAveragePooling3D
+AdaptiveMaxPooling2D
+AdaptiveMaxPooling3D
+ResizingND
+AttentionGate
+EfficientPairedAttention
+SqueezeExcitation
+ConvBnAct
+DepthwiseConv3D
+SeparableConv3D
+DropPath
+MLPBlock
+SwinMLP
+TransUNetMLP
+ViTMLP
+```
+
+The adaptive pooling layers support rank-specific 2D and 3D inputs, while
+`ResizingND` provides rank-aware resizing for image and feature tensors.
+
+**Available Metrics / Losses**: Medic-AI provides backend-agnostic objectives
+and evaluation metrics for binary, categorical, and sparse segmentation:
+
+```bash
+Dice: Binary, Categorical, Sparse
+Centerline Dice: Binary, Categorical, Sparse
+IoU: Binary, Categorical, Sparse
+Generalized Dice: Binary, Categorical, Sparse
+Tversky: Binary, Categorical, Sparse
+Dice + Cross Entropy: Binary, Categorical, Sparse
+```
+
+**Available Utilities**: The utility API includes sliding-window inference for
+large 2D and 3D inputs, patch extraction and merging helpers, and Grad-CAM
+support for both classification and segmentation models across 2D and 3D
+workloads. It also includes model, activation, normalization, pooling, and
+encoder-resolution helpers for building compatible Keras models.
+
+
+## Documentation
 
 To learn more about **models**, **transformations**, and **training**, please visit the Read the Docs documentation: [`medicai.readthedocs.io`](https://medicai.readthedocs.io/)
 
-# 🤝 Contributing
+## Contributing
 
 Please check the contribution guide [here](CONTRIBUTION.md).
 
 
-# 🙏 Acknowledgements
+## Acknowledgements
 
-This project is greatly inspired by [MONAI](https://monai.io/).
+This project is greatly inspired by [MONAI](https://monai.io/) and [NiftyNet](https://github.com/niftk/niftynet).
 
-# 📝 Citation
+## Citation
 
 If you use `medicai` in your research or educational purposes, please cite it using the metadata from our `CITATION.cff` file.
