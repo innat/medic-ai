@@ -1,23 +1,24 @@
 """End-to-end TensorFlow training coverage for transforms."""
 
+from test.training.common import DatasetBuilder as make_dataset
+from test.training.common import (
+    GPUAugmentedModel,
+    PyGrainSource,
+    apply_classification_pipeline,
+    apply_segmentation_pipeline,
+    build_classification_model,
+    build_gpu_random_pipeline,
+    build_segmentation_model,
+    build_transform_pipelines,
+    build_volume_geometry_pipeline,
+)
+
 import keras
 import numpy as np
 import pytest
 
 from medicai.losses import BinaryDiceLoss
 from medicai.metrics import BinaryDiceMetric
-from test.training.common import (
-    DatasetBuilder as make_dataset,
-    GPUAugmentedModel,
-    PyGrainSource,
-    apply_classification_pipeline,
-    apply_segmentation_pipeline,
-    build_classification_model,
-    build_segmentation_model,
-    build_gpu_random_pipeline,
-    build_transform_pipelines,
-    build_volume_geometry_pipeline,
-)
 
 
 def _require_tensorflow():
@@ -139,6 +140,7 @@ def _fit_gpu_augmented_model(
         return result["image"], label
 
     dataset = tf.data.Dataset.from_tensor_slices((images, labels)).batch(2)
+
     def build_base_model():
         return (
             build_segmentation_model(input_shape)

@@ -1,14 +1,16 @@
 """Backend-neutral fixtures and model builders for training integration tests."""
 
-import numpy as np
 import keras
+import numpy as np
 
 from medicai.losses import BinaryDiceLoss
 from medicai.metrics import BinaryDiceMetric
 from medicai.transforms import (
-    CropForeground,
     Compose,
+    CropForeground,
     Flip,
+    NormalizeIntensity,
+    Orientation,
     RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
@@ -17,14 +19,12 @@ from medicai.transforms import (
     RandomRotate90,
     RandomShiftIntensity,
     RandomSpatialCrop,
-    NormalizeIntensity,
     Resize,
     Rotate90,
     ScaleIntensityRange,
-    Orientation,
-    SpatialCrop,
-    Spacing,
     ShiftIntensity,
+    Spacing,
+    SpatialCrop,
 )
 
 
@@ -106,9 +106,7 @@ class DatasetBuilder:
         ).reshape(self.num_samples, depth, height, width, 1)
         return images, (images > 0.5).astype(np.float32)
 
-    def segmentation_3d_with_affine(
-        self, spatial_shape: tuple[int, int, int] = (8, 16, 16)
-    ):
+    def segmentation_3d_with_affine(self, spatial_shape: tuple[int, int, int] = (8, 16, 16)):
         """Return 3D segmentation samples and one identity affine per sample."""
         images, labels = self.segmentation_3d(spatial_shape=spatial_shape)
         affine = np.eye(4, dtype=np.float32)
@@ -184,6 +182,94 @@ def build_segmentation_model(input_shape, *, use_medicai_objectives: bool = True
     return model
 
 
+def build_multi_output_classification_model(input_shape):
+    """Build a classifier with two named outputs from one image input."""
+    image = keras.Input(shape=input_shape, name="image")
+    spatial_rank = len(input_shape) - 1
+    conv = keras.layers.Conv2D if spatial_rank == 2 else keras.layers.Conv3D
+    pooling = (
+        keras.layers.GlobalAveragePooling2D
+        if spatial_rank == 2
+        else keras.layers.GlobalAveragePooling3D
+    )
+    features = pooling()(conv(4, 3, padding="same", activation="relu")(image))
+    outputs = {
+        "class_output": keras.layers.Dense(1, activation="sigmoid", name="class_output")(features),
+        "intensity_output": keras.layers.Dense(1, name="intensity_output")(features),
+    }
+    model = keras.Model(image, outputs)
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss={
+            "class_output": "binary_crossentropy",
+            "intensity_output": "mse",
+        },
+        jit_compile="auto",
+    )
+    return model
+
+
+def build_multi_input_classification_model(input_shape):
+    """Build a classifier that consumes two named image inputs."""
+    image_1 = keras.Input(shape=input_shape, name="image_1")
+    image_2 = keras.Input(shape=input_shape, name="image_2")
+    spatial_rank = len(input_shape) - 1
+    conv = keras.layers.Conv2D if spatial_rank == 2 else keras.layers.Conv3D
+    pooling = (
+        keras.layers.GlobalAveragePooling2D
+        if spatial_rank == 2
+        else keras.layers.GlobalAveragePooling3D
+    )
+
+    def encode(image):
+        features = conv(4, 3, padding="same", activation="relu")(image)
+        return pooling()(features)
+
+    features = keras.layers.Concatenate()([encode(image_1), encode(image_2)])
+    output = keras.layers.Dense(1, activation="sigmoid")(features)
+    model = keras.Model({"image_1": image_1, "image_2": image_2}, output)
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss="binary_crossentropy",
+        metrics=[keras.metrics.BinaryAccuracy()],
+        jit_compile="auto",
+    )
+    return model
+
+
+def build_multi_input_output_classification_model(input_shape):
+    """Build a model with two named image inputs and two named outputs."""
+    image_1 = keras.Input(shape=input_shape, name="image_1")
+    image_2 = keras.Input(shape=input_shape, name="image_2")
+    spatial_rank = len(input_shape) - 1
+    conv = keras.layers.Conv2D if spatial_rank == 2 else keras.layers.Conv3D
+    pooling = (
+        keras.layers.GlobalAveragePooling2D
+        if spatial_rank == 2
+        else keras.layers.GlobalAveragePooling3D
+    )
+
+    def encode(image):
+        features = conv(4, 3, padding="same", activation="relu")(image)
+        return pooling()(features)
+
+    features = keras.layers.Concatenate()([encode(image_1), encode(image_2)])
+    outputs = {
+        "class_output": keras.layers.Dense(1, activation="sigmoid", name="class_output")(features),
+        "intensity_output": keras.layers.Dense(1, name="intensity_output")(features),
+    }
+    model = keras.Model({"image_1": image_1, "image_2": image_2}, outputs)
+    model.compile(
+        optimizer=keras.optimizers.Adam(1e-3),
+        loss={
+            "class_output": "binary_crossentropy",
+            "intensity_output": "mse",
+        },
+        jit_compile="auto",
+    )
+    return model
+
+
 def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     """Return five representative pipelines for use inside training maps.
 
@@ -195,11 +281,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     is_2d = input_layout in {"HWC", "BHWC"}
     first_spatial_axis = 0 if input_layout in {"HWC", "DHWC"} else 1
     rotation_axes = (
-        (0, 1)
-        if input_layout == "HWC"
-        else (1, 2)
-        if input_layout in {"DHWC", "BHWC"}
-        else (2, 3)
+        (0, 1) if input_layout == "HWC" else (1, 2) if input_layout in {"DHWC", "BHWC"} else (2, 3)
     )
     crop_size = (24, 24) if is_2d else (6, 12, 12)
     crop_start = (4, 4) if is_2d else (1, 2, 2)
@@ -215,9 +297,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
                 )
             ]
         ),
-        Compose(
-            [Flip(keys=keys, spatial_axis=first_spatial_axis, input_layout=input_layout)]
-        ),
+        Compose([Flip(keys=keys, spatial_axis=first_spatial_axis, input_layout=input_layout)]),
         Compose(
             [
                 SpatialCrop(
@@ -286,9 +366,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
                     )
                 ]
             ),
-            Compose(
-                [ShiftIntensity(keys=["image"], offset=0.1, input_layout=input_layout)]
-            ),
+            Compose([ShiftIntensity(keys=["image"], offset=0.1, input_layout=input_layout)]),
             Compose(
                 [
                     RandomFlip(
@@ -327,12 +405,10 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
                     Resize(
                         keys=keys,
                         interpolation=(
-                            ("bilinear", "nearest")
-                            if is_2d
-                            else ("trilinear", "nearest")
-                        )
-                        if segmentation
-                        else ("bilinear" if is_2d else "trilinear"),
+                            (("bilinear", "nearest") if is_2d else ("trilinear", "nearest"))
+                            if segmentation
+                            else ("bilinear" if is_2d else "trilinear")
+                        ),
                         target_shape=crop_size,
                         input_layout=input_layout,
                     )

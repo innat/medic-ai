@@ -1,15 +1,8 @@
 """End-to-end Torch training coverage for transforms."""
 
 import os
-
-import keras
-import numpy as np
-import pytest
-
-from medicai.losses import BinaryDiceLoss
-from medicai.metrics import BinaryDiceMetric
+from test.training.common import DatasetBuilder as make_dataset
 from test.training.common import (
-    DatasetBuilder as make_dataset,
     GPUAugmentedModel,
     PyGrainSource,
     apply_classification_pipeline,
@@ -19,6 +12,13 @@ from test.training.common import (
     build_segmentation_model,
     build_transform_pipelines,
 )
+
+import keras
+import numpy as np
+import pytest
+
+from medicai.losses import BinaryDiceLoss
+from medicai.metrics import BinaryDiceMetric
 
 
 def _require_torch():
@@ -80,9 +80,7 @@ def _fit_torch_dataset(
     torch = _require_torch()
     from torch.utils.data import DataLoader
 
-    pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[
-        pipeline_index
-    ]
+    pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[pipeline_index]
     loader_kwargs = {
         "batch_size": 2,
         "shuffle": False,
@@ -126,11 +124,7 @@ def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segme
     pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
-        result = pipeline(
-            {"image": image, "label": label}
-            if segmentation
-            else {"image": image}
-        )
+        result = pipeline({"image": image, "label": label} if segmentation else {"image": image})
         if segmentation:
             return result["image"], result["label"]
         return result["image"], label

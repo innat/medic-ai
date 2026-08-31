@@ -1,19 +1,20 @@
 """End-to-end JAX training coverage for transforms and Keras distribution."""
 
-import keras
-import numpy as np
-import pytest
-
-from medicai.losses import BinaryDiceLoss
-from medicai.metrics import BinaryDiceMetric
+from test.training.common import DatasetBuilder as make_dataset
 from test.training.common import (
-    DatasetBuilder as make_dataset,
     GPUAugmentedModel,
     build_classification_model,
     build_gpu_random_pipeline,
     build_segmentation_model,
     build_transform_pipelines,
 )
+
+import keras
+import numpy as np
+import pytest
+
+from medicai.losses import BinaryDiceLoss
+from medicai.metrics import BinaryDiceMetric
 
 
 def _require_jax():
@@ -40,10 +41,7 @@ def _require_pygrain():
 def _make_pygrain_loader(images, labels, pipeline):
     """Build a shuffled PyGrain loader for JAX sample-level transforms."""
     pygrain = _require_pygrain()
-    records = [
-        {"image": image, "label": label}
-        for image, label in zip(images, labels)
-    ]
+    records = [{"image": image, "label": label} for image, label in zip(images, labels)]
 
     def apply_transform(record):
         with keras.device("cpu:0"):
@@ -122,11 +120,7 @@ def _fit_model_augmented(*, segmentation, input_layout, input_shape):
         metrics = [keras.metrics.BinaryAccuracy()]
 
     def augment_data(image, label):
-        result = pipeline(
-            {"image": image, "label": label}
-            if segmentation
-            else {"image": image}
-        )
+        result = pipeline({"image": image, "label": label} if segmentation else {"image": image})
         if segmentation:
             return result["image"], result["label"]
         return result["image"], label
@@ -183,17 +177,13 @@ def test_jax_training_applies_random_transforms_to_3d_segmentation_batches():
     )
 
 
-def _fit_distributed_sample_transformed(
-    *, segmentation, input_layout, input_shape, pipeline_index
-):
+def _fit_distributed_sample_transformed(*, segmentation, input_layout, input_shape, pipeline_index):
     """Train a transformed PyGrain dataset with Keras data parallelism."""
     jax = _require_jax()
     devices = jax.devices("gpu")
     if len(devices) < 2:
         pytest.skip("JAX multi-device coverage requires at least two GPUs.")
-    keras.distribution.set_distribution(
-        keras.distribution.DataParallel(devices=devices)
-    )
+    keras.distribution.set_distribution(keras.distribution.DataParallel(devices=devices))
 
     is_2d = input_layout == "HWC"
     if segmentation:
@@ -223,9 +213,7 @@ def _fit_distributed_model_augmented(*, segmentation, input_layout, input_shape)
     devices = jax.devices("gpu")
     if len(devices) < 2:
         pytest.skip("JAX multi-device coverage requires at least two GPUs.")
-    keras.distribution.set_distribution(
-        keras.distribution.DataParallel(devices=devices)
-    )
+    keras.distribution.set_distribution(keras.distribution.DataParallel(devices=devices))
 
     pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
     if segmentation:
@@ -248,11 +236,7 @@ def _fit_distributed_model_augmented(*, segmentation, input_layout, input_shape)
         metrics = [keras.metrics.BinaryAccuracy()]
 
     def augment_data(image, label):
-        result = pipeline(
-            {"image": image, "label": label}
-            if segmentation
-            else {"image": image}
-        )
+        result = pipeline({"image": image, "label": label} if segmentation else {"image": image})
         if segmentation:
             return result["image"], result["label"]
         return result["image"], label
