@@ -16,10 +16,10 @@ class DropPath(layers.Layer):
         seed (int, optional): A random seed to ensure deterministic behavior.
             If ``None``, a random seed is used. Default is ``None``.
         **kwargs: Additional keyword arguments passed to the base Layer class.
-    
+
     Example:
-        .. code-block:: python    
-        
+        .. code-block:: python
+
             import keras
             import numpy as np
 

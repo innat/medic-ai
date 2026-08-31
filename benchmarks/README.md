@@ -32,7 +32,7 @@ KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
 
-# Compare eager execution with the active backend's XLA path.
+# Compare eager execution with the active backend's compiled path.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile xla
 ```
 
@@ -84,7 +84,7 @@ memory use grows cubically with the 3D size.
 
 ## Recorded Results
 
-The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and GPU with XLA tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in **bold**; `--` means no matching result or unsupported execution.
+The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and compiled GPU tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in **bold**; `--` means no matching result or unsupported execution.
 
 Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 
@@ -106,7 +106,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | DHWC | (160, 160, 160, 1) | CropForeground | 25.07 | **17.39** | 359.07 |
 | DHWC | (256, 256, 256, 1) | CropForeground | **121.47** | 163.57 | 412.34 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -155,7 +155,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | Flip | **12.01** | 13.41 | 16.22 |
 | BDHWC | (1, 256, 256, 256, 1) | Flip | 127.52 | 159.66 | **106.23** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -216,7 +216,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | NormalizeIntensity | **12.69** | 14.69 | 16.76 |
 | BDHWC | (1, 256, 256, 256, 1) | NormalizeIntensity | 109.41 | 165.35 | **83.06** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -253,7 +253,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | DHWC | (160, 160, 160, 1) | Orientation | 37.05 | **16.86** | 43.96 |
 | DHWC | (256, 256, 256, 1) | Orientation | 196.84 | 162.45 | **139.79** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -302,7 +302,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomCutOut | 34.56 | **15.51** | 139.62 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomCutOut | **134.87** | 163.27 | 226.54 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -363,7 +363,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomFlip | 14.32 | **14.22** | 127.60 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomFlip | **133.84** | 160.40 | 224.09 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -424,7 +424,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomRotate | **28.79** | 51.00 | 61.13 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomRotate | 182.08 | 305.35 | **170.48** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -485,7 +485,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomRotate90 | 33.25 | **15.43** | 363.23 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomRotate90 | 275.13 | **161.74** | 478.97 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -546,7 +546,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomShiftIntensity | 14.44 | **14.35** | 70.98 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomShiftIntensity | **110.64** | 160.32 | 147.73 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -607,7 +607,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | RandomSpatialCrop | 20.04 | **13.21** | 29.20 |
 | BDHWC | (1, 256, 256, 256, 1) | RandomSpatialCrop | 103.17 | 110.28 | **93.15** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -668,7 +668,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | Resize | 110.66 | **17.33** | 36.64 |
 | BDHWC | (1, 256, 256, 256, 1) | Resize | 637.24 | 128.67 | **99.51** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -729,7 +729,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | Rotate90 | 25.32 | **13.64** | 17.10 |
 | BDHWC | (1, 256, 256, 256, 1) | Rotate90 | 266.93 | 158.05 | **107.67** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -790,7 +790,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | ScaleIntensityRange | **9.86** | 13.83 | 11.21 |
 | BDHWC | (1, 256, 256, 256, 1) | ScaleIntensityRange | 107.23 | 159.67 | **78.02** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -851,7 +851,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | ShiftIntensity | **9.75** | 13.20 | 11.12 |
 | BDHWC | (1, 256, 256, 256, 1) | ShiftIntensity | 104.17 | 157.50 | **76.23** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -912,7 +912,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | SignalFillEmpty | **11.34** | 14.43 | 12.45 |
 | BDHWC | (1, 256, 256, 256, 1) | SignalFillEmpty | 108.10 | 161.55 | **78.67** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -949,7 +949,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | DHWC | (160, 160, 160, 1) | Spacing | 88.66 | **8.32** | 47.23 |
 | DHWC | (256, 256, 256, 1) | Spacing | 160.28 | **17.88** | 54.16 |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -998,7 +998,7 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | SpatialCrop | 20.10 | **12.81** | 28.46 |
 | BDHWC | (1, 256, 256, 256, 1) | SpatialCrop | 102.26 | 109.00 | **93.46** |
 
-#### GPU with XLA
+#### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
@@ -1018,4 +1018,4 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | BDHWC | (1, 160, 160, 160, 1) | SpatialCrop | **9.27** | 16.27 | 10.86 |
 | BDHWC | (1, 256, 256, 256, 1) | SpatialCrop | 82.99 | 116.76 | **74.06** |
 
-TensorFlow \`RandomRotate\` is not XLA-compatible because its affine image kernel is unsupported by the TensorFlow XLA GPU compiler. Metadata-aware sample-level transforms \`CropForeground\`, \`Orientation\`, and \`Spacing\` have no compiled records.
+TensorFlow `RandomRotate` is not XLA-compatible because its affine image kernel is unsupported by the TensorFlow XLA GPU compiler. Metadata-aware sample-level transforms `CropForeground`, `Orientation`, and `Spacing` have no compiled records.

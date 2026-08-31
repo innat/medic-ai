@@ -65,7 +65,7 @@ class UNETRBasicBlock(layers.Layer):
         res_block=True,
         dropout_rate=None,
         name="unetr_basic_block",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
 
@@ -185,7 +185,7 @@ class UNETRUpsamplingBlock(layers.Layer):
         norm_name="instance",
         res_block=True,
         name="unetr_upsampling_block",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name=name, **kwargs)
         self.filters = filters
@@ -332,7 +332,7 @@ class UNETRPreUpsamplingBlock(layers.Layer):
         upsample_kernel_size,
         conv_block=False,
         res_block=False,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.filters = filters

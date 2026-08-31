@@ -60,8 +60,8 @@ class UNETRPlusPlusEncoder(keras.Model, DescribeMixin):
     Returns:
         A ``keras.Model`` whose forward pass returns the final backbone
         feature tensor. Intermediate multi-scale features are available in
-        the ``pyramid_outputs`` attribute.    
-    
+        the ``pyramid_outputs`` attribute.
+
     Examples:
         .. code-block:: python
 

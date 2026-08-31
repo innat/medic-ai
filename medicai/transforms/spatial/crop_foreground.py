@@ -121,9 +121,9 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             from medicai.transforms import CropForeground
 
             transform = CropForeground(
-                keys=["image"], source_key="image", input_layout="BHWC"
+                keys=["image"], source_key="image", input_layout="HWC"
             )
-            image = torch.ones((2, 32, 32, 1))
+            image = torch.ones((32, 32, 1))
             result = transform({"image": image})
             print(result["image"].shape)
 
@@ -342,14 +342,23 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             dtype="int32",
         )
 
-        min_coords = ops.maximum(ops.cast(min_coords, "int32") - margin, 0)
-        max_coords = ops.minimum(
-            ops.cast(max_coords, "int32") + margin, ops.cast(image_shape, "int32")
-        )
+        image_shape = ops.cast(image_shape, "int32")
+        requested_min = ops.cast(min_coords, "int32") - margin
+        requested_max = ops.cast(max_coords, "int32") + margin
+        min_coords = ops.maximum(requested_min, 0)
+        max_coords = ops.minimum(requested_max, image_shape)
 
         if not allow_smaller:
-            min_coords = ops.minimum(min_coords, ops.cast(image_shape, "int32") - margin)
-            max_coords = ops.maximum(max_coords, margin)
+            requested_size = requested_max - requested_min
+            current_size = max_coords - min_coords
+            deficit = ops.maximum(requested_size - current_size, 0)
+
+            shift_left = ops.minimum(min_coords, deficit)
+            min_coords = min_coords - shift_left
+            deficit = deficit - shift_left
+
+            shift_right = ops.minimum(image_shape - max_coords, deficit)
+            max_coords = max_coords + shift_right
 
         return min_coords, max_coords
 
@@ -370,7 +379,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         size = max_coords - min_coords
         remainder = size % k_divisible
         padding = ops.where(remainder != 0, k_divisible - remainder, 0)
-        max_coords = ops.minimum(max_coords + padding, ops.cast(image_shape, "int32"))
+        image_shape = ops.cast(image_shape, "int32")
+        requested_max = max_coords + padding
+        max_coords = ops.minimum(requested_max, image_shape)
+        overflow = ops.maximum(requested_max - max_coords, 0)
+        min_coords = ops.maximum(min_coords - overflow, 0)
         return min_coords, max_coords
 
     def _get_last_crop_foreground_trace(self, bundle: TensorBundle):

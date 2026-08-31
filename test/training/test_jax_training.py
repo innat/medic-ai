@@ -41,7 +41,10 @@ def _require_pygrain():
 def _make_pygrain_loader(images, labels, pipeline):
     """Build a shuffled PyGrain loader for JAX sample-level transforms."""
     pygrain = _require_pygrain()
-    records = [{"image": image, "label": label} for image, label in zip(images, labels)]
+    records = [
+        {"image": image, "label": label}
+        for image, label in zip(images, labels, strict=True)
+    ]
 
     def apply_transform(record):
         with keras.device("cpu:0"):

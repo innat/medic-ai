@@ -95,7 +95,7 @@ class UNETR(keras.Model, DescribeMixin):
                 num_classes=3,
                 classifier_activation="sigmoid",
             )
-            
+
             x = torch.randn((1, 96, 96, 96, 3))
             y = model(x)
             print(y.shape) # torch.Size([1, 96, 96, 96, 3])

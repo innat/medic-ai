@@ -160,7 +160,7 @@ def _get_static_tensor_value(value: Any) -> Any:
     """
     try:
         return ops.convert_to_numpy(value)
-    except (TypeError, ValueError, RuntimeError):
+    except (AttributeError, TypeError, ValueError, RuntimeError):
         return None
 
 

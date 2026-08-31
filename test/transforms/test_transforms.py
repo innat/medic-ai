@@ -2153,6 +2153,55 @@ def test_crop_foreground_channel_indices_and_k_divisible():
 
 
 @pytest.mark.unit
+def test_crop_foreground_preserves_margin_when_foreground_touches_boundary():
+    source = np.zeros((10, 10, 1), dtype=np.float32)
+    source[:1, :1, 0] = 1.0
+    transform = CropForeground(
+        keys=["image"],
+        source_key="image",
+        margin=4,
+        allow_smaller=False,
+        input_layout="HWC",
+    )
+
+    result = transform(TensorBundle({"image": as_tensor(source)}))
+
+    assert tuple(ops.shape(result["image"])) == (9, 9, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result.meta["foreground_start_coord"]),
+        np.array([0, 0]),
+    )
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result.meta["foreground_end_coord"]),
+        np.array([9, 9]),
+    )
+
+
+@pytest.mark.unit
+def test_crop_foreground_shifts_divisible_extent_away_from_image_edge():
+    source = np.zeros((10, 10, 1), dtype=np.float32)
+    source[8:10, 8:10, 0] = 1.0
+    transform = CropForeground(
+        keys=["image"],
+        source_key="image",
+        k_divisible=4,
+        input_layout="HWC",
+    )
+
+    result = transform(TensorBundle({"image": as_tensor(source)}))
+
+    assert tuple(ops.shape(result["image"])) == (4, 4, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result.meta["foreground_start_coord"]),
+        np.array([6, 6]),
+    )
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result.meta["foreground_end_coord"]),
+        np.array([10, 10]),
+    )
+
+
+@pytest.mark.unit
 def test_crop_foreground_inverse_restores_original_canvas_for_2d():
     image = as_tensor(np.zeros((6, 7, 1), dtype=np.float32))
     image_np = ops.convert_to_numpy(image)

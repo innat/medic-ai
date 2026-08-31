@@ -61,7 +61,7 @@ class SegFormer(keras.Model, DescribeMixin):
                 classifier_activation="softmax",
             )
 
-            key = jax.random.PRNGKey(0) 
+            key = jax.random.PRNGKey(0)
             x = jax.random.normal(key, (1, 224, 224, 3))
             y = model(x)
             print(y.shape) # (1, 224, 224, 2)
@@ -99,7 +99,7 @@ class SegFormer(keras.Model, DescribeMixin):
                 num_classes=3,
             )
 
-            key = jax.random.PRNGKey(0) 
+            key = jax.random.PRNGKey(0)
             x = jax.random.normal(key, (1, 96, 96, 96, 3))
             y = model(x)
             print(y.shape) # (1, 96, 96, 96, 3)
@@ -126,7 +126,7 @@ class SegFormer(keras.Model, DescribeMixin):
                 num_classes=5,
             )
 
-            key = jax.random.PRNGKey(0) 
+            key = jax.random.PRNGKey(0)
             x = jax.random.normal(key, (1, 224, 224, 3))
             y = model(x)
             print(y.shape) # (1, 224, 224, 5)

@@ -32,8 +32,16 @@ def main() -> None:
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
 
-    if args.batch_size < 1 or args.channels < 1:
-        parser.error("--batch-size and --channels must be positive.")
+    if (
+        args.batch_size < 1
+        or args.channels < 1
+        or args.iterations < 1
+        or args.warmup < 0
+    ):
+        parser.error(
+            "--batch-size, --channels, and --iterations must be positive; "
+            "--warmup must be non-negative."
+        )
     default_size = 224 if args.layout in ("HWC", "BHWC") else 96
     sizes = args.sizes or [default_size]
     if any(size < 1 for size in sizes):

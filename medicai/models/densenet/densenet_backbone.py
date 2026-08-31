@@ -75,7 +75,7 @@ class DenseNetBackbone(keras.Model, DescribeMixin):
 
 
     References:
-     
+
      - Densely Connected Convolutional Networks. CVPR 2017. `arXiv:1608.06993 <https://arxiv.org/abs/1608.06993>`_
     """
 

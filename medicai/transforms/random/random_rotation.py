@@ -53,7 +53,14 @@ def _apply_anisotropy_policy(ranges, spacing, threshold):
     if spacing is None or max(spacing) / min(spacing) <= threshold:
         return dict(ranges)
     coarse_axis = AXES[list(spacing).index(max(spacing))]
-    return {axis: value for axis, value in ranges.items() if axis == coarse_axis}
+    retained = {axis: value for axis, value in ranges.items() if axis == coarse_axis}
+    if not retained:
+        raise ValueError(
+            f"`spacing` is anisotropic beyond `anisotropy_threshold`, so rotation is "
+            f"restricted to axis {coarse_axis!r}, but `factor` configures "
+            f"{sorted(ranges)}. Configure a range for {coarse_axis!r}."
+        )
+    return retained
 
 
 def _resolve_per_key(keys, value, default_fn, name):

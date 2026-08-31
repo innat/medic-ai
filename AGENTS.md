@@ -54,13 +54,6 @@ make test-integration
 make test-gpu
 ```
 
-Backend matrix checks:
-
-```bash
-python -m pytest test/backends/test_backend_matrix_losses.py
-python -m pytest test/backends/test_backend_matrix_metrics_transforms_models.py
-```
-
 Optional backend selection before import:
 
 ```bash
@@ -84,7 +77,7 @@ wrappers.
 - `medicai/metrics/`, `medicai/losses/`
   Backend-agnostic medical objective functions and metrics.
 - `medicai/transforms/`
-  TensorFlow-oriented preprocessing and augmentation utilities for imaging data.
+  Backend-agnostic preprocessing and augmentation utilities for imaging data.
 - `medicai/utils/`
   Shared helpers for registration, activation validation, encoder resolution,
   inference, visualization, and descriptive mixins.
@@ -158,32 +151,16 @@ it into `medicai/layers/`, `medicai/blocks/`, or `medicai/utils/`.
 - For 3D workflows, preserve compatibility with sliding-window inference helpers
   in `medicai.utils.inference` and `medicai.utils.swi_utils`.
 
-### TensorFlow-only transform zone
+### Transform runtime zone
 
-- `medicai/transforms/` may use TensorFlow ops directly.
-- Keep transform code compatible with `tf.data` pipelines, caching, prefetching,
-  and thread-safe dataset execution.
-- Do not copy TensorFlow-specific transform patterns into backend-agnostic
-  model, metric, or loss modules.
+- `medicai/transforms/` should use `keras.ops` when an equivalent operation is
+  available.
+- Support both:
+    - sample-level: `(H, W, C)` and `(D, H, W, C)` for 2D and 3D inputs.
+    - batch-level: `(B, H, W, C)` and `(B, D, H, W, C)` for 2D and 3D inputs.
+- Some of the transformation can be executed either CPU and GPU. Some are also XLA-JIT
+  compatible. See: `benchmarks/README.md`.
 
-### Transform Keras-ops migration
-
-- The TensorFlow transform implementation remains the compatibility baseline;
-  the migration tracked in
-  `tmp/plans/transforms/medicai_transform_tf_to_keras_ops_migration.md`
-  incrementally replaces eligible runtime operations with `from keras import ops`.
-- During that migration, use the Keras Ops API as the source of truth for
-  equivalence. The Keras 3 migration guide is supporting context, not a reason
-  to assume that every TensorFlow operation has a drop-in replacement.
-- Preserve `tf.data` behavior while migrating. Do not change transform
-  semantics merely to remove a TensorFlow call; document and test workarounds
-  for operations such as N-D gathers, string processing, scatter updates, and
-  chunked loops.
-- Spatial transforms use explicit channel-last `input_layout` contracts. Accept
-  only the layouts declared by each transform, normalize layout names to
-  uppercase, and require the channel axis to remain last. For example, `HWC`,
-  `DHWC`, `BHWC`, and `BDHWC` distinguish sample and batch inputs without
-  guessing from rank alone.
 
 ### Typing and docstrings
 
@@ -424,7 +401,8 @@ Also cover:
 
 ### Implementing a New Transformation
 
-1. Use TensorFlow ops to preserve `tf.data` compatibility.
+1. Use `keras.ops` when an equivalent operation exists. Keep TensorFlow ops
+   only for documented gaps while preserving `tf.data` compatibility.
 2. Handle standard channel-last medical tensor layouts cleanly.
 3. Be explicit about rank assumptions and boundary behavior.
 4. Add tests in `test/transforms/` with realistic 3D mock arrays.
@@ -473,7 +451,7 @@ Important edge cases:
 Use this checklist before you stop:
 
 - [ ] No direct `tf.*`, `torch.*`, or `jax.*` calls were introduced in core
-      `models/`, `metrics/`, or `losses/` code unless explicitly justified.
+      `models/`, `metrics/`, `transforms/`, or `losses/` code **unless explicitly justified**.
 - [ ] Public APIs include type hints and Google-style docstrings.
 - [ ] Tensor shapes and expected value ranges are documented where relevant.
 - [ ] New model code is split into focused files rather than a monolith.

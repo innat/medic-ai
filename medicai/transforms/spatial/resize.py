@@ -117,10 +117,10 @@ class Resize(KeyedTransform, InvertibleTransform):
             from medicai.transforms import Resize
 
             transform = Resize(
-                keys=["image", "label"],
-                interpolation=("bilinear", "nearest"),
+                keys=["image"],
+                interpolation="bilinear",
                 target_shape=(48, 48),
-                input_layout="HWC",
+                input_layout="BHWC",
             )
 
             torch.manual_seed(7)

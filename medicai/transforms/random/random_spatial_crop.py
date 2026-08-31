@@ -363,6 +363,8 @@ class RandomSpatialCrop(RandomTransform):
     ) -> Any:
         if get_tensor_rank(label) > spatial_rank:
             valid_mask = ops.any(label != self.invalid_label, axis=-1)
+            if self.crop.layout_info.batched:
+                valid_mask = ops.any(valid_mask, axis=0)
         else:
             valid_mask = label != self.invalid_label
         valid_coords = ops.where(valid_mask)
@@ -414,18 +416,12 @@ class RandomSpatialCrop(RandomTransform):
             starts = ops.maximum(current_center - crop_size // 2, 0)
             ends = ops.minimum(starts + crop_size, spatial_shape)
             starts = ops.maximum(ends - crop_size, 0)
-            if get_tensor_rank(label) > spatial_rank:
-                begin = ops.concatenate(
-                    [starts, ops.convert_to_tensor([0], dtype="int32")],
-                    axis=0,
-                )
-                size = ops.concatenate(
-                    [crop_size, ops.reshape(ops.shape(label)[-1], (1,))],
-                    axis=0,
-                )
-                crop = ops.slice(label, start_indices=begin, shape=size)
-            else:
-                crop = ops.slice(label, start_indices=starts, shape=crop_size)
+            crop = self.crop.crop_tensor(
+                label,
+                starts,
+                crop_size,
+                static_size=not self.random_shape,
+            )
 
             valid_ratio = ops.mean(ops.cast(crop != self.invalid_label, "float32"))
             new_center = ops.cond(

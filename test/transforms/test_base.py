@@ -477,7 +477,7 @@ def test_random_choice_replays_selection_with_same_integer_seed():
     second_selections, second_outputs = draw_sequence()
 
     assert first_selections == second_selections
-    for first, second in zip(first_outputs, second_outputs):
+    for first, second in zip(first_outputs, second_outputs, strict=True):
         np.testing.assert_allclose(first, second)
 
 

@@ -225,7 +225,18 @@ class Flip(KeyedTransform, InvertibleTransform):
         tensor: Any,
         spatial_axis: Union[int, Sequence[int], None] = None,
     ) -> Any:
-        """Flip a batched tensor using spatial axes expressed without the batch axis."""
+        """Flip a batched tensor.
+
+        Args:
+            tensor: Batched channel-last tensor.
+            spatial_axis: Spatial axis or axes to flip. For a batched
+                ``input_layout``, axes are real tensor axes of that layout. For
+                a sample ``input_layout``, axes are sample-relative and are
+                offset by one for the temporary batch axis.
+
+        Returns:
+            The flipped tensor, represented by the active Keras backend.
+        """
         effective_axis = self.spatial_axis if spatial_axis is None else spatial_axis
         if effective_axis is None:
             return tensor

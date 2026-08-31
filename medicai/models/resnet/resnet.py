@@ -736,7 +736,7 @@ class ResNeXt50(ResNetBase, DescribeMixin):
         ResNeXt introduces a new dimension called "cardinality" (the size of the set
         of transformations) in addition to width and depth, which improves accuracy
         without significantly increasing computational complexity.
-    
+
         Initializes the ResNeXt-50 32x4 model.
 
         Args:
