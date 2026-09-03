@@ -8,6 +8,7 @@ from ..base import (
     _apply_if_applied,
     _normalize_keys,
     _pop_last_transform_trace,
+    _trace_applied_to_bool,
 )
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
@@ -208,7 +209,14 @@ class RandomRotate90(RandomTransform):
     ):
         """Apply the sampled rotation conditionally to one tensor."""
         del key
-        self._validate_square_rotation_plane(tensor, params["spatial_axis"])
+        try:
+            applied = _trace_applied_to_bool(params["should_apply"])
+        except ValueError:
+            applied = None
+        if applied is False:
+            return tensor
+        if applied is True:
+            self._validate_square_rotation_plane(tensor, params["spatial_axis"])
         return _apply_if_applied(
             params["should_apply"],
             lambda tensor=tensor: self._rotate_with_dynamic_k(

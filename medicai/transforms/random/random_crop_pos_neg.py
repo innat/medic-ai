@@ -417,24 +417,27 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
-        axes = [ops.arange(fallback_shape[index]) for index in range(spatial_rank)]
-        grid = ops.meshgrid(*axes, indexing="ij")
-        coords = ops.reshape(ops.stack(grid, axis=-1), (-1, spatial_rank))
         valid_flat = ops.reshape(valid_mask, (-1,))
-        valid_int = ops.cast(valid_flat, "int32")
-        num_valid = ops.sum(valid_int)
-        ranks = ops.cumsum(valid_int) - 1
+        valid_indices = ops.reshape(ops.where(valid_flat), (-1,))
+        num_valid = ops.shape(valid_indices)[0]
         valid_rank = self.random_integers(
             shape=(),
             minval=0,
             maxval=ops.maximum(num_valid, 1),
             dtype="int32",
         )
-        selected_index = ops.argmax(
-            ops.cast((valid_int > 0) & (ranks == valid_rank), "int32"),
+        safe_indices = ops.concatenate(
+            [ops.cast(valid_indices, "int32"), ops.zeros((1,), dtype="int32")],
             axis=0,
         )
-        selected = ops.cast(coords[selected_index], "int32")
+        selected_flat = safe_indices[valid_rank]
+        remaining = selected_flat
+        coordinates = []
+        for dimension in reversed(range(spatial_rank)):
+            size = ops.cast(fallback_shape[dimension], "int32")
+            coordinates.append(ops.mod(remaining, size))
+            remaining = ops.floor_divide(remaining, size)
+        selected = ops.stack(list(reversed(coordinates)), axis=0)
         random_unit = self.random_uniform(
             shape=(spatial_rank,),
             minval=0.0,

@@ -57,7 +57,9 @@ backend with its default graph-break behavior.
 
 Compilation time is reported separately as `compile_time_ms`. Metadata-dependent transforms
 are skipped because their Python-side metadata and dynamic geometry are not
-part of this compiled tensor-only benchmark. If a transform uses an operation unsupported by the active backend's XLA compiler, it is recorded with `compile_status=not-xla-compatible`
+part of this compiled tensor-only benchmark. If compilation or the first compiled
+call is unsupported by the active backend compiler, it is recorded with
+`compile_status=not-compile-compatible`.
 and the remaining benchmark continues.
 
 Example:

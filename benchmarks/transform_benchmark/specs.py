@@ -45,7 +45,9 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
         BenchmarkSpec(
             "NormalizeIntensity",
             "cpu+gpu",
-            lambda layout, s: NormalizeIntensity(keys=["image"], channel_wise=True, input_layout=layout),
+            lambda layout, s: NormalizeIntensity(
+                keys=["image"], channel_wise=True, input_layout=layout
+            ),
         ),
         BenchmarkSpec(
             "ScaleIntensityRange",
@@ -96,7 +98,9 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
         BenchmarkSpec(
             "SpatialCrop",
             "cpu+gpu",
-            lambda layout, s: SpatialCrop(keys=["image", "label"], crop_size=crop_shape, input_layout=layout),
+            lambda layout, s: SpatialCrop(
+                keys=["image", "label"], crop_size=crop_shape, input_layout=layout
+            ),
             True,
         ),
         BenchmarkSpec(

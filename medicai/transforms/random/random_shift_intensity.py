@@ -165,6 +165,15 @@ class RandomShiftIntensity(RandomTransform):
         sampled_offsets = {}
         present_keys = self.shift.iter_present_keys(bundle)
 
+        if not present_keys:
+            self.record_random_transform(
+                bundle,
+                params=self.build_trace_params(params, sampled_offsets),
+                applied=False,
+                kernel="ShiftIntensity",
+            )
+            return bundle
+
         def apply_shift(tensor, key: str):
             if params["channel_wise"]:
                 offset_shape = [1] * (get_tensor_rank(tensor) - 1) + [tensor.shape[-1]]

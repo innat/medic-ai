@@ -19,7 +19,7 @@ class Flip(KeyedTransform, InvertibleTransform):
 
     ``Flip`` deterministically reverses channel-last tensors using the
     backend-native Keras operations. It can be applied to common Medic-AI
-    dictionary-style samples such as image-label pairs. 
+    dictionary-style samples such as image-label pairs.
 
     The transform is invertible. Applying the same flip twice restores
     the original orientation. During :meth:`apply`, the normalized axes are

@@ -418,7 +418,10 @@ class RandomSpatialCrop(RandomTransform):
 
             valid_ratio = ops.mean(ops.cast(crop != self.invalid_label, "float32"))
             new_center = ops.cond(
-                valid_ratio >= self.min_valid_ratio,
+                ops.logical_or(
+                    valid_ratio >= self.min_valid_ratio,
+                    i + 1 >= self.max_attempts,
+                ),
                 lambda: current_center,
                 lambda: self._get_random_center(spatial_shape, crop_size, spatial_rank),
             )

@@ -327,7 +327,7 @@ class RandomRotate(RandomTransform):
         On the TensorFlow backend, the affine image kernel used by
         ``RandomRotate`` is not currently XLA-compatible. Regular eager and
         ``tf.data`` graph execution remain supported, including GPU execution
-        when TensorFlow places the kernel there. When using RandomRotate within 
+        when TensorFlow places the kernel there. When using RandomRotate within
         a compiled model graph, set jit_compile=False to disable XLA compilation.
 
     Args:

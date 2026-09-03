@@ -47,9 +47,9 @@ def _failed_result(
         "case_reused": True,
         "compile_mode": compile_mode,
         "compile_time_ms": compile_time_ms,
-        "compile_status": "not-xla-compatible",
+        "compile_status": "not-compile-compatible",
         "compile_error": f"{type(error).__name__}: {error}",
-        "inverse_status": "not-xla-compatible",
+        "inverse_status": "not-compile-compatible",
         "iterations": iterations,
         "warmup": warmup,
         "transform": spec.name,
@@ -124,6 +124,7 @@ def profile(
             sync(transform.inverse(forward))
 
     forward_times = []
+    input_shape = list(template["image"].shape)
     for _ in range(iterations):
         start = time.perf_counter()
         if compiled_forward is None:
@@ -139,7 +140,6 @@ def profile(
             sync(transform.inverse(result))
             inverse_times.append((time.perf_counter() - start) * 1000.0)
 
-    output_image = result[0] if compiled_forward is not None else result["image"]
     return {
         "backend": keras.config.backend(),
         "device": device,
@@ -147,7 +147,7 @@ def profile(
         "spatial_size": spatial_size,
         "batch_size": batch_size,
         "channels": channels,
-        "input_shape": list(output_image.shape),
+        "input_shape": input_shape,
         "forward_median_ms": statistics.median(forward_times),
         "forward_p95_ms": float(np.percentile(forward_times, 95)),
         "inverse_median_ms": statistics.median(inverse_times) if inverse_times else None,

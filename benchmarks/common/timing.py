@@ -11,7 +11,11 @@ def sync(value) -> None:
         for tensor in value.data.values():
             sync(tensor)
         return
-    if isinstance(value, (dict, tuple, list)):
+    if isinstance(value, dict):
+        for item in value.values():
+            sync(item)
+        return
+    if isinstance(value, (tuple, list)):
         for item in value:
             sync(item)
         return

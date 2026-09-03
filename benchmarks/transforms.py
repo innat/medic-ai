@@ -32,12 +32,7 @@ def main() -> None:
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()
 
-    if (
-        args.batch_size < 1
-        or args.channels < 1
-        or args.iterations < 1
-        or args.warmup < 0
-    ):
+    if args.batch_size < 1 or args.channels < 1 or args.iterations < 1 or args.warmup < 0:
         parser.error(
             "--batch-size, --channels, and --iterations must be positive; "
             "--warmup must be non-negative."

@@ -3555,6 +3555,25 @@ def test_random_cutout_supports_2d_and_3d():
 
 
 @pytest.mark.unit
+def test_random_cutout_samples_2d_centers_from_height_and_width():
+    image = as_tensor(np.ones((8, 9, 1), dtype=np.float32))
+    transform = RandomCutOut(
+        keys=["image"],
+        mask_size=(2, 2),
+        num_cuts=8,
+        prob=1.0,
+        input_layout="HWC",
+        seed=7,
+    )
+
+    centers = ops.convert_to_numpy(transform._sample_cutout_centers(image, spatial_rank=2))
+
+    assert np.all(centers[:, 0] < 8)
+    assert np.all(centers[:, 1] < 9)
+    assert np.any(centers[:, 1] > 0)
+
+
+@pytest.mark.unit
 def test_random_cutout_supports_batch_layout_and_records_input_layout():
     image_2d = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
     label_2d = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
@@ -3957,3 +3976,59 @@ def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing
     assert restored_label.dtype == label.dtype
     assert set(np.unique(restored_label)).issubset({0.0, 1.0})
     assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
+def test_random_rotate90_prob_zero_is_noop_for_rectangular_input():
+    image = as_tensor(np.arange(2 * 3, dtype=np.float32).reshape(2, 3, 1))
+    transform = RandomRotate90(
+        keys=["image"],
+        prob=0.0,
+        max_k=3,
+        spatial_axis=(0, 1),
+        input_layout="HWC",
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_shift_intensity_allow_missing_keys_records_empty_trace():
+    transform = RandomShiftIntensity(
+        keys=["image"],
+        offset=0.1,
+        prob=1.0,
+        input_layout="HWC",
+        allow_missing_keys=True,
+    )
+    bundle = TensorBundle({"label": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+
+    output = transform(bundle)
+
+    assert output is bundle
+    trace = output.get_applied_transforms()[-1]
+    assert trace["params"]["keys"] == []
+    assert not bool(ops.convert_to_numpy(trace["applied"]))
+
+
+@pytest.mark.unit
+def test_rotate90_inverse_does_not_consume_another_instance_trace():
+    image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
+    first = Rotate90(keys=["image"], k=1, input_layout="HWC")
+    second = Rotate90(keys=["image"], k=2, input_layout="HWC")
+    bundle = first(TensorBundle({"image": image}))
+
+    untouched = second.inverse(bundle)
+
+    assert untouched is bundle
+    assert len(untouched.get_applied_transforms()) == 1
+    restored = first.inverse(bundle)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )

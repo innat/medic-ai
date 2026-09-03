@@ -323,9 +323,8 @@ class RandomCutOut(RandomTransform):
             center_shape = ops.concatenate(
                 [prefix, ops.convert_to_tensor([2], dtype="int32")], axis=0
             )
-        spatial_shape = ops.stack(
-            [shape[-3 if spatial_rank == 3 else -2], shape[-2 if spatial_rank == 3 else -1]]
-        )
+        # The cutout plane is always the final two spatial dimensions (H, W).
+        spatial_shape = ops.stack([shape[-3], shape[-2]])
         random_unit = self.random_uniform(
             shape=center_shape,
             minval=0.0,

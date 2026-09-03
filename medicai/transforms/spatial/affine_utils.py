@@ -115,7 +115,7 @@ def _raise_for_duplicate_axes(current_axes: Any) -> None:
 def _selected_matrix_entries(matrix: Any, row_indices: Any) -> Any:
     """Select one row from each matrix column without N-D gather operations."""
     selectors = ops.one_hot(row_indices, num_classes=3, dtype=matrix.dtype)
-    return ops.sum(matrix * selectors, axis=0)
+    return ops.sum(matrix * ops.transpose(selectors), axis=0)
 
 
 def orientation_from_affine(affine: Any) -> str:

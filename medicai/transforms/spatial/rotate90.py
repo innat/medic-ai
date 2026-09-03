@@ -33,7 +33,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     ``Rotate90`` deterministically rotates channel-last tensors by
     multiples of 90 degrees. The rotation plane is selected through
-    ``spatial_axis``. 
+    ``spatial_axis``.
 
     For 2D tensors, leaving ``spatial_axis=None`` rotates in the image plane.
     For 3D tensors, the default also rotates within the last two spatial
@@ -139,6 +139,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
+        self._trace_id = f"rotate90_{id(self)}"
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         params = self.get_transform_params(bundle)
@@ -155,23 +156,6 @@ class Rotate90(KeyedTransform, InvertibleTransform):
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         trace = self._get_last_rotate90_trace(bundle)
         if trace is None:
-            params = self.get_transform_params(bundle)
-            if not params["applied"]:
-                return bundle
-            inverse_k = (-params["k"]) % 4
-            self.apply_to_present_keys(
-                bundle,
-                lambda tensor, key: self.transform_tensor(
-                    tensor,
-                    key,
-                    {
-                        "applied": True,
-                        "k": inverse_k,
-                        "spatial_axis": params["spatial_axis"],
-                        "input_layout": params["input_layout"],
-                    },
-                ),
-            )
             return bundle
 
         params = trace["params"]
@@ -224,6 +208,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
         """Build invertible trace metadata for the current rotation."""
         return {
             "keys": list(present_keys),
+            "_rotate90_id": self._trace_id,
             "k": params["k"],
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
@@ -375,4 +360,8 @@ class Rotate90(KeyedTransform, InvertibleTransform):
     def _get_last_rotate90_trace(self, bundle: TensorBundle):
         from ..base import _pop_last_transform_trace
 
-        return _pop_last_transform_trace(bundle, type(self).__name__)
+        return _pop_last_transform_trace(
+            bundle,
+            type(self).__name__,
+            predicate=lambda entry: entry.get("params", {}).get("_rotate90_id") == self._trace_id,
+        )
