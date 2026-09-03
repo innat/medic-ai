@@ -7,9 +7,10 @@
 **Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical 2D and 3D image analysis using machine learning techniques. Its core strengths include:
 
 - **Backend Agnostic:** Compatible with `tensorflow`, `torch`, and `jax`.
-- **User-Friendly API:** High-level interface for transformations and model creation of both 2D and 3D.
+- **User-Friendly API:** High-level interface for 75+ classification models, 11+ segmentation models, and 20+ medical preprocessing transforms across 2D and 3D.
+- **Flexible Transformations:** Provides backend-agnostic preprocessing and augmentation for 2D and 3D images, with both single and batch support, synchronized image-label processing, and CPU/GPU execution where supported.
 - **Scalable Execution:** Supports training and inference on **single/multi-GPU** and **TPU-VM** setups.
-- **Essential Components:** Includes standard medical specific metrics and losses, such as Dice. Support **GradCAM** for segmentation and classification on both 2D and 3D input.
+- **Essential Components:** Includes standard medical specific metrics and losses. Support **GradCAM** for segmentation and classification on both 2D and 3D input including large volume of medical inputs.
 - **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data.
 
 
@@ -101,6 +102,20 @@ model = SwinUNETR(encoder=custom_encoder)
 
 # 📊 Features
 
+**Supported Dataloaders**: Choose the right dataloaders for the targeted Keras backend.
+
+| Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
+| :--- | :---: | :---: | :---: | :---: |
+| TensorFlow | ✓ | ✗ | ✓ | ✓ |
+| Torch | ✓ | ✓ | ✗ | ✓ |
+| JAX | ✓ | ✗ | ✗ | ✓ |
+
+> **Cross-backend pipelines:** If the same end-to-end pipeline must run with
+> every Keras backend, choose **PyGrain** or `keras.utils.PyDataset`. PyGrain is
+> highly recommended for its efficient parallel data loading, worker support,
+> and backend-neutral record pipeline. `keras.utils.PyDataset` is a simpler
+> choice for custom Python datasets.
+
 **Available Models** : The following table lists the currently supported models along with their supported input modalities, primary tasks, and underlying architecture type.  The model inputs can be either **3D** `(depth × height × width × channel)` or **2D** `(height × width × channel)`.
 
 | Model | Supported Modalities | Primary Task | Architecture Type |
@@ -136,31 +151,32 @@ can run on either CPU or GPU, depending on the active backend and execution
 context. Many transforms are also compatible with XLA compilation; any
 backend-specific XLA limitations are documented by the individual transform.
 
-```python
-NormalizeIntensity
-ScaleIntensityRange
-ShiftIntensity
-SignalFillEmpty
-Flip
-SpatialCrop
-Resize
-Rotate90
-RandomCropByPosNegLabel
-RandomCutOut
-RandomRotate
-RandomRotate90
-RandomFlip
-RandomShiftIntensity
-RandomSpatialCrop
-```
+| Transformation | Layout | GPU | GPU (XLA/compiled) |
+| :--- | :--- | :---: | :---: |
+| NormalizeIntensity | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| ScaleIntensityRange | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| ShiftIntensity | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| SignalFillEmpty | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| Flip | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| SpatialCrop | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| Resize | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| Rotate90 | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| RandomCropByPosNegLabel | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| RandomCutOut | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| RandomRotate | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| RandomRotate90 | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| RandomFlip | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| RandomShiftIntensity | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
+| RandomSpatialCrop | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| CropForeground | `HWC`, `DHWC` | No | No |
+| Orientation | `DHWC` | No | No |
+| Spacing | `DHWC` | No | No |
 
-The following transformations only accept sample input (`HWC`, `DHWC`).
-
-```python
-CropForeground
-Orientation
-Spacing
-```
+`Limited` means compiled execution depends on the active backend and runtime
+configuration (i.e., `jit_compile : bool`). `No` indicates that the current implementation is not included
+in the compiled GPU path. The table describes supported execution patterns;
+refer to the transform docstrings and [Transform Benchmarks](benchmarks/README.md)
+for backend-specific limitations and measurements.
 
 **Transform Benchmark Snapshot**: The following compact tables show forward
 median execution time on a Tesla T4 GPU. They use the benchmark artifacts with
