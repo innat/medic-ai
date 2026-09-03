@@ -7,8 +7,8 @@
 **Medic-AI** is a [Keras](https://keras.io/keras_3/) based library designed for medical 2D and 3D image analysis using machine learning techniques. Its core strengths include:
 
 - **Backend Agnostic:** Compatible with `tensorflow`, `torch`, and `jax`.
-- **User-Friendly API:** High-level interface for 75+ classification models, 11+ segmentation models, and 20+ medical preprocessing transforms across 2D and 3D.
-- **Flexible Transformations:** Provides backend-agnostic preprocessing and augmentation for 2D and 3D images, with both single and batch support, synchronized image-label processing, and CPU/GPU execution where supported.
+- **User-Friendly API:** High-level interface for `75+` classification models, `11+` segmentation models, and `20+` medical preprocessing transforms across 2D and 3D.
+- **Flexible Transformations:** Provides backend-agnostic preprocessing and augmentation for 2D and 3D images, with both **single and batch** support, synchronized image-label processing, and CPU/GPU execution where supported.
 - **Scalable Execution:** Supports training and inference on **single/multi-GPU** and **TPU-VM** setups.
 - **Essential Components:** Includes standard medical specific metrics and losses. Support **GradCAM** for segmentation and classification on both 2D and 3D input including large volume of medical inputs.
 - **Optimized 3D Inference:** Offers an efficient sliding-window method and callback for volumetric data.
@@ -172,11 +172,12 @@ backend-specific XLA limitations are documented by the individual transform.
 | Orientation | `DHWC` | No | No |
 | Spacing | `DHWC` | No | No |
 
-`Limited` means compiled execution depends on the active backend and runtime
-configuration (i.e., `jit_compile : bool`). `No` indicates that the current implementation is not included
-in the compiled GPU path. The table describes supported execution patterns;
-refer to the transform docstrings and [Transform Benchmarks](benchmarks/README.md)
-for backend-specific limitations and measurements.
+> `Limited` means compiled execution depends on the active backend and runtime
+> configuration (i.e., `jit_compile : bool`). `No` indicates that the current  
+> implementation is not included
+> in the compiled GPU path. The table describes supported execution patterns;
+> refer to the transform docstrings and [Transform Benchmarks](benchmarks/README.md)
+> for backend-specific limitations and measurements.
 
 **Transform Benchmark Snapshot**: The following compact tables show forward
 median execution time on a Tesla T4 GPU. They use the benchmark artifacts with
@@ -219,11 +220,11 @@ Batch size is 1 and the channel count is 1.
 | BDHWC | (1, 256, 256, 256, 1) | SignalFillEmpty | 108.10 | 161.55 | **78.67** |
 | BDHWC | (1, 256, 256, 256, 1) | Rotate90 | 266.93 | 158.05 | **107.67** |
 
-These values are representative measurements rather than universal
-performance guarantees. Backend versions, device type, memory pressure,
-warm-up policy, and input dtype can change the relative timings. Randomized,
-resampling, metadata-aware, and XLA-compiled behavior is reported separately
-in the detailed benchmark results.
+> **Note**: These values are representative measurements rather than universal
+> performance guarantees. Backend versions, device type, memory pressure,
+> warm-up policy, and input dtype can change the relative timings. Randomized,
+> resampling, metadata-aware, and XLA-compiled behavior is reported separately
+> in the detailed benchmark results.
 
 ## Documentation
 
