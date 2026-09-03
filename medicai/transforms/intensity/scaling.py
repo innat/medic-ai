@@ -1,53 +1,56 @@
 from __future__ import annotations
 
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
-import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
+from ..utils import (
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     """Linearly map selected tensor intensities from one numeric range to another.
 
     ``ScaleIntensityRange`` applies an affine intensity transform using the
-    source interval ``[input_min, input_max]`` and, when provided, the target interval
-    ``[output_min, output_max]``. This is useful for bringing image intensities into a
-    stable range such as ``[0, 1]`` or ``[-1, 1]`` before training.
-
-    The transform expects channel-last image tensors such as ``(H, W, C)`` or
-    ``(D, H, W, C)``. It does not infer source ranges from the data; callers
-    must provide medically meaningful source bounds. Integer inputs such as
-    ``uint8`` are supported and are cast to ``dtype`` before scaling.
+    source interval ``source_value_range=(min, max)`` and, when provided, the
+    target interval ``target_value_range=(min, max)``. This is useful for
+    bringing image intensities into a stable range such as ``[0, 1]`` or
+    ``[-1, 1]`` before training.
 
     Args:
         keys: Keys of the tensors to scale.
-        input_min: Lower bound of the source intensity range.
-        input_max: Upper bound of the source intensity range.
-        output_min: Lower bound of the target range. If ``None`` together with
-            ``output_max=None``, the normalized ``[0, 1]`` result is kept.
-        output_max: Upper bound of the target range.
-        clip: If ``True`` and both ``output_min`` and ``output_max`` are provided, clip
-            the output to the target interval after scaling.
+        source_value_range: Two-element source intensity range ``(min, max)``.
+        target_value_range: Optional two-element target intensity range
+            ``(min, max)``. If omitted, the normalized ``[0, 1]`` result is kept.
+        clip: If ``True`` and ``target_value_range`` is provided, clip the
+            output to the target interval after scaling.
         dtype: Output dtype used for computation and returned tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Map a 2D image into ``[-1, 1]`` using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import ScaleIntensityRange
 
             transform = ScaleIntensityRange(
                 keys=["image"],
-                input_min=0.0,
-                input_max=255.0,
-                output_min=-1.0,
-                output_max=1.0,
+                source_value_range=(0.0, 255.0),
+                target_value_range=(-1.0, 1.0),
                 clip=True,
+                input_layout="HWC",
             )
 
             image = tf.random.uniform((64, 64, 1), minval=0.0, maxval=255.0)
@@ -55,35 +58,66 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             output = result["image"]
             print(output.shape)
 
-        Map a 3D image volume from a clipped CT range into ``[0, 1]`` using a
-        ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import ScaleIntensityRange, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import ScaleIntensityRange
 
             transform = ScaleIntensityRange(
                 keys=["image"],
-                input_min=-175.0,
-                input_max=250.0,
-                output_min=0.0,
-                output_max=1.0,
+                source_value_range=(-175.0, 250.0),
+                target_value_range=(0.0, 1.0),
                 clip=True,
+                input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.uniform(
+                jax.random.PRNGKey(7),
+                shape=(32, 64, 64, 1),
+                minval=-175.0,
+                maxval=250.0,
+                dtype=jnp.float32,
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import ScaleIntensityRange
+
+            transform = ScaleIntensityRange(
+                keys=["image"],
+                source_value_range=(0.0, 255.0),
+                target_value_range=(-1.0, 1.0),
+                clip=True,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            batch = torch.rand((2, 64, 64, 1)) * 255.0
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 
     ``ScaleIntensityRange`` is invertible only for pure affine range mappings.
     In practice that means:
 
-    - `clip=False`
-    - `input_min != input_max`
-    - when a target range is provided, `output_min != output_max`
+    - ``clip=False``
+    - ``source_value_range[0] != source_value_range[1]``
+    - when a target range is provided, ``target_value_range[0] != target_value_range[1]``
 
     If clipping is enabled, or the mapping collapses values to a constant,
     exact inversion is not possible and :meth:`inverse` behaves as a no-op.
@@ -103,51 +137,46 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        input_min: float,
-        input_max: float,
-        output_min: Optional[float] = None,
-        output_max: Optional[float] = None,
+        source_value_range: Sequence[float],
+        target_value_range: Optional[Sequence[float]] = None,
         clip: bool = False,
-        dtype: tf.DType = tf.float32,
+        dtype: Any = "float32",
+        *,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
-        if (output_min is None) != (output_max is None):
-            raise ValueError(
-                "`output_min` and `output_max` must be provided together or both omitted."
-            )
-        self.input_min = input_min
-        self.input_max = input_max
-        self.output_min = output_min
-        self.output_max = output_max
+        self.source_value_range = self._validate_value_range(
+            source_value_range, "source_value_range"
+        )
+        self.target_value_range = (
+            None
+            if target_value_range is None
+            else self._validate_value_range(target_value_range, "target_value_range")
+        )
         self.clip = clip
         self.dtype = dtype
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            transform_name=type(self).__name__,
+        )
 
     @property
     def invertible(self) -> bool:
         if self.clip:
             return False
-        if self.input_max == self.input_min:
+        if self.source_value_range[1] == self.source_value_range[0]:
             return False
-        if self.output_min is not None and self.output_max is not None:
-            return self.output_max != self.output_min
+        if self.target_value_range is not None:
+            return self.target_value_range[1] != self.target_value_range[0]
         return True
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        params = self.get_transform_params(bundle)
         present_keys = self.apply_to_present_keys(
-            bundle, lambda tensor, _: self.scale_tensor(tensor)
+            bundle, lambda tensor, _: self.transform_tensor(tensor, params)
         )
-        self.record_transform(
-            bundle,
-            {
-                "keys": list(present_keys),
-                "input_min": self.input_min,
-                "input_max": self.input_max,
-                "output_min": self.output_min,
-                "output_max": self.output_max,
-                "clip": self.clip,
-            },
-        )
+        self.record_transform(bundle, self.build_trace_params(params, present_keys))
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
@@ -159,63 +188,153 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
             return bundle
 
         params = trace["params"]
-        input_min = params.get("input_min", self.input_min)
-        input_max = params.get("input_max", self.input_max)
-        output_min = params.get("output_min", self.output_min)
-        output_max = params.get("output_max", self.output_max)
+        source_value_range = params.get("source_value_range", self.source_value_range)
+        target_value_range = params.get("target_value_range", self.target_value_range)
 
         self.apply_to_present_keys(
             bundle,
             lambda tensor, _: self.inverse_scale_tensor(
                 tensor,
-                input_min=input_min,
-                input_max=input_max,
-                output_min=output_min,
-                output_max=output_max,
+                source_value_range=source_value_range,
+                target_value_range=target_value_range,
             ),
             keys=params.get("keys", []),
         )
         return bundle
 
-    def scale_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
-        """Scale one tensor from source range to target range."""
-        tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
-        if self.input_max == self.input_min:
-            result = (
-                tensor - self.input_min
-                if self.output_min is None
-                else tensor - self.input_min + self.output_min
-            )
-            return tf.cast(result, dtype=self.dtype)
+    def get_transform_params(self, bundle: TensorBundle) -> dict[str, object]:
+        """Prepare forward-pass parameters for this range scaling."""
+        del bundle
+        return {
+            "source_value_range": self.source_value_range,
+            "target_value_range": self.target_value_range,
+            "clip": self.clip,
+            "input_layout": self.input_layout,
+        }
 
-        tensor = (tensor - self.input_min) / (self.input_max - self.input_min)
-        if self.output_min is not None and self.output_max is not None:
-            tensor = tensor * (self.output_max - self.output_min) + self.output_min
-        if self.clip and self.output_min is not None and self.output_max is not None:
-            tensor = tf.clip_by_value(tensor, self.output_min, self.output_max)
-        return tf.cast(tensor, dtype=self.dtype)
+    def transform_tensor(
+        self,
+        tensor: Any,
+        params: dict[str, object],
+    ) -> Any:
+        """Scale one tensor using prepared transform parameters."""
+        self._validate_tensor_layout(tensor)
+        return self.scale_tensor(
+            tensor,
+            source_value_range=params["source_value_range"],
+            target_value_range=params["target_value_range"],
+            clip=params["clip"],
+        )
+
+    def build_trace_params(
+        self,
+        params: dict[str, object],
+        present_keys: Sequence[str],
+    ) -> dict[str, object]:
+        """Build invertible trace metadata for the current range scaling."""
+        return {
+            "keys": list(present_keys),
+            "source_value_range": params["source_value_range"],
+            "target_value_range": params["target_value_range"],
+            "clip": params["clip"],
+            "input_layout": params["input_layout"],
+        }
+
+    def scale_tensor(
+        self,
+        tensor: Any,
+        source_value_range: Sequence[float] | None = None,
+        target_value_range: Sequence[float] | None = None,
+        clip: bool | None = None,
+    ) -> Any:
+        """Scale one sample or batch tensor from source range to target range."""
+        tensor = ops.cast(ops.convert_to_tensor(tensor), self.dtype)
+        return self.scale_batch_tensor(
+            tensor,
+            source_value_range=source_value_range,
+            target_value_range=target_value_range,
+            clip=clip,
+        )
+
+    def scale_batch_tensor(
+        self,
+        tensor: Any,
+        source_value_range: Sequence[float] | None = None,
+        target_value_range: Sequence[float] | None = None,
+        clip: bool | None = None,
+    ) -> Any:
+        """Scale a tensor with a kernel that is agnostic to sample vs batch layout."""
+        src_range = (
+            self.source_value_range if source_value_range is None else tuple(source_value_range)
+        )
+        tgt_range = (
+            self.target_value_range if target_value_range is None else tuple(target_value_range)
+        )
+        in_min, in_max = src_range
+        if tgt_range is None:
+            out_min = out_max = None
+        else:
+            out_min, out_max = tgt_range
+        should_clip = self.clip if clip is None else clip
+
+        if in_max == in_min:
+            result = tensor - in_min if out_min is None else tensor - in_min + out_min
+            return ops.cast(result, dtype=self.dtype)
+
+        tensor = (tensor - in_min) / (in_max - in_min)
+        if out_min is not None and out_max is not None:
+            tensor = tensor * (out_max - out_min) + out_min
+        if should_clip and out_min is not None and out_max is not None:
+            tensor = ops.clip(tensor, out_min, out_max)
+        return ops.cast(tensor, dtype=self.dtype)
 
     def inverse_scale_tensor(
         self,
-        tensor: tf.Tensor,
-        input_min: float | None = None,
-        input_max: float | None = None,
-        output_min: float | None = None,
-        output_max: float | None = None,
-    ) -> tf.Tensor:
-        """Invert one tensor from target range back to source range."""
-        tensor = tf.cast(tf.convert_to_tensor(tensor), self.dtype)
+        tensor: Any,
+        source_value_range: Sequence[float] | None = None,
+        target_value_range: Sequence[float] | None = None,
+    ) -> Any:
+        """Invert one sample or batch tensor from target range back to source range."""
+        tensor = ops.cast(ops.convert_to_tensor(tensor), self.dtype)
 
-        in_min = self.input_min if input_min is None else input_min
-        in_max = self.input_max if input_max is None else input_max
-        out_min = self.output_min if output_min is None else output_min
-        out_max = self.output_max if output_max is None else output_max
+        src_range = (
+            self.source_value_range if source_value_range is None else tuple(source_value_range)
+        )
+        tgt_range = (
+            self.target_value_range if target_value_range is None else tuple(target_value_range)
+        )
+        in_min, in_max = src_range
+        if tgt_range is None:
+            out_min = out_max = None
+        else:
+            out_min, out_max = tgt_range
 
         if out_min is not None and out_max is not None:
             tensor = (tensor - out_min) / (out_max - out_min)
 
         tensor = tensor * (in_max - in_min) + in_min
-        return tf.cast(tensor, dtype=self.dtype)
+        return ops.cast(tensor, dtype=self.dtype)
+
+    def _validate_tensor_layout(self, tensor: Any) -> None:
+        """Validate sample or batch channel-last layout for intensity scaling."""
+        validate_tensor_matches_layout(
+            tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
+
+    def _validate_value_range(
+        self,
+        value_range: Sequence[float],
+        name: str,
+    ) -> tuple[float, float]:
+        """Validate a two-element intensity range."""
+        if len(value_range) != 2:
+            raise ValueError(f"`{name}` must contain exactly 2 values, got {len(value_range)}.")
+        lower, upper = value_range
+        if lower > upper:
+            raise ValueError(f"`{name}` must be ordered as (min, max), got ({lower}, {upper}).")
+        return (float(lower), float(upper))
 
     def _get_last_scaling_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

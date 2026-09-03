@@ -426,6 +426,7 @@ class EfficientNetL2(EfficientNetBase, DescribeMixin):
             **kwargs,
         )
 
+
 EfficientNet_DOCSTRING = """
 This class provides a complete {name} model, including the convolutional
 backbone and the classification head (the "top"). The backbone follows the

@@ -1,20 +1,32 @@
 import warnings
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
-import tensorflow as tf
+from keras import ops
+
+from medicai.utils.image import resize_volumes
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     SpatialResample,
+    _get_static_shape_tuple,
     compute_destination_affine,
     compute_output_shape,
     get_spatial_rank,
     is_axis_aligned_affine,
+    resolve_input_layout,
     round_half_up,
     spacing_from_affine,
+    validate_tensor_matches_layout,
 )
-from .resize import resize_volumes
+
+
+def _concrete_bool(value: Any) -> bool:
+    """Convert a scalar backend value to bool when it is concretely available."""
+    try:
+        return bool(ops.convert_to_numpy(value))
+    except (TypeError, ValueError):
+        return False
 
 
 class Spacing(KeyedTransform, InvertibleTransform):
@@ -23,7 +35,8 @@ class Spacing(KeyedTransform, InvertibleTransform):
     ``Spacing`` uses voxel spacing derived from the input affine matrix to
     resample 3D channel-last tensors to a requested physical resolution. It is
     intended for volumetric medical images and corresponding labels that follow
-    Medic-AI's ``(D, H, W, C)`` tensor convention.
+    ``medicai``'s ``(D, H, W, C)`` tensor convention. This transform is
+    sample-only and does not support batched inputs.
 
     The transform reads the source spacing from ``bundle.meta["affine"]``. If
     no affine is provided, it falls back to spacing ``(1.0, 1.0, 1.0)`` and
@@ -46,13 +59,19 @@ class Spacing(KeyedTransform, InvertibleTransform):
         interpolation: Interpolation mode specified as a single string, a sequence
             aligned with ``keys``, or a mapping from key to mode. Valid 3D
             modes are ``"trilinear"`` and ``"nearest"``.
+        input_layout: Tensor layout contract for selected tensors. ``Spacing``
+            currently supports only ``"DHWC"`` because it is affine-aware and
+            sample-level.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Resample a 3D image-label pair to isotropic spacing using a raw Python
-        dictionary and affine metadata:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import Spacing
@@ -80,41 +99,31 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 {"affine": affine}
             )
 
-        Resample a 3D image volume using a ``TensorBundle`` and restore its
-        prior spacing:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Spacing, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import Spacing
 
             transform = Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0))
 
-            image = tf.random.normal((24, 64, 64, 1))
-            affine = tf.constant(
-                [
-                    [0.0, 0.0, 2.0, 0.0],
-                    [0.0, 1.0, 0.0, 0.0],
-                    [3.0, 0.0, 0.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ],
-                dtype=tf.float32,
-            )
+            image = jnp.ones((24, 64, 64, 1), dtype=jnp.float32)
+            result = transform({"image": image}, {"affine": jnp.eye(4)})
+            print(result["image"].shape)
 
-            bundle = TensorBundle(
-                {"image": image},
-                {"affine": affine}
-            )
-            forward = transform(bundle)
-            restored = transform.inverse(forward)
-
-        Resample an image-label pair and then map it back to the original
-        spatial shape:
+        Torch backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Spacing, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import Spacing
 
             transform = Spacing(
                 keys=["image", "label"],
@@ -122,15 +131,9 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 interpolation=("trilinear", "nearest"),
             )
 
-            image = tf.random.normal((12, 32, 32, 1))
-            label = tf.random.uniform((12, 32, 32, 1), maxval=2, dtype=tf.int32)
-            affine = tf.eye(4)
-
-            forward = transform(
-                {"image": image, "label": label},
-                {"affine": affine}
-            )
-            restored = transform.inverse(forward)
+            image = torch.ones((12, 32, 32, 1))
+            result = transform({"image": image}, {"affine": torch.eye(4)})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with resampled tensors, updated
@@ -149,10 +152,17 @@ class Spacing(KeyedTransform, InvertibleTransform):
         keys: Sequence[str] = ("image", "label"),
         pixdim: Sequence[float] = (1.0, 1.0, 1.0),
         interpolation: str | Sequence[str] | Mapping[str, str] = ("trilinear", "nearest"),
+        *,
+        input_layout: str = "DHWC",
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
         self.pixdim = tuple(pixdim)
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            allowed_layouts=("DHWC",),
+            transform_name=type(self).__name__,
+        )
 
         if len(self.pixdim) != 3:
             raise ValueError(
@@ -195,7 +205,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
         if affine is not None:
             original_spacing = self.get_spacing_from_affine(affine)
         else:
-            original_spacing = tf.constant((1.0, 1.0, 1.0), dtype=tf.float32)
+            original_spacing = ops.convert_to_tensor((1.0, 1.0, 1.0), dtype="float32")
             warnings.warn(
                 "Affine matrix is not provided. Using default spacing (1.0, 1.0, 1.0).",
                 stacklevel=2,
@@ -203,14 +213,14 @@ class Spacing(KeyedTransform, InvertibleTransform):
 
         original_shapes = {}
         destination_affine = None
-        target_pixdim = tf.constant(self.pixdim, dtype=tf.float32)
+        target_pixdim = ops.convert_to_tensor(self.pixdim, dtype="float32")
         use_fast_resize_path = False
         if affine is not None:
-            affine = tf.cast(affine, tf.float32)
+            affine = ops.cast(affine, "float32")
             destination_affine = compute_destination_affine(affine, target_pixdim)
-            use_fast_resize_path = bool(tf.get_static_value(is_axis_aligned_affine(affine)))
+            use_fast_resize_path = _concrete_bool(is_axis_aligned_affine(affine))
 
-        def apply_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_spacing(tensor: Any, key: str) -> Any:
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
@@ -218,14 +228,14 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     f"{spatial_rank} "
                     f"for shape {tensor.shape}."
                 )
-            static_shape = tensor.shape[:3]
-            if static_shape.is_fully_defined():
+            static_shape = _get_static_shape_tuple(tensor)[:3]
+            if all(dim is not None for dim in static_shape):
                 original_shapes[key] = list(static_shape)
             else:
-                original_shapes[key] = tf.shape(tensor)[:3]
+                original_shapes[key] = ops.shape(tensor)[:3]
             if destination_affine is not None and not use_fast_resize_path:
                 output_shape = compute_output_shape(
-                    input_shape=tf.convert_to_tensor(original_shapes[key], dtype=tf.int32),
+                    input_shape=ops.convert_to_tensor(original_shapes[key], dtype="int32"),
                     src_affine=affine,
                     dst_affine=destination_affine,
                     align_corners=False,
@@ -250,8 +260,8 @@ class Spacing(KeyedTransform, InvertibleTransform):
         bundle.meta["pixdim"] = target_pixdim
         original_affine = None
         if affine is not None:
-            original_affine = tf.identity(tf.cast(affine, tf.float32))
-            bundle.meta["affine"] = tf.cast(destination_affine, tf.float32)
+            original_affine = ops.cast(affine, "float32")
+            bundle.meta["affine"] = ops.cast(destination_affine, "float32")
         self.record_transform(
             bundle,
             {
@@ -260,11 +270,14 @@ class Spacing(KeyedTransform, InvertibleTransform):
                 "original_spacing": original_spacing,
                 "original_affine": original_affine,
                 "output_affine": (
-                    tf.identity(destination_affine) if destination_affine is not None else None
+                    ops.cast(destination_affine, "float32")
+                    if destination_affine is not None
+                    else None
                 ),
                 "original_shapes": original_shapes,
                 "interpolation": {key: self.interpolation[key] for key in present_keys},
                 "used_fast_resize_path": use_fast_resize_path,
+                "input_layout": self.input_layout,
             },
         )
         return bundle
@@ -285,85 +298,27 @@ class Spacing(KeyedTransform, InvertibleTransform):
             return bundle
 
         if original_affine is not None and output_affine is not None and not used_fast_resize_path:
-            tensors_by_shape: dict[tuple[int, ...], dict[str, tf.Tensor]] = {}
-            interpolation_by_shape: dict[tuple[int, ...], dict[str, str]] = {}
-            can_group = True
-
-            for key in params.get("keys", []):
-                if key not in bundle.data:
-                    if self.allow_missing_keys:
-                        continue
-                    raise KeyError(f"Key '{key}' not found in input data.")
-                if key not in original_shapes:
-                    continue
-                target_shape = original_shapes[key]
-                if isinstance(target_shape, (list, tuple)):
-                    static_shape = target_shape
-                else:
-                    static_shape = tf.get_static_value(target_shape)
-                if static_shape is None:
-                    can_group = False
-                    break
-                shape_key = tuple(int(v) for v in static_shape)
-                tensors_by_shape.setdefault(shape_key, {})[key] = bundle.data[key]
-                interpolation_by_shape.setdefault(shape_key, {})[key] = interpolation[key]
-
-            if can_group:
-                for shape_key, tensors in tensors_by_shape.items():
-                    output_shape = tf.constant(shape_key, dtype=tf.int32)
-                    restored = self._spatial_resample.resample_many(
-                        tensors=tensors,
-                        src_affine=output_affine,
-                        dst_affine=original_affine,
-                        output_shape=output_shape,
-                        interpolation=interpolation_by_shape[shape_key],
-                        padding_mode="constant",
-                        fill_value=0.0,
-                    )
-                    for key, value in restored.items():
-                        bundle.data[key] = value
-
-                bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
-                if original_affine is not None:
-                    bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
-                return bundle
-
-            for key in params.get("keys", []):
-                if key not in bundle.data:
-                    if self.allow_missing_keys:
-                        continue
-                    raise KeyError(f"Key '{key}' not found in input data.")
-                if key not in original_shapes:
-                    continue
-                bundle.data[key] = self._spatial_resample(
-                    tensor=bundle.data[key],
-                    src_affine=output_affine,
-                    dst_affine=original_affine,
-                    output_shape=tf.convert_to_tensor(original_shapes[key], dtype=tf.int32),
-                    interpolation=interpolation[key],
-                    padding_mode="constant",
-                    fill_value=0.0,
-                )
-
-            bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
-            if original_affine is not None:
-                bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
+            self._restore_with_affine_resample(
+                bundle=bundle,
+                keys=params.get("keys", []),
+                original_shapes=original_shapes,
+                interpolation=interpolation,
+                original_affine=original_affine,
+                output_affine=output_affine,
+            )
+            bundle.meta["pixdim"] = ops.cast(original_spacing, "float32")
+            bundle.meta["affine"] = ops.cast(original_affine, "float32")
             return bundle
 
-        def apply_inverse_spacing(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            if key not in original_shapes:
-                return tensor
-            target_shape = tf.convert_to_tensor(original_shapes[key], dtype=tf.int32)
-            return self._resize_to_shape(tensor, target_shape, interpolation[key])
-
-        self.apply_to_present_keys(
-            bundle,
-            apply_inverse_spacing,
+        self._restore_with_shape_resize(
+            bundle=bundle,
             keys=params.get("keys", []),
+            original_shapes=original_shapes,
+            interpolation=interpolation,
         )
-        bundle.meta["pixdim"] = tf.cast(original_spacing, tf.float32)
+        bundle.meta["pixdim"] = ops.cast(original_spacing, "float32")
         if original_affine is not None:
-            bundle.meta["affine"] = tf.cast(original_affine, tf.float32)
+            bundle.meta["affine"] = ops.cast(original_affine, "float32")
         return bundle
 
     def _validate_bundle_is_3d(self, bundle: TensorBundle) -> None:
@@ -372,6 +327,17 @@ class Spacing(KeyedTransform, InvertibleTransform):
             if key not in bundle.data:
                 continue
             tensor = bundle.data[key]
+            try:
+                validate_tensor_matches_layout(
+                    tensor,
+                    self.input_layout,
+                    transform_name=type(self).__name__,
+                )
+            except ValueError as error:
+                raise ValueError(
+                    f"{type(self).__name__} supports only 3D channel-last tensors shaped "
+                    f"(D, H, W, C). Key '{key}' has shape {tensor.shape}."
+                ) from error
             spatial_rank = get_spatial_rank(tensor)
             if spatial_rank != 3:
                 raise ValueError(
@@ -380,29 +346,27 @@ class Spacing(KeyedTransform, InvertibleTransform):
                     f"{spatial_rank}."
                 )
 
-    def get_spacing_from_affine(self, affine: tf.Tensor) -> tf.Tensor:
+    def get_spacing_from_affine(self, affine: Any) -> Any:
         """Calculate voxel spacing from a 4x4 affine matrix."""
         return spacing_from_affine(affine)
 
     def spacing_resample(
         self,
-        tensor: tf.Tensor,
-        original_spacing: tf.Tensor,
-        desired_spacing: tf.Tensor,
+        tensor: Any,
+        original_spacing: Any,
+        desired_spacing: Any,
         interpolation: str,
-    ) -> tf.Tensor:
+    ) -> Any:
         """Resample one 3D tensor to the desired physical spacing."""
-        scale = tf.cast(original_spacing, tf.float32) / tf.cast(desired_spacing, tf.float32)
-        original_shape = tf.cast(tf.shape(tensor)[:3], tf.float32)
-        new_shape = tf.maximum(
-            tf.cast(round_half_up(original_shape * scale), tf.int32),
+        scale = ops.cast(original_spacing, "float32") / ops.cast(desired_spacing, "float32")
+        original_shape = ops.cast(ops.shape(tensor)[:3], "float32")
+        new_shape = ops.maximum(
+            ops.cast(round_half_up(original_shape * scale), "int32"),
             1,
         )
         return self._resize_to_shape(tensor, new_shape, interpolation)
 
-    def _resize_to_shape(
-        self, tensor: tf.Tensor, spatial_shape: tf.Tensor, interpolation: str
-    ) -> tf.Tensor:
+    def _resize_to_shape(self, tensor: Any, spatial_shape: Any, interpolation: str) -> Any:
         tensor = tensor[None, ...]
         resized = resize_volumes(
             tensor,
@@ -413,6 +377,99 @@ class Spacing(KeyedTransform, InvertibleTransform):
             align_corners=False,
         )
         return resized[0]
+
+    def _restore_with_affine_resample(
+        self,
+        bundle: TensorBundle,
+        keys: Sequence[str],
+        original_shapes: Mapping[str, Sequence[int] | Any],
+        interpolation: Mapping[str, str],
+        original_affine: Any,
+        output_affine: Any,
+    ) -> None:
+        """Restore tensors with full affine-aware resampling."""
+        grouped = self._group_restore_targets(bundle, keys, original_shapes, interpolation)
+        if grouped is not None:
+            tensors_by_shape, interpolation_by_shape = grouped
+            for shape_key, tensors in tensors_by_shape.items():
+                output_shape = ops.convert_to_tensor(shape_key, dtype="int32")
+                restored = self._spatial_resample.resample_many(
+                    tensors=tensors,
+                    src_affine=output_affine,
+                    dst_affine=original_affine,
+                    output_shape=output_shape,
+                    interpolation=interpolation_by_shape[shape_key],
+                    padding_mode="constant",
+                    fill_value=0.0,
+                )
+                for key, value in restored.items():
+                    bundle.data[key] = value
+            return
+
+        for key in keys:
+            if key not in bundle.data:
+                if self.allow_missing_keys:
+                    continue
+                raise KeyError(f"Key '{key}' not found in input data.")
+            if key not in original_shapes:
+                continue
+            bundle.data[key] = self._spatial_resample(
+                tensor=bundle.data[key],
+                src_affine=output_affine,
+                dst_affine=original_affine,
+                output_shape=ops.convert_to_tensor(original_shapes[key], dtype="int32"),
+                interpolation=interpolation[key],
+                padding_mode="constant",
+                fill_value=0.0,
+            )
+
+    def _restore_with_shape_resize(
+        self,
+        bundle: TensorBundle,
+        keys: Sequence[str],
+        original_shapes: Mapping[str, Sequence[int] | Any],
+        interpolation: Mapping[str, str],
+    ) -> None:
+        """Restore tensors with shape-only resizing when affine resampling is unnecessary."""
+
+        def apply_inverse_spacing(tensor: Any, key: str) -> Any:
+            if key not in original_shapes:
+                return tensor
+            target_shape = ops.convert_to_tensor(original_shapes[key], dtype="int32")
+            return self._resize_to_shape(tensor, target_shape, interpolation[key])
+
+        self.apply_to_present_keys(bundle, apply_inverse_spacing, keys=keys)
+
+    def _group_restore_targets(
+        self,
+        bundle: TensorBundle,
+        keys: Sequence[str],
+        original_shapes: Mapping[str, Sequence[int] | Any],
+        interpolation: Mapping[str, str],
+    ) -> tuple[dict[tuple[int, ...], dict[str, Any]], dict[tuple[int, ...], dict[str, str]]] | None:
+        """Group inverse targets by static output shape when available."""
+        tensors_by_shape: dict[tuple[int, ...], dict[str, Any]] = {}
+        interpolation_by_shape: dict[tuple[int, ...], dict[str, str]] = {}
+
+        for key in keys:
+            if key not in bundle.data:
+                if self.allow_missing_keys:
+                    continue
+                raise KeyError(f"Key '{key}' not found in input data.")
+            if key not in original_shapes:
+                continue
+            target_shape = original_shapes[key]
+            if isinstance(target_shape, (list, tuple)):
+                static_shape = target_shape
+            else:
+                return None
+            if static_shape is None:
+                return None
+            shape_key = tuple(int(v) for v in static_shape)
+            tensors_by_shape.setdefault(shape_key, {})[key] = bundle.data[key]
+            interpolation_by_shape.setdefault(shape_key, {})[key] = interpolation[key]
+
+        return tensors_by_shape, interpolation_by_shape
 
     def _get_last_spacing_trace(self, bundle: TensorBundle) -> dict | None:
         return _pop_last_transform_trace(bundle, type(self).__name__)

@@ -33,18 +33,14 @@ print(f"medicai version: {medicai.version()}")
 ## Transformations
 
 `medicai.transforms` is designed for medical imaging workflows and is
-implemented with TensorFlow-compatible operations for volumetric data.
+implemented with backend-native Keras operations for volumetric data.
 
 ```{eval-rst}
 .. note::
 
-   Volumetric transforms in ``medicai.transforms`` currently depend on
-   TensorFlow operations and therefore require the ``tensorflow`` package
-   to be installed, regardless of the selected Keras backend.
-
-   This requirement only applies to the transform pipeline. Model training
-   and inference can still use any supported backend, including ``torch``
-   and ``jax`` without forcing you to train with TensorFlow.
+   Volumetric transforms in ``medicai.transforms`` use ``keras.ops`` and run
+   with the selected Keras backend, including ``tensorflow``, ``torch``, and
+   ``jax``.
 
    The transforms can be integrated into a variety of data loading workflows,
    including:
@@ -53,9 +49,8 @@ implemented with TensorFlow-compatible operations for volumetric data.
    - ``keras.utils.PyDataset`` by converting samples to ``numpy``
    - ``torch.utils.data.Dataset`` and ``DataLoader`` by converting samples to ``numpy``
 
-   In other words, TensorFlow is required for executing the transforms, but
-   it does not restrict the backend used for model development, training,
-   or inference.
+   The appropriate conversion at the data-loader boundary depends on the
+   selected backend and data-loading API.
 ```
 
 Example preprocessing pipeline:

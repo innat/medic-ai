@@ -382,7 +382,7 @@ class GradCAM(BaseCAM):
     Args:
         model: The Keras model to analyze.
         target_layer: The name of the convolutional layer whose feature maps will be used.
-        task_type: Specifies the type of task. Can be "auto", "classification", or "segmentation". 
+        task_type: Specifies the type of task. Can be "auto", "classification", or "segmentation".
             If "auto", it is inferred from the model's output shape.
 
     Raises:

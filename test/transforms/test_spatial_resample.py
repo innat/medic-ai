@@ -1,6 +1,5 @@
 import numpy as np
 import pytest
-import tensorflow as tf
 from keras import ops
 
 from medicai.transforms.utils import SpatialResample, build_affine
@@ -8,6 +7,10 @@ from medicai.transforms.utils import SpatialResample, build_affine
 
 def as_tensor(array, dtype=None):
     return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
+
+
+def as_numpy(tensor, dtype=None):
+    return np.asarray(ops.convert_to_numpy(tensor), dtype=dtype)
 
 
 @pytest.mark.unit
@@ -24,8 +27,8 @@ def test_spatial_resample_identity_nearest_returns_same_volume():
     )
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(resampled),
-        ops.convert_to_numpy(tensor),
+        as_numpy(resampled),
+        as_numpy(tensor),
         rtol=1e-6,
     )
 
@@ -44,8 +47,8 @@ def test_spatial_resample_identity_trilinear_returns_same_volume():
     )
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(resampled),
-        ops.convert_to_numpy(tensor),
+        as_numpy(resampled),
+        as_numpy(tensor),
         rtol=1e-6,
     )
 
@@ -74,30 +77,10 @@ def test_spatial_resample_upscales_with_destination_spacing_change():
     )
 
     assert tuple(ops.shape(resampled)) == (4, 4, 4, 1)
-    np.testing.assert_allclose(ops.convert_to_numpy(resampled)[0, 0, 0, 0], 0.0)
-    np.testing.assert_allclose(ops.convert_to_numpy(resampled)[2, 2, 2, 0], 7.0)
-    np.testing.assert_allclose(ops.convert_to_numpy(resampled)[3, 3, 3, 0], -1.0)
-
-
-@pytest.mark.unit
-def test_spatial_resample_runs_under_tf_function():
-    tensor = as_tensor(np.arange(8, dtype=np.float32).reshape(2, 2, 2, 1))
-    affine = as_tensor(np.eye(4, dtype=np.float32))
-    resample = SpatialResample()
-
-    @tf.function
-    def apply(x, a):
-        return resample(
-            tensor=x,
-            src_affine=a,
-            dst_affine=a,
-            output_shape=as_tensor([2, 2, 2], dtype="int32"),
-            interpolation="nearest",
-        )
-
-    out = apply(tensor, affine)
-
-    np.testing.assert_allclose(ops.convert_to_numpy(out), ops.convert_to_numpy(tensor), rtol=1e-6)
+    resampled_np = as_numpy(resampled)
+    np.testing.assert_allclose(resampled_np[0, 0, 0, 0], 0.0)
+    np.testing.assert_allclose(resampled_np[2, 2, 2, 0], 7.0)
+    np.testing.assert_allclose(resampled_np[3, 3, 3, 0], -1.0)
 
 
 @pytest.mark.unit
@@ -121,8 +104,8 @@ def test_spatial_resample_chunked_matches_single_pass_output():
     )
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(chunked),
-        ops.convert_to_numpy(full),
+        as_numpy(chunked),
+        as_numpy(full),
         rtol=1e-6,
     )
 
@@ -158,9 +141,5 @@ def test_spatial_resample_many_matches_individual_calls():
         interpolation={"image": "trilinear", "label": "nearest"},
     )
 
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(batched["image"]), ops.convert_to_numpy(image_out), rtol=1e-6
-    )
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(batched["label"]), ops.convert_to_numpy(label_out), rtol=1e-6
-    )
+    np.testing.assert_allclose(as_numpy(batched["image"]), as_numpy(image_out), rtol=1e-6)
+    np.testing.assert_allclose(as_numpy(batched["label"]), as_numpy(label_out), rtol=1e-6)

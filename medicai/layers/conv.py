@@ -16,29 +16,29 @@ def ConvBnAct(
     name="",
 ):
     """
-    This helper creates a lightweight configurable convolutional block commonly used in CNN architectures. 
-    The block dynamically supports both ``2D`` and ``3D`` inputs by automatically detecting the 
+    This helper creates a lightweight configurable convolutional block commonly used in CNN architectures.
+    The block dynamically supports both ``2D`` and ``3D`` inputs by automatically detecting the
     spatial dimensionality from the input tensor. The operation order is:
 
-    1. Convolution 
-    2. Normalization (**optional**) 
+    1. Convolution
+    2. Normalization (**optional**)
     3. Activation (**optional**)
 
-    Bias is automatically disabled in the convolution layer when a normalization layer is used, 
+    Bias is automatically disabled in the convolution layer when a normalization layer is used,
     since normalization already introduces learnable affine parameters.
 
-    Args: 
-        filters (int): Number of convolution output channels. kernel_size (int or tuple, 
-            optional): Size of the convolution kernel. Defaults to ``3``. 
-        strides (int or tuple, optional): Convolution stride value. Defaults to ``1``. 
-        padding (str, optional): Padding mode for convolution. Common options are ``"same"`` 
-            and ``"valid"``. Defaults to ``"same"``. 
-        normalization (str or None, optional): Type of normalization layer to apply after 
-            convolution. Examples include ``"batch"``, ``"layer"``, etc. If ``None``, 
-            normalization is skipped. Defaults to ``"batch"``. 
-        activation (str or None, optional): Activation function applied after normalization. 
-            Examples include ``"relu"``, ``"gelu"``, ``"swish"``, etc. If ``None``, 
-            activation is skipped. Defaults to ``"relu"``. 
+    Args:
+        filters (int): Number of convolution output channels. kernel_size (int or tuple,
+            optional): Size of the convolution kernel. Defaults to ``3``.
+        strides (int or tuple, optional): Convolution stride value. Defaults to ``1``.
+        padding (str, optional): Padding mode for convolution. Common options are ``"same"``
+            and ``"valid"``. Defaults to ``"same"``.
+        normalization (str or None, optional): Type of normalization layer to apply after
+            convolution. Examples include ``"batch"``, ``"layer"``, etc. If ``None``,
+            normalization is skipped. Defaults to ``"batch"``.
+        activation (str or None, optional): Activation function applied after normalization.
+            Examples include ``"relu"``, ``"gelu"``, ``"swish"``, etc. If ``None``,
+            activation is skipped. Defaults to ``"relu"``.
         name (str, optional): Prefix used for internal layer naming. Defaults to ``""``.
 
     Example:
@@ -49,9 +49,9 @@ def ConvBnAct(
 
             x = np.random.randn(1, 128, 128, 3).astype(np.float32)
             y = ConvBnAct(
-                filters=64, 
-                kernel_size=3, 
-                strides=2, 
+                filters=64,
+                kernel_size=3,
+                strides=2,
                 activation="relu"
             )(x)
             print(y.shape) # (1, 64, 64, 64)
@@ -63,8 +63,8 @@ def ConvBnAct(
 
             x = np.random.randn(1, 64, 128, 128, 3).astype(np.float32)
             y = ConvBnAct(
-                filters=64, 
-                kernel_size=3, 
+                filters=64,
+                kernel_size=3,
                 strides=2,
                 activation=None,
                 normalization=None
@@ -72,13 +72,13 @@ def ConvBnAct(
             print(y.shape) # (1, 32, 64, 64, 64)
 
     Returns:
-        ``Callable``: A function ``apply(x)`` that accepts a ``keras.KerasTensor`` and returns 
-        a ``keras.KerasTensor`` of shape ``(batch, *spatial_dims, filters)``, where 
-        ``spatial_dims`` are determined by the stride and padding applied to the input 
+        ``Callable``: A function ``apply(x)`` that accepts a ``keras.KerasTensor`` and returns
+        a ``keras.KerasTensor`` of shape ``(batch, *spatial_dims, filters)``, where
+        ``spatial_dims`` are determined by the stride and padding applied to the input
         spatial dimensions.
 
     Raises:
-        ValueError: If the input tensor ``x`` does not have a rank of ``4`` (2D) or 
+        ValueError: If the input tensor ``x`` does not have a rank of ``4`` (2D) or
             ``5`` (3D), i.e., spatial dimensionality is neither ``2`` nor ``3``.
     """
 
@@ -122,9 +122,9 @@ class DepthwiseConv3D(layers.Conv3D):
     each input channel is convolved independently using its own spatial
     kernel. Unlike a standard ``Conv3D`` layer, which mixes information
     across channels, this layer preserves channel-wise separation and
-    only increases channels via ``depth_multiplier``. This design significantly 
-    reduces computational cost while retaining strong spatial feature extraction 
-    capability, making it suitable for lightweight 3D CNN architectures. The output 
+    only increases channels via ``depth_multiplier``. This design significantly
+    reduces computational cost while retaining strong spatial feature extraction
+    capability, making it suitable for lightweight 3D CNN architectures. The output
     channels are computed as: ``output_channels = input_channels × depth_multiplier``
 
     Args:
@@ -166,17 +166,17 @@ class DepthwiseConv3D(layers.Conv3D):
                 depth_multiplier=2
             )(x)
             print(y.shape) # (1, 16, 64, 64, 6)
-    
+
     Returns:
-        ``keras.KerasTensor``: Output tensor of shape 
+        ``keras.KerasTensor``: Output tensor of shape
         ``(batch, d_out, h_out, w_out, input_channels × depth_multiplier)``,
-        where the spatial dimensions ``d_out``, ``h_out``, and ``w_out`` depend 
-        on the input shape, ``kernel_size``, ``strides``, ``padding``, and 
+        where the spatial dimensions ``d_out``, ``h_out``, and ``w_out`` depend
+        on the input shape, ``kernel_size``, ``strides``, ``padding``, and
         ``dilation_rate``.
 
     Raises:
-        ValueError: If the channel dimension of the input tensor is ``None`` 
-            (i.e., undefined at build time), since the number of depthwise 
+        ValueError: If the channel dimension of the input tensor is ``None``
+            (i.e., undefined at build time), since the number of depthwise
             filters cannot be inferred.
     """
 
@@ -311,7 +311,7 @@ class SeparableConv3D(layers.Layer):
 
     Example:
         .. code-block:: python
-    
+
             import numpy as np
             from medicai.layers import SeparableConv3D
 
@@ -517,7 +517,7 @@ class AtrousSpatialPyramidPooling(layers.Layer):
                 num_channels=256,
             )(x)
             print(y.shape) # (1, 224, 224, 256)
- 
+
     Returns:
         ``keras.KerasTensor``: Output tensor of shape
         ``(batch, *spatial_dims, num_channels)``, where ``spatial_dims``
@@ -653,9 +653,7 @@ class AtrousSpatialPyramidPooling(layers.Layer):
             interpolation="bilinear" if spatial_dims == 2 else "trilinear",
             name="pool_resize",
         )
-        pool_resize_input = (
-            input_shape[:1] + (1,) * spatial_dims + (self.num_channels,)
-        )
+        pool_resize_input = input_shape[:1] + (1,) * spatial_dims + (self.num_channels,)
         self._pool_resize.build(pool_resize_input)
 
         self.built = True

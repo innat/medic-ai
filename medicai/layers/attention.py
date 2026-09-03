@@ -13,10 +13,10 @@ from medicai.utils.model_utils import (
 
 class AttentionGate(keras.layers.Layer):
     """
-    Attention Gate layer used in Attention U-Net architectures. The purpose of 
-    an Attention Gate is to selectively emphasize relevant spatial regions from 
-    encoder skip connections before merging them into the decoder pathway. Instead 
-    of directly passing all encoder features, the gate suppresses irrelevant background 
+    Attention Gate layer used in Attention U-Net architectures. The purpose of
+    an Attention Gate is to selectively emphasize relevant spatial regions from
+    encoder skip connections before merging them into the decoder pathway. Instead
+    of directly passing all encoder features, the gate suppresses irrelevant background
     information and highlights task-relevant regions. The layer receives one list of
     two inputs:
 
@@ -57,7 +57,7 @@ class AttentionGate(keras.layers.Layer):
 
             x = np.random.randn(1, 128, 128, 64).astype(np.float32)
             g = np.random.randn(1, 64, 64, 128).astype(np.float32)
-            gate = AttentionGate(filters=32) 
+            gate = AttentionGate(filters=32)
             y = gate([x, g])
             print(y.shape) # (1, 128, 128, 64)
 
@@ -164,23 +164,23 @@ class AttentionGate(keras.layers.Layer):
 
 class SqueezeExcitation(keras.layers.Layer):
     """
-    Squeeze-and-Excitation (SE) block. The purpose of the SE block is to improve 
-    feature representation by adaptively recalibrating channel-wise feature responses. 
-    Instead of treating all feature channels equally, the SE block learns which 
-    channels are more important and scales them accordingly. The mechanism consists of 
-    two main operations: 
+    Squeeze-and-Excitation (SE) block. The purpose of the SE block is to improve
+    feature representation by adaptively recalibrating channel-wise feature responses.
+    Instead of treating all feature channels equally, the SE block learns which
+    channels are more important and scales them accordingly. The mechanism consists of
+    two main operations:
 
-    1. **Squeeze**: Global spatial information is aggregated using global average pooling, producing a compact channel descriptor. 
-    2. **Excitation**: The pooled descriptor is passed through two lightweight fully-connected transformations (implemented here using ``1x1`` or ``1x1x1`` convolutions) to learn channel-wise attention weights. 
-    
+    1. **Squeeze**: Global spatial information is aggregated using global average pooling, producing a compact channel descriptor.
+    2. **Excitation**: The pooled descriptor is passed through two lightweight fully-connected transformations (implemented here using ``1x1`` or ``1x1x1`` convolutions) to learn channel-wise attention weights.
+
     Finally, the learned channel attention weights are multiplied with the original input tensor, emphasizing informative channels and suppressing less useful ones.
 
-    Args: 
-        ratio (int): Reduction ratio used to decrease channel dimensionality inside the 
-            excitation bottleneck. A larger ratio reduces parameter count and 
-            computational cost. Defaults to ``16``. 
-        activation (str): Activation function used in the intermediate excitation 
-            layer. Defaults to ``"relu"``. 
+    Args:
+        ratio (int): Reduction ratio used to decrease channel dimensionality inside the
+            excitation bottleneck. A larger ratio reduces parameter count and
+            computational cost. Defaults to ``16``.
+        activation (str): Activation function used in the intermediate excitation
+            layer. Defaults to ``"relu"``.
         **kwargs: Additional keyword arguments passed to ``keras.layers.Layer``.
 
 
@@ -191,9 +191,9 @@ class SqueezeExcitation(keras.layers.Layer):
             from medicai.layers import SqueezeExcitation
 
             x = np.random.randn(1, 128, 128, 64).astype(np.float32)
-            se_block = SqueezeExcitation(ratio=16) 
+            se_block = SqueezeExcitation(ratio=16)
             y = se_block(x)
-            print(y.shape) # (1, 128, 128, 64) 
+            print(y.shape) # (1, 128, 128, 64)
 
     Returns:
         keras.KerasTensor: Output tensor of the same shape as the input
@@ -208,6 +208,7 @@ class SqueezeExcitation(keras.layers.Layer):
             explicit guard if a minimum bottleneck size larger than
             ``1`` is required.
     """
+
     def __init__(self, ratio=16, activation="relu", **kwargs):
         super().__init__(**kwargs)
         self.ratio = ratio
@@ -277,27 +278,27 @@ class UniformSqrtDim(initializers.Initializer):
 
 class EfficientPairedAttention(keras.layers.Layer):
     """
-    Efficient Paired Attention (EPA) layer from the ``UNETR++`` architecture. This layer 
-    combines channel attention and spatial attention into a computationally efficient 
-    dual-attention mechanism for transformer-based medical image segmentation. EPA computes 
+    Efficient Paired Attention (EPA) layer from the ``UNETR++`` architecture. This layer
+    combines channel attention and spatial attention into a computationally efficient
+    dual-attention mechanism for transformer-based medical image segmentation. EPA computes
     two complementary attention branches:
 
-    1. **Channel Attention (CA)**: Learns relationships across feature channels to enhance semantic feature interactions. 
-    2. **Spatial Attention (SA)**: Learns spatial dependencies between sequence tokens using a reduced token representation for improved efficiency. 
-    
-    Unlike standard self-attention, EPA reduces the computational cost of spatial attention 
-    by projecting the original sequence length ``N -> K``, where ``K`` is significantly 
-    smaller than ``N``. This allows the model to capture long-range spatial interactions 
-    while reducing memory and computation requirements. 
-    
-    The layer uses: 
+    1. **Channel Attention (CA)**: Learns relationships across feature channels to enhance semantic feature interactions.
+    2. **Spatial Attention (SA)**: Learns spatial dependencies between sequence tokens using a reduced token representation for improved efficiency.
 
-    1. Shared ``query`` and ``key`` projections 
-    2. Separate value projections for channel and spatial attention 
-    3. Learnable temperature parameters for scaling attention logits 
-    4. Dropout regularization for both attention branches 
-    
-    The outputs from channel attention and spatial attention are combined through 
+    Unlike standard self-attention, EPA reduces the computational cost of spatial attention
+    by projecting the original sequence length ``N -> K``, where ``K`` is significantly
+    smaller than ``N``. This allows the model to capture long-range spatial interactions
+    while reducing memory and computation requirements.
+
+    The layer uses:
+
+    1. Shared ``query`` and ``key`` projections
+    2. Separate value projections for channel and spatial attention
+    3. Learnable temperature parameters for scaling attention logits
+    4. Dropout regularization for both attention branches
+
+    The outputs from channel attention and spatial attention are combined through
     element-wise summation.
 
     Args:
@@ -321,14 +322,14 @@ class EfficientPairedAttention(keras.layers.Layer):
 
             x = np.random.randn(2, 64, 128).astype(np.float32)
             epa_block = EfficientPairedAttention(
-                sequence_length=64, 
-                hidden_size=128, 
+                sequence_length=64,
+                hidden_size=128,
                 spatial_reduced_tokens=16,
                 num_heads=4,
             )
             y = epa_block(x)
             print(y.shape) # (2, 64, 128)
-    
+
     Returns:
         keras.KerasTensor: Output tensor of the same shape as the input
         ``(batch, sequence_length, hidden_size)``, computed as the

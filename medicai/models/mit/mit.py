@@ -617,6 +617,7 @@ class MixViTB5(MiTBase, DescribeMixin):
             **kwargs,
         )
 
+
 MIT_DOCSTRING = """
 {name} model for classification, supporting both 2D and 3D inputs.
 

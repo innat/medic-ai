@@ -4,22 +4,37 @@ import inspect
 import itertools
 from typing import Any, Mapping, Sequence
 
+import keras
 import numpy as np
-import tensorflow as tf
+from keras import ops
 
 from .tensor_bundle import TensorBundle
 
 
+def _as_tensor_like(value: Any) -> Any:
+    """Convert tensor-like numeric values to backend-aware tensors when practical."""
+    if isinstance(value, (np.ndarray, np.generic, list, tuple, int, float, bool)):
+        try:
+            return ops.convert_to_tensor(value)
+        except (TypeError, ValueError):
+            return value
+    return value
+
+
 def _convert_numpy_mapping(mapping: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Convert top-level NumPy arrays in a mapping to TensorFlow tensors."""
+    """Convert top-level tensor-like values in a mapping to tensors when possible."""
     if mapping is None:
         return {}
 
     converted = dict(mapping)
     for key, value in converted.items():
-        if isinstance(value, np.ndarray):
-            converted[key] = tf.convert_to_tensor(value)
+        converted[key] = _as_tensor_like(value)
     return converted
+
+
+def _is_tensor_like(value: Any) -> bool:
+    """Return whether a value behaves like a backend tensor for control flow."""
+    return hasattr(value, "shape") and not isinstance(value, (np.ndarray, np.generic))
 
 
 def ensure_tensor_bundle(
@@ -49,18 +64,41 @@ def ensure_tensor_bundle(
     return TensorBundle(_convert_numpy_mapping(inputs), _convert_numpy_mapping(meta))
 
 
-def _trace_applied_to_bool(applied: tf.Tensor | bool) -> bool:
+def _trace_applied_to_bool(applied: Any | bool) -> bool:
     """Convert a trace `applied` flag into a Python bool when possible."""
     if isinstance(applied, bool):
         return applied
-    if tf.is_tensor(applied):
-        static_value = tf.get_static_value(tf.cast(applied, tf.bool))
+    if _is_tensor_like(applied):
+        static_value = _get_static_tensor_value(ops.cast(applied, "bool"))
         if static_value is None:
             raise ValueError(
                 "Cannot evaluate a symbolic `applied` trace flag outside eager execution."
             )
         return bool(static_value)
     return bool(applied)
+
+
+def _apply_if_applied(
+    applied: Any | bool,
+    true_fn,
+    false_fn,
+):
+    """Run one of two callbacks based on an eager or symbolic `applied` flag.
+
+    Args:
+        applied: Boolean-like trace flag, either a Python bool or TensorFlow
+            scalar tensor.
+        true_fn: Callback executed when the flag evaluates to ``True``.
+        false_fn: Callback executed when the flag evaluates to ``False``.
+
+    Returns:
+        The value returned by whichever callback is selected.
+    """
+    if _is_tensor_like(applied):
+        return ops.cond(ops.cast(applied, "bool"), true_fn, false_fn)
+    if _trace_applied_to_bool(applied):
+        return true_fn()
+    return false_fn()
 
 
 def _pop_last_transform_trace(
@@ -106,10 +144,30 @@ def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str,
     return normalized
 
 
+def _get_static_tensor_value(value: Any) -> Any:
+    """Return a Python-visible concrete value for a backend tensor when available.
+
+    Keras Ops does not expose symbolic static-value extraction. Converting to
+    NumPy is sufficient for eager/concrete values and fails safely for symbolic
+    tensors, which preserves the caller's existing error handling.
+
+    This helper is intended for small scalar or configuration values used by
+    validation, not runtime tensor data or hot transformation paths. In
+    ``tf.data`` or other graph execution, symbolic tensors return ``None``;
+    callers must keep the fallback path backend operations rather than relying
+    on Python or NumPy control flow. For eager device tensors, conversion may
+    synchronize the device and copy data to the host.
+    """
+    try:
+        return ops.convert_to_numpy(value)
+    except (AttributeError, TypeError, ValueError, RuntimeError):
+        return None
+
+
 def _require_static_value(value: Any, name: str) -> Any:
-    """Convert a TensorFlow scalar/tensor to a Python-visible value when possible."""
-    if tf.is_tensor(value):
-        static_value = tf.get_static_value(value)
+    """Convert a backend scalar/tensor to a Python-visible value when possible."""
+    if _is_tensor_like(value):
+        static_value = _get_static_tensor_value(value)
         if static_value is None:
             raise ValueError(
                 f"`{name}` must be statically knowable when used in this transform. "
@@ -126,8 +184,23 @@ def _require_static_value(value: Any, name: str) -> Any:
     return value
 
 
+def _normalize_random_dtype(dtype: Any) -> str:
+    """Normalize dtype values for Keras random ops across backends.
+
+    Keras random APIs accept backend-neutral dtype descriptors such as
+    ``"float32"`` and ``"int32"``. Passing TensorFlow dtype objects directly
+    can fail under non-TensorFlow backends, especially JAX.
+    """
+    try:
+        return keras.backend.standardize_dtype(dtype)
+    except (AttributeError, TypeError, ValueError):
+        if hasattr(dtype, "name"):
+            return str(dtype.name)
+        return str(dtype)
+
+
 class Transform:
-    """Base class for Medic-AI transforms.
+    """Base class for ``medicai`` transforms.
 
     ``Transform`` is the root abstraction of ``medicai.transforms``.
     Subclasses implement :meth:`apply` and receive a normalized
@@ -137,6 +210,12 @@ class Transform:
     This keeps input normalization, trace helpers, and inversion-related
     conventions in one place while allowing concrete transforms to focus on
     their transformation logic.
+
+    Reusability:
+        ``Transform`` is bundle-oriented rather than sample-rank-oriented. It
+        can be used for sample-only transforms, dual-mode transforms, or
+        orchestration helpers as long as the subclass explicitly validates the
+        tensor layout it expects.
 
     When to use this:
         Use ``Transform`` when a custom transform needs to inspect or update
@@ -150,16 +229,16 @@ class Transform:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import TensorBundle, Transform
 
             class MarkSample(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     bundle["processed"] = True
-                    bundle["image"] = tf.identity(bundle["image"])
+                    bundle["image"] = ops.convert_to_tensor(bundle["image"])
                     return bundle
 
-            image = tf.random.normal((64, 64, 1))
+            image = ops.ones((64, 64, 1))
             output = MarkSample()({"image": image})
             print(output["processed"])
     """
@@ -210,7 +289,7 @@ class Transform:
         self,
         *,
         params: Mapping[str, Any] | None = None,
-        applied: tf.Tensor | bool = True,
+        applied: Any | bool = True,
         random: bool = False,
         invertible: bool | None = None,
         kernel: str | None = None,
@@ -224,7 +303,7 @@ class Transform:
         Args:
             params: Optional transform-specific metadata to store.
             applied: Whether the transform was actually applied. Random
-                transforms may store this as a TensorFlow boolean tensor.
+                transforms may store this as a backend boolean tensor.
             random: Whether the transform is stochastic.
             invertible: Optional override for the invertibility flag. When
                 omitted, the transform's ``invertible`` property is used.
@@ -248,38 +327,50 @@ class Transform:
 
 
 class RandomTransform(Transform):
-    """Base class for random TensorFlow-native transforms.
+    """Base class for random backend-neutral transforms.
 
     ``RandomTransform`` adds probability-driven behavior on top of
     :class:`~medicai.transforms.Transform`. It is intended for transforms that
-    sample whether to apply an operation using TensorFlow ops so the transform
-    remains compatible with eager execution, ``tf.function``, and
-    ``tf.data`` pipelines.
+    sample whether to apply an operation using Keras random operations so the
+    transform can run with the configured Keras backend.
 
     Args:
         prob: Probability of applying the random transform. Must be in
             ``[0, 1]``.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``. Integer seeds are normalized to a
+            private seed generator so repeated draws from one transform
+            instance advance deterministically.
 
     When to use this:
         Use ``RandomTransform`` when a transform needs probabilistic behavior
-        implemented with TensorFlow ops so it stays compatible with
-        ``tf.function`` and ``tf.data``. It is most useful as a base for
+        implemented with Keras operations. It is most useful as a base for
         random augmentations that decide whether to apply themselves per
-        sample.
+        sample or batch, according to the concrete transform's contract.
+
+    Current batch semantics:
+        ``RandomTransform`` itself does not enforce per-item or per-batch
+        randomness for batched tensors. Each concrete transform defines that
+        policy. In the current migrated dual-mode wrappers, when
+        a batch layout such as ``"BHWC"`` or ``"BDHWC"`` is supported, one
+        random decision / parameter set is typically sampled for the whole
+        input bundle and then applied consistently across the batch.
+        Per-item batched randomness is planned as a later design step rather
+        than the default today.
 
     Example:
         Build a tiny random transform that adds a bias to ``"image"``:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import RandomTransform, TensorBundle
 
             class RandomAddOne(RandomTransform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     should_apply = self.sample_should_apply()
                     image = bundle["image"]
-                    bundle.data["image"] = tf.cond(
+                    bundle.data["image"] = ops.cond(
                         should_apply,
                         lambda: image + 1.0,
                         lambda: image,
@@ -291,30 +382,135 @@ class RandomTransform(Transform):
                     )
                     return bundle
 
-            image = tf.zeros((32, 32, 1), dtype=tf.float32)
+            image = ops.zeros((32, 32, 1), dtype="float32")
             output = RandomAddOne(prob=0.5)({"image": image})
             result = output['image']
+
+        Use a fixed integer seed for deterministic replay across fresh
+        transform instances:
+
+        .. code-block:: python
+
+            from keras import ops
+            from medicai.transforms import RandomTransform, TensorBundle
+
+            class RandomBias(RandomTransform):
+                def apply(self, bundle: TensorBundle) -> TensorBundle:
+                    bias = self.random_uniform(
+                        shape=(),
+                        minval=-1.0,
+                        maxval=1.0,
+                        dtype="float32",
+                    )
+                    bundle["bias"] = bias
+                    return bundle
+
+            image = ops.zeros((8, 8, 1), dtype="float32")
+            first = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
+            second = RandomBias(prob=1.0, seed=7)(TensorBundle({"image": image}))
+            print(
+                ops.convert_to_numpy(first["bias"])
+                == ops.convert_to_numpy(second["bias"])
+            )
     """
 
-    def __init__(self, prob: float = 0.1):
+    def __init__(
+        self,
+        prob: float = 0.1,
+        seed: int | keras.random.SeedGenerator | None = None,
+    ):
         if not 0.0 <= prob <= 1.0:
             raise ValueError(f"`prob` must be in the range [0, 1]. Received {prob}.")
         self.prob = prob
+        self.seed = seed
+        self.seed_generator = self._normalize_seed(seed)
 
-    def sample_should_apply(self) -> tf.Tensor:
+    def sample_should_apply(self):
         """Sample whether the random transform should be applied.
 
         Returns:
-            tf.Tensor: A scalar boolean tensor indicating whether the random
-            transform should execute for the current sample.
+            Tensor-like object: A scalar boolean value indicating whether the
+            random transform should execute for the current sample.
         """
-        return tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
+        return self.random_uniform(shape=(), minval=0.0, maxval=1.0, dtype="float32") < self.prob
+
+    def random_uniform(
+        self,
+        *,
+        shape: Sequence[int] | tuple | list,
+        minval: float | int = 0.0,
+        maxval: float | int = 1.0,
+        dtype: Any = "float32",
+    ):
+        """Sample from a uniform distribution using the transform seed stream."""
+        return keras.random.uniform(
+            shape=shape,
+            minval=minval,
+            maxval=maxval,
+            dtype=_normalize_random_dtype(dtype),
+            seed=self.seed_generator,
+        )
+
+    def random_normal(
+        self,
+        *,
+        shape: Sequence[int] | tuple | list,
+        mean: float = 0.0,
+        stddev: float = 1.0,
+        dtype: Any = "float32",
+    ):
+        """Sample from a normal distribution using the transform seed stream."""
+        return keras.random.normal(
+            shape=shape,
+            mean=mean,
+            stddev=stddev,
+            dtype=_normalize_random_dtype(dtype),
+            seed=self.seed_generator,
+        )
+
+    def random_integers(
+        self,
+        *,
+        shape: Sequence[int] | tuple | list,
+        minval: int,
+        maxval: int,
+        dtype: Any = "int32",
+    ):
+        """Sample integer values using the transform seed stream."""
+        return keras.random.randint(
+            shape=shape,
+            minval=minval,
+            maxval=maxval,
+            dtype=_normalize_random_dtype(dtype),
+            seed=self.seed_generator,
+        )
+
+    @staticmethod
+    def _normalize_seed(
+        seed: int | keras.random.SeedGenerator | None,
+    ) -> keras.random.SeedGenerator | None:
+        """Normalize supported random seed inputs to a Keras seed generator."""
+        if seed is None:
+            return None
+        if isinstance(seed, keras.random.SeedGenerator):
+            return seed
+        if isinstance(seed, bool):
+            raise TypeError(
+                "`seed` must be None, an integer, or keras.random.SeedGenerator. "
+                f"Received {type(seed).__name__}."
+            )
+        if isinstance(seed, int):
+            return keras.random.SeedGenerator(seed)
+        raise TypeError(
+            "`seed` must be None, an integer, or keras.random.SeedGenerator. "
+            f"Received {type(seed).__name__}."
+        )
 
     def record_random_transform(
         self,
         bundle: TensorBundle,
         params: Mapping[str, Any] | None = None,
-        applied: tf.Tensor | bool | None = None,
+        applied: Any | bool | None = None,
         kernel: str | None = None,
     ) -> TensorBundle:
         """Append a random transform trace entry to bundle metadata.
@@ -353,28 +549,16 @@ class RandomChoice(RandomTransform):
     transform to be eligible multiple times, they can include multiple
     instances of that transform in ``transforms``.
 
-    For eager execution, ``RandomChoice`` supports the full API including
-    multi-transform sampling and inverse bookkeeping. Under symbolic graph
-    execution such as ``tf.data`` pipelines, ``RandomChoice`` uses a
-    graph-safe forward path that statically unrolls up to ``max_choices``
-    sequential dispatch steps with ``tf.switch_case``.
+    When its random values are concrete, ``RandomChoice`` supports the full
+    API including multi-transform sampling and inverse bookkeeping. Under
+    symbolic execution, it uses a backend-neutral graph-safe forward path that
+    statically unrolls up to ``max_choices`` sequential dispatch steps with
+    ``ops.cond`` and ``ops.switch``.
 
     This graph-safe path focuses on forward tensor transformation and assumes
     that every candidate transform preserves the same key structure, shape, and
     dtype per key across branches. It does not preserve eager-style wrapper
     trace bookkeeping used for ``inverse()``.
-
-    .. note::
-
-        ``RandomChoice`` currently has two important limitations:
-
-        1. Graph-mode support is intended for forward execution only. Bundles
-           produced through the graph-safe path do not preserve the eager-style
-           wrapper trace bookkeeping needed for reliable ``inverse()`` support.
-        2. Graph-mode transform pools should contain shape-preserving
-           transforms. If candidate transforms return different key
-           structures, dtypes, ranks, or static shapes, TensorFlow branch
-           dispatch may fail under ``tf.function`` / ``tf.data`` tracing.
 
     When to use this:
         Use ``RandomChoice`` when an augmentation pipeline should sample from a
@@ -384,11 +568,22 @@ class RandomChoice(RandomTransform):
 
     Args:
         transforms: Candidate transform objects to sample from.
-        num_choices: Either one integer for an exact number of transforms to
-            apply, or a ``(min, max)`` tuple specifying an inclusive range.
+        num_choices: Controls how many transforms are selected without
+            replacement. An integer selects exactly that many transforms: for
+            example, ``1`` selects one transform and ``2`` selects two
+            different transforms when the pool contains more than two. If the
+            value equals ``len(transforms)``, every transform is selected. A
+            value greater than ``len(transforms)`` raises ``ValueError``. A
+            ``(min, max)`` tuple samples an integer from that inclusive range
+            on each call, then selects that many different transforms. Both
+            bounds must be valid for the transform pool, so ``max`` cannot
+            exceed ``len(transforms)``.
         prob: Probability of applying any sampled transforms at all. When the
             probability gate is not passed, the input is returned unchanged and
             no candidate transform is executed.
+        seed: Optional random seed. Supports ``None``, an integer seed, or a
+            ``keras.random.SeedGenerator``. The seed controls transform-count
+            sampling, transform-order sampling, and weighted selection.
         weights: Optional relative sampling weights aligned with
             ``transforms``. Larger values increase the chance that a transform
             is selected. Weights are interpreted as relative preferences, not
@@ -410,39 +605,39 @@ class RandomChoice(RandomTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import keras
             from medicai.transforms import RandomChoice, RandomRotate, RandomRotate90
 
             transform = RandomChoice(
                 transforms=[
-                    RandomRotate90(keys=["image"], prob=1.0),
-                    RandomRotate(keys=["image"], factor=0.2, prob=1.0),
+                    RandomRotate90(keys=["image"], prob=1.0, input_layout="DHWC"),
+                    RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="DHWC"),
                 ],
                 num_choices=1,
                 prob=1.0,
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
+            image = keras.random.normal((32, 64, 64, 1), seed=7)
             result = transform({"image": image})
 
         Pick between one and two transforms from a pool:
 
         .. code-block:: python
 
-            import tensorflow as tf
+            import keras
             from medicai.transforms import Flip, RandomChoice, ShiftIntensity
 
             transform = RandomChoice(
                 transforms=[
-                    Flip(keys=["image"], spatial_axis=0),
-                    Flip(keys=["image"], spatial_axis=1),
-                    ShiftIntensity(keys=["image"], offset=0.1),
+                    Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+                    ShiftIntensity(keys=["image"], offset=0.1, input_layout="HWC"),
                 ],
                 num_choices=(1, 2),
                 weights=[1.0, 1.0, 0.5],
             )
 
-            image = tf.random.normal((64, 64, 1))
+            image = keras.random.normal((64, 64, 1), seed=7)
             result = transform({"image": image})
     """
 
@@ -452,8 +647,9 @@ class RandomChoice(RandomTransform):
         num_choices: int | tuple[int, int] = 1,
         prob: float = 1.0,
         weights: Sequence[float] | None = None,
+        seed: int | keras.random.SeedGenerator | None = None,
     ):
-        super().__init__(prob=prob)
+        super().__init__(prob=prob, seed=seed)
         self.transforms = tuple(transforms)
         if not self.transforms:
             raise ValueError("`transforms` must contain at least one transform.")
@@ -480,10 +676,24 @@ class RandomChoice(RandomTransform):
         return any(getattr(transform, "invertible", False) for transform in self.transforms)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        if not tf.executing_eagerly():
-            return self._apply_graph_choice(bundle)
-
         should_apply = self.sample_should_apply()
+        try:
+            _trace_applied_to_bool(should_apply)
+        except ValueError:
+            return self._apply_graph_choice(bundle, should_apply=should_apply)
+
+        params = self.get_random_params(bundle, should_apply=should_apply)
+        return self.apply_with_params(bundle, params)
+
+    def get_random_params(
+        self,
+        bundle: TensorBundle,
+        should_apply: Any | None = None,
+    ) -> dict[str, Any]:
+        """Sample eager-mode child-transform selection parameters."""
+        del bundle
+        if should_apply is None:
+            should_apply = self.sample_should_apply()
         should_apply_bool = _trace_applied_to_bool(should_apply)
 
         selected_indices: list[int] = []
@@ -498,60 +708,100 @@ class RandomChoice(RandomTransform):
                 selected_names = [
                     type(self.transforms[index]).__name__ for index in selected_indices
                 ]
-                for index in selected_indices:
-                    bundle = self.transforms[index](bundle)
+
+        return {
+            "selected_indices": list(selected_indices),
+            "selected_names": list(selected_names),
+            "num_choices": (self.min_choices, self.max_choices),
+        }
+
+    def apply_with_params(self, bundle: TensorBundle, params: Mapping[str, Any]) -> TensorBundle:
+        """Apply the sampled eager-mode child-transform sequence."""
+        for index in params["selected_indices"]:
+            bundle = self.transforms[index](bundle)
 
         self.record_random_transform(
             bundle,
-            params={
-                "selected_indices": list(selected_indices),
-                "selected_names": list(selected_names),
-                "num_selected": len(selected_indices),
-                "num_choices": (self.min_choices, self.max_choices),
-            },
-            applied=bool(selected_indices),
+            params=self.build_trace_params(params),
+            applied=bool(params["selected_indices"]),
             kernel="RandomChoice",
         )
         return bundle
 
-    def _apply_graph_choice(self, bundle: TensorBundle) -> TensorBundle:
+    def build_trace_params(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Build random trace metadata for the current choice selection."""
+        return {
+            "selected_indices": list(params["selected_indices"]),
+            "selected_names": list(params["selected_names"]),
+            "num_selected": len(params["selected_indices"]),
+            "num_choices": params["num_choices"],
+        }
+
+    def _apply_graph_choice(
+        self,
+        bundle: TensorBundle,
+        should_apply: Any | None = None,
+    ) -> TensorBundle:
         data_keys = tuple(bundle.data.keys())
         if not data_keys:
             return bundle
 
-        should_apply = self.sample_should_apply()
+        if should_apply is None:
+            should_apply = self.sample_should_apply()
         permutation = self._sample_permutation_graph()
         num_to_apply = self._sample_num_choices()
 
-        def apply_step(current_outputs, step: int):
-            selected_index = permutation[step]
-
-            def make_branch(index: int, current_outputs=current_outputs):
-                def branch():
-                    local_data = {
-                        key: value for key, value in zip(data_keys, current_outputs, strict=True)
-                    }
-                    local_bundle = TensorBundle(local_data, dict(bundle.meta))
-                    output = self.transforms[index](local_bundle)
-                    return tuple(output.data[key] for key in data_keys)
-
-                return branch
-
-            branch_fns = {index: make_branch(index) for index in range(len(self.transforms))}
-            return tf.switch_case(selected_index, branch_fns=branch_fns)
-
         current_outputs = tuple(bundle.data[key] for key in data_keys)
         for step in range(self.max_choices):
-            current_outputs = tf.cond(
-                tf.logical_and(should_apply, tf.constant(step, dtype=tf.int32) < num_to_apply),
-                lambda current_outputs=current_outputs, step=step: apply_step(
-                    current_outputs, step
+            current_outputs = ops.cond(
+                ops.logical_and(should_apply, ops.cast(step, "int32") < num_to_apply),
+                lambda current_outputs=current_outputs, step=step: self._apply_graph_step(
+                    current_outputs,
+                    step,
+                    permutation,
+                    data_keys,
+                    bundle.meta,
                 ),
                 lambda current_outputs=current_outputs: current_outputs,
             )
 
         bundle.data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
         return bundle
+
+    def _apply_graph_step(
+        self,
+        current_outputs: tuple[Any, ...],
+        step: int,
+        permutation: Any,
+        data_keys: tuple[str, ...],
+        meta: Mapping[str, Any],
+    ) -> tuple[Any, ...]:
+        """Apply one graph-safe selection step for ``RandomChoice``."""
+        selected_index = permutation[step]
+        branch_fns = [
+            self._make_graph_branch(index, current_outputs, data_keys, meta)
+            for index in range(len(self.transforms))
+        ]
+        return ops.switch(selected_index, branch_fns)
+
+    def _make_graph_branch(
+        self,
+        index: int,
+        current_outputs: tuple[Any, ...],
+        data_keys: tuple[str, ...],
+        meta: Mapping[str, Any],
+    ):
+        """Build one graph-safe transform branch for ``RandomChoice``."""
+
+        def branch():
+            local_data = {key: value for key, value in zip(data_keys, current_outputs, strict=True)}
+            local_meta = dict(meta)
+            local_meta["applied_transforms"] = list(meta.get("applied_transforms", []))
+            local_bundle = TensorBundle(local_data, local_meta)
+            output = self.transforms[index](local_bundle)
+            return tuple(output.data[key] for key in data_keys)
+
+        return branch
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         if not self.invertible:
@@ -567,14 +817,14 @@ class RandomChoice(RandomTransform):
                 bundle = transform.inverse(bundle)
         return bundle
 
-    def _sample_num_choices(self) -> tf.Tensor:
+    def _sample_num_choices(self):
         if self.min_choices == self.max_choices:
-            return tf.constant(self.min_choices, dtype=tf.int32)
-        return tf.random.uniform(
+            return ops.convert_to_tensor(self.min_choices, dtype="int32")
+        return self.random_integers(
             shape=(),
             minval=self.min_choices,
             maxval=self.max_choices + 1,
-            dtype=tf.int32,
+            dtype="int32",
         )
 
     def _sample_indices(self, num_to_apply: int) -> list[int]:
@@ -585,20 +835,31 @@ class RandomChoice(RandomTransform):
         permutation = _require_static_value(permutation[:num_to_apply], "selected_indices")
         return [int(index) for index in permutation]
 
-    def _sample_permutation_graph(self) -> tf.Tensor:
+    def _sample_permutation_graph(self):
         """Graph-safe unique permutation of transform indices."""
         num_transforms = len(self.transforms)
         if self.weights is None:
-            return tf.random.shuffle(tf.range(num_transforms, dtype=tf.int32))
+            scores = self.random_uniform(
+                shape=(num_transforms,),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            return ops.argsort(-scores, axis=-1)
 
-        weights = tf.convert_to_tensor(self.weights, dtype=tf.float32)
-        uniforms = tf.random.uniform(shape=(num_transforms,), minval=1e-6, maxval=1.0)
-        gumbels = -tf.math.log(-tf.math.log(uniforms))
+        weights = ops.convert_to_tensor(self.weights, dtype="float32")
+        uniforms = self.random_uniform(
+            shape=(num_transforms,),
+            minval=1e-6,
+            maxval=1.0,
+            dtype="float32",
+        )
+        gumbels = -ops.log(-ops.log(uniforms))
         valid = weights > 0.0
-        safe_weights = tf.where(valid, weights, 1e-9)
-        scores = tf.math.log(safe_weights) + gumbels
-        scores = tf.where(valid, scores, -1e9)
-        return tf.argsort(scores, direction="DESCENDING")
+        safe_weights = ops.where(valid, weights, 1e-9)
+        scores = ops.log(safe_weights) + gumbels
+        scores = ops.where(valid, scores, -1e9)
+        return ops.argsort(-scores, axis=-1)
 
     def _normalize_num_choices(self, num_choices: int | tuple[int, int]) -> tuple[int, int]:
         if isinstance(num_choices, int):
@@ -644,6 +905,12 @@ class KeyedTransform(Transform):
         allow_missing_keys: If ``True``, missing keys are skipped. If
             ``False``, missing keys raise ``KeyError``.
 
+    Reusability:
+        ``KeyedTransform`` is also not inherently sample-only. It works for
+        both sample-level and batch-level transforms, provided subclasses make
+        their expected layout explicit through validation such as
+        ``input_layout`` checks.
+
     When to use this:
         Use ``KeyedTransform`` when a transform acts on one or more known data
         entries such as ``"image"``, ``"label"``, or ``"mask"``. This is the
@@ -655,7 +922,7 @@ class KeyedTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import KeyedTransform, TensorBundle
 
             class Multiply(KeyedTransform):
@@ -666,11 +933,11 @@ class KeyedTransform(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor * tf.cast(self.factor, tensor.dtype),
+                        lambda tensor, _: tensor * ops.cast(self.factor, tensor.dtype),
                     )
                     return bundle
 
-            image = tf.ones((16, 16, 1), dtype=tf.float32)
+            image = ops.ones((16, 16, 1), dtype="float32")
             output = Multiply(keys=["image"], factor=2.0)({"image": image})
     """
 
@@ -757,7 +1024,7 @@ class InvertibleTransform(Transform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import (
                 InvertibleTransform, KeyedTransform, TensorBundle
             )
@@ -770,7 +1037,7 @@ class InvertibleTransform(Transform):
                 def apply(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor + tf.cast(self.value, tensor.dtype),
+                        lambda tensor, _: tensor + ops.cast(self.value, tensor.dtype),
                     )
                     self.record_transform(
                         bundle,
@@ -784,11 +1051,11 @@ class InvertibleTransform(Transform):
                 def inverse(self, bundle: TensorBundle) -> TensorBundle:
                     self.apply_to_present_keys(
                         bundle,
-                        lambda tensor, _: tensor - tf.cast(self.value, tensor.dtype),
+                        lambda tensor, _: tensor - ops.cast(self.value, tensor.dtype),
                     )
                     return bundle
 
-            image = tf.ones((8, 8, 1), dtype=tf.float32)
+            image = ops.ones((8, 8, 1), dtype="float32")
             transform = AddValue(keys=["image"], value=5.0)
             forward = transform(TensorBundle({"image": image}))
             restored = transform.inverse(forward)
@@ -853,8 +1120,8 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import LambdaTransform, TensorBundle
+            from keras import ops
+            from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
                 keys=["image"],
@@ -863,7 +1130,7 @@ class LambdaTransform(KeyedTransform):
                 name="add_two",
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            image = ops.ones((32, 32, 1), dtype="float32")
             forward = transform({"image": image})
             restored = transform.inverse(forward)
             output = restored['image']
@@ -872,7 +1139,7 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
+            from keras import ops
             from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
@@ -880,13 +1147,13 @@ class LambdaTransform(KeyedTransform):
                 fn=lambda tensor, key: (
                     tensor / 255.0
                     if key == "image"
-                    else tf.cast(tensor, tf.float32)
+                    else ops.cast(tensor, "float32")
                 ),
                 name="prepare_pair",
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32) * 255.0
-            label = tf.ones((32, 32, 1), dtype=tf.int32)
+            image = ops.ones((32, 32, 1), dtype="float32") * 255.0
+            label = ops.ones((32, 32, 1), dtype="int32")
             output = transform(
                 {
                     "image": image,
@@ -898,8 +1165,8 @@ class LambdaTransform(KeyedTransform):
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import LambdaTransform, TensorBundle
+            from keras import ops
+            from medicai.transforms import LambdaTransform
 
             transform = LambdaTransform(
                 keys=["image"],
@@ -908,7 +1175,7 @@ class LambdaTransform(KeyedTransform):
                 trace_params={"kind": "scale"},
             )
 
-            image = tf.ones((32, 32, 1), dtype=tf.float32)
+            image = ops.ones((32, 32, 1), dtype="float32")
             result = transform({"image": image})
             output = result['image']
     """
@@ -947,9 +1214,17 @@ class LambdaTransform(KeyedTransform):
         return self.inverse_fn is not None
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
-        should_apply: tf.Tensor | bool = True
+        should_apply: Any | bool = True
         if self.prob is not None:
-            should_apply = tf.random.uniform(shape=(), dtype=tf.float32) < self.prob
+            should_apply = (
+                keras.random.uniform(
+                    shape=(),
+                    minval=0.0,
+                    maxval=1.0,
+                    dtype="float32",
+                )
+                < self.prob
+            )
 
         present_keys = self.iter_present_keys(bundle)
         for key in present_keys:
@@ -957,7 +1232,7 @@ class LambdaTransform(KeyedTransform):
             if self.prob is None:
                 bundle.data[key] = self._call_tensor_fn(self.fn, tensor, key)
             else:
-                bundle.data[key] = tf.cond(
+                bundle.data[key] = _apply_if_applied(
                     should_apply,
                     lambda tensor=tensor, key=key: self._call_tensor_fn(self.fn, tensor, key),
                     lambda tensor=tensor: tensor,
@@ -1000,16 +1275,11 @@ class LambdaTransform(KeyedTransform):
         present_keys = [key for key in trace["params"].get("keys", []) if key in bundle.data]
         for key in present_keys:
             tensor = bundle.data[key]
-            if tf.is_tensor(applied):
-                bundle.data[key] = tf.cond(
-                    tf.cast(applied, tf.bool),
-                    lambda tensor=tensor, key=key: self._call_tensor_fn(
-                        self.inverse_fn, tensor, key
-                    ),
-                    lambda tensor=tensor: tensor,
-                )
-            elif _trace_applied_to_bool(applied):
-                bundle.data[key] = self._call_tensor_fn(self.inverse_fn, tensor, key)
+            bundle.data[key] = _apply_if_applied(
+                applied,
+                lambda tensor=tensor, key=key: self._call_tensor_fn(self.inverse_fn, tensor, key),
+                lambda tensor=tensor: tensor,
+            )
 
         if self.inverse_meta_fn is not None:
             try:
@@ -1023,14 +1293,13 @@ class LambdaTransform(KeyedTransform):
         return bundle
 
     def _get_last_trace(self, bundle: TensorBundle) -> dict[str, Any] | None:
-        for entry in reversed(bundle.get_applied_transforms()):
-            if entry.get("name") != type(self).__name__:
-                continue
-            if entry.get("params", {}).get("_lambda_id") == self._trace_id:
-                return entry
-        return None
+        return _pop_last_transform_trace(
+            bundle,
+            type(self).__name__,
+            predicate=lambda entry: entry.get("params", {}).get("_lambda_id") == self._trace_id,
+        )
 
-    def _call_tensor_fn(self, fn, tensor: tf.Tensor, key: str) -> tf.Tensor:
+    def _call_tensor_fn(self, fn, tensor: Any, key: str) -> Any:
         takes_key = self._fn_takes_key if fn is self.fn else self._inverse_fn_takes_key
         if takes_key:
             return fn(tensor, key)
@@ -1062,7 +1331,7 @@ class Compose(Transform):
 
     ``Compose`` is the entry point for building a transformation pipeline in
     ``medicai.transforms``. It accepts raw sample dictionaries, converts any
-    NumPy arrays into TensorFlow tensors, wraps the result in a
+    NumPy arrays into backend-aware tensors, wraps the result in a
     ``TensorBundle``, and then applies each transform sequentially.
 
     This gives every transform a consistent container interface:
@@ -1084,7 +1353,7 @@ class Compose(Transform):
     Example:
         .. code-block:: python
 
-            import numpy as np
+            import keras
             from medicai.transforms import (
                 Compose,
                 Resize,
@@ -1094,25 +1363,23 @@ class Compose(Transform):
             transform = Compose([
                 ScaleIntensityRange(
                     keys=["image"],
-                    input_min=-175,
-                    input_max=250,
-                    output_min=0.0,
-                    output_max=1.0,
+                    source_value_range=(-175, 250),
+                    target_value_range=(0.0, 1.0),
                     clip=True,
+                    input_layout="DHWC",
                 ),
                 Resize(
                     keys=["image", "label"],
                     target_shape=(96, 96, 96),
-                    interpolation=("trilinear", "nearest")
+                    interpolation=("trilinear", "nearest"),
+                    input_layout="DHWC",
                 )
             ])
 
-            image = np.random.randn(
-                128, 128, 128, 1
-            ).astype(np.float32)
-            label = np.random.randint(
-                0, 2, (128, 128, 128, 1)
-            ).astype(np.float32)
+            image = keras.random.normal((128, 128, 128, 1), seed=7)
+            label = keras.random.uniform(
+                (128, 128, 128, 1), minval=0, maxval=2, dtype="float32", seed=7
+            )
 
             data = {
                 "image": image,
@@ -1121,29 +1388,30 @@ class Compose(Transform):
             output = transform(data)
             processed_image, processed_label = output["image"], output["label"]
             processed_image.shape, processed_label.shape
-            # (TensorShape([96, 96, 96, 1]), TensorShape([96, 96, 96, 1]))
+            # (96, 96, 96, 1), (96, 96, 96, 1)
 
         Invert an already-applied pipeline when its transforms support
         ``inverse()``:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import Compose, Flip, Resize, TensorBundle
+            import keras
+            from medicai.transforms import Compose, Flip, Resize
 
             pipeline = Compose(
                 [
-                    Flip(keys=["image"], spatial_axis=1),
+                    Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
                     Resize(
                         keys=["image"],
                         interpolation="bilinear",
-                        target_shape=(32, 32)
+                        target_shape=(32, 32),
+                        input_layout="HWC",
                     ),
                 ]
             )
 
-            image = tf.random.normal((64, 64, 1))
-            forward = pipeline(TensorBundle({"image": image}))
+            image = keras.random.normal((64, 64, 1), seed=7)
+            forward = pipeline({"image": image})
             restored = pipeline.inverse(forward)
 
     Returns:

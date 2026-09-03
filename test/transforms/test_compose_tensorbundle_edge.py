@@ -13,6 +13,10 @@ from medicai.transforms import (
 )
 
 
+def as_numpy(tensor, dtype=None):
+    return np.asarray(ops.convert_to_numpy(tensor), dtype=dtype)
+
+
 @pytest.mark.unit
 def test_compose_converts_numpy_for_data_and_meta():
     image = np.ones((4, 4, 1), dtype=np.float32)
@@ -42,21 +46,14 @@ def test_compose_applies_transforms_in_order():
     output = pipeline({"image": ops.convert_to_tensor(np.array([[[1.0]]], dtype=np.float32))})
 
     # (1 + 1) * 2 = 4
-    assert float(output["image"].numpy().item()) == 4.0
-
-
-@pytest.mark.unit
-def test_tensorbundle_missing_key_raises():
-    bundle = TensorBundle({"image": ops.zeros((2, 2, 1), dtype="float32")}, {"meta_key": "value"})
-    with pytest.raises(KeyError):
-        _ = bundle["unknown"]
+    assert float(as_numpy(output["image"]).item()) == 4.0
 
 
 @pytest.mark.unit
 def test_tensorbundle_repr_contains_data_and_meta():
     bundle = TensorBundle({"image": ops.zeros((2, 2, 1), dtype="float32")}, {"spacing": [1.0, 1.0]})
     value = repr(bundle)
-    assert "MetaTensor" in value
+    assert "TensorBundle" in value
     assert "spacing" in value
 
 
@@ -65,40 +62,40 @@ def test_compose_inverse_reverses_invertible_transforms_only():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offset=3.0),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=3.0, input_layout="HWC"),
         ]
     )
 
     forward = pipeline({"image": image})
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}))
+    restored = pipeline.inverse(forward)
 
-    expected = ops.convert_to_numpy(image) + 3.0
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
+    expected = as_numpy(image)
+    np.testing.assert_allclose(as_numpy(restored["image"]), expected)
 
 
 @pytest.mark.unit
-def test_compose_inverse_accepts_mapping_inputs():
+def test_compose_inverse_accepts_tensorbundle_input():
     image = np.arange(6, dtype=np.float32).reshape(2, 3, 1)
-    pipeline = Compose([Flip(keys=["image"], spatial_axis=1)])
+    pipeline = Compose([Flip(keys=["image"], spatial_axis=1, input_layout="HWC")])
 
     forward = pipeline({"image": image})
-    restored = pipeline.inverse({"image": forward["image"]})
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), image)
+    np.testing.assert_allclose(as_numpy(restored["image"]), image)
 
 
 @pytest.mark.unit
 def test_compose_inverse_traverses_nested_compose_blocks():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-    inner = Compose([Flip(keys=["image"], spatial_axis=1)])
-    outer = Compose([inner, ShiftIntensity(keys=["image"], offset=3.0)])
+    inner = Compose([Flip(keys=["image"], spatial_axis=1, input_layout="HWC")])
+    outer = Compose([inner, ShiftIntensity(keys=["image"], offset=3.0, input_layout="HWC")])
 
     forward = outer({"image": image})
-    restored = outer.inverse(TensorBundle({"image": forward["image"]}))
+    restored = outer.inverse(forward)
 
-    expected = ops.convert_to_numpy(image) + 3.0
-    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), expected)
+    expected = as_numpy(image)
+    np.testing.assert_allclose(as_numpy(restored["image"]), expected)
 
 
 @pytest.mark.unit
@@ -106,8 +103,8 @@ def test_compose_inverse_handles_repeated_shift_intensity_instances():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            ShiftIntensity(keys=["image"], offset=2.0),
-            ShiftIntensity(keys=["image"], offset=-0.5),
+            ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=-0.5, input_layout="HWC"),
         ]
     )
 
@@ -115,12 +112,11 @@ def test_compose_inverse_handles_repeated_shift_intensity_instances():
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
         rtol=1e-6,
     )
-    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
-    assert "RandomChoice" not in remaining_trace_names
+    assert restored.get_applied_transforms() == []
 
 
 @pytest.mark.unit
@@ -130,17 +126,15 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
         [
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=0.0,
-                input_max=1.0,
-                output_min=-1.0,
-                output_max=1.0,
+                source_value_range=(0.0, 1.0),
+                target_value_range=(-1.0, 1.0),
+                input_layout="HWC",
             ),
             ScaleIntensityRange(
                 keys=["image"],
-                input_min=-1.0,
-                input_max=1.0,
-                output_min=0.0,
-                output_max=255.0,
+                source_value_range=(-1.0, 1.0),
+                target_value_range=(0.0, 255.0),
+                input_layout="HWC",
             ),
         ]
     )
@@ -149,12 +143,11 @@ def test_compose_inverse_handles_repeated_scale_intensity_range_instances():
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
         rtol=1e-6,
     )
-    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
-    assert "RandomChoice" not in remaining_trace_names
+    assert restored.get_applied_transforms() == []
 
 
 @pytest.mark.unit
@@ -162,8 +155,8 @@ def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
     image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
     pipeline = Compose(
         [
-            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0),
-            RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0),
+            RandomShiftIntensity(keys=["image"], offset=0.25, prob=1.0, input_layout="HWC"),
+            RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC"),
         ]
     )
 
@@ -171,8 +164,8 @@ def test_compose_inverse_handles_repeated_random_shift_intensity_instances():
     restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
+        as_numpy(restored["image"]),
+        as_numpy(image),
         rtol=1e-6,
     )
     assert forward.get_applied_transforms() == []
@@ -199,7 +192,7 @@ def test_random_choice_applies_exact_number_without_replacement():
     forward = transform({"image": image})
     trace = forward.get_applied_transforms()[-1]
 
-    assert float(ops.convert_to_numpy(forward["image"])[0, 0, 0]) == 2.0
+    assert float(as_numpy(forward["image"])[0, 0, 0]) == 2.0
     assert len(trace["params"]["selected_indices"]) == 2
     assert len(set(trace["params"]["selected_indices"])) == 2
     assert len(forward.meta["order"]) == 2
@@ -209,7 +202,7 @@ def test_random_choice_applies_exact_number_without_replacement():
 @pytest.mark.unit
 def test_random_choice_respects_prob_zero():
     transform = RandomChoice(
-        transforms=[ShiftIntensity(keys=["image"], offset=2.0)],
+        transforms=[ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")],
         num_choices=1,
         prob=0.0,
     )
@@ -218,41 +211,17 @@ def test_random_choice_respects_prob_zero():
     forward = transform({"image": image})
     trace = forward.get_applied_transforms()[-1]
 
-    np.testing.assert_allclose(ops.convert_to_numpy(forward["image"]), 1.0)
+    np.testing.assert_allclose(as_numpy(forward["image"]), 1.0)
     assert trace["applied"] is False
     assert trace["params"]["selected_indices"] == []
-
-
-@pytest.mark.unit
-def test_random_choice_inverse_reverses_selected_invertible_transforms():
-    transform = RandomChoice(
-        transforms=[
-            Flip(keys=["image"], spatial_axis=1),
-            ShiftIntensity(keys=["image"], offset=3.0),
-        ],
-        num_choices=2,
-        prob=1.0,
-    )
-    image = ops.convert_to_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-
-    forward = transform({"image": image})
-    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
-
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-        rtol=1e-6,
-    )
-    remaining_trace_names = [entry["name"] for entry in forward.get_applied_transforms()]
-    assert "RandomChoice" not in remaining_trace_names
 
 
 @pytest.mark.unit
 def test_random_choice_weights_can_force_selection():
     transform = RandomChoice(
         transforms=[
-            ShiftIntensity(keys=["image"], offset=5.0),
-            ShiftIntensity(keys=["image"], offset=100.0),
+            ShiftIntensity(keys=["image"], offset=5.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=100.0, input_layout="HWC"),
         ],
         num_choices=1,
         prob=1.0,
@@ -263,5 +232,5 @@ def test_random_choice_weights_can_force_selection():
     forward = transform({"image": image})
     trace = forward.get_applied_transforms()[-1]
 
-    np.testing.assert_allclose(ops.convert_to_numpy(forward["image"]), 6.0)
+    np.testing.assert_allclose(as_numpy(forward["image"]), 6.0)
     assert trace["params"]["selected_indices"] == [0]

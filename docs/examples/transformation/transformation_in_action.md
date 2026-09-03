@@ -20,6 +20,7 @@ transforms only change intensities, and what "restoring" means in practice.
 import os
 import numpy as np
 import nibabel as nib
+from keras import ops
 from matplotlib import pyplot as plt
 
 import medicai
@@ -168,8 +169,8 @@ scale_transform = ScaleIntensityRange(
 
 scaled = scale_transform(data)
 print(
-    scaled['image'].numpy().min(), 
-    scaled['image'].numpy().max()
+    ops.convert_to_numpy(scaled['image']).min(),
+    ops.convert_to_numpy(scaled['image']).max()
 )
 create_plot(data, scaled, title1="Original", title2="ScaleIntensityRange")
 ```
@@ -184,8 +185,8 @@ In this example the image intensities are mapped from the chosen CT range into
 ```python
 restored_scale = scale_transform.inverse(scaled)
 print(
-    restored_scale['image'].numpy().min(), 
-    restored_scale['image'].numpy().max()
+    ops.convert_to_numpy(restored_scale['image']).min(),
+    ops.convert_to_numpy(restored_scale['image']).max()
 )
 create_plot(
     data, restored_scale, title1="Original", title2="ScaleIntensityRange Inverse"
@@ -384,8 +385,8 @@ dataset = dataset.map(
 dataset = dataset.batch(...)
 ```
 
-When using ``tf.data``, the transformed outputs stay as TensorFlow tensors, so
-they can flow directly into a Keras training step.
+When using ``tf.data`` with the TensorFlow backend, the transformed outputs stay
+as TensorFlow tensors and can flow directly into a Keras training step.
 
 ```python
 # Example with keras.utils.PyDataset API
@@ -412,14 +413,14 @@ class MedicalPyDataset(keras.utils.PyDataset):
             )
             result = pipeline(data, meta)
 
-            images.append(result["image"].numpy())
-            labels.append(result["label"].numpy())
+            images.append(ops.convert_to_numpy(result["image"]))
+            labels.append(ops.convert_to_numpy(result["label"]))
 
         return np.stack(images, axis=0), np.stack(labels, axis=0)
 ```
 
-For ``keras.utils.PyDataset``, the transform results are still TensorFlow
-tensors, but the dataset can convert them to NumPy arrays before stacking and
+For ``keras.utils.PyDataset``, the transform results use the active Keras
+backend. The dataset can convert them to NumPy arrays before stacking and
 returning the batch.
 
 ```python
@@ -443,8 +444,8 @@ class MedicalTorchDataset(torch.utils.data.Dataset):
         )
         result = pipeline(data, meta)
 
-        image = result["image"].numpy()
-        label = result["label"].numpy()
+        image = ops.convert_to_numpy(result["image"])
+        label = ops.convert_to_numpy(result["label"])
 
         # Optional: convert channel-last DHWC to channel-first CDHW for PyTorch.
         image = np.transpose(image, (3, 0, 1, 2))
@@ -457,7 +458,7 @@ class MedicalTorchDataset(torch.utils.data.Dataset):
 
 For PyTorch-style datasets, the typical boundary is:
 
-- `medicai` transform returns TensorFlow tensors
+- `medicai` transform returns tensors from the active Keras backend
 - convert those tensors to NumPy
 - **optionally** reorder channel-last tensors to channel-first
 - convert the final arrays to ``torch.Tensor``

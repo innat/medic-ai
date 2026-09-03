@@ -1,9 +1,13 @@
-from typing import Sequence
+from typing import Any, Sequence
 
-import tensorflow as tf
+from keras import ops
 
 from ..base import KeyedTransform
 from ..tensor_bundle import TensorBundle
+from ..utils import (
+    resolve_input_layout,
+    validate_tensor_matches_layout,
+)
 
 
 class NormalizeIntensity(KeyedTransform):
@@ -14,11 +18,6 @@ class NormalizeIntensity(KeyedTransform):
     computed over the whole tensor or independently per channel, and can be
     restricted to nonzero voxels or pixels when background values should be
     excluded from normalization.
-
-    This transform operates on channel-last tensors and is commonly used for
-    medical images shaped like ``(H, W, C)`` or ``(D, H, W, C)``. Label tensors
-    are usually not appropriate inputs unless a workflow explicitly requires
-    intensity-style normalization on them.
 
     Args:
         keys: Keys of the tensors to normalize.
@@ -31,15 +30,24 @@ class NormalizeIntensity(KeyedTransform):
             after normalization. For channel-wise normalization, nonzero values
             determine the statistics used for each channel.
         channel_wise: If ``True``, normalize each channel independently using
-            channel-specific statistics. If ``False``, normalize using one set
-            of statistics over the full tensor.
+            one statistic per channel. If ``False``, normalize using one set
+            of statistics over the full tensor. For ``BHWC`` and ``BDHWC``,
+            channel-wise statistics are shared across the batch rather than
+            computed independently for each sample. Use a sample layout when
+            normalizing one image or volume at a time.
         dtype: Output dtype used for computation and returned tensors.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
-        Normalize a 2D image using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import NormalizeIntensity
@@ -48,29 +56,59 @@ class NormalizeIntensity(KeyedTransform):
                 keys=["image"],
                 nonzero=True,
                 channel_wise=False,
+                input_layout="HWC",
             )
 
-            image = tf.random.normal((64, 64, 1))
+            image = tf.random.normal((64, 64, 1), seed=7)
             result = transform({"image": image})
             output = result["image"]
             print(output.shape)
 
-        Normalize a 3D image volume using a ``TensorBundle``:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import NormalizeIntensity, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax
+            import jax.numpy as jnp
+            from medicai.transforms import NormalizeIntensity
 
             transform = NormalizeIntensity(
                 keys=["image"],
                 nonzero=True,
-                channel_wise=False,
+                channel_wise=True,
+                input_layout="DHWC",
             )
 
-            image = tf.random.normal((32, 64, 64, 1))
-            bundle = TensorBundle({"image": image})
-            result = transform(bundle)
+            image = jax.random.normal(
+                jax.random.PRNGKey(7), shape=(32, 64, 64, 1), dtype=jnp.float32
+            )
+            result = transform({"image": image})
+            output = result["image"]
+            print(output.shape)
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import NormalizeIntensity
+
+            transform = NormalizeIntensity(
+                keys=["image"],
+                nonzero=True,
+                channel_wise=True,
+                input_layout="BHWC",
+            )
+
+            torch.manual_seed(7)
+            batch = torch.randn((2, 64, 64, 1), dtype=torch.float32)
+            result = transform({"image": batch})
             output = result["image"]
             print(output.shape)
 
@@ -90,7 +128,9 @@ class NormalizeIntensity(KeyedTransform):
         scale=None,
         nonzero: bool = False,
         channel_wise: bool = False,
-        dtype=tf.float32,
+        dtype: Any = "float32",
+        *,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
@@ -99,6 +139,10 @@ class NormalizeIntensity(KeyedTransform):
         self.nonzero = nonzero
         self.channel_wise = channel_wise
         self.dtype = dtype
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            transform_name=type(self).__name__,
+        )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present_keys = self.apply_to_present_keys(
@@ -110,6 +154,7 @@ class NormalizeIntensity(KeyedTransform):
                     "keys": list(present_keys),
                     "nonzero": self.nonzero,
                     "channel_wise": self.channel_wise,
+                    "input_layout": self.input_layout,
                 },
                 applied=True,
                 random=False,
@@ -118,69 +163,69 @@ class NormalizeIntensity(KeyedTransform):
         )
         return bundle
 
-    def normalize_tensor(self, tensor: tf.Tensor) -> tf.Tensor:
+    def normalize_tensor(self, tensor: Any) -> Any:
         """Normalize one tensor with the configured statistics policy."""
-        tensor = tf.cast(tensor, dtype=self.dtype or tensor.dtype)
+        self._validate_tensor_layout(tensor)
+        tensor = ops.convert_to_tensor(tensor)
+        working_dtype = self.dtype or tensor.dtype
+        tensor = ops.cast(tensor, dtype=working_dtype)
         if self.channel_wise:
             normalized = self._normalize_channel_wise(tensor)
         else:
             normalized = self._normalize_global(tensor)
-        return tf.cast(normalized, self.dtype or tensor.dtype)
+        return ops.cast(normalized, working_dtype)
 
-    def _normalize_channel_wise(self, tensor: tf.Tensor) -> tf.Tensor:
-        mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        num_dims = tf.rank(tensor)
-        channel_axis = num_dims - 1
-
-        def normalize_single_channel(channel_and_mask):
-            channel, channel_mask = channel_and_mask
-            channel_masked = tf.boolean_mask(channel, channel_mask)
-            has_valid = tf.size(channel_masked) > 0
-
-            def normalize_nonempty():
-                mean = tf.reduce_mean(channel_masked)
-                std = tf.math.reduce_std(channel_masked)
-                sub = self.offset if self.offset is not None else mean
-                div = self.scale if self.scale is not None else std
-                sub = tf.cast(sub, channel.dtype)
-                div = tf.cast(div, channel.dtype)
-                div = tf.where(tf.equal(div, 0.0), tf.ones_like(div), div)
-                normalized = (channel - sub) / div
-                if self.nonzero:
-                    return tf.where(channel_mask, normalized, channel)
-                return normalized
-
-            return tf.cond(has_valid, normalize_nonempty, lambda: channel)
-
-        permutation = tf.concat(
-            [tf.expand_dims(channel_axis, axis=0), tf.range(channel_axis)], axis=0
+    def _normalize_channel_wise(self, tensor: Any) -> Any:
+        mask = (
+            ops.not_equal(tensor, 0.0) if self.nonzero else ops.cast(ops.ones_like(tensor), "bool")
         )
-        transposed_tensor = tf.transpose(tensor, perm=permutation)
-        transposed_mask = tf.transpose(mask, perm=permutation)
-        normalized_transposed = tf.map_fn(
-            normalize_single_channel,
-            (transposed_tensor, transposed_mask),
-            dtype=tensor.dtype,
+        num_dims = len(ops.shape(tensor))
+        spatial_axes = tuple(range(num_dims - 1))
+        mask_f = ops.cast(mask, tensor.dtype)
+        count = ops.sum(mask_f, axis=spatial_axes, keepdims=True)
+        safe_count = ops.where(count > 0, count, ops.ones_like(count))
+
+        masked_tensor = ops.where(mask, tensor, ops.zeros_like(tensor))
+        mean = ops.sum(masked_tensor, axis=spatial_axes, keepdims=True) / safe_count
+        centered = tensor - mean
+        masked_sq = ops.where(mask, ops.square(centered), ops.zeros_like(centered))
+        std = ops.sqrt(ops.sum(masked_sq, axis=spatial_axes, keepdims=True) / safe_count)
+
+        sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
+        div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
+        div = ops.where(ops.equal(div, 0.0), ops.ones_like(div), div)
+        normalized = (tensor - sub) / div
+        if self.nonzero:
+            normalized = ops.where(mask, normalized, tensor)
+        return ops.where(count > 0, normalized, tensor)
+
+    def _normalize_global(self, tensor: Any) -> Any:
+        mask = (
+            ops.not_equal(tensor, 0.0) if self.nonzero else ops.cast(ops.ones_like(tensor), "bool")
         )
-        inverse_permutation = tf.concat(
-            [tf.range(1, num_dims), tf.constant([0], dtype=tf.int32)], axis=0
+        mask_f = ops.cast(mask, tensor.dtype)
+        count = ops.sum(mask_f)
+        safe_count = ops.where(count > 0, count, ops.ones_like(count))
+
+        masked_tensor = ops.where(mask, tensor, ops.zeros_like(tensor))
+        mean = ops.sum(masked_tensor) / safe_count
+        centered = tensor - mean
+        masked_sq = ops.where(mask, ops.square(centered), ops.zeros_like(centered))
+        std = ops.sqrt(ops.sum(masked_sq) / safe_count)
+
+        std = ops.where(ops.equal(std, 0.0), 1.0, std)
+        sub = mean if self.offset is None else ops.cast(self.offset, tensor.dtype)
+        div = std if self.scale is None else ops.cast(self.scale, tensor.dtype)
+        div = ops.where(ops.equal(div, 0.0), 1.0, div)
+        normalized = (tensor - sub) / div
+        if self.nonzero:
+            normalized = ops.where(mask, normalized, tensor)
+        return ops.where(count > 0, normalized, tensor)
+
+    def _validate_tensor_layout(self, tensor: Any) -> None:
+        """Validate sample or batch channel-last layout for normalization."""
+        validate_tensor_matches_layout(
+            tensor,
+            self.input_layout,
+            transform_name=type(self).__name__,
         )
-        return tf.transpose(normalized_transposed, perm=inverse_permutation)
-
-    def _normalize_global(self, tensor: tf.Tensor) -> tf.Tensor:
-        mask = tf.not_equal(tensor, 0.0) if self.nonzero else tf.ones_like(tensor, dtype=tf.bool)
-        num_valid = tf.reduce_sum(tf.cast(mask, tf.int32))
-
-        def normalize():
-            vals = tf.boolean_mask(tensor, mask)
-            mean = tf.reduce_mean(vals)
-            std = tf.math.reduce_std(vals)
-            std = tf.where(std == 0.0, 1.0, std)
-            sub = mean if self.offset is None else tf.cast(self.offset, tensor.dtype)
-            div = std if self.scale is None else tf.cast(self.scale, tensor.dtype)
-            div = tf.where(div == 0.0, 1.0, div)
-            if self.nonzero:
-                return tf.where(mask, (tensor - sub) / div, tensor)
-            return (tensor - sub) / div
-
-        return tf.cond(num_valid > 0, normalize, lambda: tensor)

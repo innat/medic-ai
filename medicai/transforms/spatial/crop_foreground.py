@@ -1,13 +1,16 @@
 from typing import Callable, Optional, Sequence, Union
 
-import tensorflow as tf
+from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_spatial_tuple,
+    get_input_layout_info,
     get_spatial_rank,
-    get_spatial_shape,
+    get_spatial_shape_for_layout,
+    resolve_input_layout,
+    validate_tensor_matches_layout,
 )
 from .spatial_crop import SpatialCrop
 
@@ -19,6 +22,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
     builds a bounding box around that region, and applies the same crop to all
     selected tensors. It supports both 2D channel-last tensors ``(H, W, C)``
     and 3D channel-last tensors ``(D, H, W, C)``.
+    This transform is sample-only. It does not support batched inputs.
 
     Foreground is computed by reducing the source tensor across the channel
     dimension and selecting spatial locations where ``select_fn`` evaluates to
@@ -54,41 +58,19 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             ``None`` to skip storing them.
         end_coord_key: Metadata key used to store crop end coordinates, or
             ``None`` to skip storing them.
+        input_layout: Channel-last tensor layout. Supported values are
+            ``"HWC"`` and ``"DHWC"``. Batched layouts are intentionally
+            rejected because foreground detection is defined per sample.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
-        .. note::
-
-            * **When to use it**: only when ``select_fn`` is producing a
-                bounding box that includes content you don't want, or is
-                missing content it should include. If ``select_fn`` alone
-                gives a clean mask, leave this unset; it adds a mask-cleanup
-                pass that isn't free.
-            * **What it can do**: presets and custom callables operate purely
-                on the boolean mask, so any spatial-only cleanup is fair game,
-                discarding small disconnected regions, bridging fragmented
-                regions, filling internal holes, restricting to
-                border-touching regions, etc. Custom callables compose with
-                the rest of ``CropForeground`` (``margin``, ``allow_smaller``,
-                ``k_divisible``) exactly like the unmodified mask would.
-            * **Limitations**: it only sees the mask, not the source image's
-                pixel values or any other tensor in ``keys``. Tt cannot make
-                decisions based on intensity, texture, or content elsewhere in
-                the sample. It also cannot recover information that
-                ``select_fn`` already discarded. Built-in presets requiring
-                ``scipy`` are eager, host-side operations (bridged internally
-                via ``tf.py_function`` on the TensorFlow backend), so they run
-                per-sample rather than as traceable ops; fine for a
-                ``tf.data`` input pipeline, not intended for use inside a
-                model's forward pass. Preset defaults (e.g. bridging/closing
-                strength) are tuned heuristics, not guarantees -- verify on a
-                sample of your own data, since the right amount of bridging
-                differs by modality (thin gaps at soft tissue edges in 2D
-                mammography vs. tighter anatomy-to-artifact spacing in 3D CT).
-
     Example:
-        Crop a 2D image-label pair using a raw Python dictionary:
+
+        TensorFlow backend:
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import CropForeground
@@ -97,6 +79,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 keys=["image", "label"],
                 source_key="image",
                 margin=4,
+                input_layout="HWC",
             )
 
             image = tf.pad(tf.ones((24, 24, 1)), paddings=[[8, 8], [8, 8], [0, 0]])
@@ -106,29 +89,43 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             cropped_image = result["image"]
             cropped_label = result["label"]
 
-        Crop a 3D image volume using a ``TensorBundle`` and inspect the stored
-        crop coordinates:
+        JAX backend:
 
         .. code-block:: python
 
-            import tensorflow as tf
-            from medicai.transforms import CropForeground, TensorBundle
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
+            import jax.numpy as jnp
+            from medicai.transforms import CropForeground
 
             transform = CropForeground(
                 keys=["image"],
                 margin=(2, 4, 4),
                 k_divisible=2,
+                input_layout="DHWC",
             )
 
-            image = tf.pad(
-                tf.ones((8, 16, 16, 1)),
-                paddings=[[4, 4], [8, 8], [8, 8], [0, 0]],
-            )
-            bundle = TensorBundle({"image": image})
+            image = jnp.ones((8, 16, 16, 1), dtype=jnp.float32)
+            result = transform({"image": image})
+            print(result["image"].shape)
 
-            result = transform(bundle)
-            start = result["foreground_start_coord"]
-            end = result["foreground_end_coord"]
+        Torch backend:
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import CropForeground
+
+            transform = CropForeground(
+                keys=["image"], source_key="image", input_layout="HWC"
+            )
+            image = torch.ones((32, 32, 1))
+            result = transform({"image": image})
+            print(result["image"].shape)
 
     Returns:
         ``TensorBundle``: The input bundle with cropped tensors, optional crop
@@ -152,6 +149,8 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         k_divisible: Union[Sequence[int], int] = 1,
         start_coord_key: Optional[str] = "foreground_start_coord",
         end_coord_key: Optional[str] = "foreground_end_coord",
+        *,
+        input_layout: str,
         allow_missing_keys: bool = False,
     ):
         KeyedTransform.__init__(self, keys=keys, allow_missing_keys=allow_missing_keys)
@@ -170,6 +169,16 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         self.k_divisible = k_divisible
         self.start_coord_key = start_coord_key
         self.end_coord_key = end_coord_key
+        self.input_layout = resolve_input_layout(
+            input_layout=input_layout,
+            allowed_layouts=("HWC", "DHWC"),
+            transform_name=type(self).__name__,
+        )
+        layout_info = get_input_layout_info(self.input_layout)
+        if layout_info.batched:
+            raise ValueError(
+                f"{type(self).__name__} supports only sample layouts 'HWC' and 'DHWC'."
+            )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         if self.source_key not in bundle.data:
@@ -178,11 +187,19 @@ class CropForeground(KeyedTransform, InvertibleTransform):
             raise KeyError(f"Key '{self.source_key}' not found in input data.")
 
         source_data = bundle.data[self.source_key]
+        validate_tensor_matches_layout(
+            source_data,
+            self.input_layout,
+            transform_name=type(self).__name__,
+        )
         spatial_rank = get_spatial_rank(source_data)
-        image_shape = get_spatial_shape(source_data)
+        image_shape = get_spatial_shape_for_layout(
+            source_data,
+            input_layout=self.input_layout,
+        )
 
         if self.channel_indices is not None:
-            source_data = tf.gather(source_data, self.channel_indices, axis=-1)
+            source_data = ops.take(source_data, self.channel_indices, axis=-1)
 
         min_coords, max_coords = self.find_bounding_box(source_data, self.select_fn, spatial_rank)
         min_coords, max_coords = self.add_margin(
@@ -206,12 +223,19 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
+            input_layout=self.input_layout,
             allow_missing_keys=self.allow_missing_keys,
         )
 
-        def apply_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
-            original_shapes[key] = get_spatial_shape(tensor)
-            return crop.crop_tensor(tensor, min_coords, crop_size)
+        def apply_crop(tensor: object, key: str) -> object:
+            original_shapes[key] = get_spatial_shape_for_layout(
+                tensor,
+                input_layout=self.input_layout,
+            )
+            # The helper is configured with a placeholder crop size. Use the
+            # runtime foreground size rather than that placeholder's static
+            # output-shape optimization.
+            return crop.crop_tensor(tensor, min_coords, crop_size, static_size=False)
 
         present_keys = crop.apply_to_present_keys(bundle, apply_crop)
 
@@ -228,6 +252,7 @@ class CropForeground(KeyedTransform, InvertibleTransform):
                 "crop_size": crop_size,
                 "original_shapes": original_shapes,
                 "source_key": self.source_key,
+                "input_layout": self.input_layout,
             },
         )
         return bundle
@@ -242,10 +267,11 @@ class CropForeground(KeyedTransform, InvertibleTransform):
         crop = SpatialCrop(
             keys=self.keys,
             crop_size=1,
+            input_layout=self.input_layout,
             allow_missing_keys=self.allow_missing_keys,
         )
 
-        def apply_inverse_crop(tensor: tf.Tensor, key: str) -> tf.Tensor:
+        def apply_inverse_crop(tensor: object, key: str) -> object:
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
@@ -260,72 +286,104 @@ class CropForeground(KeyedTransform, InvertibleTransform):
 
     def find_bounding_box(
         self,
-        image: tf.Tensor,
+        image: object,
         select_fn: Callable,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Find the bounding box of the foreground in the image."""
-        mask = tf.reduce_any(select_fn(image), axis=-1)
-        coords = tf.where(mask)
-        coord_dtype = coords.dtype
+        mask = ops.any(select_fn(image), axis=-1)
+        has_foreground = ops.any(mask)
+        spatial_shape = ops.cast(
+            get_spatial_shape_for_layout(image, input_layout=self.input_layout),
+            "int32",
+        )
 
         def empty_bbox():
             return (
-                tf.zeros((spatial_rank,), dtype=coord_dtype),
-                tf.cast(get_spatial_shape(image), coord_dtype),
+                ops.zeros((spatial_rank,), dtype="int32"),
+                spatial_shape,
             )
 
         def foreground_bbox():
-            min_coords = tf.cast(tf.reduce_min(coords[:, :spatial_rank], axis=0), coord_dtype)
-            max_coords = tf.cast(tf.reduce_max(coords[:, :spatial_rank], axis=0) + 1, coord_dtype)
+            min_coords = []
+            max_coords = []
+            for axis in range(spatial_rank):
+                other_axes = tuple(i for i in range(spatial_rank) if i != axis)
+                axis_presence = mask
+                # Reduce one axis at a time in descending order. Some Keras
+                # backends do not support a tuple of reduction axes, and the
+                # descending order keeps the target axis index stable.
+                for reduce_axis in reversed(other_axes):
+                    axis_presence = ops.any(axis_presence, axis=reduce_axis)
+                axis_presence_i32 = ops.cast(axis_presence, "int32")
+                axis_size = ops.shape(axis_presence_i32)[0]
+                start = ops.argmax(axis_presence_i32, axis=0)
+                end = axis_size - ops.argmax(ops.flip(axis_presence_i32, axis=0), axis=0)
+                min_coords.append(ops.cast(start, "int32"))
+                max_coords.append(ops.cast(end, "int32"))
+            min_coords = ops.stack(min_coords, axis=0)
+            max_coords = ops.stack(max_coords, axis=0)
             return min_coords, max_coords
 
-        return tf.cond(tf.shape(coords)[0] > 0, foreground_bbox, empty_bbox)
+        return ops.cond(has_foreground, foreground_bbox, empty_bbox)
 
     def add_margin(
         self,
-        min_coords: tf.Tensor,
-        max_coords: tf.Tensor,
+        min_coords: object,
+        max_coords: object,
         margin: Union[Sequence[int], int],
-        image_shape: tf.Tensor,
+        image_shape: object,
         allow_smaller: bool,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Add margin to the bounding box while staying inside image bounds."""
-        margin = tf.convert_to_tensor(
+        margin = ops.convert_to_tensor(
             ensure_spatial_tuple(margin, spatial_rank, "margin"),
-            dtype=tf.int32,
+            dtype="int32",
         )
 
-        min_coords = tf.maximum(tf.cast(min_coords, tf.int32) - margin, 0)
-        max_coords = tf.minimum(
-            tf.cast(max_coords, tf.int32) + margin, tf.cast(image_shape, tf.int32)
-        )
+        image_shape = ops.cast(image_shape, "int32")
+        requested_min = ops.cast(min_coords, "int32") - margin
+        requested_max = ops.cast(max_coords, "int32") + margin
+        min_coords = ops.maximum(requested_min, 0)
+        max_coords = ops.minimum(requested_max, image_shape)
 
         if not allow_smaller:
-            min_coords = tf.minimum(min_coords, tf.cast(image_shape, tf.int32) - margin)
-            max_coords = tf.maximum(max_coords, margin)
+            requested_size = requested_max - requested_min
+            current_size = max_coords - min_coords
+            deficit = ops.maximum(requested_size - current_size, 0)
+
+            shift_left = ops.minimum(min_coords, deficit)
+            min_coords = min_coords - shift_left
+            deficit = deficit - shift_left
+
+            shift_right = ops.minimum(image_shape - max_coords, deficit)
+            max_coords = max_coords + shift_right
 
         return min_coords, max_coords
 
     def make_divisible(
         self,
-        min_coords: tf.Tensor,
-        max_coords: tf.Tensor,
+        min_coords: object,
+        max_coords: object,
         k_divisible: Union[Sequence[int], int],
-        image_shape: tf.Tensor,
+        image_shape: object,
         spatial_rank: int,
-    ) -> tuple[tf.Tensor, tf.Tensor]:
+    ) -> tuple[object, object]:
         """Expand the bounding box so its size is divisible by ``k_divisible``."""
-        k_divisible = tf.convert_to_tensor(
+        k_divisible = ops.convert_to_tensor(
             ensure_spatial_tuple(k_divisible, spatial_rank, "k_divisible"),
-            dtype=tf.int32,
+            dtype="int32",
         )
 
         size = max_coords - min_coords
         remainder = size % k_divisible
-        padding = tf.where(remainder != 0, k_divisible - remainder, 0)
-        max_coords = tf.minimum(max_coords + padding, tf.cast(image_shape, tf.int32))
+        padding = ops.where(remainder != 0, k_divisible - remainder, 0)
+        image_shape = ops.cast(image_shape, "int32")
+        requested_max = max_coords + padding
+        max_coords = ops.minimum(requested_max, image_shape)
+        overflow = ops.maximum(requested_max - max_coords, 0)
+        min_coords = ops.maximum(min_coords - overflow, 0)
         return min_coords, max_coords
 
     def _get_last_crop_foreground_trace(self, bundle: TensorBundle):

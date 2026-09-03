@@ -6,7 +6,7 @@ from medicai.utils import resize_volumes
 
 class ResizingND(layers.Layer):
     """
-    ``N``-dimensional resizing layer supporting both ``2D`` and ``3D`` inputs. This layer resizes spatial 
+    ``N``-dimensional resizing layer supporting both ``2D`` and ``3D`` inputs. This layer resizes spatial
     dimensions of an input tensor using either:
 
     - A fixed ``target_shape``, or
@@ -18,7 +18,7 @@ class ResizingND(layers.Layer):
     Args:
         target_shape (tuple[int] or None):
             Desired spatial output size.
-            
+
             - For 2D: ``(H, W)``
             - For 3D: ``(D, H, W)``
 
@@ -78,7 +78,7 @@ class ResizingND(layers.Layer):
             print(y.shape) # (1, 8, 64, 64, 3)
 
     .. code-block:: python
-            
+
             import numpy as np
             from medicai.layers import ResizingND
 
@@ -138,6 +138,7 @@ class ResizingND(layers.Layer):
             spatial dimensionality, or if any element is not a positive
             integer (non-``None`` values only).
     """
+
     def __init__(
         self,
         target_shape=None,

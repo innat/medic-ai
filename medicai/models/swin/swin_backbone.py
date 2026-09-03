@@ -436,6 +436,7 @@ def resolve_input_params(input_shape, patch_size, window_size, downsampling_stra
 
     return input_shape, patch_size, window_size, downsampling_strategy
 
+
 SWIN_BACKBONE_DOCSTRING = """
 {version} supporting both 2D and 3D inputs.
 

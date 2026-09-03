@@ -1,30 +1,72 @@
 # Transformations
 
-`medicai.transforms` provides TensorFlow-native preprocessing and augmentation
-utilities for medical imaging workflows. The transforms are designed to work
-cleanly inside `tf.data.Dataset` pipelines, or, ``keras.utils.PyDataset`` and, ``torch.utils.data.Dataset`` by converting samples to ``numpy``. Most of transformation are rank-agnostic across 2D and 3D channel-last tensors.
+`medicai.transforms` provides native, multi-backend preprocessing and
+augmentation utilities for medical imaging workflows. The transforms are
+designed to integrate cleanly with `pygrain`, `torch.utils.data.Dataset`,
+`tf.data.Dataset`, and `keras.utils.PyDataset`.
 
-Most transforms accept either:
+Choose the right dataloader for the target Keras backend.
 
-- a plain sample mapping such as `{"image": image, "label": label}`
-- an existing `TensorBundle`
+| Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
+| :--- | :---: | :---: | :---: | :---: |
+| TensorFlow | ✓ | ✗ | ✓ | ✓ |
+| Torch | ✓ | ✓ | ✗ | ✓ |
+| JAX | ✓ | ✗ | ✗ | ✓ |
 
-In both cases, the output is a `TensorBundle`, and transformed tensors remain
-available under the same keys.
+When `torch` is the active backend, `medicai.transforms` use Torch-backed
+Keras operations. The same applies to the `tensorflow` and `jax` backends.
 
-## Input Conventions
+If you want a common dataloader that supports all backends out of the box,
+the recommended option is **PyGrain**, which provides efficient parallel data
+loading and multithreading and multiprocessing worker support.
 
-``medicai`` transforms operate on channel-last tensors:
 
-- 2D tensors use `(H, W, C)`
-- 3D tensors use `(D, H, W, C)`
+**Input Conventions**
 
-Most transforms are intentionally 2D/3D agnostic, so callers should provide
-rank-appropriate spatial arguments explicitly instead of relying on implicit
-defaults.
+``medicai`` transforms use **channel-last** tensors and provide the
+`input_layout` argument to make the execution mode explicit:
+
+- single 2D tensors use: `input_layout="HWC"`
+- single 3D tensors use: `input_layout="DHWC"`
+- batched 2D tensors use: `input_layout="BHWC"`
+- batched 3D tensors use: `input_layout="BDHWC"`
+
+
+**Dual-mode transforms**
+
+These transforms can process either one sample or an already-batched tensor,
+depending on `input_layout`:
+
+- `Flip`
+- `Rotate90`
+- `Resize`
+- `SpatialCrop`
+- `RandomFlip`
+- `RandomRotate90`
+- `RandomRotate`
+- `RandomShiftIntensity`
+- `RandomSpatialCrop`
+- `RandomCropByPosNegLabel`
+- `RandomCutOut`
+
+They support both sample layouts (`"HWC"` or `"DHWC"`) and batch layouts
+(`"BHWC"` or `"BDHWC"`). Callers should therefore provide spatial arguments
+appropriate to the input rank instead of relying on implicit defaults.
+
+**Sample-only transforms**
+
+These transforms process one sample at a time because they depend on
+sample-specific metadata or spatial decisions:
+
+- `CropForeground`
+- `Spacing`
+- `Orientation`
+
+They support only sample layouts (`"HWC"` or `"DHWC"`).
 
 ```{note}
-Two spatial transforms are intentionally 3D-only:
+Two spatial transforms are intentionally sample-level and 3D-only. They do not
+support 2D input or batched input:
 
 - `Spacing`
 - `Orientation`
@@ -32,17 +74,14 @@ Two spatial transforms are intentionally 3D-only:
 
 ## Spatial
 
-Spatial transforms change geometry, layout, orientation, or spatial extent.
-Most of them are designed to work for both 2D and 3D tensors as long as the
-caller provides spatial arguments with the correct rank.
+Spatial transforms modify geometry, layout, orientation, or spatial extent.
+Most support both `2D` and `3D` tensors when the caller provides arguments with the
+appropriate rank. Therefore, the same class can be used in either of these
+contexts:
 
-Common examples:
+- in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
+- on already batched tensors with batch layouts such as `"BHWC"` or `"BDHWC"`
 
-- `SpatialCrop` for extracting a fixed region
-- `Flip` and `Rotate90` for deterministic spatial reordering
-- `Resize` for resampling to a target spatial shape
-- `CropForeground` for foreground-aware cropping
-- `Spacing` and `Orientation` for 3D spatial metadata-aware transforms
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.SpatialCrop
@@ -62,15 +101,13 @@ Common examples:
 
 ## Intensity
 
-Intensity transforms adjust voxel or pixel values without changing spatial
-layout.
+Intensity transforms modify voxel or pixel values without changing the spatial
+layout. Most support both `2D` and `3D` tensors when the caller provides arguments
+with the appropriate rank. Therefore, the same class can be used in either of these
+contexts:
 
-Common examples:
-
-- `NormalizeIntensity` for mean/std normalization
-- `ScaleIntensityRange` for mapping one range into another
-- `ShiftIntensity` for additive offsets
-- `SignalFillEmpty` for handling invalid values such as `NaN` and `Inf`
+- in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
+- on already batched tensors with batch layouts such as `"BHWC"` or `"BDHWC"`
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.NormalizeIntensity
@@ -84,18 +121,27 @@ Common examples:
 
 ## Random
 
-Random transforms introduce stochastic augmentation.
+Random transforms provide stochastic augmentation. Most support both `2D` and `3D`
+tensors when the caller provides arguments with the appropriate rank.
+Therefore, the same class can be used in either of these contexts:
 
-Common examples:
+- in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
+- on already batched tensors with batch layouts such as `"BHWC"` or `"BDHWC"`
 
-- `RandomFlip`
-- `RandomRotate90`
-- `RandomRotate`
-- `RandomShiftIntensity`
-- `RandomSpatialCrop`
-- `RandomCropByPosNegLabel`
-- `RandomCutOut`
-- `RandomChoice`
+All public random transforms inherit the shared `RandomTransform` seed contract. The `seed` argument accepts:
+
+- `None` for ordinary non-deterministic randomness
+- an integer seed for reproducible replay
+- `keras.random.SeedGenerator` for stateful seeded sampling
+
+```{note}
+
+For currently dual-mode random transforms, using a batch layout causes one
+random decision or sampled parameter set to be shared across the entire
+incoming batch tensor. This keeps inversion and trace behavior simple and
+predictable.
+```
+
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomFlip
@@ -117,14 +163,17 @@ Common examples:
 
 ## Compose
 
+`Compose` applies transforms sequentially. It is the usual way to define a
+preprocessing or augmentation pipeline for a dataset loader.
+
 ```{eval-rst}
 .. autoclass:: medicai.transforms.Compose
 ```
 
 ## Custom Transforms
 
-The APIs below are most useful when building custom transforms or
-understanding how `medicai.transforms` pipelines are structured internally.
+The APIs below are primarily useful when creating custom transforms or learning
+how `medicai.transforms` pipelines are structured internally.
 
 ### LambdaTransform
 
@@ -158,14 +207,4 @@ understanding how `medicai.transforms` pipelines are structured internally.
 ```{eval-rst}
 .. autoclass:: medicai.transforms.InvertibleTransform
    :members: record_transform, inverse
-```
-
-### Advanced: TensorBundle
-
-`TensorBundle` is the internal execution container used by
-`medicai.transforms`. You usually do not need to create it directly unless
-you are working with metadata, inversion, or custom transforms.
-
-```{eval-rst}
-.. autoclass:: medicai.transforms.TensorBundle
 ```

@@ -80,8 +80,8 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
        :class: api-subheading
 
     By default, the built-in ``unetr_plusplus_encoder`` follows the **BraTS**-like
-    isotropic setup. For anisotropic medical inputs, we can manually instantiate a 
-    compatible encoder with a custom ``patch_size`` and pass it through ``encoder`` 
+    isotropic setup. For anisotropic medical inputs, we can manually instantiate a
+    compatible encoder with a custom ``patch_size`` and pass it through ``encoder``
     while keeping the decoder unchanged.
 
     Example:
@@ -133,6 +133,7 @@ class UNETRPlusPlus(keras.Model, DescribeMixin):
         - UNETR++: Delving into Efficient and Accurate 3D Medical Image
           Segmentation. `arXiv:2212.04497 <https://arxiv.org/abs/2212.04497>`_
     """
+
     ALLOWED_BACKBONE_FAMILIES = ["unetr_plusplus"]
 
     def __init__(

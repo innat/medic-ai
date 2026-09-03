@@ -116,6 +116,7 @@ class CategoricalCenterlineDiceLoss(BaseCenterlineDiceLoss):
         else:
             return y_pred
 
+
 _CLDICE_SPECIFIC_ARGS = """    iters (int, optional): Number of soft-skeletonization iterations.
         Higher values can produce more complete skeletons but increase
         computational cost. Defaults to ``50``.
@@ -159,7 +160,8 @@ Skeletons are computed using differentiable soft morphological operations.
 
 """
 
-CATEGORICAL_CLDICE_DOCSTRING = """Centerline Dice loss for categorical one-hot encoded segmentation labels.
+CATEGORICAL_CLDICE_DOCSTRING = (
+    """Centerline Dice loss for categorical one-hot encoded segmentation labels.
 
 This loss computes ``1 - clDice`` for categorical segmentation targets that are
 already one-hot encoded. When ``from_logits=True``, predictions are passed
@@ -168,9 +170,11 @@ through a softmax activation before topology-aware overlap is computed.
 This variant expects one-hot targets and does not expose ``ignore_class_ids``.
 Use ``SparseCenterlineDiceLoss`` if your labels are stored as class indices.
 
-""" + _CLDICE_SHARED_OVERVIEW + BASE_COMMON_ARGS.format(
-    specific_args=_CLDICE_SPECIFIC_ARGS,
-    example="""    Example with one-hot encoded labels::
+"""
+    + _CLDICE_SHARED_OVERVIEW
+    + BASE_COMMON_ARGS.format(
+        specific_args=_CLDICE_SPECIFIC_ARGS,
+        example="""    Example with one-hot encoded labels::
 
         import keras
         from medicai.losses import CategoricalCenterlineDiceLoss
@@ -191,12 +195,14 @@ Use ``SparseCenterlineDiceLoss`` if your labels are stored as class indices.
         )
 
         print(loss(y_true, y_pred))""",
-    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
         type or contains invalid class IDs.""",
-    default_name="categorical_cldice",
+        default_name="categorical_cldice",
+    )
 )
 
-SPARSE_CLDICE_DOCSTRING = """Centerline Dice loss for sparse categorical segmentation labels.
+SPARSE_CLDICE_DOCSTRING = (
+    """Centerline Dice loss for sparse categorical segmentation labels.
 
 This loss adapts clDice to sparse class-index targets by one-hot encoding them
 internally. When ``from_logits=True``, predictions are passed through softmax
@@ -205,9 +211,11 @@ before topology-aware overlap is computed.
 This variant is appropriate when the ground-truth tensor stores integer class
 IDs instead of one-hot vectors.
 
-""" + _CLDICE_SHARED_OVERVIEW + BASE_COMMON_ARGS.format(
-    specific_args=_CLDICE_SPECIFIC_ARGS,
-    example="""    Example with sparse labels and ignored regions::
+"""
+    + _CLDICE_SHARED_OVERVIEW
+    + BASE_COMMON_ARGS.format(
+        specific_args=_CLDICE_SPECIFIC_ARGS,
+        example="""    Example with sparse labels and ignored regions::
 
         import keras
         from medicai.losses import SparseCenterlineDiceLoss
@@ -227,12 +235,14 @@ IDs instead of one-hot vectors.
         )
 
         print(loss(y_true, y_pred))""",
-    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
         type or contains invalid class IDs.""",
-    default_name="sparse_cldice",
+        default_name="sparse_cldice",
+    )
 )
 
-BINARY_CLDICE_DOCSTRING = """Centerline Dice loss for binary or multi-label segmentation tasks.
+BINARY_CLDICE_DOCSTRING = (
+    """Centerline Dice loss for binary or multi-label segmentation tasks.
 
 This loss computes ``1 - clDice`` for binary or multi-label targets. When
 ``from_logits=True``, predictions are passed through a sigmoid activation
@@ -241,9 +251,11 @@ before topology-aware overlap is computed.
 This variant is especially useful for vessel-like or tubular foreground
 structures where preserving topology matters more than plain region overlap.
 
-""" + _CLDICE_SHARED_OVERVIEW + BASE_COMMON_ARGS.format(
-    specific_args=_CLDICE_SPECIFIC_ARGS,
-    example="""    Example with a binary foreground mask::
+"""
+    + _CLDICE_SHARED_OVERVIEW
+    + BASE_COMMON_ARGS.format(
+        specific_args=_CLDICE_SPECIFIC_ARGS,
+        example="""    Example with a binary foreground mask::
 
         import keras
         from medicai.losses import BinaryCenterlineDiceLoss
@@ -264,9 +276,10 @@ structures where preserving topology matters more than plain region overlap.
         )
 
         print(loss(y_true, y_pred))""",
-    raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
+        raises="""    ValueError: If ``target_class_ids`` is provided with an unsupported
         type or contains invalid class IDs.""",
-    default_name="binary_cldice",
+        default_name="binary_cldice",
+    )
 )
 
 
