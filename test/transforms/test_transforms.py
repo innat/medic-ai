@@ -2866,7 +2866,9 @@ def test_rotate90_supports_2d_and_3d_and_records_inverse_trace():
     assert trace["random"] is False
     assert trace["invertible"] is True
     np.testing.assert_allclose(
-        ops.convert_to_numpy(rotate_2d.inverse(TensorBundle({"image": out_2d["image"]}))["image"]),
+        ops.convert_to_numpy(
+            rotate_2d.inverse(TensorBundle({"image": out_2d["image"]}, out_2d.meta))["image"]
+        ),
         ops.convert_to_numpy(image_2d),
     )
 
