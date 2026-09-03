@@ -35,7 +35,7 @@ class Spacing(KeyedTransform, InvertibleTransform):
     ``Spacing`` uses voxel spacing derived from the input affine matrix to
     resample 3D channel-last tensors to a requested physical resolution. It is
     intended for volumetric medical images and corresponding labels that follow
-    Medic-AI's ``(D, H, W, C)`` tensor convention. This transform is
+    ``medicai``'s ``(D, H, W, C)`` tensor convention. This transform is
     sample-only and does not support batched inputs.
 
     The transform reads the source spacing from ``bundle.meta["affine"]``. If

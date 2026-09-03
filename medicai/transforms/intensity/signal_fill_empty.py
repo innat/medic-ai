@@ -19,13 +19,6 @@ class SignalFillEmpty(KeyedTransform):
     downstream normalization, resampling, or batching steps that assume valid
     numeric inputs.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     Args:
         keys: Keys of the tensors to sanitize.
         fill_value: Value used for ``NaN`` entries. Positive and negative

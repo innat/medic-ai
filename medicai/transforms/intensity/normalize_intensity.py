@@ -19,13 +19,6 @@ class NormalizeIntensity(KeyedTransform):
     restricted to nonzero voxels or pixels when background values should be
     excluded from normalization.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     Args:
         keys: Keys of the tensors to normalize.
         offset: Optional fixed value to subtract. If ``None``, the mean of

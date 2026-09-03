@@ -22,14 +22,6 @@ class RandomShiftIntensity(RandomTransform):
     and applies them with a given probability using the deterministic
     :class:`~medicai.transforms.ShiftIntensity` kernel.
 
-    The transform expects channel-last tensors such as ``(H, W, C)`` or
-    ``(D, H, W, C)``. Depending on ``input_layout``, it supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     .. note::
 
         Offsets may be sampled once per tensor or separately per channel depending

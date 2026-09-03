@@ -21,13 +21,6 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     bringing image intensities into a stable range such as ``[0, 1]`` or
     ``[-1, 1]`` before training.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     Args:
         keys: Keys of the tensors to scale.
         source_value_range: Two-element source intensity range ``(min, max)``.
@@ -122,9 +115,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     ``ScaleIntensityRange`` is invertible only for pure affine range mappings.
     In practice that means:
 
-    - `clip=False`
-    - `source_value_range[0] != source_value_range[1]`
-    - when a target range is provided, `target_value_range[0] != target_value_range[1]`
+    - ``clip=False``
+    - ``source_value_range[0] != source_value_range[1]``
+    - when a target range is provided, ``target_value_range[0] != target_value_range[1]``
 
     If clipping is enabled, or the mapping collapses values to a constant,
     exact inversion is not possible and :meth:`inverse` behaves as a no-op.

@@ -20,13 +20,6 @@ class RandomRotate90(RandomTransform):
     samples an integer ``k`` in ``[1, max_k]`` before delegating to
     :class:`~medicai.transforms.Rotate90`.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     .. note::
 
         In batch mode, one quarter-turn count ``k`` is sampled per transform call

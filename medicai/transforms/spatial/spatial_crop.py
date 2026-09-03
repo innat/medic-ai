@@ -18,12 +18,6 @@ class SpatialCrop(KeyedTransform, InvertibleTransform):
 
     This transform crops channel-last tensors using either a crop
     ``crop_start`` or a crop ``crop_center`` together with ``crop_size``.
-    Depending on ``input_layout``, it supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
 
     ``crop_size`` is interpreted per spatial dimension. Non-positive values are
     treated as "use the full available size" for that dimension after bounds

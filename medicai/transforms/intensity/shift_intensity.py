@@ -20,13 +20,6 @@ class ShiftIntensity(KeyedTransform, InvertibleTransform):
     random intensity-shift augmentations and can also be used directly for
     fixed preprocessing adjustments.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     The provided offset must be broadcast-compatible with the selected tensor
     shape. Its inverse subtracts the recorded offset from the same traced keys
     and still honors ``allow_missing_keys``.

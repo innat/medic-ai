@@ -28,13 +28,6 @@ class Resize(KeyedTransform, InvertibleTransform):
     continuous images can use linear interpolation while discrete labels can
     use nearest-neighbor interpolation.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     ``Resize`` is invertible in the limited sense that it records the original
     spatial shape and can resize the transformed result back to that shape via
     :meth:`inverse`. As with any resampling transform, the restored tensor is

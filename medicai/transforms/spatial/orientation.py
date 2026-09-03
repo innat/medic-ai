@@ -26,14 +26,6 @@ class Orientation(KeyedTransform, InvertibleTransform):
     Medic-AI's internal tensor layout convention of depth-first,
     channel-last data.
 
-    In Medic-AI, 3D sample tensors are expected to use the shape
-    ``(D, H, W, C)``, where:
-
-    - ``D`` is the depth axis
-    - ``H`` is the height axis
-    - ``W`` is the width axis
-    - ``C`` is the channel axis
-
     The associated ``affine`` metadata must describe that same voxel order.
     This means any loader that converts file-native arrays into Medic-AI's
     ``(D, H, W, C)`` layout must also reorder the affine consistently before

@@ -200,7 +200,7 @@ def _normalize_random_dtype(dtype: Any) -> str:
 
 
 class Transform:
-    """Base class for Medic-AI transforms.
+    """Base class for ``medicai`` transforms.
 
     ``Transform`` is the root abstraction of ``medicai.transforms``.
     Subclasses implement :meth:`apply` and receive a normalized
@@ -559,17 +559,6 @@ class RandomChoice(RandomTransform):
     that every candidate transform preserves the same key structure, shape, and
     dtype per key across branches. It does not preserve eager-style wrapper
     trace bookkeeping used for ``inverse()``.
-
-    .. note::
-
-        ``RandomChoice`` currently has two important limitations:
-
-        1. Graph-mode support is intended for forward execution only. Bundles
-           produced through the graph-safe path do not preserve the eager-style
-           wrapper trace bookkeeping needed for reliable ``inverse()`` support.
-        2. Symbolic transform pools should contain shape-preserving transforms.
-           If candidate transforms return different key structures, dtypes,
-           ranks, or static shapes, backend graph dispatch may fail.
 
     When to use this:
         Use ``RandomChoice`` when an augmentation pipeline should sample from a
@@ -1364,6 +1353,7 @@ class Compose(Transform):
     Example:
         .. code-block:: python
 
+            import keras
             from medicai.transforms import (
                 Compose,
                 Resize,
@@ -1385,8 +1375,6 @@ class Compose(Transform):
                     input_layout="DHWC",
                 )
             ])
-
-            import keras
 
             image = keras.random.normal((128, 128, 128, 1), seed=7)
             label = keras.random.uniform(

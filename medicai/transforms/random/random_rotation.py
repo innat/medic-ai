@@ -327,8 +327,8 @@ class RandomRotate(RandomTransform):
         On the TensorFlow backend, the affine image kernel used by
         ``RandomRotate`` is not currently XLA-compatible. Regular eager and
         ``tf.data`` graph execution remain supported, including GPU execution
-        when TensorFlow places the kernel there. Use ``jit_compile=False`` for
-        this transform rather than treating it as CPU-only.
+        when TensorFlow places the kernel there. When using RandomRotate within 
+        a compiled model graph, set jit_compile=False to disable XLA compilation.
 
     Args:
         keys: Tensor keys to rotate together.
@@ -413,12 +413,6 @@ class RandomRotate(RandomTransform):
             batch = torch.randn((2, 64, 64, 1))
             result = transform({"image": batch})
             print(result["image"].shape)
-
-    Notes:
-        The trace stores sampled per-item angles in bundle metadata, so inverse
-        execution can work after the model replaces transformed tensors with
-        predictions. Reuse the returned ``TensorBundle`` when calling
-        ``inverse()``.
     """
 
     def __init__(

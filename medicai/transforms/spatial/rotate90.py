@@ -33,12 +33,7 @@ class Rotate90(KeyedTransform, InvertibleTransform):
 
     ``Rotate90`` deterministically rotates channel-last tensors by
     multiples of 90 degrees. The rotation plane is selected through
-    ``spatial_axis``. Depending on ``input_layout``, it can be used for:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
+    ``spatial_axis``. 
 
     For 2D tensors, leaving ``spatial_axis=None`` rotates in the image plane.
     For 3D tensors, the default also rotates within the last two spatial

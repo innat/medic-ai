@@ -26,13 +26,6 @@ class RandomCropByPosNegLabel(RandomTransform):
     voxels according to the ``pos:neg`` ratio, then the same patch is cropped
     from both image and label tensors.
 
-    Depending on ``input_layout``, this transform supports:
-
-    - sample 2D tensors shaped ``(H, W, C)``
-    - sample 3D tensors shaped ``(D, H, W, C)``
-    - batch 2D tensors shaped ``(B, H, W, C)``
-    - batch 3D tensors shaped ``(B, D, H, W, C)``
-
     Args:
         keys: Two keys containing the image tensor and label tensor.
         target_shape: Output crop size as ``(H, W)`` for 2D inputs or
