@@ -317,6 +317,11 @@ class RandomRotate(RandomTransform):
     exact voxel-for-voxel round trip. ``fill_mode="constant"`` is typically
     the most predictable choice for medical images.
 
+    Internally, the transform samples angles for each sample, converts them to
+    2D or 3D affine matrices, and resamples the selected tensors with the
+    backend-agnostic Keras image operation. The same sampled angles and
+    interpolation geometry are shared across all selected keys.
+
     .. note::
 
         On the TensorFlow backend, the affine image kernel used by

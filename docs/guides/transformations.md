@@ -5,33 +5,32 @@ augmentation utilities for medical imaging workflows. The transforms are
 designed to integrate cleanly with `pygrain`, `torch.utils.data.Dataset`,
 `tf.data.Dataset`, and `keras.utils.PyDataset`.
 
+Choose the right dataloader for the target Keras backend.
+
+| Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
+| :--- | :---: | :---: | :---: | :---: |
+| TensorFlow | ✓ | ✗ | ✓ | ✓ |
+| Torch | ✓ | ✓ | ✗ | ✓ |
+| JAX | ✓ | ✗ | ✗ | ✓ |
+
+When `torch` is the active backend, `medicai.transforms` use Torch-backed
+Keras operations. The same applies to the `tensorflow` and `jax` backends.
+
+If you want a common dataloader that supports all backends out of the box,
+the recommended option is **PyGrain**, which provides efficient parallel data
+loading and multithreading and multiprocessing worker support.
+
+
 **Input Conventions**
 
-``medicai`` transforms use **channel-last** tensors:
+``medicai`` transforms use **channel-last** tensors and provide the
+`input_layout` argument to make the execution mode explicit:
 
-- 2D tensors use `(H, W, C)`
-- 3D tensors use `(D, H, W, C)`
-- batched 2D tensors use `(B, H, W, C)`
-- batched 3D tensors use `(B, D, H, W, C)`
+- single 2D tensors use: `input_layout="HWC"`
+- single 3D tensors use: `input_layout="DHWC"`
+- batched 2D tensors use: `input_layout="BHWC"`
+- batched 3D tensors use: `input_layout="BDHWC"`
 
-The transform API uses `input_layout` to make the execution mode explicit:
-
-- sample layouts (`"HWC"`, `"DHWC"`) indicate that the transform expects one sample tensor at a time
-- batch layouts (`"BHWC"`, `"BDHWC"`) indicate that the transform expects one batched tensor bundle
-
-
-## Capability Split
-
-**Sample-only transforms**
-
-These transforms process one sample at a time because they depend on
-sample-specific metadata or spatial decisions:
-
-- `CropForeground`
-- `Spacing`
-- `Orientation`
-
-They support only sample layouts (`"HWC"` or `"DHWC"`).
 
 **Dual-mode transforms**
 
@@ -50,10 +49,24 @@ depending on `input_layout`:
 - `RandomCropByPosNegLabel`
 - `RandomCutOut`
 
-They support both sample layouts (`"HWC"` or `"DHWC"`) and batch layout (`"BHWC"` or `"BDHWC"`). Callers should therefore provide spatial arguments appropriate to the input rank instead of relying on implicit defaults.
+They support both sample layouts (`"HWC"` or `"DHWC"`) and batch layouts
+(`"BHWC"` or `"BDHWC"`). Callers should therefore provide spatial arguments
+appropriate to the input rank instead of relying on implicit defaults.
+
+**Sample-only transforms**
+
+These transforms process one sample at a time because they depend on
+sample-specific metadata or spatial decisions:
+
+- `CropForeground`
+- `Spacing`
+- `Orientation`
+
+They support only sample layouts (`"HWC"` or `"DHWC"`).
 
 ```{note}
-Two spatial transforms are intentionally sample-level 3D-only. The do not support 2D input or batch support:
+Two spatial transforms are intentionally sample-level and 3D-only. They do not
+support 2D input or batched input:
 
 - `Spacing`
 - `Orientation`
@@ -62,8 +75,8 @@ Two spatial transforms are intentionally sample-level 3D-only. The do not suppor
 ## Spatial
 
 Spatial transforms modify geometry, layout, orientation, or spatial extent.
-Most support both 2D and 3D tensors when the caller provides arguments with the
-appropriate rank. So, the same class can be used in either of these
+Most support both `2D` and `3D` tensors when the caller provides arguments with the
+appropriate rank. Therefore, the same class can be used in either of these
 contexts:
 
 - in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
@@ -89,7 +102,8 @@ contexts:
 ## Intensity
 
 Intensity transforms modify voxel or pixel values without changing the spatial
-layout. Most support both 2D and 3D tensors when the caller provides arguments with the appropriate rank. So, the same class can be used in either of these
+layout. Most support both `2D` and `3D` tensors when the caller provides arguments
+with the appropriate rank. Therefore, the same class can be used in either of these
 contexts:
 
 - in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
@@ -107,7 +121,9 @@ contexts:
 
 ## Random
 
-Random transforms provide stochastic augmentation. Most support both 2D and 3D tensors when the caller provides arguments with the appropriate rank. So, the same class can be used in either of these contexts:
+Random transforms provide stochastic augmentation. Most support both `2D` and `3D`
+tensors when the caller provides arguments with the appropriate rank.
+Therefore, the same class can be used in either of these contexts:
 
 - in dataloaders with sample layouts such as `"HWC"` or `"DHWC"`
 - on already batched tensors with batch layouts such as `"BHWC"` or `"BDHWC"`
@@ -118,9 +134,13 @@ All public random transforms inherit the shared `RandomTransform` seed contract.
 - an integer seed for reproducible replay
 - `keras.random.SeedGenerator` for stateful seeded sampling
 
-For currently dual-mode random transforms, a batch layout causes one random
-decision or sampled parameter set to be shared across the entire incoming batch
-tensor. This keeps inversion and trace behavior simple and predictable.
+```{note}
+
+For currently dual-mode random transforms, using a batch layout causes one
+random decision or sampled parameter set to be shared across the entire
+incoming batch tensor. This keeps inversion and trace behavior simple and
+predictable.
+```
 
 
 ```{eval-rst}

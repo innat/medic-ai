@@ -102,7 +102,7 @@ model = SwinUNETR(encoder=custom_encoder)
 
 # 📊 Features
 
-**Supported Dataloaders**: Choose the right dataloaders for the targeted Keras backend.
+**Supported Dataloaders**: Choose the right dataloaders for the target Keras backend.
 
 | Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
 | :--- | :---: | :---: | :---: | :---: |
