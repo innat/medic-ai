@@ -151,7 +151,7 @@ can run on either CPU or GPU, depending on the active backend and execution
 context. Many transforms are also compatible with XLA compilation; any
 backend-specific XLA limitations are documented by the individual transform.
 
-| Transformation | Layout | GPU | GPU (XLA/compiled) |
+| Transformation | Supported Layout | GPU | GPU (XLA/compiled) |
 | :--- | :--- | :---: | :---: |
 | NormalizeIntensity | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
 | ScaleIntensityRange | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
@@ -172,9 +172,8 @@ backend-specific XLA limitations are documented by the individual transform.
 | Orientation | `DHWC` | No | No |
 | Spacing | `DHWC` | No | No |
 
-> `Limited` means compiled execution depends on the active backend and runtime
-> configuration (i.e., `jit_compile : bool`). `No` indicates that the current  
-> implementation is not included
+> **Note**: `Limited` means compiled execution depends on the active backend and runtime
+> configuration (i.e., `jit_compile : bool`). `No` indicates that the current implementation is not included
 > in the compiled GPU path. The table describes supported execution patterns;
 > refer to the transform docstrings and [Transform Benchmarks](benchmarks/README.md)
 > for backend-specific limitations and measurements.
