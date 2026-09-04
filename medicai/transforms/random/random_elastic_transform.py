@@ -96,9 +96,53 @@ def _flatten_gather(volume: Any, batch_indices: Any, spatial_indices: Sequence[A
     return ops.reshape(gathered, output_shape)
 
 
-def _linear_sample(volume: Any, coordinates: Any) -> Any:
+def _normalize_coordinates(
+    volume: Any,
+    coordinates: Any,
+    fill_mode: str,
+) -> tuple[Any, Any]:
+    """Map sampling coordinates to the requested boundary behavior."""
+    spatial_rank = coordinates.shape[-1]
+    shape = ops.shape(volume)
+    valid = ops.ones_like(coordinates[..., 0], dtype="bool")
+    normalized = []
+    for axis in range(spatial_rank):
+        size = shape[axis + 1]
+        coordinate = coordinates[..., axis]
+        if fill_mode == "constant":
+            size_value = ops.cast(size, coordinate.dtype)
+            valid = ops.logical_and(
+                valid,
+                ops.logical_and(coordinate >= 0.0, coordinate <= size_value - 1.0),
+            )
+            normalized.append(ops.clip(coordinate, 0.0, size_value - 1.0))
+        elif fill_mode == "reflect":
+            static_size = volume.shape[axis + 1]
+            if static_size == 1:
+                normalized.append(ops.zeros_like(coordinate))
+            else:
+                period = ops.cast(2 * (int(static_size) - 1), coordinate.dtype)
+                reflected = ops.mod(ops.abs(coordinate), period)
+                edge = ops.cast(int(static_size) - 1, coordinate.dtype)
+                normalized.append(ops.where(reflected <= edge, reflected, period - reflected))
+        elif fill_mode == "wrap":
+            normalized.append(ops.mod(coordinate, ops.cast(size, coordinate.dtype)))
+        else:  # nearest
+            normalized.append(
+                ops.clip(coordinate, 0.0, ops.cast(size, coordinate.dtype) - 1.0)
+            )
+    return ops.stack(normalized, axis=-1), valid
+
+
+def _linear_sample(
+    volume: Any,
+    coordinates: Any,
+    fill_mode: str = "nearest",
+    fill_value: float = 0.0,
+) -> Any:
     """Sample a 2D or 3D channel-last volume with linear interpolation."""
     spatial_rank = coordinates.shape[-1]
+    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], volume.dtype) for index in range(spatial_rank)]
     floors = [ops.floor(coordinates[..., index]) for index in range(spatial_rank)]
@@ -124,12 +168,21 @@ def _linear_sample(volume: Any, coordinates: Any) -> Any:
             indices.append(ops.cast(coordinate, "int32"))
             weight = weight * (fractions[axis] if bit else (1.0 - fractions[axis]))
         output = output + _flatten_gather(volume, batch_indices, indices) * weight
+    if fill_mode == "constant":
+        fill = ops.cast(fill_value, output.dtype)
+        output = ops.where(valid[..., None], output, fill)
     return output
 
 
-def _nearest_sample(volume: Any, coordinates: Any) -> Any:
+def _nearest_sample(
+    volume: Any,
+    coordinates: Any,
+    fill_mode: str = "nearest",
+    fill_value: float = 0.0,
+) -> Any:
     """Sample a channel-last volume with nearest-neighbor interpolation."""
     spatial_rank = coordinates.shape[-1]
+    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], coordinates.dtype) for index in range(spatial_rank)]
     indices = []
@@ -144,7 +197,11 @@ def _nearest_sample(volume: Any, coordinates: Any) -> Any:
     batch_indices = ops.arange(shape[0], dtype="int32")
     batch_indices = ops.reshape(batch_indices, [shape[0]] + [1] * spatial_rank)
     batch_indices = ops.broadcast_to(batch_indices, ops.shape(indices[0]))
-    return _flatten_gather(volume, batch_indices, indices)
+    output = _flatten_gather(volume, batch_indices, indices)
+    if fill_mode == "constant":
+        fill = ops.cast(fill_value, output.dtype)
+        output = ops.where(valid[..., None], output, fill)
+    return output
 
 
 class RandomElasticTransform(RandomTransform):
@@ -165,6 +222,10 @@ class RandomElasticTransform(RandomTransform):
             ``keys``, or a mapping from key to mode. Use ``"bilinear"`` for
             images and ``"nearest"`` for labels or masks. For 3D inputs,
             ``"trilinear"`` is the linear mode.
+        fill_mode: Boundary behavior for out-of-bounds coordinates. Supported
+            values are ``"nearest"``, ``"constant"``, ``"reflect"``, and
+            ``"wrap"``. The default ``"nearest"`` preserves border values.
+        fill_value: Value used outside the input when ``fill_mode="constant"``.
         prob: Probability of applying the deformation.
         input_layout: One of ``"HWC"``, ``"DHWC"``, ``"BHWC"``, or
             ``"BDHWC"``.
@@ -190,6 +251,8 @@ class RandomElasticTransform(RandomTransform):
         *,
         input_layout: str,
         control_grid_spacing: int | Sequence[int] | None = None,
+        fill_mode: str = "nearest",
+        fill_value: float = 0.0,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -212,6 +275,14 @@ class RandomElasticTransform(RandomTransform):
         self.control_grid_spacing = self._normalize_control_grid_spacing(
             control_grid_spacing
         )
+        if fill_mode not in {"nearest", "constant", "reflect", "wrap"}:
+            raise ValueError(
+                "`fill_mode` must be one of 'nearest', 'constant', 'reflect', or 'wrap'."
+            )
+        if not isinstance(fill_value, Number):
+            raise TypeError("`fill_value` must be numeric.")
+        self.fill_mode = fill_mode
+        self.fill_value = float(fill_value)
         self.interpolation = self._normalize_interpolation(interpolation)
         self.allow_missing_keys = allow_missing_keys
 
@@ -280,6 +351,8 @@ class RandomElasticTransform(RandomTransform):
             "alpha": self.alpha,
             "sigma": self.sigma,
             "control_grid_spacing": self.control_grid_spacing,
+            "fill_mode": self.fill_mode,
+            "fill_value": self.fill_value,
             "interpolation": dict(self.interpolation),
             "input_layout": self.input_layout,
             "should_apply": self.sample_should_apply(),
@@ -375,5 +448,15 @@ class RandomElasticTransform(RandomTransform):
         grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
         coordinates = grid[None, ...] + field
         if interpolation == "nearest":
-            return _nearest_sample(tensor, coordinates)
-        return _linear_sample(tensor, coordinates)
+            return _nearest_sample(
+                tensor,
+                coordinates,
+                fill_mode=self.fill_mode,
+                fill_value=self.fill_value,
+            )
+        return _linear_sample(
+            tensor,
+            coordinates,
+            fill_mode=self.fill_mode,
+            fill_value=self.fill_value,
+        )
