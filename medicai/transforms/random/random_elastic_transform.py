@@ -436,10 +436,11 @@ class RandomElasticTransform(RandomTransform):
             max(1, (size + step - 1) // step)
             for size, step in zip(spatial_shape, spacing, strict=True)
         )
-        field_shape = [shape[0]] + list(coarse_shape) + [spatial_rank]
+        coarse_field_shape = [shape[0]] + list(coarse_shape) + [spatial_rank]
+        output_field_shape = [shape[0]] + list(spatial_shape) + [spatial_rank]
 
         def sample_field():
-            noise = self.random_normal(shape=field_shape, dtype="float32")
+            noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
             smooth_sigma = self.sigma / min(spacing)
             field = _gaussian_smooth_nd(noise, max(smooth_sigma, 1e-3), spatial_rank)
             if spatial_rank == 3 and spacing != (1, 1, 1):
@@ -457,7 +458,7 @@ class RandomElasticTransform(RandomTransform):
         return ops.cond(
             ops.cast(should_apply, "bool"),
             sample_field,
-            lambda: ops.zeros(field_shape, dtype="float32"),
+            lambda: ops.zeros(output_field_shape, dtype="float32"),
         )
 
     def _static_spatial_shape(self, tensor: Any) -> tuple[int, ...]:
