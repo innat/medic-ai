@@ -136,16 +136,6 @@ class Flip(KeyedTransform, InvertibleTransform):
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
         trace = self._get_last_flip_trace(bundle)
         if trace is None:
-            if self.spatial_axis is None:
-                return bundle
-            params = {
-                "spatial_axis": self.spatial_axis,
-                "input_layout": self.input_layout,
-            }
-            self.apply_to_present_keys(
-                bundle,
-                lambda tensor, key: self.transform_tensor(tensor, key, params),
-            )
             return bundle
         self.apply_to_present_keys(
             bundle,

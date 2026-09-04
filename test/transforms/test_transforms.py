@@ -2716,9 +2716,23 @@ def test_flip_supports_2d_and_3d_and_records_inverse_trace():
     assert trace["random"] is False
     assert trace["invertible"] is True
     np.testing.assert_allclose(
-        ops.convert_to_numpy(flip_2d.inverse(TensorBundle({"image": out_2d["image"]}))["image"]),
+        ops.convert_to_numpy(
+            flip_2d.inverse(
+                TensorBundle({"image": out_2d["image"]}, out_2d.meta)
+            )["image"]
+        ),
         ops.convert_to_numpy(image_2d),
     )
+
+
+@pytest.mark.unit
+def test_flip_inverse_without_trace_is_noop():
+    bundle = TensorBundle({"image": as_tensor(np.ones((4, 4, 1), dtype=np.float32))})
+    transform = Flip(keys=["image"], spatial_axis=1, input_layout="HWC")
+
+    restored = transform.inverse(bundle)
+
+    assert restored is bundle
 
 
 @pytest.mark.unit
