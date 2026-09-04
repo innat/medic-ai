@@ -14,6 +14,7 @@ from ..utils import (
     restore_from_batch_axis,
     validate_tensor_matches_layout,
 )
+from ...utils.image import resize_volumes
 
 
 def _gaussian_kernel_1d(sigma: float, radius: int, dtype: str = "float32") -> Any:
@@ -151,8 +152,10 @@ class RandomElasticTransform(RandomTransform):
 
     One displacement field is sampled per batch item and shared by all
     selected keys, keeping aligned images and masks geometrically consistent.
-    The initial implementation uses a full-resolution smoothed field; a
-    coarse-grid 3D implementation is planned for large volumes.
+    Three-dimensional fields can be sampled on a coarse grid and expanded to
+    the input resolution with trilinear interpolation. Two-dimensional fields
+    retain the full-resolution path unless a future 2D coarse-grid policy is
+    introduced.
 
     Args:
         keys: Keys of aligned tensors to deform.
@@ -165,6 +168,9 @@ class RandomElasticTransform(RandomTransform):
         prob: Probability of applying the deformation.
         input_layout: One of ``"HWC"``, ``"DHWC"``, ``"BHWC"``, or
             ``"BDHWC"``.
+        control_grid_spacing: Optional spacing between coarse 3D field samples,
+            in voxels. A scalar applies to every spatial axis. If ``None``, the
+            field is sampled at full resolution.
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -183,6 +189,7 @@ class RandomElasticTransform(RandomTransform):
         prob: float = 0.1,
         *,
         input_layout: str,
+        control_grid_spacing: int | Sequence[int] | None = None,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -202,8 +209,36 @@ class RandomElasticTransform(RandomTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
+        self.control_grid_spacing = self._normalize_control_grid_spacing(
+            control_grid_spacing
+        )
         self.interpolation = self._normalize_interpolation(interpolation)
         self.allow_missing_keys = allow_missing_keys
+
+    def _normalize_control_grid_spacing(
+        self,
+        spacing: int | Sequence[int] | None,
+    ) -> tuple[int, ...] | None:
+        if spacing is None:
+            return None
+        if isinstance(spacing, int):
+            values = (spacing,) * self.layout_info.spatial_rank
+        elif isinstance(spacing, (tuple, list)):
+            if len(spacing) != self.layout_info.spatial_rank:
+                raise ValueError(
+                    "`control_grid_spacing` must contain one value per spatial axis."
+                )
+            values = tuple(spacing)
+        else:
+            raise TypeError("`control_grid_spacing` must be an int, sequence, or None.")
+        if any(not isinstance(value, int) or value <= 0 for value in values):
+            raise ValueError("`control_grid_spacing` values must be positive integers.")
+        if self.layout_info.spatial_rank == 2 and values != (1, 1):
+            raise ValueError(
+                "Coarse `control_grid_spacing` is currently supported only for 3D. "
+                "Use None or (1, 1) for 2D inputs."
+            )
+        return values
 
     def _normalize_interpolation(
         self,
@@ -244,6 +279,7 @@ class RandomElasticTransform(RandomTransform):
             "keys": list(present_keys),
             "alpha": self.alpha,
             "sigma": self.sigma,
+            "control_grid_spacing": self.control_grid_spacing,
             "interpolation": dict(self.interpolation),
             "input_layout": self.input_layout,
             "should_apply": self.sample_should_apply(),
@@ -291,18 +327,44 @@ class RandomElasticTransform(RandomTransform):
     def _sample_or_zero_field(self, tensor: Any, should_apply: Any) -> Any:
         shape = ops.shape(tensor)
         spatial_rank = self.layout_info.spatial_rank
-        field_shape = [shape[0]] + [shape[index + 1] for index in range(spatial_rank)]
-        field_shape.append(spatial_rank)
+        spatial_shape = self._static_spatial_shape(tensor)
+        spacing = self.control_grid_spacing or (1,) * spatial_rank
+        coarse_shape = tuple(
+            max(1, (size + step - 1) // step)
+            for size, step in zip(spatial_shape, spacing, strict=True)
+        )
+        field_shape = [shape[0]] + list(coarse_shape) + [spatial_rank]
 
         def sample_field():
             noise = self.random_normal(shape=field_shape, dtype="float32")
-            return _gaussian_smooth_nd(noise, self.sigma, spatial_rank) * self.alpha
+            smooth_sigma = self.sigma / min(spacing)
+            field = _gaussian_smooth_nd(noise, max(smooth_sigma, 1e-3), spatial_rank)
+            if spatial_rank == 3 and spacing != (1, 1, 1):
+                field = resize_volumes(
+                    field,
+                    depth=spatial_shape[0],
+                    height=spatial_shape[1],
+                    width=spatial_shape[2],
+                    method="trilinear",
+                    align_corners=False,
+                )
+            return field * self.alpha
 
         return ops.cond(
             ops.cast(should_apply, "bool"),
             sample_field,
             lambda: ops.zeros(field_shape, dtype="float32"),
         )
+
+    def _static_spatial_shape(self, tensor: Any) -> tuple[int, ...]:
+        spatial_rank = self.layout_info.spatial_rank
+        spatial_shape = tuple(tensor.shape[1 : spatial_rank + 1])
+        if any(size is None for size in spatial_shape):
+            raise ValueError(
+                "RandomElasticTransform requires statically known spatial dimensions "
+                "to construct its deformation field."
+            )
+        return tuple(int(size) for size in spatial_shape)
 
     def _warp_tensor(self, tensor: Any, field: Any, interpolation: str) -> Any:
         shape = ops.shape(tensor)

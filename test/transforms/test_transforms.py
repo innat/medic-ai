@@ -4094,6 +4094,7 @@ def test_random_elastic_transform_supports_3d_sample_and_batch_layouts():
         keys=["image", "mask"],
         alpha=0.5,
         sigma=1.0,
+        control_grid_spacing=(2, 2, 2),
         interpolation={"image": "trilinear", "mask": "nearest"},
         prob=1.0,
         seed=7,
@@ -4111,6 +4112,16 @@ def test_random_elastic_transform_supports_3d_sample_and_batch_layouts():
     )
     assert tuple(ops.shape(batch["image"])) == (2, 3, 4, 5, 1)
     assert tuple(ops.shape(batch["mask"])) == (2, 3, 4, 5, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_rejects_coarse_grid_for_2d():
+    with pytest.raises(ValueError, match="supported only for 3D"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="HWC",
+            control_grid_spacing=(2, 2),
+        )
 
 
 @pytest.mark.unit
