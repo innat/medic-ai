@@ -204,6 +204,27 @@ def _nearest_sample(
     return output
 
 
+def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> Any:
+    """Zero displacement on the outer control-grid layers."""
+    if locked_borders == 0:
+        return field
+
+    shape = ops.shape(field)
+    interior = ops.ones_like(field[..., 0], dtype="bool")
+    for axis in range(spatial_rank):
+        size = shape[axis + 1]
+        coordinates = ops.arange(size, dtype="int32")
+        axis_interior = ops.logical_and(
+            coordinates >= locked_borders,
+            coordinates < size - locked_borders,
+        )
+        reshape = [1] * (spatial_rank + 1)
+        reshape[axis + 1] = size
+        axis_interior = ops.reshape(axis_interior, reshape)
+        interior = ops.logical_and(interior, axis_interior)
+    return ops.where(interior[..., None], field, ops.zeros_like(field))
+
+
 class RandomElasticTransform(RandomTransform):
     """Apply random smooth elastic deformation to 2D or 3D tensors.
 
@@ -232,6 +253,8 @@ class RandomElasticTransform(RandomTransform):
         control_grid_spacing: Optional spacing between coarse 3D field samples,
             in voxels. A scalar applies to every spatial axis. If ``None``, the
             field is sampled at full resolution.
+        locked_borders: Number of outer coarse-grid layers with zero
+            displacement. This is currently available for 3D fields only.
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -253,6 +276,7 @@ class RandomElasticTransform(RandomTransform):
         control_grid_spacing: int | Sequence[int] | None = None,
         fill_mode: str = "nearest",
         fill_value: float = 0.0,
+        locked_borders: int = 0,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -275,6 +299,11 @@ class RandomElasticTransform(RandomTransform):
         self.control_grid_spacing = self._normalize_control_grid_spacing(
             control_grid_spacing
         )
+        if not isinstance(locked_borders, int) or locked_borders < 0:
+            raise ValueError("`locked_borders` must be a non-negative integer.")
+        if locked_borders and self.layout_info.spatial_rank != 3:
+            raise ValueError("`locked_borders` is currently supported only for 3D.")
+        self.locked_borders = locked_borders
         if fill_mode not in {"nearest", "constant", "reflect", "wrap"}:
             raise ValueError(
                 "`fill_mode` must be one of 'nearest', 'constant', 'reflect', or 'wrap'."
@@ -351,6 +380,7 @@ class RandomElasticTransform(RandomTransform):
             "alpha": self.alpha,
             "sigma": self.sigma,
             "control_grid_spacing": self.control_grid_spacing,
+            "locked_borders": self.locked_borders,
             "fill_mode": self.fill_mode,
             "fill_value": self.fill_value,
             "interpolation": dict(self.interpolation),
@@ -421,6 +451,7 @@ class RandomElasticTransform(RandomTransform):
                     method="trilinear",
                     align_corners=False,
                 )
+            field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             return field * self.alpha
 
         return ops.cond(

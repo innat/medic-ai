@@ -4125,6 +4125,31 @@ def test_random_elastic_transform_rejects_coarse_grid_for_2d():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_locks_3d_volume_borders():
+    image = as_tensor(np.arange(64, dtype=np.float32).reshape(4, 4, 4, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=20.0,
+        sigma=1.0,
+        interpolation="nearest",
+        prob=1.0,
+        input_layout="DHWC",
+        locked_borders=1,
+        seed=7,
+    )
+
+    output = ops.convert_to_numpy(transform(TensorBundle({"image": image}))["image"])
+    original = ops.convert_to_numpy(image)
+
+    np.testing.assert_array_equal(output[0], original[0])
+    np.testing.assert_array_equal(output[-1], original[-1])
+    np.testing.assert_array_equal(output[:, 0], original[:, 0])
+    np.testing.assert_array_equal(output[:, -1], original[:, -1])
+    np.testing.assert_array_equal(output[:, :, 0], original[:, :, 0])
+    np.testing.assert_array_equal(output[:, :, -1], original[:, :, -1])
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_probability_zero_is_noop():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     transform = RandomElasticTransform(
