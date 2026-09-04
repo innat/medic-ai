@@ -7,6 +7,7 @@ from medicai.transforms import (
     CropForeground,
     Flip,
     NormalizeIntensity,
+    RandomElasticTransform,
     Orientation,
     RandomCropByPosNegLabel,
     RandomCutOut,
@@ -4047,4 +4048,100 @@ def test_rotate90_inverse_does_not_consume_another_instance_trace():
     np.testing.assert_array_equal(
         ops.convert_to_numpy(restored["image"]),
         ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_supports_2d_sample_and_batch_layouts():
+    image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
+    mask = as_tensor((np.arange(20).reshape(4, 5, 1) > 10).astype(np.int32))
+    transform = RandomElasticTransform(
+        keys=["image", "mask"],
+        alpha=1.0,
+        sigma=1.0,
+        interpolation={"image": "bilinear", "mask": "nearest"},
+        prob=1.0,
+        input_layout="HWC",
+        seed=7,
+    )
+
+    sample = transform(TensorBundle({"image": image, "mask": mask}))
+    assert tuple(ops.shape(sample["image"])) == (4, 5, 1)
+    assert tuple(ops.shape(sample["mask"])) == (4, 5, 1)
+    assert set(np.unique(ops.convert_to_numpy(sample["mask"]))).issubset({0, 1})
+
+    batch_transform = RandomElasticTransform(
+        keys=["image", "mask"],
+        alpha=1.0,
+        sigma=1.0,
+        interpolation={"image": "bilinear", "mask": "nearest"},
+        prob=1.0,
+        input_layout="BHWC",
+        seed=7,
+    )
+    batch = batch_transform(
+        TensorBundle({"image": ops.stack([image, image]), "mask": ops.stack([mask, mask])})
+    )
+    assert tuple(ops.shape(batch["image"])) == (2, 4, 5, 1)
+    assert tuple(ops.shape(batch["mask"])) == (2, 4, 5, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_supports_3d_sample_and_batch_layouts():
+    image = as_tensor(np.arange(60, dtype=np.float32).reshape(3, 4, 5, 1))
+    mask = as_tensor((np.arange(60).reshape(3, 4, 5, 1) > 30).astype(np.int32))
+    config = dict(
+        keys=["image", "mask"],
+        alpha=0.5,
+        sigma=1.0,
+        interpolation={"image": "trilinear", "mask": "nearest"},
+        prob=1.0,
+        seed=7,
+    )
+
+    sample = RandomElasticTransform(input_layout="DHWC", **config)(
+        TensorBundle({"image": image, "mask": mask})
+    )
+    assert tuple(ops.shape(sample["image"])) == (3, 4, 5, 1)
+    assert tuple(ops.shape(sample["mask"])) == (3, 4, 5, 1)
+    assert set(np.unique(ops.convert_to_numpy(sample["mask"]))).issubset({0, 1})
+
+    batch = RandomElasticTransform(input_layout="BDHWC", **config)(
+        TensorBundle({"image": ops.stack([image, image]), "mask": ops.stack([mask, mask])})
+    )
+    assert tuple(ops.shape(batch["image"])) == (2, 3, 4, 5, 1)
+    assert tuple(ops.shape(batch["mask"])) == (2, 3, 4, 5, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_probability_zero_is_noop():
+    image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=1.0,
+        sigma=1.0,
+        prob=0.0,
+        input_layout="HWC",
+        seed=7,
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert not bool(ops.convert_to_numpy(output.get_applied_transforms()[-1]["applied"]))
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_replays_seed_sequence():
+    image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
+    config = dict(keys=["image"], alpha=1.0, sigma=1.0, prob=1.0, input_layout="HWC", seed=7)
+    first = RandomElasticTransform(**config)(TensorBundle({"image": image}))
+    second = RandomElasticTransform(**config)(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(first["image"]),
+        ops.convert_to_numpy(second["image"]),
     )
