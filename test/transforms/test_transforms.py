@@ -4470,6 +4470,38 @@ def test_random_elastic_transform_rejects_invalid_field_configuration():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("input_layout", "spacing"),
+    [("HWC", (2, 2, 2)), ("DHWC", (2, 2))],
+    ids=["2d-spacing-for-3d", "3d-spacing-for-2d"],
+)
+def test_random_elastic_transform_validates_control_grid_rank(input_layout, spacing):
+    with pytest.raises(ValueError, match="one value per spatial axis"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout=input_layout,
+            control_grid_spacing=spacing,
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("input_layout", "field_interpolation"),
+    [("HWC", "trilinear"), ("DHWC", "bilinear")],
+    ids=["trilinear-for-2d", "bilinear-for-3d"],
+)
+def test_random_elastic_transform_validates_field_interpolation_rank(
+    input_layout, field_interpolation
+):
+    with pytest.raises(ValueError, match="invalid for"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout=input_layout,
+            field_interpolation=field_interpolation,
+        )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_mm_requires_affine_metadata():
     image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
     transform = RandomElasticTransform(

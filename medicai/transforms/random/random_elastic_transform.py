@@ -262,13 +262,15 @@ class RandomElasticTransform(RandomTransform):
         prob: Probability of applying the deformation.
         input_layout: One of ``"HWC"``, ``"DHWC"``, ``"BHWC"``, or
             ``"BDHWC"``.
-        control_grid_spacing: Optional spacing between coarse 3D field samples,
-            in voxels. A scalar applies to every spatial axis. If ``None``, the
-            field is sampled at full resolution.
+        control_grid_spacing: Optional spacing between coarse field samples,
+            in pixel/voxel units. A scalar applies to every spatial axis, while
+            a sequence must contain exactly two values for 2D or three values
+            for 3D. If ``None``, the field is sampled at full resolution.
         displacement_units: Units for ``alpha`` and the sampled displacement
-            field. ``"voxel"`` is the default and is currently executable.
-            ``"mm"`` requires valid ``bundle.meta["affine"]`` metadata;
-            physical-unit conversion is not implemented yet.
+            field. ``"voxel"`` is the default for both ranks; for 2D it means
+            pixel units, and for 3D it means voxel units. ``"mm"`` requires
+            valid ``bundle.meta["affine"]`` metadata; physical-unit conversion
+            is not implemented yet.
         field_interpolation: Interpolation used to expand a coarse field. If
             ``None``, 2D fields use ``"bilinear"`` and 3D fields use
             ``"trilinear"``.
@@ -279,6 +281,131 @@ class RandomElasticTransform(RandomTransform):
             fields.
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Examples:
+        A 2D sample-level TensorFlow pipeline. Set ``KERAS_BACKEND`` before
+        importing Keras.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            image = keras.ops.zeros((224, 224, 3), dtype="float32")
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="HWC",
+                alpha=4.0,
+                sigma=6.0,
+                control_grid_spacing=(16, 16),
+                field_interpolation="bilinear",
+                seed=101,
+            )
+            result = transform({"image": image})
+
+        A 2D batch-level Torch pipeline using a coarse B-spline field on GPU.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            images = keras.ops.zeros((8, 224, 224, 3), dtype="float32")
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="BHWC",
+                alpha=(2.0, 5.0),
+                sigma=(4.0, 8.0),
+                control_grid_spacing=(16, 16),
+                field_interpolation="bspline",
+                prob=0.8,
+                seed=102,
+            )
+            with keras.device("gpu:0"):
+                result = transform({"image": images})
+
+        A 3D sample-level JAX pipeline with trilinear coarse-field expansion.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            volume = keras.ops.zeros((96, 128, 128, 1), dtype="float32")
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="DHWC",
+                alpha=3.0,
+                sigma=5.0,
+                control_grid_spacing=(8, 8, 8),
+                field_interpolation="trilinear",
+                seed=103,
+            )
+            result = transform({"image": volume})
+
+        A 3D batch-level TensorFlow segmentation pipeline. The same sampled
+        field is shared by the image and label keys, while their value
+        interpolation remains different.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            image = keras.ops.zeros((2, 64, 96, 96, 1), dtype="float32")
+            label = keras.ops.zeros((2, 64, 96, 96, 1), dtype="int32")
+            transform = RandomElasticTransform(
+                keys=["image", "label"],
+                input_layout="BDHWC",
+                interpolation={"image": "trilinear", "label": "nearest"},
+                control_grid_spacing=(8, 8, 8),
+                locked_borders=1,
+                seed=104,
+            )
+            result = transform({"image": image, "label": label})
+
+        A Torch 3D pipeline with constant image-domain padding and a B-spline
+        deformation field.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            volume = keras.ops.zeros((1, 160, 256, 256, 1), dtype="float32")
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="BDHWC",
+                alpha=6.0,
+                sigma=8.0,
+                control_grid_spacing=(16, 16, 16),
+                field_interpolation="bspline",
+                fill_mode="constant",
+                fill_value=0.0,
+                seed=105,
+            )
+            result = transform({"image": volume})
+
+        A JAX 2D pipeline using the full-resolution default field. No coarse
+        grid is created when ``control_grid_spacing`` is ``None``.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import RandomElasticTransform
+
+            images = keras.ops.zeros((4, 512, 512, 1), dtype="float32")
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="BHWC",
+                alpha=2.0,
+                sigma=3.0,
+                field_interpolation="bspline",
+                control_grid_spacing=None,
+                prob=0.5,
+                seed=106,
+            )
+            result = transform({"image": images})
 
     Note:
         The transform is not invertible. Elastic deformation does not have a
@@ -324,10 +451,16 @@ class RandomElasticTransform(RandomTransform):
             field_interpolation = (
                 "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
             )
-        if field_interpolation not in {"bilinear", "trilinear", "bspline"}:
+        allowed_field_interpolations = (
+            {"bilinear", "bspline"}
+            if self.layout_info.spatial_rank == 2
+            else {"trilinear", "bspline"}
+        )
+        if field_interpolation not in allowed_field_interpolations:
             raise ValueError(
-                "`field_interpolation` must be 'bilinear', 'trilinear', or "
-                "'bspline'."
+                f"`field_interpolation`={field_interpolation!r} is invalid for "
+                f"{self.layout_info.spatial_rank}D input. Allowed values are "
+                f"{sorted(allowed_field_interpolations)}."
             )
         self.displacement_units = displacement_units
         self.field_interpolation = field_interpolation
