@@ -269,9 +269,9 @@ class RandomElasticTransform(RandomTransform):
             field. ``"voxel"`` is the default and is currently executable.
             ``"mm"`` requires valid ``bundle.meta["affine"]`` metadata;
             physical-unit conversion is not implemented yet.
-        field_interpolation: Interpolation used to expand a coarse field.
-            Two-dimensional fields use ``"bilinear"`` by default and
-            three-dimensional fields use ``"trilinear"`` by default.
+        field_interpolation: Interpolation used to expand a coarse field. If
+            ``None``, 2D fields use ``"bilinear"`` and 3D fields use
+            ``"trilinear"``.
             ``"bspline"`` is supported for both ranks and treats coarse values
             as control-point coefficients.
         locked_borders: Number of outer coarse-grid layers with zero
@@ -296,7 +296,7 @@ class RandomElasticTransform(RandomTransform):
         input_layout: str,
         control_grid_spacing: int | Sequence[int] | None = None,
         displacement_units: str = "voxel",
-        field_interpolation: str = "trilinear",
+        field_interpolation: str | None = None,
         fill_mode: str = "nearest",
         fill_value: float = 0.0,
         locked_borders: int = 0,
@@ -319,14 +319,16 @@ class RandomElasticTransform(RandomTransform):
         )
         if displacement_units not in {"voxel", "mm"}:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+        if field_interpolation is None:
+            field_interpolation = (
+                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            )
         if field_interpolation not in {"bilinear", "trilinear", "bspline"}:
             raise ValueError(
                 "`field_interpolation` must be 'bilinear', 'trilinear', or "
                 "'bspline'."
             )
         self.displacement_units = displacement_units
-        if self.layout_info.spatial_rank == 2 and field_interpolation == "trilinear":
-            field_interpolation = "bilinear"
         self.field_interpolation = field_interpolation
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
