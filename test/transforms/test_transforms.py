@@ -4365,6 +4365,30 @@ def test_random_elastic_transform_locks_3d_volume_borders():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_locks_2d_image_borders():
+    image = as_tensor(np.arange(36, dtype=np.float32).reshape(6, 6, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="HWC",
+        alpha=2.0,
+        sigma=1.0,
+        control_grid_spacing=(2, 2),
+        locked_borders=1,
+        interpolation="nearest",
+        prob=1.0,
+        seed=7,
+    )
+
+    output = ops.convert_to_numpy(transform(TensorBundle({"image": image}))["image"])
+    original = ops.convert_to_numpy(image)
+
+    np.testing.assert_array_equal(output[0], original[0])
+    np.testing.assert_array_equal(output[-1], original[-1])
+    np.testing.assert_array_equal(output[:, 0], original[:, 0])
+    np.testing.assert_array_equal(output[:, -1], original[:, -1])
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("fill_mode", ["nearest", "reflect", "wrap"])
 def test_random_elastic_transform_accepts_boundary_modes(fill_mode):
     image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))

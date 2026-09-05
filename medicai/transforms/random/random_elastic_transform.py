@@ -275,7 +275,8 @@ class RandomElasticTransform(RandomTransform):
             ``"bspline"`` is supported for both ranks and treats coarse values
             as control-point coefficients.
         locked_borders: Number of outer coarse-grid layers with zero
-            displacement. This is currently available for 3D fields only.
+            displacement. This applies to the control grid for both 2D and 3D
+            fields.
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
@@ -332,8 +333,6 @@ class RandomElasticTransform(RandomTransform):
         self.field_interpolation = field_interpolation
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
-        if locked_borders and self.layout_info.spatial_rank != 3:
-            raise ValueError("`locked_borders` is currently supported only for 3D.")
         self.locked_borders = locked_borders
         if fill_mode not in {"nearest", "constant", "reflect", "wrap"}:
             raise ValueError(
