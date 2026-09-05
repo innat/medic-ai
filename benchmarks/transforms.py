@@ -38,7 +38,11 @@ def main() -> None:
     parser.add_argument("--channels", type=int, default=1)
     parser.add_argument("--iterations", type=int, default=30)
     parser.add_argument("--warmup", type=int, default=5)
-    parser.add_argument("--compile", choices=("none", "xla"), default="none")
+    parser.add_argument(
+        "--compile",
+        action="store_true",
+        help="Compile the benchmark using the active backend's supported compiler.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args()

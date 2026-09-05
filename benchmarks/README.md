@@ -41,8 +41,8 @@ KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
   --device both --transform Flip RandomElasticTransform
 
-# Compare eager execution with the active backend's compiled path.
-KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile xla
+# Use the active backend's compiled path.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile
 ```
 
 The registry uses two execution groups:
@@ -66,7 +66,7 @@ def run(
     layout,
     size,
     batch,
-    compile_mode="none",
+    compile_enabled=False,
     group="all",
     device="both",
     transforms=("all",),
@@ -74,7 +74,7 @@ def run(
     transform_label = "-".join(transforms)
     json_path = (
         f"/tmp/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
-        f"TRANSFORM_{transform_label}_COMPILE_{compile_mode}.json"
+        f"TRANSFORM_{transform_label}_COMPILE_{compile_enabled}.json"
     )
     command = [
         "python",
@@ -92,8 +92,6 @@ def run(
         str(size),
         "--batch-size",
         str(batch),
-        "--compile",
-        compile_mode,
         "--transform",
         *transforms,
         "--json",
@@ -101,11 +99,13 @@ def run(
     ]
     if group != "all":
         command.extend(["--group", group])
+    if compile_enabled:
+        command.append("--compile")
 
     environment = {**os.environ, "KERAS_BACKEND": backend}
     print(
         f"\n=== {backend} {layout} size={size} batch={batch} "
-        f"compile={compile_mode} ===",
+        f"compile={compile_enabled} ===",
         flush=True,
     )
     process = subprocess.Popen(
@@ -123,11 +123,11 @@ def run(
     if process.returncode != 0:
         print(
             f"!! FAILED: {backend} {layout} size={size} batch={batch} "
-            f"compile={compile_mode} (rc={process.returncode})",
+            f"compile={compile_enabled} (rc={process.returncode})",
             flush=True,
         )
 
-def run_transform_matrix(backend, compile_mode="none", transforms=("all",)):
+def run_transform_matrix(backend, compile_enabled=False, transforms=("all",)):
     image_profiles = [
         (224, [4, 8, 16, 32]),
         (512, [4, 8, 16]),
@@ -136,34 +136,34 @@ def run_transform_matrix(backend, compile_mode="none", transforms=("all",)):
     ]
     for size, batches in image_profiles:
         for batch in batches:
-            run(backend, "BHWC", size, batch, compile_mode, transforms=transforms)
+            run(backend, "BHWC", size, batch, compile_enabled, transforms=transforms)
 
     for size in [64, 96, 128, 160, 256]:
-        run(backend, "DHWC", size, 1, compile_mode, transforms=transforms)
+        run(backend, "DHWC", size, 1, compile_enabled, transforms=transforms)
 
     for size in [64, 96, 128]:
         for batch in [1, 2]:
-            run(backend, "BDHWC", size, batch, compile_mode, transforms=transforms)
+            run(backend, "BDHWC", size, batch, compile_enabled, transforms=transforms)
 
     for size in [160, 256]:
-        run(backend, "BDHWC", size, 1, compile_mode, transforms=transforms)
+        run(backend, "BDHWC", size, 1, compile_enabled, transforms=transforms)
 ```
 
-Run without XLA or compilation. `--compile none` is the default and measures
-eager transform calls.
+Run without compilation. Omitting `--compile` is the default and measures eager
+transform calls.
 
 ```python
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="none",
+        compile_enabled=False,
         transforms=["all"],
     )
 
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="none",
+        compile_enabled=False,
         transforms=["RandomElasticTransform"],
     )
 
@@ -171,28 +171,27 @@ selected_transforms = ["Flip", "RandomElasticTransform"]
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="none",
+        compile_enabled=False,
         transforms=selected_transforms,
     )
 ```
 
-Run with XLA or compilation. With `--compile xla`, TensorFlow uses
-`tf.function(jit_compile=True)`, JAX uses
-`jax.jit`, and Torch uses `torch.compile` with the Keras-standard `inductor`
-backend with its default graph-break behavior.
+Run with compilation by passing `--compile`. TensorFlow uses
+`tf.function(jit_compile=True)`, JAX uses `jax.jit`, and Torch uses
+`torch.compile` with the Keras-standard `inductor` backend.
 
 ```python
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="xla",
+        compile_enabled=True,
         transforms=["all"],
     )
 
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="xla",
+        compile_enabled=True,
         transforms=["RandomElasticTransform"],
     )
 
@@ -200,7 +199,7 @@ selected_transforms = ["Flip", "RandomElasticTransform"]
 for backend in ["tensorflow", "torch", "jax"]:
     run_transform_matrix(
         backend,
-        compile_mode="xla",
+        compile_enabled=True,
         transforms=selected_transforms,
     )
 ```
