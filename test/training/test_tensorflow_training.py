@@ -8,7 +8,6 @@ from test.training.common import (
     apply_segmentation_pipeline,
     build_classification_model,
     build_gpu_random_pipeline,
-    build_random_elastic_pipeline,
     build_segmentation_model,
     build_transform_pipelines,
     build_volume_geometry_pipeline,
@@ -348,9 +347,9 @@ def test_tensorflow_gpu_augmented_model_trains_with_random_elastic(
         input_layout=input_layout,
         input_shape=input_shape,
         segmentation=segmentation,
-        pipeline=build_random_elastic_pipeline(
+        pipeline=build_transform_pipelines(
             input_layout, segmentation=segmentation
-        ),
+        )[-1],
     )
 
 

@@ -272,11 +272,12 @@ def build_multi_input_output_classification_model(input_shape):
 
 
 def build_transform_pipelines(input_layout: str, *, segmentation: bool):
-    """Return five representative pipelines for use inside training maps.
+    """Return representative pipelines for use inside training maps.
 
     The pipelines keep image and label geometry synchronized when
     ``segmentation=True``. They intentionally contain no data-loader logic;
     the backend-specific test decides how the returned samples are consumed.
+    The final pipeline contains batch-compatible elastic augmentation.
     """
     keys = ["image", "label"] if segmentation else ["image"]
     is_2d = input_layout in {"HWC", "BHWC"}
@@ -481,6 +482,32 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             )
         )
 
+    elastic_interpolation = (
+        {"image": "bilinear", "label": "nearest"}
+        if is_2d and segmentation
+        else {"image": "trilinear", "label": "nearest"}
+        if segmentation
+        else "bilinear"
+        if is_2d
+        else "trilinear"
+    )
+    pipelines.append(
+        Compose(
+            [
+                RandomElasticTransform(
+                    keys=keys,
+                    input_layout=input_layout,
+                    interpolation=elastic_interpolation,
+                    control_grid_spacing=(8,) * (2 if is_2d else 3),
+                    alpha=2.0,
+                    sigma=3.0,
+                    prob=1.0,
+                    seed=31,
+                )
+            ]
+        )
+    )
+
     return pipelines
 
 
@@ -530,32 +557,6 @@ def build_gpu_random_pipeline(
         )
     )
     return Compose(transforms)
-
-
-def build_random_elastic_pipeline(input_layout: str, *, segmentation: bool):
-    """Build a focused batch pipeline containing elastic augmentation."""
-    keys = ["image", "label"] if segmentation else ["image"]
-    spatial_rank = 2 if input_layout == "BHWC" else 3
-    linear_mode = "bilinear" if spatial_rank == 2 else "trilinear"
-    interpolation = (
-        {"image": linear_mode, "label": "nearest"}
-        if segmentation
-        else linear_mode
-    )
-    return Compose(
-        [
-            RandomElasticTransform(
-                keys=keys,
-                input_layout=input_layout,
-                interpolation=interpolation,
-                control_grid_spacing=(8,) * spatial_rank,
-                alpha=2.0,
-                sigma=3.0,
-                prob=1.0,
-                seed=31,
-            )
-        ]
-    )
 
 
 def build_volume_geometry_pipeline():
