@@ -4115,6 +4115,83 @@ def test_random_elastic_transform_supports_3d_sample_and_batch_layouts():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_bspline_coarse_field_keeps_aligned_keys():
+    image_np = np.arange(64, dtype=np.float32).reshape(4, 4, 4, 1)
+    transform = RandomElasticTransform(
+        keys=["image", "label"],
+        input_layout="DHWC",
+        alpha=1.0,
+        sigma=1.0,
+        control_grid_spacing=(2, 2, 2),
+        field_interpolation="bspline",
+        interpolation={"image": "nearest", "label": "nearest"},
+        prob=1.0,
+        seed=7,
+    )
+
+    result = transform(
+        TensorBundle({"image": as_tensor(image_np), "label": as_tensor(image_np)})
+    )
+
+    assert tuple(ops.shape(result["image"])) == (4, 4, 4, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result["image"]),
+        ops.convert_to_numpy(result["label"]),
+    )
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_bspline_coarse_field_respects_locked_borders():
+    image = as_tensor(np.arange(125, dtype=np.float32).reshape(5, 5, 5, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="DHWC",
+        alpha=2.0,
+        sigma=1.0,
+        control_grid_spacing=(2, 2, 2),
+        field_interpolation="bspline",
+        interpolation="nearest",
+        locked_borders=1,
+        prob=1.0,
+        seed=7,
+    )
+
+    output = ops.convert_to_numpy(transform(TensorBundle({"image": image}))["image"])
+    original = ops.convert_to_numpy(image)
+
+    np.testing.assert_array_equal(output[0], original[0])
+    np.testing.assert_array_equal(output[-1], original[-1])
+    np.testing.assert_array_equal(output[:, 0], original[:, 0])
+    np.testing.assert_array_equal(output[:, -1], original[:, -1])
+    np.testing.assert_array_equal(output[:, :, 0], original[:, :, 0])
+    np.testing.assert_array_equal(output[:, :, -1], original[:, :, -1])
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_bspline_coarse_field_replays_seed_sequence():
+    image = as_tensor(np.arange(64, dtype=np.float32).reshape(4, 4, 4, 1))
+    config = dict(
+        keys=["image"],
+        input_layout="DHWC",
+        alpha=1.0,
+        sigma=1.0,
+        control_grid_spacing=(2, 2, 2),
+        field_interpolation="bspline",
+        interpolation="nearest",
+        prob=1.0,
+        seed=101,
+    )
+
+    first = RandomElasticTransform(**config)(TensorBundle({"image": image}))
+    second = RandomElasticTransform(**config)(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(first["image"]),
+        ops.convert_to_numpy(second["image"]),
+    )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_identity_matches_numpy_reference():
     image_np = np.arange(27, dtype=np.float32).reshape(3, 3, 3, 1)
     label_np = (image_np > 13).astype(np.int32)
