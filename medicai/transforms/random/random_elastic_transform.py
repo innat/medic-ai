@@ -17,7 +17,7 @@ from ..utils import (
 from ...utils.image import resize_volumes
 
 
-def _gaussian_kernel_1d(sigma: float, radius: int, dtype: str = "float32") -> Any:
+def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
     offsets = ops.arange(-radius, radius + 1, dtype=dtype)
     kernel = ops.exp(-0.5 * ops.square(offsets / sigma))
     return kernel / ops.sum(kernel)
@@ -50,9 +50,18 @@ def _smooth_along_axis(
     return ops.conv(padded, kernel, padding="valid")
 
 
-def _gaussian_smooth_nd(field: Any, sigma: float, spatial_rank: int) -> Any:
+def _gaussian_smooth_nd(
+    field: Any,
+    sigma: Any,
+    spatial_rank: int,
+    *,
+    max_sigma: float | None = None,
+) -> Any:
     """Smooth each displacement channel with separable Gaussian kernels."""
-    radius = max(1, int(round(3.0 * sigma)))
+    radius_sigma = max_sigma if max_sigma is not None else sigma
+    if not isinstance(radius_sigma, Number):
+        raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
+    radius = max(1, int(round(3.0 * float(radius_sigma))))
     static_spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
     if all(size is not None for size in static_spatial_shape):
         max_radius = min(int(size) - 1 for size in static_spatial_shape)
@@ -237,8 +246,10 @@ class RandomElasticTransform(RandomTransform):
 
     Args:
         keys: Keys of aligned tensors to deform.
-        alpha: Maximum displacement magnitude in pixels or voxels.
-        sigma: Gaussian smoothing width in pixels or voxels.
+        alpha: Maximum displacement magnitude in pixels or voxels. A scalar
+            uses one value; a ``(min, max)`` range samples a value per call.
+        sigma: Gaussian smoothing width in pixels or voxels. A scalar uses one
+            value; a ``(min, max)`` range samples a value per call.
         interpolation: Optional interpolation mode, a sequence aligned with
             ``keys``, or a mapping from key to mode. When omitted, the first
             key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
@@ -268,8 +279,8 @@ class RandomElasticTransform(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        alpha: float = 20.0,
-        sigma: float = 4.0,
+        alpha: float | Sequence[float] = 20.0,
+        sigma: float | Sequence[float] = 4.0,
         interpolation: str | Sequence[str] | Mapping[str, str] | None = None,
         prob: float = 0.1,
         *,
@@ -284,14 +295,9 @@ class RandomElasticTransform(RandomTransform):
         super().__init__(prob=prob, seed=seed)
         if not keys:
             raise ValueError("`keys` must contain at least one tensor key.")
-        if not isinstance(alpha, Number) or alpha < 0:
-            raise ValueError(f"`alpha` must be a non-negative number. Received {alpha!r}.")
-        if not isinstance(sigma, Number) or sigma <= 0:
-            raise ValueError(f"`sigma` must be a positive number. Received {sigma!r}.")
-
         self.keys = tuple(keys)
-        self.alpha = float(alpha)
-        self.sigma = float(sigma)
+        self.alpha = self._normalize_parameter_range(alpha, "alpha", 0.0)
+        self.sigma = self._normalize_parameter_range(sigma, "sigma", 1e-6)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
@@ -340,6 +346,35 @@ class RandomElasticTransform(RandomTransform):
                 "Use None or (1, 1) for 2D inputs."
             )
         return values
+
+    def _normalize_parameter_range(
+        self,
+        value: float | Sequence[float],
+        name: str,
+        minimum: float,
+    ) -> tuple[float, float]:
+        if isinstance(value, Number):
+            bounds = (float(value), float(value))
+        elif isinstance(value, (tuple, list)) and len(value) == 2:
+            bounds = (float(value[0]), float(value[1]))
+        else:
+            raise TypeError(f"`{name}` must be a number or a two-value range.")
+        if bounds[0] < minimum or bounds[1] < minimum or bounds[0] > bounds[1]:
+            raise ValueError(
+                f"`{name}` must satisfy {name}[0] <= {name}[1] and both values "
+                f"must be >= {minimum}. Received {value!r}."
+            )
+        return bounds
+
+    def _sample_parameter(self, bounds: tuple[float, float]) -> Any:
+        if bounds[0] == bounds[1]:
+            return bounds[0]
+        return self.random_uniform(
+            shape=(),
+            minval=bounds[0],
+            maxval=bounds[1],
+            dtype="float32",
+        )
 
     def _normalize_interpolation(
         self,
@@ -448,8 +483,15 @@ class RandomElasticTransform(RandomTransform):
 
         def sample_field():
             noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
-            smooth_sigma = self.sigma / min(spacing)
-            field = _gaussian_smooth_nd(noise, max(smooth_sigma, 1e-3), spatial_rank)
+            alpha = self._sample_parameter(self.alpha)
+            sigma = self._sample_parameter(self.sigma)
+            smooth_sigma = sigma / min(spacing)
+            field = _gaussian_smooth_nd(
+                noise,
+                ops.maximum(smooth_sigma, 1e-3),
+                spatial_rank,
+                max_sigma=self.sigma[1] / min(spacing),
+            )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spatial_rank == 3 and spacing != (1, 1, 1):
                 field = resize_volumes(
@@ -463,8 +505,8 @@ class RandomElasticTransform(RandomTransform):
             reduction_axes = tuple(range(1, spatial_rank + 2))
             peak = ops.max(ops.abs(field), axis=reduction_axes, keepdims=True)
             safe_peak = ops.where(peak > 1e-6, peak, ops.ones_like(peak))
-            field = (field / safe_peak) * self.alpha
-            return ops.clip(field, -self.alpha, self.alpha)
+            field = (field / safe_peak) * alpha
+            return ops.clip(field, -alpha, alpha)
 
         return ops.cond(
             ops.cast(should_apply, "bool"),

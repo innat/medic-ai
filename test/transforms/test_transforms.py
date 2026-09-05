@@ -4197,6 +4197,35 @@ def test_random_elastic_transform_keeps_image_and_label_aligned():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("input_layout", "shape", "interpolation"),
+    [
+        ("HWC", (5, 6, 1), "bilinear"),
+        ("DHWC", (3, 5, 6, 1), "trilinear"),
+    ],
+)
+def test_random_elastic_transform_accepts_alpha_sigma_ranges(
+    input_layout, shape, interpolation
+):
+    image = as_tensor(np.zeros(shape, dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=(1.0, 3.0),
+        sigma=(1.0, 2.0),
+        interpolation=interpolation,
+        prob=1.0,
+        input_layout=input_layout,
+        seed=7,
+    )
+
+    result = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(result["image"])) == shape
+    assert transform.alpha == (1.0, 3.0)
+    assert transform.sigma == (1.0, 2.0)
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_rejects_coarse_grid_for_2d():
     with pytest.raises(ValueError, match="supported only for 3D"):
         RandomElasticTransform(
