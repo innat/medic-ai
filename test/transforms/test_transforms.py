@@ -4515,7 +4515,54 @@ def test_random_elastic_transform_mm_requires_affine_metadata():
 
 
 @pytest.mark.unit
-def test_random_elastic_transform_mm_does_not_silently_use_voxels():
+@pytest.mark.parametrize(
+    ("input_layout", "tensor_shape", "affine_diagonal", "expected"),
+    [
+        (
+            "HWC",
+            (3, 4, 1),
+            (2.0, 4.0, 1.0, 1.0),
+            (1.0, 0.5),
+        ),
+        (
+            "DHWC",
+            (3, 4, 5, 1),
+            (2.0, 4.0, 8.0, 1.0),
+            (1.0, 0.5, 0.25),
+        ),
+    ],
+    ids=["2d-mm-to-pixels", "3d-mm-to-voxels"],
+)
+def test_random_elastic_transform_converts_mm_to_tensor_axis_units(
+    monkeypatch,
+    input_layout,
+    tensor_shape,
+    affine_diagonal,
+    expected,
+):
+    image = as_tensor(np.zeros(tensor_shape, dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout=input_layout,
+        alpha=2.0,
+        displacement_units="mm",
+        prob=1.0,
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_normal",
+        lambda shape, dtype: ops.ones(shape, dtype=dtype),
+    )
+    affine = ops.diag(ops.convert_to_tensor(affine_diagonal, dtype="float32"))
+    batched = ops.expand_dims(image, axis=0)
+    field = transform._sample_or_zero_field(batched, True, affine=affine)
+
+    field_np = ops.convert_to_numpy(field)
+    np.testing.assert_allclose(field_np[0, ..., : len(expected)], expected, atol=1e-5)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_mm_rejects_invalid_affine_shape():
     image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
     transform = RandomElasticTransform(
         keys=["image"],
@@ -4523,8 +4570,8 @@ def test_random_elastic_transform_mm_does_not_silently_use_voxels():
         displacement_units="mm",
     )
 
-    with pytest.raises(NotImplementedError, match="physical-unit conversion"):
-        transform(TensorBundle({"image": image}, {"affine": ops.eye(4)}))
+    with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
+        transform(TensorBundle({"image": image}, {"affine": ops.eye(3)}))
 
 
 @pytest.mark.unit

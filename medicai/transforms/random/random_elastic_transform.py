@@ -6,6 +6,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _apply_if_applied
+from ..spatial.affine_utils import spacing_from_affine
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -246,10 +247,12 @@ class RandomElasticTransform(RandomTransform):
 
     Args:
         keys: Keys of aligned tensors to deform.
-        alpha: Maximum displacement magnitude in pixels or voxels. A scalar
-            uses one value; a ``(min, max)`` range samples a value per call.
-        sigma: Gaussian smoothing width in pixels or voxels. A scalar uses one
-            value; a ``(min, max)`` range samples a value per call.
+        alpha: Maximum displacement magnitude in the units selected by
+            ``displacement_units``. A scalar uses one value; a ``(min, max)``
+            range samples a value per call.
+        sigma: Gaussian smoothing width in the units selected by
+            ``displacement_units``. A scalar uses one value; a ``(min, max)``
+            range samples a value per call.
         interpolation: Optional interpolation mode, a sequence aligned with
             ``keys``, or a mapping from key to mode. When omitted, the first
             key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
@@ -268,9 +271,11 @@ class RandomElasticTransform(RandomTransform):
             for 3D. If ``None``, the field is sampled at full resolution.
         displacement_units: Units for ``alpha`` and the sampled displacement
             field. ``"voxel"`` is the default for both ranks; for 2D it means
-            pixel units, and for 3D it means voxel units. ``"mm"`` requires
-            valid ``bundle.meta["affine"]`` metadata; physical-unit conversion
-            is not implemented yet.
+            pixel units, and for 3D it means voxel units. ``"mm"`` samples
+            physical displacement magnitudes and converts each tensor spatial
+            axis using the corresponding spacing extracted from
+            ``bundle.meta["affine"]``. The affine must describe the same
+            spatial-axis order as the input tensor.
         field_interpolation: Interpolation used to expand a coarse field. If
             ``None``, 2D fields use ``"bilinear"`` and 3D fields use
             ``"trilinear"``.
@@ -278,9 +283,20 @@ class RandomElasticTransform(RandomTransform):
             as control-point coefficients.
         locked_borders: Number of outer coarse-grid layers with zero
             displacement. This applies to the control grid for both 2D and 3D
-            fields.
+            fields. For example, ``locked_borders=1`` keeps the outermost
+            control-point layer fixed while allowing the interior to move.
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    Validation rules:
+        ``input_layout`` determines the spatial rank: ``HWC``/``BHWC`` are
+        2D and ``DHWC``/``BDHWC`` are 3D. ``control_grid_spacing`` must have
+        exactly one positive value per spatial axis when given. The default
+        field interpolation is ``"bilinear"`` for 2D and ``"trilinear"`` for
+        3D; ``"bspline"`` is valid for either rank. A nonzero
+        ``locked_borders`` value is measured in coarse-grid layers. When
+        ``displacement_units="mm"``, every call must provide a validated 4x4
+        affine in ``bundle.meta["affine"]``.
 
     Examples:
         A 2D sample-level TensorFlow pipeline.
@@ -424,6 +440,64 @@ class RandomElasticTransform(RandomTransform):
                 seed=106,
             )
             result = transform({"image": images})
+
+        A 3D physical-unit pipeline. The affine supplies the voxel spacing;
+        ``alpha`` and ``sigma`` are interpreted in millimeters.
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
+
+            import tensorflow as tf
+            from medicai.transforms import RandomElasticTransform
+
+            volume = tf.random.normal((64, 96, 96, 1), seed=107)
+            affine = tf.constant(
+                [
+                    [2.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.8, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ],
+                dtype=tf.float32,
+            )
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="DHWC",
+                alpha=(1.0, 3.0),
+                sigma=4.0,
+                displacement_units="mm",
+                control_grid_spacing=(8, 8, 8),
+                locked_borders=1,
+                seed=107,
+            )
+            result = transform({"image": volume}, {"affine": affine})
+
+        A 2D physical-unit Torch pipeline. For ``HWC`` and ``BHWC``, the
+        first two affine spacing entries correspond to the tensor's two
+        spatial axes.
+
+        .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
+
+            import torch
+            from medicai.transforms import RandomElasticTransform
+
+            images = torch.randn((4, 224, 224, 3))
+            affine = torch.diag(torch.tensor([0.7, 0.7, 1.0, 1.0]))
+            transform = RandomElasticTransform(
+                keys=["image"],
+                input_layout="BHWC",
+                alpha=2.0,
+                sigma=3.0,
+                displacement_units="mm",
+                field_interpolation="bspline",
+                seed=108,
+            )
+            result = transform({"image": images}, {"affine": affine})
             
     """
 
@@ -578,19 +652,14 @@ class RandomElasticTransform(RandomTransform):
         return result
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        affine = bundle.meta.get("affine")
         if self.displacement_units == "mm":
-            affine = bundle.meta.get("affine")
             if affine is None:
                 raise ValueError(
                     "RandomElasticTransform with displacement_units='mm' "
                     "requires bundle.meta['affine'] containing a 4x4 affine matrix."
                 )
-            validate_affine_matrix(affine)
-            raise NotImplementedError(
-                "displacement_units='mm' is validated against the affine metadata "
-                "but physical-unit conversion is not implemented yet. Use "
-                "displacement_units='voxel' for now."
-            )
+            affine = validate_affine_matrix(affine)
         missing_keys = [key for key in self.keys if key not in bundle.data]
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
@@ -624,7 +693,11 @@ class RandomElasticTransform(RandomTransform):
             reference,
             input_layout=self.input_layout,
         )
-        field = self._sample_or_zero_field(batched, params["should_apply"])
+        field = self._sample_or_zero_field(
+            batched,
+            params["should_apply"],
+            affine=affine,
+        )
 
         for key in present_keys:
             tensor = bundle.data[key]
@@ -649,7 +722,13 @@ class RandomElasticTransform(RandomTransform):
         )
         return bundle
 
-    def _sample_or_zero_field(self, tensor: Any, should_apply: Any) -> Any:
+    def _sample_or_zero_field(
+        self,
+        tensor: Any,
+        should_apply: Any,
+        *,
+        affine: Any | None = None,
+    ) -> Any:
         shape = ops.shape(tensor)
         spatial_rank = self.layout_info.spatial_rank
         spatial_shape = self._static_spatial_shape(tensor)
@@ -665,12 +744,25 @@ class RandomElasticTransform(RandomTransform):
             noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
             alpha = self._sample_parameter(self.alpha)
             sigma = self._sample_parameter(self.sigma)
-            smooth_sigma = sigma / min(spacing)
+            if self.displacement_units == "mm":
+                physical_spacing = self._physical_spacing(affine)
+                coarse_physical_spacing = physical_spacing * ops.cast(
+                    spacing,
+                    physical_spacing.dtype,
+                )
+                smooth_sigma = sigma / ops.min(coarse_physical_spacing)
+                # The kernel radius must be statically bounded for graph
+                # execution. The physical spacing can be dynamic metadata, so
+                # use the declared millimeter bound as a conservative radius.
+                max_smooth_sigma = self.sigma[1]
+            else:
+                smooth_sigma = sigma / min(spacing)
+                max_smooth_sigma = self.sigma[1] / min(spacing)
             field = _gaussian_smooth_nd(
                 noise,
                 ops.maximum(smooth_sigma, 1e-3),
                 spatial_rank,
-                max_sigma=self.sigma[1] / min(spacing),
+                max_sigma=max_smooth_sigma,
             )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
@@ -684,6 +776,14 @@ class RandomElasticTransform(RandomTransform):
             peak = ops.max(ops.abs(field), axis=reduction_axes, keepdims=True)
             safe_peak = ops.where(peak > 1e-6, peak, ops.ones_like(peak))
             field = (field / safe_peak) * alpha
+            if self.displacement_units == "mm":
+                voxel_spacing = self._physical_spacing(affine)
+                field = field / voxel_spacing[None, ...]
+                return ops.clip(
+                    field,
+                    -alpha / voxel_spacing[None, ...],
+                    alpha / voxel_spacing[None, ...],
+                )
             return ops.clip(field, -alpha, alpha)
 
         return ops.cond(
@@ -691,6 +791,15 @@ class RandomElasticTransform(RandomTransform):
             sample_field,
             lambda: ops.zeros(output_field_shape, dtype="float32"),
         )
+
+    def _physical_spacing(self, affine: Any | None) -> Any:
+        """Return physical spacing aligned with the tensor spatial axes."""
+        if affine is None:
+            raise ValueError(
+                "An affine matrix is required for displacement_units='mm'."
+            )
+        spacing = spacing_from_affine(affine)
+        return spacing[: self.layout_info.spatial_rank]
 
     def _static_spatial_shape(self, tensor: Any) -> tuple[int, ...]:
         spatial_rank = self.layout_info.spatial_rank
