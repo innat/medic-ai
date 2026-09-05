@@ -780,10 +780,15 @@ class RandomElasticTransform(RandomTransform):
                 )
             return ops.clip(field, -alpha, alpha)
 
-        return ops.cond(
+        # Keep random sampling outside conditional control flow. JAX does not
+        # allow the stateful Keras SeedGenerator to escape an ``ops.cond``
+        # branch while tracing a data-loader or compiled training function.
+        sampled_field = sample_field()
+        zero_field = ops.zeros(output_field_shape, dtype="float32")
+        return ops.where(
             ops.cast(should_apply, "bool"),
-            sample_field,
-            lambda: ops.zeros(output_field_shape, dtype="float32"),
+            sampled_field,
+            zero_field,
         )
 
     def _physical_spacing(self, affine: Any | None) -> Any:
