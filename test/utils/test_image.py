@@ -88,3 +88,17 @@ def test_resample_displacement_field_bspline_matches_scipy(input_shape, target_s
     )
 
     np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+
+
+@pytest.mark.unit
+def test_resample_displacement_field_bilinear_supports_2d_fields():
+    field = as_tensor(np.zeros((2, 4, 5, 2), dtype=np.float32))
+
+    output = resample_displacement_field(
+        field,
+        target_shape=(7, 8),
+        method="bilinear",
+    )
+
+    assert tuple(ops.shape(output)) == (2, 7, 8, 2)
+    assert output.dtype == field.dtype

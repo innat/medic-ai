@@ -63,6 +63,36 @@ def _resample_bspline_field(field, target_shape, boundary, fill_value):
     return result
 
 
+def _resample_linear_axis(field, axis, target_size, align_corners):
+    """Apply a two-tap linear interpolation pass along one spatial axis."""
+    input_size = int(field.shape[axis + 1])
+    if align_corners:
+        coordinates = ops.linspace(
+            0.0,
+            float(max(input_size - 1, 0)),
+            target_size,
+        )
+    else:
+        scale = float(input_size) / float(target_size)
+        coordinates = (ops.arange(target_size, dtype="float32") + 0.5) * scale - 0.5
+        coordinates = ops.clip(coordinates, 0.0, float(max(input_size - 1, 0)))
+    index0 = ops.cast(ops.floor(coordinates), "int32")
+    index1 = ops.minimum(index0 + 1, input_size - 1)
+    values0 = ops.take(field, index0, axis=axis + 1)
+    values1 = ops.take(field, index1, axis=axis + 1)
+    reshape = [1] * len(field.shape)
+    reshape[axis + 1] = target_size
+    weight = ops.reshape(coordinates - ops.cast(index0, "float32"), reshape)
+    return values0 * (1.0 - weight) + values1 * weight
+
+
+def _resample_linear_field(field, target_shape, align_corners):
+    result = field
+    for axis, target_size in enumerate(target_shape):
+        result = _resample_linear_axis(result, axis, target_size, align_corners)
+    return result
+
+
 def resample_displacement_field(
     field,
     target_shape,
@@ -104,6 +134,8 @@ def resample_displacement_field(
                 "'constant'."
             )
         return _resample_bspline_field(field, target_shape, boundary, fill_value)
+    if method == "bilinear" and rank == 2:
+        return _resample_linear_field(field, target_shape, align_corners)
     if method == "trilinear" and rank == 3:
         return resize_volumes(
             field,
