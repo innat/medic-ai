@@ -147,6 +147,9 @@ def resample_displacement_field(
         volume::
 
             from medicai.utils import resample_displacement_field
+            from keras import ops
+
+            coarse_field = ops.zeros((1, 20, 32, 32, 3), dtype="float32")
 
             dense_field = resample_displacement_field(
                 coarse_field,
@@ -154,6 +157,16 @@ def resample_displacement_field(
                 method="bspline",
                 boundary="nearest",
             )
+            print(dense_field.shape)  # (1, 160, 256, 256, 3)
+
+            coarse_field_2d = ops.zeros((1, 32, 32, 2), dtype="float32")
+            dense_field_2d = resample_displacement_field(
+                coarse_field_2d,
+                target_shape=(224, 224),
+                method="bspline",
+                boundary="nearest",
+            )
+            print(dense_field_2d.shape)  # (1, 224, 224, 2)
     """
     rank = len(target_shape)
     expected_rank = rank + 2
