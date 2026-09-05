@@ -4257,7 +4257,9 @@ def test_random_elastic_transform_keeps_image_and_label_aligned():
         ],
         axis=-1,
     )
-    transform._sample_or_zero_field = lambda tensor, should_apply: field
+    transform._sample_or_zero_field = (
+        lambda tensor, should_apply, affine=None: field
+    )
 
     result = transform(TensorBundle({"image": image, "label": label}))
 
@@ -4548,7 +4550,13 @@ def test_random_elastic_transform_converts_mm_to_tensor_axis_units(
     field = transform._sample_or_zero_field(batched, True, affine=affine)
 
     field_np = ops.convert_to_numpy(field)
-    np.testing.assert_allclose(field_np[0, ..., : len(expected)], expected, atol=1e-5)
+    expected_field = np.broadcast_to(
+        np.asarray(expected, dtype=np.float32),
+        field_np[0, ..., : len(expected)].shape,
+    )
+    np.testing.assert_allclose(
+        field_np[0, ..., : len(expected)], expected_field, atol=1e-5
+    )
 
 
 @pytest.mark.unit
