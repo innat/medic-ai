@@ -4150,6 +4150,63 @@ def test_random_elastic_transform_locks_3d_volume_borders():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("fill_mode", ["nearest", "reflect", "wrap"])
+def test_random_elastic_transform_accepts_boundary_modes(fill_mode):
+    image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=1.0,
+        sigma=1.0,
+        interpolation="bilinear",
+        fill_mode=fill_mode,
+        prob=1.0,
+        input_layout="HWC",
+        seed=7,
+    )
+
+    output = transform(TensorBundle({"image": image}))
+    assert tuple(ops.shape(output["image"])) == (2, 2, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_constant_boundary_uses_fill_value(monkeypatch):
+    image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=2.0,
+        sigma=1.0,
+        interpolation="nearest",
+        fill_mode="constant",
+        fill_value=-5.0,
+        prob=1.0,
+        input_layout="HWC",
+        seed=7,
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_normal",
+        lambda shape, dtype: ops.ones(shape, dtype=dtype),
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output["image"]),
+        np.full((2, 2, 1), -5.0, dtype=np.float32),
+    )
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_rejects_unknown_boundary_mode():
+    with pytest.raises(ValueError, match="fill_mode"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="HWC",
+            fill_mode="mirror",
+        )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_probability_zero_is_noop():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     transform = RandomElasticTransform(
