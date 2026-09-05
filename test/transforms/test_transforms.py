@@ -4368,16 +4368,20 @@ def test_random_elastic_transform_mm_does_not_silently_use_voxels():
 
 
 @pytest.mark.unit
-def test_random_elastic_transform_bspline_field_is_explicitly_pending():
-    image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
+def test_random_elastic_transform_supports_bspline_coarse_field():
+    image = as_tensor(np.zeros((4, 4, 4, 1), dtype=np.float32))
     transform = RandomElasticTransform(
         keys=["image"],
         input_layout="DHWC",
         field_interpolation="bspline",
+        control_grid_spacing=(2, 2, 2),
+        prob=1.0,
+        seed=7,
     )
 
-    with pytest.raises(NotImplementedError, match="B-spline"):
-        transform(TensorBundle({"image": image}))
+    result = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(result["image"])) == (4, 4, 4, 1)
 
 
 @pytest.mark.unit

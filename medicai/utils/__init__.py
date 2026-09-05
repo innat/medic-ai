@@ -2,7 +2,7 @@ from medicai.utils.cam import GradCAM
 from medicai.utils.constant import keras_constants
 from medicai.utils.describe_mixin import DescribeMixin
 from medicai.utils.general import camel_to_snake
-from medicai.utils.image import resize_volumes
+from medicai.utils.image import resample_displacement_field, resize_volumes
 from medicai.utils.inference import (
     SlidingWindowInference,
     extract_patches,

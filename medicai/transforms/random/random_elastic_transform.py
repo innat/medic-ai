@@ -15,7 +15,7 @@ from ..utils import (
     validate_affine_matrix,
     validate_tensor_matches_layout,
 )
-from ...utils.image import resize_volumes
+from ...utils.image import resample_displacement_field
 
 
 def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
@@ -271,8 +271,9 @@ class RandomElasticTransform(RandomTransform):
             ``"mm"`` requires valid ``bundle.meta["affine"]`` metadata;
             physical-unit conversion is not implemented yet.
         field_interpolation: Interpolation used to expand a coarse 3D field.
-            ``"trilinear"`` is currently supported. ``"bspline"`` is reserved
-            for the planned B-spline field kernel.
+            ``"trilinear"`` and ``"bspline"`` are supported for coarse 3D
+            fields. B-spline interpolation treats coarse values as control
+            point coefficients.
         locked_borders: Number of outer coarse-grid layers with zero
             displacement. This is currently available for 3D fields only.
         seed: Optional integer or Keras ``SeedGenerator``.
@@ -444,11 +445,6 @@ class RandomElasticTransform(RandomTransform):
                 "but physical-unit conversion is not implemented yet. Use "
                 "displacement_units='voxel' for now."
             )
-        if self.field_interpolation == "bspline":
-            raise NotImplementedError(
-                "field_interpolation='bspline' is reserved for the planned "
-                "B-spline deformation-field kernel. Use 'trilinear' for now."
-            )
         missing_keys = [key for key in self.keys if key not in bundle.data]
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
@@ -532,11 +528,9 @@ class RandomElasticTransform(RandomTransform):
             )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spatial_rank == 3 and spacing != (1, 1, 1):
-                field = resize_volumes(
+                field = resample_displacement_field(
                     field,
-                    depth=spatial_shape[0],
-                    height=spatial_shape[1],
-                    width=spatial_shape[2],
+                    target_shape=spatial_shape,
                     method=self.field_interpolation,
                     align_corners=False,
                 )

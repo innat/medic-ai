@@ -1,4 +1,122 @@
+import itertools
+
 from keras import ops
+
+
+def _cubic_bspline_weights(fraction):
+    one_minus = 1.0 - fraction
+    return (
+        one_minus**3 / 6.0,
+        (3.0 * fraction**3 - 6.0 * fraction**2 + 4.0) / 6.0,
+        (-3.0 * fraction**3 + 3.0 * fraction**2 + 3.0 * fraction + 1.0) / 6.0,
+        fraction**3 / 6.0,
+    )
+
+
+def _map_bspline_indices(indices, size, boundary):
+    if boundary == "nearest":
+        return ops.clip(indices, 0, size - 1), ops.ones_like(indices, dtype="bool")
+    if boundary == "wrap":
+        return ops.mod(indices, size), ops.ones_like(indices, dtype="bool")
+    if boundary == "reflect":
+        if size == 1:
+            return ops.zeros_like(indices), ops.ones_like(indices, dtype="bool")
+        period = 2 * (size - 1)
+        reflected = ops.mod(ops.abs(indices), period)
+        reflected = ops.where(reflected <= size - 1, reflected, period - reflected)
+        return reflected, ops.ones_like(indices, dtype="bool")
+    if boundary == "constant":
+        valid = ops.logical_and(indices >= 0, indices < size)
+        return ops.clip(indices, 0, size - 1), valid
+    raise ValueError("boundary must be 'nearest', 'reflect', 'wrap', or 'constant'.")
+
+
+def _resample_bspline_axis(field, axis, target_size, boundary, fill_value):
+    input_size = int(field.shape[axis + 1])
+    denominator = max(target_size - 1, 1)
+    numerator = max(input_size - 1, 0)
+    coordinates = ops.arange(target_size, dtype="float32") * (numerator / denominator)
+    base = ops.floor(coordinates)
+    fraction = coordinates - base
+    values = []
+    for offset, weight in zip((-1, 0, 1, 2), _cubic_bspline_weights(fraction)):
+        indices, valid = _map_bspline_indices(
+            ops.cast(base + offset, "int32"), input_size, boundary
+        )
+        sample = ops.take(field, indices, axis=axis + 1)
+        reshape = [1] * len(field.shape)
+        reshape[axis + 1] = target_size
+        weight = ops.reshape(weight, reshape)
+        valid = ops.reshape(valid, reshape)
+        if boundary == "constant":
+            sample = ops.where(valid, sample, ops.cast(fill_value, field.dtype))
+        values.append(sample * weight)
+    return sum(values[1:], values[0])
+
+
+def _resample_bspline_field(field, target_shape, boundary, fill_value):
+    result = field
+    for axis, target_size in enumerate(target_shape):
+        result = _resample_bspline_axis(
+            result, axis, target_size, boundary, fill_value
+        )
+    return result
+
+
+def resample_displacement_field(
+    field,
+    target_shape,
+    method="trilinear",
+    *,
+    boundary="nearest",
+    fill_value=0.0,
+    align_corners=False,
+):
+    """Resample a 2D or 3D channel-last displacement field.
+
+    Args:
+        field: Tensor shaped ``(B, H, W, 2)`` or ``(B, D, H, W, 3)``.
+        target_shape: Target spatial shape, ``(H, W)`` or ``(D, H, W)``.
+        method: ``"bilinear"`` for 2D, ``"trilinear"`` for 3D, or
+            ``"bspline"`` for cubic B-spline field interpolation.
+        boundary: Boundary mode for B-spline interpolation.
+        fill_value: Constant boundary value when ``boundary="constant"``.
+        align_corners: Coordinate convention for linear interpolation. The
+            B-spline path uses control-grid-aligned coordinates.
+
+    Returns:
+        Tensor: The resampled displacement field with the requested shape.
+
+    Raises:
+        ValueError: If the field rank, target rank, or method is invalid.
+    """
+    rank = len(target_shape)
+    expected_rank = rank + 2
+    if rank not in (2, 3) or len(field.shape) != expected_rank:
+        raise ValueError(
+            "`field` and `target_shape` must describe a 2D or 3D channel-last "
+            "field."
+        )
+    if method == "bspline":
+        if boundary not in {"nearest", "reflect", "wrap", "constant"}:
+            raise ValueError(
+                "B-spline `boundary` must be 'nearest', 'reflect', 'wrap', or "
+                "'constant'."
+            )
+        return _resample_bspline_field(field, target_shape, boundary, fill_value)
+    if method == "trilinear" and rank == 3:
+        return resize_volumes(
+            field,
+            depth=target_shape[0],
+            height=target_shape[1],
+            width=target_shape[2],
+            method="trilinear",
+            align_corners=align_corners,
+        )
+    raise ValueError(
+        f"Unsupported displacement-field method {method!r} for {rank}D input. "
+        "Use 'bilinear' for 2D, 'trilinear' for 3D, or 'bspline'."
+    )
 
 
 def resize_volumes(volumes, depth, height, width, method="trilinear", align_corners=False):
