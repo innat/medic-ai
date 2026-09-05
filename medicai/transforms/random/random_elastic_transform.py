@@ -290,10 +290,10 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
-            import keras
+            import tensorflow as tf
             from medicai.transforms import RandomElasticTransform
 
-            image = keras.ops.zeros((224, 224, 3), dtype="float32")
+            image = tf.random.normal((224, 224, 3), seed=101)
             transform = RandomElasticTransform(
                 keys=["image"],
                 input_layout="HWC",
@@ -312,10 +312,10 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "torch"
 
-            import keras
+            import torch
             from medicai.transforms import RandomElasticTransform
 
-            images = keras.ops.zeros((8, 224, 224, 3), dtype="float32")
+            images = torch.randn((8, 224, 224, 3))
             transform = RandomElasticTransform(
                 keys=["image"],
                 input_layout="BHWC",
@@ -335,10 +335,10 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "jax"
 
-            import keras
+            import jax
             from medicai.transforms import RandomElasticTransform
 
-            volume = keras.ops.zeros((96, 128, 128, 1), dtype="float32")
+            volume = jax.random.normal(jax.random.PRNGKey(103), (96, 128, 128, 1))
             transform = RandomElasticTransform(
                 keys=["image"],
                 input_layout="DHWC",
@@ -359,11 +359,13 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "tensorflow"
 
-            import keras
+            import tensorflow as tf
             from medicai.transforms import RandomElasticTransform
 
-            image = keras.ops.zeros((2, 64, 96, 96, 1), dtype="float32")
-            label = keras.ops.zeros((2, 64, 96, 96, 1), dtype="int32")
+            image = tf.random.normal((2, 64, 96, 96, 1), seed=104)
+            label = tf.random.uniform(
+                (2, 64, 96, 96, 1), maxval=2, dtype=tf.int32, seed=104
+            )
             transform = RandomElasticTransform(
                 keys=["image", "label"],
                 input_layout="BDHWC",
@@ -382,10 +384,10 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "torch"
 
-            import keras
+            import torch
             from medicai.transforms import RandomElasticTransform
 
-            volume = keras.ops.zeros((1, 160, 256, 256, 1), dtype="float32")
+            volume = torch.randn((1, 160, 256, 256, 1))
             transform = RandomElasticTransform(
                 keys=["image"],
                 input_layout="BDHWC",
@@ -407,10 +409,10 @@ class RandomElasticTransform(RandomTransform):
             import os
             os.environ["KERAS_BACKEND"] = "jax"
 
-            import keras
+            import jax
             from medicai.transforms import RandomElasticTransform
 
-            images = keras.ops.zeros((4, 512, 512, 1), dtype="float32")
+            images = jax.random.normal(jax.random.PRNGKey(106), (4, 512, 512, 1))
             transform = RandomElasticTransform(
                 keys=["image"],
                 input_layout="BHWC",
