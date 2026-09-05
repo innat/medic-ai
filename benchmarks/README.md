@@ -28,6 +28,7 @@ benchmarks/
 Set the Keras backend before starting Python:
 
 ```bash
+# Run all transforms on the target device.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
@@ -51,13 +52,6 @@ The registry uses two execution groups:
 - `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
   random augmentation transforms.
 
-Use `--transform all` (the default) to benchmark every transform available for
-the selected layout. To target specific transforms, pass one or more public
-class names after `--transform`, for example `--transform
-RandomElasticTransform` or `--transform Flip RandomElasticTransform`. Names are
-matched case-insensitively. A transform that is not available for the selected
-layout produces a clear error listing the valid names.
-
 For a Python matrix launcher, pass the selected names through the launcher
 instead of changing each subprocess command:
 
@@ -67,26 +61,53 @@ import subprocess
 
 BENCHMARK = "benchmarks/transforms.py"
 
-
-def run(backend, layout, size, batch, compile_mode="none", transforms=("all",)):
+def run(
+    backend,
+    layout,
+    size,
+    batch,
+    compile_mode="none",
+    group="all",
+    device="both",
+    transforms=("all",),
+):
     transform_label = "-".join(transforms)
     json_path = (
         f"/tmp/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
         f"TRANSFORM_{transform_label}_COMPILE_{compile_mode}.json"
     )
     command = [
-        "python", "-u", BENCHMARK,
-        "--device", "both",
-        "--iterations", "50",
-        "--warmup", "10",
-        "--layout", layout,
-        "--sizes", str(size),
-        "--batch-size", str(batch),
-        "--compile", compile_mode,
-        "--transform", *transforms,
-        "--json", json_path,
+        "python",
+        "-u",
+        BENCHMARK,
+        "--device",
+        device,
+        "--iterations",
+        "50",
+        "--warmup",
+        "10",
+        "--layout",
+        layout,
+        "--sizes",
+        str(size),
+        "--batch-size",
+        str(batch),
+        "--compile",
+        compile_mode,
+        "--transform",
+        *transforms,
+        "--json",
+        json_path,
     ]
+    if group != "all":
+        command.extend(["--group", group])
+
     environment = {**os.environ, "KERAS_BACKEND": backend}
+    print(
+        f"\n=== {backend} {layout} size={size} batch={batch} "
+        f"compile={compile_mode} ===",
+        flush=True,
+    )
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -99,23 +120,97 @@ def run(backend, layout, size, batch, compile_mode="none", transforms=("all",)):
     for line in process.stdout:
         print(line, end="", flush=True)
     process.wait()
+    if process.returncode != 0:
+        print(
+            f"!! FAILED: {backend} {layout} size={size} batch={batch} "
+            f"compile={compile_mode} (rc={process.returncode})",
+            flush=True,
+        )
 
+def run_transform_matrix(backend, compile_mode="none", transforms=("all",)):
+    image_profiles = [
+        (224, [4, 8, 16, 32]),
+        (512, [4, 8, 16]),
+        (1024, [4, 8]),
+        (1280, [4]),
+    ]
+    for size, batches in image_profiles:
+        for batch in batches:
+            run(backend, "BHWC", size, batch, compile_mode, transforms=transforms)
+
+    for size in [64, 96, 128, 160, 256]:
+        run(backend, "DHWC", size, 1, compile_mode, transforms=transforms)
+
+    for size in [64, 96, 128]:
+        for batch in [1, 2]:
+            run(backend, "BDHWC", size, batch, compile_mode, transforms=transforms)
+
+    for size in [160, 256]:
+        run(backend, "BDHWC", size, 1, compile_mode, transforms=transforms)
+```
+
+Run without XLA or compilation. `--compile none` is the default and measures
+eager transform calls.
+
+```python
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_mode="none",
+        transforms=["all"],
+    )
+
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_mode="none",
+        transforms=["RandomElasticTransform"],
+    )
 
 selected_transforms = ["Flip", "RandomElasticTransform"]
 for backend in ["tensorflow", "torch", "jax"]:
-    run(
+    run_transform_matrix(
         backend,
-        layout="BDHWC",
-        size=96,
-        batch=1,
+        compile_mode="none",
         transforms=selected_transforms,
     )
 ```
 
-Use `transforms=("all",)` for the complete suite, a single-item tuple such as
-`("RandomElasticTransform",)`, or multiple names such as
-`("Flip", "RandomElasticTransform")`. Including the selected names in the
-JSON filename keeps targeted results separate from full-suite results.
+Run with XLA or compilation. With `--compile xla`, TensorFlow uses
+`tf.function(jit_compile=True)`, JAX uses
+`jax.jit`, and Torch uses `torch.compile` with the Keras-standard `inductor`
+backend with its default graph-break behavior.
+
+```python
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_mode="xla",
+        transforms=["all"],
+    )
+
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_mode="xla",
+        transforms=["RandomElasticTransform"],
+    )
+
+selected_transforms = ["Flip", "RandomElasticTransform"]
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_mode="xla",
+        transforms=selected_transforms,
+    )
+```
+
+Compilation time is reported separately as `compile_time_ms`. Metadata-dependent
+transforms are skipped because their Python-side metadata and dynamic geometry
+are not part of this compiled tensor-only benchmark. If compilation or the
+first compiled call is unsupported by the active backend compiler, it is
+recorded with `compile_status=not-compile-compatible`, and the remaining
+benchmark continues.
 
 The runner separates warm-up from measured iterations, reuses one prebuilt
 tensor case while creating a fresh bundle for every call, synchronizes backend
@@ -124,45 +219,9 @@ is reported separately as `case_setup_ms`; it is not included in transform
 timings. The benchmark is a timing tool, not a correctness replacement for
 `test/transforms/`.
 
-`--compile none` is the default and measures eager transform calls. With
-`--compile xla`, TensorFlow uses `tf.function(jit_compile=True)`, JAX uses
-`jax.jit`, and Torch uses `torch.compile` with the Keras-standard `inductor`
-backend with its default graph-break behavior. 
-
-Compilation time is reported separately as `compile_time_ms`. Metadata-dependent transforms
-are skipped because their Python-side metadata and dynamic geometry are not
-part of this compiled tensor-only benchmark. If compilation or the first compiled
-call is unsupported by the active backend compiler, it is recorded with
-`compile_status=not-compile-compatible`.
-and the remaining benchmark continues.
-
-Example:
-
-```bash
-python benchmarks/transforms.py --group cpu+gpu --device both \
-  --layout BDHWC --sizes 64 96 128 160 --batch-size 1 \
-  --iterations 50 --warmup 10 --json /tmp/medicai.json
-```
-
-Common image-size profiles:
-
-```bash
-# 2D: (B, H, W, C), with H=W in each run.
-python benchmarks/transforms.py --layout BHWC --sizes 224 512 1024 --batch-size 1
-
-# 3D: (B, D, H, W, C), with D=H=W in each run.
-python benchmarks/transforms.py --layout BDHWC --sizes 64 96 128 160 --batch-size 1
-```
-
-Use a smaller `--batch-size` or fewer sizes when measuring large 3D volumes;
-memory use grows cubically with the 3D size.
-
-
 ## Recorded Results
 
 The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and compiled GPU tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in **bold**; `--` means no matching result or unsupported execution.
-
-Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 
 ### CropForeground
 
