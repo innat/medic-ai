@@ -58,22 +58,24 @@ RandomElasticTransform` or `--transform Flip RandomElasticTransform`. Names are
 matched case-insensitively. A transform that is not available for the selected
 layout produces a clear error listing the valid names.
 
-For a Kaggle or notebook matrix, pass the selected names through the launcher
+For a Python matrix launcher, pass the selected names through the launcher
 instead of changing each subprocess command:
 
 ```python
 import os
 import subprocess
 
+BENCHMARK = "benchmarks/transforms.py"
+
 
 def run(backend, layout, size, batch, compile_mode="none", transforms=("all",)):
     transform_label = "-".join(transforms)
     json_path = (
-        f"/kaggle/working/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
+        f"/tmp/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
         f"TRANSFORM_{transform_label}_COMPILE_{compile_mode}.json"
     )
     command = [
-        "python", "-u", "/kaggle/working/medic-ai/benchmarks/transforms.py",
+        "python", "-u", BENCHMARK,
         "--device", "both",
         "--iterations", "50",
         "--warmup", "10",
