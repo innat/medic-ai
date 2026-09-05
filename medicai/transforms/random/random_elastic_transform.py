@@ -531,7 +531,7 @@ class RandomElasticTransform(RandomTransform):
                 field = resample_displacement_field(
                     field,
                     target_shape=spatial_shape,
-                    method=self.field_interpolation,
+                    interpolation=self.field_interpolation,
                     align_corners=False,
                 )
             reduction_axes = tuple(range(1, spatial_rank + 2))

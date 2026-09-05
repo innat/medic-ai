@@ -83,7 +83,7 @@ def test_resample_displacement_field_bspline_matches_scipy(input_shape, target_s
         resample_displacement_field(
             as_tensor(field_np),
             target_shape=target_shape,
-            method="bspline",
+            interpolation="bspline",
         )
     )
 
@@ -97,7 +97,7 @@ def test_resample_displacement_field_bilinear_supports_2d_fields():
     output = resample_displacement_field(
         field,
         target_shape=(7, 8),
-        method="bilinear",
+        interpolation="bilinear",
     )
 
     assert tuple(ops.shape(output)) == (2, 7, 8, 2)

@@ -94,7 +94,7 @@ def _resample_linear_field(field, target_shape, align_corners):
 def resample_displacement_field(
     field,
     target_shape,
-    method="trilinear",
+    interpolation="trilinear",
     *,
     boundary="nearest",
     fill_value=0.0,
@@ -125,7 +125,7 @@ def resample_displacement_field(
     Args:
         field: Tensor shaped ``(B, H, W, 2)`` or ``(B, D, H, W, 3)``.
         target_shape: Target spatial shape, ``(H, W)`` or ``(D, H, W)``.
-        method: ``"bilinear"`` for 2D, ``"trilinear"`` for 3D, or
+        interpolation: ``"bilinear"`` for 2D, ``"trilinear"`` for 3D, or
             ``"bspline"`` for cubic B-spline field interpolation. The linear
             methods use the existing backend-neutral volume/axis resizing
             semantics; ``"bspline"`` uses control-grid-aligned coordinates.
@@ -154,7 +154,7 @@ def resample_displacement_field(
             dense_field = resample_displacement_field(
                 coarse_field,
                 target_shape=(160, 256, 256),
-                method="bspline",
+                interpolation="bspline",
                 boundary="nearest",
             )
             print(dense_field.shape)  # (1, 160, 256, 256, 3)
@@ -165,13 +165,13 @@ def resample_displacement_field(
             from keras import ops
 
             coarse_field = ops.zeros((1, 32, 32, 2), dtype="float32")
-            dense_field_2d = resample_displacement_field(
+            dense_field = resample_displacement_field(
                 coarse_field,
                 target_shape=(224, 224),
-                method="bspline",
+                interpolation="bspline",
                 boundary="nearest",
             )
-            print(dense_field_2d.shape)  # (1, 224, 224, 2)
+            print(dense_field.shape)  # (1, 224, 224, 2)
     """
     rank = len(target_shape)
     expected_rank = rank + 2
@@ -180,16 +180,16 @@ def resample_displacement_field(
             "`field` and `target_shape` must describe a 2D or 3D channel-last "
             "field."
         )
-    if method == "bspline":
+    if interpolation == "bspline":
         if boundary not in {"nearest", "reflect", "wrap", "constant"}:
             raise ValueError(
                 "B-spline `boundary` must be 'nearest', 'reflect', 'wrap', or "
                 "'constant'."
             )
         return _resample_bspline_field(field, target_shape, boundary, fill_value)
-    if method == "bilinear" and rank == 2:
+    if interpolation == "bilinear" and rank == 2:
         return _resample_linear_field(field, target_shape, align_corners)
-    if method == "trilinear" and rank == 3:
+    if interpolation == "trilinear" and rank == 3:
         return resize_volumes(
             field,
             depth=target_shape[0],
@@ -199,7 +199,7 @@ def resample_displacement_field(
             align_corners=align_corners,
         )
     raise ValueError(
-        f"Unsupported displacement-field method {method!r} for {rank}D input. "
+        f"Unsupported displacement-field interpolation {interpolation!r} for {rank}D input. "
         "Use 'bilinear' for 2D, 'trilinear' for 3D, or 'bspline'."
     )
 
