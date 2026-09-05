@@ -14,6 +14,7 @@ from medicai.transforms import (
     RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -502,7 +503,12 @@ def build_gpu_random_pipeline(
     *,
     segmentation: bool,
 ):
-    """Build a batch-layout pipeline for model-side random augmentation."""
+    """Build a batch-layout pipeline for model-side random augmentation.
+
+    Args:
+        input_layout: Batch layout, either ``"BHWC"`` or ``"BDHWC"``.
+        segmentation: Whether image and label tensors must share geometry.
+    """
     keys = ["image", "label"] if segmentation else ["image"]
     flip_axis = 1
     transforms = [
@@ -524,6 +530,32 @@ def build_gpu_random_pipeline(
         )
     )
     return Compose(transforms)
+
+
+def build_random_elastic_pipeline(input_layout: str, *, segmentation: bool):
+    """Build a focused batch pipeline containing elastic augmentation."""
+    keys = ["image", "label"] if segmentation else ["image"]
+    spatial_rank = 2 if input_layout == "BHWC" else 3
+    linear_mode = "bilinear" if spatial_rank == 2 else "trilinear"
+    interpolation = (
+        {"image": linear_mode, "label": "nearest"}
+        if segmentation
+        else linear_mode
+    )
+    return Compose(
+        [
+            RandomElasticTransform(
+                keys=keys,
+                input_layout=input_layout,
+                interpolation=interpolation,
+                control_grid_spacing=(8,) * spatial_rank,
+                alpha=2.0,
+                sigma=3.0,
+                prob=1.0,
+                seed=31,
+            )
+        ]
+    )
 
 
 def build_volume_geometry_pipeline():

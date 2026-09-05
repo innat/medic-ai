@@ -8,6 +8,7 @@ from test.training.common import (
     apply_segmentation_pipeline,
     build_classification_model,
     build_gpu_random_pipeline,
+    build_random_elastic_pipeline,
     build_segmentation_model,
     build_transform_pipelines,
     build_volume_geometry_pipeline,
@@ -127,10 +128,12 @@ def _fit_gpu_augmented_model(
     input_layout: str,
     input_shape: tuple[int, ...],
     segmentation: bool,
+    pipeline=None,
     strategy=None,
 ):
     tf = _require_tensorflow()
-    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+    if pipeline is None:
+        pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
         if segmentation:
@@ -307,6 +310,48 @@ def test_tensorflow_pygrain_accepts_classification_samples():
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "BHWC", (32, 48, 1)),
+        (False, "BDHWC", (8, 16, 16, 1)),
+        (True, "BHWC", (32, 48, 1)),
+        (True, "BDHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_tensorflow_gpu_augmented_model_trains_with_random_elastic(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Train TensorFlow with batch elastic augmentation in the train step."""
+    if segmentation:
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "BHWC"
+            else make_dataset().segmentation_3d()
+        )
+    else:
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "BHWC"
+            else make_dataset().classification_3d()
+        )
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        segmentation=segmentation,
+        pipeline=build_random_elastic_pipeline(
+            input_layout, segmentation=segmentation
+        ),
+    )
 
 
 @pytest.mark.integration

@@ -9,6 +9,7 @@ from test.training.common import (
     apply_segmentation_pipeline,
     build_classification_model,
     build_gpu_random_pipeline,
+    build_random_elastic_pipeline,
     build_segmentation_model,
     build_transform_pipelines,
 )
@@ -114,14 +115,23 @@ def _fit_torch_dataset(
     )
 
 
-def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segmentation):
+def _fit_gpu_augmented_model(
+    images,
+    labels,
+    *,
+    input_layout,
+    input_shape,
+    segmentation,
+    pipeline=None,
+):
     """Train a Torch model with batch transforms executed in ``train_step``."""
     torch = _require_torch()
     if not torch.cuda.is_available():
         pytest.skip("GPU augmentation coverage requires a CUDA device.")
     from torch.utils.data import DataLoader
 
-    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+    if pipeline is None:
+        pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
         result = pipeline({"image": image, "label": label} if segmentation else {"image": image})
@@ -243,6 +253,48 @@ def test_torch_gpu_augmented_model_trains_3d_segmentation():
         input_layout="BDHWC",
         input_shape=(8, 16, 16, 1),
         segmentation=True,
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "BHWC", (32, 48, 1)),
+        (False, "BDHWC", (8, 16, 16, 1)),
+        (True, "BHWC", (32, 48, 1)),
+        (True, "BDHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_torch_gpu_augmented_model_trains_with_random_elastic(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Train Torch with batch elastic augmentation in the train step."""
+    if segmentation:
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "BHWC"
+            else make_dataset().segmentation_3d()
+        )
+    else:
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "BHWC"
+            else make_dataset().classification_3d()
+        )
+    _fit_gpu_augmented_model(
+        images,
+        labels,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        segmentation=segmentation,
+        pipeline=build_random_elastic_pipeline(
+            input_layout, segmentation=segmentation
+        ),
     )
 
 
