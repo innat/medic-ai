@@ -12,6 +12,7 @@ from ..utils import (
     get_input_layout_info,
     resolve_input_layout,
     restore_from_batch_axis,
+    validate_affine_matrix,
     validate_tensor_matches_layout,
 )
 from ...utils.image import resize_volumes
@@ -265,6 +266,13 @@ class RandomElasticTransform(RandomTransform):
         control_grid_spacing: Optional spacing between coarse 3D field samples,
             in voxels. A scalar applies to every spatial axis. If ``None``, the
             field is sampled at full resolution.
+        displacement_units: Units for ``alpha`` and the sampled displacement
+            field. ``"voxel"`` is the default and is currently executable.
+            ``"mm"`` requires valid ``bundle.meta["affine"]`` metadata;
+            physical-unit conversion is not implemented yet.
+        field_interpolation: Interpolation used to expand a coarse 3D field.
+            ``"trilinear"`` is currently supported. ``"bspline"`` is reserved
+            for the planned B-spline field kernel.
         locked_borders: Number of outer coarse-grid layers with zero
             displacement. This is currently available for 3D fields only.
         seed: Optional integer or Keras ``SeedGenerator``.
@@ -286,6 +294,8 @@ class RandomElasticTransform(RandomTransform):
         *,
         input_layout: str,
         control_grid_spacing: int | Sequence[int] | None = None,
+        displacement_units: str = "voxel",
+        field_interpolation: str = "trilinear",
         fill_mode: str = "nearest",
         fill_value: float = 0.0,
         locked_borders: int = 0,
@@ -306,6 +316,14 @@ class RandomElasticTransform(RandomTransform):
         self.control_grid_spacing = self._normalize_control_grid_spacing(
             control_grid_spacing
         )
+        if displacement_units not in {"voxel", "mm"}:
+            raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+        if field_interpolation not in {"trilinear", "bspline"}:
+            raise ValueError(
+                "`field_interpolation` must be either 'trilinear' or 'bspline'."
+            )
+        self.displacement_units = displacement_units
+        self.field_interpolation = field_interpolation
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
         if locked_borders and self.layout_info.spatial_rank != 3:
@@ -413,6 +431,24 @@ class RandomElasticTransform(RandomTransform):
         return result
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
+        if self.displacement_units == "mm":
+            affine = bundle.meta.get("affine")
+            if affine is None:
+                raise ValueError(
+                    "RandomElasticTransform with displacement_units='mm' "
+                    "requires bundle.meta['affine'] containing a 4x4 affine matrix."
+                )
+            validate_affine_matrix(affine)
+            raise NotImplementedError(
+                "displacement_units='mm' is validated against the affine metadata "
+                "but physical-unit conversion is not implemented yet. Use "
+                "displacement_units='voxel' for now."
+            )
+        if self.field_interpolation == "bspline":
+            raise NotImplementedError(
+                "field_interpolation='bspline' is reserved for the planned "
+                "B-spline deformation-field kernel. Use 'trilinear' for now."
+            )
         missing_keys = [key for key in self.keys if key not in bundle.data]
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
@@ -422,6 +458,8 @@ class RandomElasticTransform(RandomTransform):
             "alpha": self.alpha,
             "sigma": self.sigma,
             "control_grid_spacing": self.control_grid_spacing,
+            "displacement_units": self.displacement_units,
+            "field_interpolation": self.field_interpolation,
             "locked_borders": self.locked_borders,
             "fill_mode": self.fill_mode,
             "fill_value": self.fill_value,
@@ -499,7 +537,7 @@ class RandomElasticTransform(RandomTransform):
                     depth=spatial_shape[0],
                     height=spatial_shape[1],
                     width=spatial_shape[2],
-                    method="trilinear",
+                    method=self.field_interpolation,
                     align_corners=False,
                 )
             reduction_axes = tuple(range(1, spatial_rank + 2))

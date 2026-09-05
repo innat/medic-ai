@@ -4318,6 +4318,69 @@ def test_random_elastic_transform_rejects_unknown_boundary_mode():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_defaults_to_voxel_trilinear_field_units():
+    transform = RandomElasticTransform(keys=["image"], input_layout="DHWC")
+
+    assert transform.displacement_units == "voxel"
+    assert transform.field_interpolation == "trilinear"
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_rejects_invalid_field_configuration():
+    with pytest.raises(ValueError, match="displacement_units"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="DHWC",
+            displacement_units="world",
+        )
+    with pytest.raises(ValueError, match="field_interpolation"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="DHWC",
+            field_interpolation="cubic",
+        )
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_mm_requires_affine_metadata():
+    image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="DHWC",
+        displacement_units="mm",
+    )
+
+    with pytest.raises(ValueError, match=r"bundle\.meta\['affine'\]"):
+        transform(TensorBundle({"image": image}))
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_mm_does_not_silently_use_voxels():
+    image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="DHWC",
+        displacement_units="mm",
+    )
+
+    with pytest.raises(NotImplementedError, match="physical-unit conversion"):
+        transform(TensorBundle({"image": image}, {"affine": ops.eye(4)}))
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_bspline_field_is_explicitly_pending():
+    image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="DHWC",
+        field_interpolation="bspline",
+    )
+
+    with pytest.raises(NotImplementedError, match="B-spline"):
+        transform(TensorBundle({"image": image}))
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_limits_sampled_displacement(monkeypatch):
     image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
     transform = RandomElasticTransform(
