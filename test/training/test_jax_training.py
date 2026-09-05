@@ -64,7 +64,11 @@ def _fit_sample_transformed(*, segmentation, input_layout, input_shape, pipeline
     """Train from a shuffled PyGrain loader with sample-level transforms."""
     pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[pipeline_index]
     if segmentation:
-        images, labels = make_dataset().segmentation_2d()
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "HWC"
+            else make_dataset().segmentation_3d()
+        )
         model = build_segmentation_model(input_shape)
     else:
         images, labels = make_dataset().classification_3d()
@@ -100,17 +104,41 @@ def test_jax_training_uses_sample_transforms_for_3d_classification():
     )
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "HWC", (32, 48, 1)),
+        (False, "DHWC", (8, 16, 16, 1)),
+        (True, "HWC", (32, 48, 1)),
+        (True, "DHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_jax_training_uses_sample_elastic_transforms(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Apply the sample-layout elastic pipeline before JAX batching."""
+    _require_jax()
+    _fit_sample_transformed(
+        segmentation=segmentation,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        pipeline_index=-1,
+    )
+
+
 def _fit_model_augmented(
     *,
     segmentation,
     input_layout,
     input_shape,
-    pipeline=None,
 ):
     """Train with random transforms executed inside the JAX train step."""
     _require_jax()
-    if pipeline is None:
-        pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
     is_2d = input_layout == "BHWC"
     if segmentation:
         images, labels = make_dataset().segmentation_2d(spatial_shape=(32, 48))
@@ -183,33 +211,6 @@ def test_jax_training_applies_random_transforms_to_3d_segmentation_batches():
         segmentation=True,
         input_layout="BDHWC",
         input_shape=(8, 16, 16, 1),
-    )
-
-
-@pytest.mark.integration
-@pytest.mark.parametrize(
-    ("segmentation", "input_layout", "input_shape"),
-    [
-        (False, "BHWC", (32, 48, 1)),
-        (False, "BDHWC", (8, 16, 16, 1)),
-        (True, "BHWC", (32, 48, 1)),
-        (True, "BDHWC", (8, 16, 16, 1)),
-    ],
-    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
-)
-def test_jax_training_applies_random_elastic_in_train_step(
-    segmentation,
-    input_layout,
-    input_shape,
-):
-    """Train JAX with batch elastic augmentation in the train step."""
-    _fit_model_augmented(
-        segmentation=segmentation,
-        input_layout=input_layout,
-        input_shape=input_shape,
-        pipeline=build_transform_pipelines(
-            input_layout, segmentation=segmentation
-        )[-1],
     )
 
 

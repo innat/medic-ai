@@ -556,6 +556,24 @@ def build_gpu_random_pipeline(
             seed=17,
         )
     )
+    spatial_rank = 2 if input_layout == "BHWC" else 3
+    linear_mode = "bilinear" if spatial_rank == 2 else "trilinear"
+    transforms.append(
+        RandomElasticTransform(
+            keys=keys,
+            input_layout=input_layout,
+            interpolation=(
+                {"image": linear_mode, "label": "nearest"}
+                if segmentation
+                else linear_mode
+            ),
+            control_grid_spacing=(8,) * spatial_rank,
+            alpha=2.0,
+            sigma=3.0,
+            prob=1.0,
+            seed=31,
+        )
+    )
     return Compose(transforms)
 
 

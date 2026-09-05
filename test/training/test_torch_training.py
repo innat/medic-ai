@@ -121,7 +121,6 @@ def _fit_gpu_augmented_model(
     input_layout,
     input_shape,
     segmentation,
-    pipeline=None,
 ):
     """Train a Torch model with batch transforms executed in ``train_step``."""
     torch = _require_torch()
@@ -129,8 +128,7 @@ def _fit_gpu_augmented_model(
         pytest.skip("GPU augmentation coverage requires a CUDA device.")
     from torch.utils.data import DataLoader
 
-    if pipeline is None:
-        pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
         result = pipeline({"image": image, "label": label} if segmentation else {"image": image})
@@ -256,48 +254,6 @@ def test_torch_gpu_augmented_model_trains_3d_segmentation():
 
 
 @pytest.mark.integration
-@pytest.mark.gpu
-@pytest.mark.parametrize(
-    ("segmentation", "input_layout", "input_shape"),
-    [
-        (False, "BHWC", (32, 48, 1)),
-        (False, "BDHWC", (8, 16, 16, 1)),
-        (True, "BHWC", (32, 48, 1)),
-        (True, "BDHWC", (8, 16, 16, 1)),
-    ],
-    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
-)
-def test_torch_gpu_augmented_model_trains_with_random_elastic(
-    segmentation,
-    input_layout,
-    input_shape,
-):
-    """Train Torch with batch elastic augmentation in the train step."""
-    if segmentation:
-        images, labels = (
-            make_dataset().segmentation_2d()
-            if input_layout == "BHWC"
-            else make_dataset().segmentation_3d()
-        )
-    else:
-        images, labels = (
-            make_dataset().classification_2d()
-            if input_layout == "BHWC"
-            else make_dataset().classification_3d()
-        )
-    _fit_gpu_augmented_model(
-        images,
-        labels,
-        input_layout=input_layout,
-        input_shape=input_shape,
-        segmentation=segmentation,
-        pipeline=build_transform_pipelines(
-            input_layout, segmentation=segmentation
-        )[-1],
-    )
-
-
-@pytest.mark.integration
 def test_torch_dataloader_trains_3d_classification_with_rotation_pipeline():
     """Train a 3D classifier with synchronized deterministic geometry."""
     images, labels = make_dataset().classification_3d()
@@ -370,6 +326,45 @@ def test_torch_pygrain_trains_2d_classification():
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "HWC", (32, 48, 1)),
+        (False, "DHWC", (8, 16, 16, 1)),
+        (True, "HWC", (32, 48, 1)),
+        (True, "DHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_torch_dataloader_trains_with_sample_elastic(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Apply the sample-layout elastic pipeline before Torch batching."""
+    if segmentation:
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "HWC"
+            else make_dataset().segmentation_3d()
+        )
+    else:
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "HWC"
+            else make_dataset().classification_3d()
+        )
+    _fit_torch_dataset(
+        images,
+        labels,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        pipeline_index=-1,
+        segmentation=segmentation,
+    )
 
 
 @pytest.mark.integration

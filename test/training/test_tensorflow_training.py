@@ -127,12 +127,10 @@ def _fit_gpu_augmented_model(
     input_layout: str,
     input_shape: tuple[int, ...],
     segmentation: bool,
-    pipeline=None,
     strategy=None,
 ):
     tf = _require_tensorflow()
-    if pipeline is None:
-        pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
+    pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
 
     def augment_data(image, label):
         if segmentation:
@@ -312,45 +310,48 @@ def test_tensorflow_pygrain_accepts_classification_samples():
 
 
 @pytest.mark.integration
-@pytest.mark.gpu
 @pytest.mark.parametrize(
     ("segmentation", "input_layout", "input_shape"),
     [
-        (False, "BHWC", (32, 48, 1)),
-        (False, "BDHWC", (8, 16, 16, 1)),
-        (True, "BHWC", (32, 48, 1)),
-        (True, "BDHWC", (8, 16, 16, 1)),
+        (False, "HWC", (32, 48, 1)),
+        (False, "DHWC", (8, 16, 16, 1)),
+        (True, "HWC", (32, 48, 1)),
+        (True, "DHWC", (8, 16, 16, 1)),
     ],
     ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
 )
-def test_tensorflow_gpu_augmented_model_trains_with_random_elastic(
+def test_tensorflow_tfdata_trains_with_sample_elastic(
     segmentation,
     input_layout,
     input_shape,
 ):
-    """Train TensorFlow with batch elastic augmentation in the train step."""
+    """Apply the sample-layout elastic pipeline before TensorFlow batching."""
     if segmentation:
         images, labels = (
             make_dataset().segmentation_2d()
-            if input_layout == "BHWC"
+            if input_layout == "HWC"
             else make_dataset().segmentation_3d()
+        )
+        _fit_tfdata_segmentation(
+            images,
+            labels,
+            input_layout=input_layout,
+            input_shape=input_shape,
+            pipeline_index=-1,
         )
     else:
         images, labels = (
             make_dataset().classification_2d()
-            if input_layout == "BHWC"
+            if input_layout == "HWC"
             else make_dataset().classification_3d()
         )
-    _fit_gpu_augmented_model(
-        images,
-        labels,
-        input_layout=input_layout,
-        input_shape=input_shape,
-        segmentation=segmentation,
-        pipeline=build_transform_pipelines(
-            input_layout, segmentation=segmentation
-        )[-1],
-    )
+        _fit_tfdata_classification(
+            images,
+            labels,
+            input_layout=input_layout,
+            input_shape=input_shape,
+            pipeline_index=-1,
+        )
 
 
 @pytest.mark.integration
