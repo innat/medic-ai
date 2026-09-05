@@ -32,6 +32,14 @@ KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
 
+# Run one selected transform (names are case-insensitive).
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device cpu --transform RandomElasticTransform
+
+# Run a selected set.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device both --transform Flip RandomElasticTransform
+
 # Compare eager execution with the active backend's compiled path.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile xla
 ```
@@ -42,6 +50,13 @@ The registry uses two execution groups:
   before batching, such as `CropForeground`, `Orientation`, and `Spacing`.
 - `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
   random augmentation transforms.
+
+Use `--transform all` (the default) to benchmark every transform available for
+the selected layout. To target specific transforms, pass one or more public
+class names after `--transform`, for example `--transform
+RandomElasticTransform` or `--transform Flip RandomElasticTransform`. Names are
+matched case-insensitively. A transform that is not available for the selected
+layout produces a clear error listing the valid names.
 
 The runner separates warm-up from measured iterations, reuses one prebuilt
 tensor case while creating a fresh bundle for every call, synchronizes backend
