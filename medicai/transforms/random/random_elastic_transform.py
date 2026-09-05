@@ -283,10 +283,12 @@ class RandomElasticTransform(RandomTransform):
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Examples:
-        A 2D sample-level TensorFlow pipeline. Set ``KERAS_BACKEND`` before
-        importing Keras.
+        A 2D sample-level TensorFlow pipeline.
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import keras
             from medicai.transforms import RandomElasticTransform
@@ -303,9 +305,12 @@ class RandomElasticTransform(RandomTransform):
             )
             result = transform({"image": image})
 
-        A 2D batch-level Torch pipeline using a coarse B-spline field on GPU.
+        A 2D batch-level Torch pipeline using a coarse B-spline field.
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import keras
             from medicai.transforms import RandomElasticTransform
@@ -321,12 +326,14 @@ class RandomElasticTransform(RandomTransform):
                 prob=0.8,
                 seed=102,
             )
-            with keras.device("gpu:0"):
-                result = transform({"image": images})
+            result = transform({"image": images})
 
         A 3D sample-level JAX pipeline with trilinear coarse-field expansion.
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
 
             import keras
             from medicai.transforms import RandomElasticTransform
@@ -349,6 +356,9 @@ class RandomElasticTransform(RandomTransform):
 
         .. code-block:: python
 
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
+
             import keras
             from medicai.transforms import RandomElasticTransform
 
@@ -368,6 +378,9 @@ class RandomElasticTransform(RandomTransform):
         deformation field.
 
         .. code-block:: python
+
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import keras
             from medicai.transforms import RandomElasticTransform
@@ -391,6 +404,9 @@ class RandomElasticTransform(RandomTransform):
 
         .. code-block:: python
 
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
+
             import keras
             from medicai.transforms import RandomElasticTransform
 
@@ -406,11 +422,7 @@ class RandomElasticTransform(RandomTransform):
                 seed=106,
             )
             result = transform({"image": images})
-
-    Note:
-        The transform is not invertible. Elastic deformation does not have a
-        generally exact inverse, so the sampled field is not used for inverse
-        reconstruction.
+            
     """
 
     def __init__(
