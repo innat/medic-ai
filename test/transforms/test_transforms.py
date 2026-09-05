@@ -4207,6 +4207,31 @@ def test_random_elastic_transform_rejects_unknown_boundary_mode():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_limits_sampled_displacement(monkeypatch):
+    image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=2.0,
+        sigma=1.0,
+        interpolation="trilinear",
+        prob=1.0,
+        input_layout="DHWC",
+        seed=7,
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_normal",
+        lambda shape, dtype: ops.full(shape, 100.0, dtype=dtype),
+    )
+    batched = ops.expand_dims(image, axis=0)
+
+    field = transform._sample_or_zero_field(batched, True)
+
+    assert float(ops.convert_to_numpy(ops.max(field))) == 2.0
+    assert float(ops.convert_to_numpy(ops.min(field))) == 2.0
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_probability_zero_is_noop():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     transform = RandomElasticTransform(

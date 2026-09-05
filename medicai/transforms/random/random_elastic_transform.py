@@ -453,7 +453,8 @@ class RandomElasticTransform(RandomTransform):
                     align_corners=False,
                 )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
-            return field * self.alpha
+            field = field * self.alpha
+            return ops.clip(field, -self.alpha, self.alpha)
 
         return ops.cond(
             ops.cast(should_apply, "bool"),
