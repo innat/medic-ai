@@ -102,12 +102,36 @@ def resample_displacement_field(
 ):
     """Resample a 2D or 3D channel-last displacement field.
 
+    The ``"bspline"`` method evaluates a tensor-product cubic B-spline field
+    from regularly spaced control-point coefficients. For a cubic spline, each
+    output coordinate uses at most four neighboring control points along each
+    spatial axis; the implementation applies those four-tap evaluations
+    separably across the spatial dimensions. This follows the standard
+    B-spline basis convention described by SciPy's
+    :class:`scipy.interpolate.BSpline`, but uses ``keras.ops`` so it remains
+    backend agnostic at runtime.
+
+    B-spline field interpolation is distinct from image interpolation. The
+    resulting displacement field is later used to sample images or labels;
+    ``boundary`` controls control-point field resampling, while a transform's
+    image ``fill_mode`` controls sampling outside the image domain. The
+    ``"reflect"`` boundary uses the edge-non-repeating mirror convention.
+
+    The B-spline path treats the input values as control-point coefficients.
+    It does not prefilter arbitrary sampled values to obtain interpolation
+    coefficients, and it does not imply cubic interpolation of the image or
+    label tensor itself.
+
     Args:
         field: Tensor shaped ``(B, H, W, 2)`` or ``(B, D, H, W, 3)``.
         target_shape: Target spatial shape, ``(H, W)`` or ``(D, H, W)``.
         method: ``"bilinear"`` for 2D, ``"trilinear"`` for 3D, or
-            ``"bspline"`` for cubic B-spline field interpolation.
-        boundary: Boundary mode for B-spline interpolation.
+            ``"bspline"`` for cubic B-spline field interpolation. The linear
+            methods use the existing backend-neutral volume/axis resizing
+            semantics; ``"bspline"`` uses control-grid-aligned coordinates.
+        boundary: Boundary mode for B-spline interpolation. Supported values
+            are ``"nearest"``, ``"reflect"``, ``"wrap"``, and ``"constant"``.
+            This is separate from an image transform's ``fill_mode``.
         fill_value: Constant boundary value when ``boundary="constant"``.
         align_corners: Coordinate convention for linear interpolation. The
             B-spline path uses control-grid-aligned coordinates.
@@ -117,6 +141,19 @@ def resample_displacement_field(
 
     Raises:
         ValueError: If the field rank, target rank, or method is invalid.
+
+    Example:
+        Resample a coarse 3D displacement field before using it to warp a
+        volume::
+
+            from medicai.utils import resample_displacement_field
+
+            dense_field = resample_displacement_field(
+                coarse_field,
+                target_shape=(160, 256, 256),
+                method="bspline",
+                boundary="nearest",
+            )
     """
     rank = len(target_shape)
     expected_rank = rank + 2
