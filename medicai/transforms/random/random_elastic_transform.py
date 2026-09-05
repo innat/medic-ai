@@ -443,6 +443,7 @@ class RandomElasticTransform(RandomTransform):
             noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
             smooth_sigma = self.sigma / min(spacing)
             field = _gaussian_smooth_nd(noise, max(smooth_sigma, 1e-3), spatial_rank)
+            field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spatial_rank == 3 and spacing != (1, 1, 1):
                 field = resize_volumes(
                     field,
@@ -452,7 +453,6 @@ class RandomElasticTransform(RandomTransform):
                     method="trilinear",
                     align_corners=False,
                 )
-            field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             field = field * self.alpha
             return ops.clip(field, -self.alpha, self.alpha)
 
