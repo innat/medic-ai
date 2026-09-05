@@ -1,5 +1,3 @@
-import itertools
-
 from keras import ops
 
 
