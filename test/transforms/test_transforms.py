@@ -4232,6 +4232,34 @@ def test_random_elastic_transform_limits_sampled_displacement(monkeypatch):
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_coarse_field_respects_grid_and_borders():
+    image = as_tensor(np.zeros((9, 10, 11, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        alpha=3.0,
+        sigma=2.0,
+        control_grid_spacing=(2, 2, 2),
+        locked_borders=1,
+        interpolation="trilinear",
+        prob=1.0,
+        input_layout="DHWC",
+        seed=7,
+    )
+
+    field = transform._sample_or_zero_field(ops.expand_dims(image, axis=0), True)
+    field_np = ops.convert_to_numpy(field)
+
+    assert field_np.shape == (1, 9, 10, 11, 3)
+    assert np.max(np.abs(field_np)) <= 3.0 + 1e-6
+    np.testing.assert_array_equal(field_np[:, 0], 0.0)
+    np.testing.assert_array_equal(field_np[:, -1], 0.0)
+    np.testing.assert_array_equal(field_np[:, :, 0], 0.0)
+    np.testing.assert_array_equal(field_np[:, :, -1], 0.0)
+    np.testing.assert_array_equal(field_np[:, :, :, 0], 0.0)
+    np.testing.assert_array_equal(field_np[:, :, :, -1], 0.0)
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_probability_zero_is_noop():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     transform = RandomElasticTransform(
