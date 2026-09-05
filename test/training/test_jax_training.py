@@ -71,7 +71,11 @@ def _fit_sample_transformed(*, segmentation, input_layout, input_shape, pipeline
         )
         model = build_segmentation_model(input_shape)
     else:
-        images, labels = make_dataset().classification_3d()
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "HWC"
+            else make_dataset().classification_3d()
+        )
         model = build_classification_model(input_shape)
     loader = _make_pygrain_loader(images, labels, pipeline)
 
