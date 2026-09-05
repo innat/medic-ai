@@ -453,7 +453,10 @@ class RandomElasticTransform(RandomTransform):
                     method="trilinear",
                     align_corners=False,
                 )
-            field = field * self.alpha
+            reduction_axes = tuple(range(1, spatial_rank + 2))
+            peak = ops.max(ops.abs(field), axis=reduction_axes, keepdims=True)
+            safe_peak = ops.where(peak > 1e-6, peak, ops.ones_like(peak))
+            field = (field / safe_peak) * self.alpha
             return ops.clip(field, -self.alpha, self.alpha)
 
         return ops.cond(
