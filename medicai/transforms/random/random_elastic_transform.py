@@ -239,10 +239,11 @@ class RandomElasticTransform(RandomTransform):
         keys: Keys of aligned tensors to deform.
         alpha: Maximum displacement magnitude in pixels or voxels.
         sigma: Gaussian smoothing width in pixels or voxels.
-        interpolation: One interpolation mode, a sequence aligned with
-            ``keys``, or a mapping from key to mode. Use ``"bilinear"`` for
-            images and ``"nearest"`` for labels or masks. For 3D inputs,
-            ``"trilinear"`` is the linear mode.
+        interpolation: Optional interpolation mode, a sequence aligned with
+            ``keys``, or a mapping from key to mode. When omitted, the first
+            key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
+            later keys use ``"nearest"``. Explicit mappings are recommended
+            for image and label pipelines.
         fill_mode: Boundary behavior for out-of-bounds coordinates. Supported
             values are ``"nearest"``, ``"constant"``, ``"reflect"``, and
             ``"wrap"``. The default ``"nearest"`` preserves border values.
@@ -269,7 +270,7 @@ class RandomElasticTransform(RandomTransform):
         keys: Sequence[str],
         alpha: float = 20.0,
         sigma: float = 4.0,
-        interpolation: str | Sequence[str] | Mapping[str, str] = "bilinear",
+        interpolation: str | Sequence[str] | Mapping[str, str] | None = None,
         prob: float = 0.1,
         *,
         input_layout: str,
@@ -342,9 +343,15 @@ class RandomElasticTransform(RandomTransform):
 
     def _normalize_interpolation(
         self,
-        interpolation: str | Sequence[str] | Mapping[str, str],
+        interpolation: str | Sequence[str] | Mapping[str, str] | None,
     ) -> dict[str, str]:
-        if isinstance(interpolation, str):
+        if interpolation is None:
+            linear_mode = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            result = {
+                key: linear_mode if index == 0 else "nearest"
+                for index, key in enumerate(self.keys)
+            }
+        elif isinstance(interpolation, str):
             result = {key: interpolation for key in self.keys}
         elif isinstance(interpolation, Mapping):
             missing = set(self.keys) - set(interpolation)

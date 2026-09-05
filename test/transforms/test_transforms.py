@@ -4115,6 +4115,88 @@ def test_random_elastic_transform_supports_3d_sample_and_batch_layouts():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_identity_matches_numpy_reference():
+    image_np = np.arange(27, dtype=np.float32).reshape(3, 3, 3, 1)
+    label_np = (image_np > 13).astype(np.int32)
+    transform = RandomElasticTransform(
+        keys=["image", "label"],
+        alpha=0.0,
+        input_layout="DHWC",
+        prob=1.0,
+        seed=7,
+    )
+
+    result = transform(
+        TensorBundle(
+            {
+                "image": as_tensor(image_np),
+                "label": as_tensor(label_np),
+            }
+        )
+    )
+
+    np.testing.assert_array_equal(ops.convert_to_numpy(result["image"]), image_np)
+    np.testing.assert_array_equal(ops.convert_to_numpy(result["label"]), label_np)
+    assert transform.interpolation == {"image": "trilinear", "label": "nearest"}
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_constant_displacement_matches_numpy_reference():
+    image_np = np.arange(9, dtype=np.float32).reshape(3, 3, 1)
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="HWC",
+        interpolation="nearest",
+        prob=1.0,
+        seed=7,
+    )
+    field = ops.concatenate(
+        [
+            ops.zeros((1, 3, 3, 1), dtype="float32"),
+            ops.ones((1, 3, 3, 1), dtype="float32"),
+        ],
+        axis=-1,
+    )
+
+    result = transform._warp_tensor(
+        ops.expand_dims(as_tensor(image_np), axis=0), field, "nearest"
+    )
+    expected = np.array([[1, 2, 2], [4, 5, 5], [7, 8, 8]], dtype=np.float32)[..., None]
+
+    np.testing.assert_array_equal(ops.convert_to_numpy(result[0]), expected)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_keeps_image_and_label_aligned():
+    pattern = np.zeros((3, 3, 1), dtype=np.float32)
+    pattern[1, 1, 0] = 1.0
+    image = as_tensor(pattern)
+    label = as_tensor(pattern.astype(np.int32))
+    transform = RandomElasticTransform(
+        keys=["image", "label"],
+        input_layout="HWC",
+        interpolation={"image": "nearest", "label": "nearest"},
+        prob=1.0,
+        seed=7,
+    )
+    field = ops.concatenate(
+        [
+            ops.zeros((1, 3, 3, 1), dtype="float32"),
+            ops.ones((1, 3, 3, 1), dtype="float32"),
+        ],
+        axis=-1,
+    )
+    transform._sample_or_zero_field = lambda tensor, should_apply: field
+
+    result = transform(TensorBundle({"image": image, "label": label}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result["image"]),
+        ops.convert_to_numpy(result["label"]),
+    )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_rejects_coarse_grid_for_2d():
     with pytest.raises(ValueError, match="supported only for 3D"):
         RandomElasticTransform(
