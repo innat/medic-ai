@@ -58,6 +58,63 @@ RandomElasticTransform` or `--transform Flip RandomElasticTransform`. Names are
 matched case-insensitively. A transform that is not available for the selected
 layout produces a clear error listing the valid names.
 
+For a Kaggle or notebook matrix, pass the selected names through the launcher
+instead of changing each subprocess command:
+
+```python
+import os
+import subprocess
+
+
+def run(backend, layout, size, batch, compile_mode="none", transforms=("all",)):
+    transform_label = "-".join(transforms)
+    json_path = (
+        f"/kaggle/working/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
+        f"TRANSFORM_{transform_label}_COMPILE_{compile_mode}.json"
+    )
+    command = [
+        "python", "-u", "/kaggle/working/medic-ai/benchmarks/transforms.py",
+        "--device", "both",
+        "--iterations", "50",
+        "--warmup", "10",
+        "--layout", layout,
+        "--sizes", str(size),
+        "--batch-size", str(batch),
+        "--compile", compile_mode,
+        "--transform", *transforms,
+        "--json", json_path,
+    ]
+    environment = {**os.environ, "KERAS_BACKEND": backend}
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=environment,
+    )
+    assert process.stdout is not None
+    for line in process.stdout:
+        print(line, end="", flush=True)
+    process.wait()
+
+
+selected_transforms = ["Flip", "RandomElasticTransform"]
+for backend in ["tensorflow", "torch", "jax"]:
+    run(
+        backend,
+        layout="BDHWC",
+        size=96,
+        batch=1,
+        transforms=selected_transforms,
+    )
+```
+
+Use `transforms=("all",)` for the complete suite, a single-item tuple such as
+`("RandomElasticTransform",)`, or multiple names such as
+`("Flip", "RandomElasticTransform")`. Including the selected names in the
+JSON filename keeps targeted results separate from full-suite results.
+
 The runner separates warm-up from measured iterations, reuses one prebuilt
 tensor case while creating a fresh bundle for every call, synchronizes backend
 work before stopping the timer, and reports forward timings. Input-case setup
