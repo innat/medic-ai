@@ -142,7 +142,7 @@ def resample_displacement_field(
     Raises:
         ValueError: If the field rank, target rank, or method is invalid.
 
-    Example:
+    Examples:
         Resample a coarse 3D displacement field before using it to warp a
         volume::
 
@@ -159,9 +159,14 @@ def resample_displacement_field(
             )
             print(dense_field.shape)  # (1, 160, 256, 256, 3)
 
-            coarse_field_2d = ops.zeros((1, 32, 32, 2), dtype="float32")
+        Resample a coarse 2D displacement field::
+
+            from medicai.utils import resample_displacement_field
+            from keras import ops
+
+            coarse_field = ops.zeros((1, 32, 32, 2), dtype="float32")
             dense_field_2d = resample_displacement_field(
-                coarse_field_2d,
+                coarse_field,
                 target_shape=(224, 224),
                 method="bspline",
                 boundary="nearest",
