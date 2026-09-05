@@ -27,10 +27,7 @@ def main() -> None:
         nargs="+",
         default=["all"],
         metavar="NAME",
-        help=(
-            "Transform name(s) to benchmark. Use 'all' (default) to run the "
-            "complete suite."
-        ),
+        help=("Transform name(s) to benchmark. Use 'all' (default) to run the " "complete suite."),
     )
     parser.add_argument("--layout", choices=("HWC", "DHWC", "BHWC", "BDHWC"), default="BDHWC")
     parser.add_argument("--sizes", type=int, nargs="+", help="Square 2D or cubic 3D spatial sizes.")

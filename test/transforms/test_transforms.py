@@ -7,10 +7,10 @@ from medicai.transforms import (
     CropForeground,
     Flip,
     NormalizeIntensity,
-    RandomElasticTransform,
     Orientation,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -2718,9 +2718,7 @@ def test_flip_supports_2d_and_3d_and_records_inverse_trace():
     assert trace["invertible"] is True
     np.testing.assert_allclose(
         ops.convert_to_numpy(
-            flip_2d.inverse(
-                TensorBundle({"image": out_2d["image"]}, out_2d.meta)
-            )["image"]
+            flip_2d.inverse(TensorBundle({"image": out_2d["image"]}, out_2d.meta))["image"]
         ),
         ops.convert_to_numpy(image_2d),
     )
@@ -4129,9 +4127,7 @@ def test_random_elastic_transform_bspline_coarse_field_keeps_aligned_keys():
         seed=7,
     )
 
-    result = transform(
-        TensorBundle({"image": as_tensor(image_np), "label": as_tensor(image_np)})
-    )
+    result = transform(TensorBundle({"image": as_tensor(image_np), "label": as_tensor(image_np)}))
 
     assert tuple(ops.shape(result["image"])) == (4, 4, 4, 1)
     np.testing.assert_array_equal(
@@ -4235,9 +4231,7 @@ def test_random_elastic_transform_constant_displacement_matches_numpy_reference(
         axis=-1,
     )
 
-    result = transform._warp_tensor(
-        ops.expand_dims(as_tensor(image_np), axis=0), field, "nearest"
-    )
+    result = transform._warp_tensor(ops.expand_dims(as_tensor(image_np), axis=0), field, "nearest")
     expected = np.array([[1, 2, 2], [4, 5, 5], [7, 8, 8]], dtype=np.float32)[..., None]
 
     np.testing.assert_array_equal(ops.convert_to_numpy(result[0]), expected)
@@ -4281,9 +4275,7 @@ def test_random_elastic_transform_keeps_image_and_label_aligned():
         ("DHWC", (3, 5, 6, 1), "trilinear"),
     ],
 )
-def test_random_elastic_transform_accepts_alpha_sigma_ranges(
-    input_layout, shape, interpolation
-):
+def test_random_elastic_transform_accepts_alpha_sigma_ranges(input_layout, shape, interpolation):
     image = as_tensor(np.zeros(shape, dtype=np.float32))
     transform = RandomElasticTransform(
         keys=["image"],
@@ -4325,9 +4317,7 @@ def test_random_elastic_transform_supports_coarse_grid_for_2d():
         prob=1.0,
         seed=7,
     )
-    batch_result = batch_transform(
-        TensorBundle({"image": ops.stack([image, image])})
-    )
+    batch_result = batch_transform(TensorBundle({"image": ops.stack([image, image])}))
 
     assert tuple(ops.shape(batch_result["image"])) == (2, 6, 6, 1)
 

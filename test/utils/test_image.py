@@ -34,9 +34,7 @@ def scipy_bspline_reference(field, target_shape):
                 neighbors.append(axis_neighbors)
 
             for choices in np.ndindex(*(4,) * rank):
-                source = tuple(
-                    neighbors[axis][choice][0] for axis, choice in enumerate(choices)
-                )
+                source = tuple(neighbors[axis][choice][0] for axis, choice in enumerate(choices))
                 weight = np.prod(
                     [neighbors[axis][choice][1] for axis, choice in enumerate(choices)]
                 )

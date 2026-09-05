@@ -485,11 +485,11 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     elastic_interpolation = (
         {"image": "bilinear", "label": "nearest"}
         if is_2d and segmentation
-        else {"image": "trilinear", "label": "nearest"}
-        if segmentation
-        else "bilinear"
-        if is_2d
-        else "trilinear"
+        else (
+            {"image": "trilinear", "label": "nearest"}
+            if segmentation
+            else "bilinear" if is_2d else "trilinear"
+        )
     )
     pipelines.append(
         Compose(
@@ -563,9 +563,7 @@ def build_gpu_random_pipeline(
             keys=keys,
             input_layout=input_layout,
             interpolation=(
-                {"image": linear_mode, "label": "nearest"}
-                if segmentation
-                else linear_mode
+                {"image": linear_mode, "label": "nearest"} if segmentation else linear_mode
             ),
             control_grid_spacing=(8,) * spatial_rank,
             alpha=2.0,

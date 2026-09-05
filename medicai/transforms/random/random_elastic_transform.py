@@ -5,6 +5,7 @@ from typing import Any, Mapping, Sequence
 import keras
 from keras import ops
 
+from ...utils.image import resample_displacement_field
 from ..base import RandomTransform, _apply_if_applied
 from ..spatial.affine_utils import spacing_from_affine
 from ..tensor_bundle import TensorBundle
@@ -16,7 +17,6 @@ from ..utils import (
     validate_affine_matrix,
     validate_tensor_matches_layout,
 )
-from ...utils.image import resample_displacement_field
 
 
 def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
@@ -139,9 +139,7 @@ def _normalize_coordinates(
         elif fill_mode == "wrap":
             normalized.append(ops.mod(coordinate, ops.cast(size, coordinate.dtype)))
         else:  # nearest
-            normalized.append(
-                ops.clip(coordinate, 0.0, ops.cast(size, coordinate.dtype) - 1.0)
-            )
+            normalized.append(ops.clip(coordinate, 0.0, ops.cast(size, coordinate.dtype) - 1.0))
     return ops.stack(normalized, axis=-1), valid
 
 
@@ -158,8 +156,7 @@ def _linear_sample(
     spatial_sizes = [ops.cast(shape[index + 1], volume.dtype) for index in range(spatial_rank)]
     floors = [ops.floor(coordinates[..., index]) for index in range(spatial_rank)]
     fractions = [
-        (coordinates[..., index] - floors[index])[..., None]
-        for index in range(spatial_rank)
+        (coordinates[..., index] - floors[index])[..., None] for index in range(spatial_rank)
     ]
 
     batch_indices = ops.arange(shape[0], dtype="int32")
@@ -498,7 +495,7 @@ class RandomElasticTransform(RandomTransform):
                 seed=108,
             )
             result = transform({"image": images}, {"affine": affine})
-            
+
     """
 
     def __init__(
@@ -530,15 +527,11 @@ class RandomElasticTransform(RandomTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
-        self.control_grid_spacing = self._normalize_control_grid_spacing(
-            control_grid_spacing
-        )
+        self.control_grid_spacing = self._normalize_control_grid_spacing(control_grid_spacing)
         if displacement_units not in {"voxel", "mm"}:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
         if field_interpolation is None:
-            field_interpolation = (
-                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-            )
+            field_interpolation = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
         allowed_field_interpolations = (
             {"bilinear", "bspline"}
             if self.layout_info.spatial_rank == 2
@@ -576,9 +569,7 @@ class RandomElasticTransform(RandomTransform):
             values = (spacing,) * self.layout_info.spatial_rank
         elif isinstance(spacing, (tuple, list)):
             if len(spacing) != self.layout_info.spatial_rank:
-                raise ValueError(
-                    "`control_grid_spacing` must contain one value per spatial axis."
-                )
+                raise ValueError("`control_grid_spacing` must contain one value per spatial axis.")
             values = tuple(spacing)
         else:
             raise TypeError("`control_grid_spacing` must be an int, sequence, or None.")
@@ -622,8 +613,7 @@ class RandomElasticTransform(RandomTransform):
         if interpolation is None:
             linear_mode = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
             result = {
-                key: linear_mode if index == 0 else "nearest"
-                for index, key in enumerate(self.keys)
+                key: linear_mode if index == 0 else "nearest" for index, key in enumerate(self.keys)
             }
         elif isinstance(interpolation, str):
             result = {key: interpolation for key in self.keys}
@@ -639,10 +629,14 @@ class RandomElasticTransform(RandomTransform):
         else:
             raise TypeError("`interpolation` must be a string, sequence, or mapping.")
 
-        valid = {"nearest", "bilinear"} if self.layout_info.spatial_rank == 2 else {
-            "nearest",
-            "trilinear",
-        }
+        valid = (
+            {"nearest", "bilinear"}
+            if self.layout_info.spatial_rank == 2
+            else {
+                "nearest",
+                "trilinear",
+            }
+        )
         for key, mode in result.items():
             if mode not in valid:
                 raise ValueError(
@@ -795,9 +789,7 @@ class RandomElasticTransform(RandomTransform):
     def _physical_spacing(self, affine: Any | None) -> Any:
         """Return physical spacing aligned with the tensor spatial axes."""
         if affine is None:
-            raise ValueError(
-                "An affine matrix is required for displacement_units='mm'."
-            )
+            raise ValueError("An affine matrix is required for displacement_units='mm'.")
         spacing = spacing_from_affine(affine)
         return spacing[: self.layout_info.spatial_rank]
 
