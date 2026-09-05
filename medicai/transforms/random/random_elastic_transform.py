@@ -240,10 +240,9 @@ class RandomElasticTransform(RandomTransform):
 
     One displacement field is sampled per batch item and shared by all
     selected keys, keeping aligned images and masks geometrically consistent.
-    Three-dimensional fields can be sampled on a coarse grid and expanded to
-    the input resolution with trilinear interpolation. Two-dimensional fields
-    retain the full-resolution path unless a future 2D coarse-grid policy is
-    introduced.
+    Two- and three-dimensional fields can optionally be sampled on a coarse
+    grid and expanded to the input resolution. ``control_grid_spacing=None``
+    keeps the full-resolution path for both ranks.
 
     Args:
         keys: Keys of aligned tensors to deform.
@@ -270,10 +269,11 @@ class RandomElasticTransform(RandomTransform):
             field. ``"voxel"`` is the default and is currently executable.
             ``"mm"`` requires valid ``bundle.meta["affine"]`` metadata;
             physical-unit conversion is not implemented yet.
-        field_interpolation: Interpolation used to expand a coarse 3D field.
-            ``"trilinear"`` and ``"bspline"`` are supported for coarse 3D
-            fields. B-spline interpolation treats coarse values as control
-            point coefficients.
+        field_interpolation: Interpolation used to expand a coarse field.
+            Two-dimensional fields use ``"bilinear"`` by default and
+            three-dimensional fields use ``"trilinear"`` by default.
+            ``"bspline"`` is supported for both ranks and treats coarse values
+            as control-point coefficients.
         locked_borders: Number of outer coarse-grid layers with zero
             displacement. This is currently available for 3D fields only.
         seed: Optional integer or Keras ``SeedGenerator``.
@@ -319,11 +319,14 @@ class RandomElasticTransform(RandomTransform):
         )
         if displacement_units not in {"voxel", "mm"}:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
-        if field_interpolation not in {"trilinear", "bspline"}:
+        if field_interpolation not in {"bilinear", "trilinear", "bspline"}:
             raise ValueError(
-                "`field_interpolation` must be either 'trilinear' or 'bspline'."
+                "`field_interpolation` must be 'bilinear', 'trilinear', or "
+                "'bspline'."
             )
         self.displacement_units = displacement_units
+        if self.layout_info.spatial_rank == 2 and field_interpolation == "trilinear":
+            field_interpolation = "bilinear"
         self.field_interpolation = field_interpolation
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
@@ -359,11 +362,6 @@ class RandomElasticTransform(RandomTransform):
             raise TypeError("`control_grid_spacing` must be an int, sequence, or None.")
         if any(not isinstance(value, int) or value <= 0 for value in values):
             raise ValueError("`control_grid_spacing` values must be positive integers.")
-        if self.layout_info.spatial_rank == 2 and values != (1, 1):
-            raise ValueError(
-                "Coarse `control_grid_spacing` is currently supported only for 3D. "
-                "Use None or (1, 1) for 2D inputs."
-            )
         return values
 
     def _normalize_parameter_range(
@@ -527,7 +525,7 @@ class RandomElasticTransform(RandomTransform):
                 max_sigma=self.sigma[1] / min(spacing),
             )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
-            if spatial_rank == 3 and spacing != (1, 1, 1):
+            if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
                     field,
                     target_shape=spatial_shape,

@@ -4303,13 +4303,40 @@ def test_random_elastic_transform_accepts_alpha_sigma_ranges(
 
 
 @pytest.mark.unit
-def test_random_elastic_transform_rejects_coarse_grid_for_2d():
-    with pytest.raises(ValueError, match="supported only for 3D"):
-        RandomElasticTransform(
-            keys=["image"],
-            input_layout="HWC",
-            control_grid_spacing=(2, 2),
-        )
+def test_random_elastic_transform_supports_coarse_grid_for_2d():
+    image = as_tensor(np.arange(36, dtype=np.float32).reshape(6, 6, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="HWC",
+        control_grid_spacing=(2, 2),
+        field_interpolation="bspline",
+        prob=1.0,
+        seed=7,
+    )
+
+    result = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(result["image"])) == (6, 6, 1)
+
+    batch_transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="BHWC",
+        control_grid_spacing=(2, 2),
+        prob=1.0,
+        seed=7,
+    )
+    batch_result = batch_transform(
+        TensorBundle({"image": ops.stack([image, image])})
+    )
+
+    assert tuple(ops.shape(batch_result["image"])) == (2, 6, 6, 1)
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_uses_rank_aware_2d_field_interpolation():
+    transform = RandomElasticTransform(keys=["image"], input_layout="HWC")
+
+    assert transform.field_interpolation == "bilinear"
 
 
 @pytest.mark.unit
