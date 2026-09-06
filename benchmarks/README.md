@@ -28,12 +28,21 @@ benchmarks/
 Set the Keras backend before starting Python:
 
 ```bash
+# Run all transforms on the target device.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
 
-# Compare eager execution with the active backend's compiled path.
-KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile xla
+# Run one selected transform (names are case-insensitive).
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device cpu --transform RandomElasticTransform
+
+# Run a selected set.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device both --transform Flip RandomElasticTransform
+
+# Use the active backend's compiled path.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile
 ```
 
 The registry uses two execution groups:
@@ -43,6 +52,165 @@ The registry uses two execution groups:
 - `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
   random augmentation transforms.
 
+For a Python matrix launcher, pass the selected names through the launcher
+instead of changing each subprocess command:
+
+```python
+import os
+import subprocess
+
+BENCHMARK = "benchmarks/transforms.py"
+
+def run(
+    backend,
+    layout,
+    size,
+    batch,
+    compile_enabled=False,
+    group="all",
+    device="both",
+    transforms=("all",),
+):
+    transform_label = "-".join(transforms)
+    json_path = (
+        f"/tmp/{backend}_{layout}_SIZE{size}_BATCH{batch}_"
+        f"TRANSFORM_{transform_label}_COMPILE_{compile_enabled}.json"
+    )
+    command = [
+        "python",
+        "-u",
+        BENCHMARK,
+        "--device",
+        device,
+        "--iterations",
+        "50",
+        "--warmup",
+        "10",
+        "--layout",
+        layout,
+        "--sizes",
+        str(size),
+        "--batch-size",
+        str(batch),
+        "--transform",
+        *transforms,
+        "--json",
+        json_path,
+    ]
+    if group != "all":
+        command.extend(["--group", group])
+    if compile_enabled:
+        command.append("--compile")
+
+    environment = {**os.environ, "KERAS_BACKEND": backend}
+    print(
+        f"\n=== {backend} {layout} size={size} batch={batch} "
+        f"compile={compile_enabled} ===",
+        flush=True,
+    )
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=environment,
+    )
+    assert process.stdout is not None
+    for line in process.stdout:
+        print(line, end="", flush=True)
+    process.wait()
+    if process.returncode != 0:
+        print(
+            f"!! FAILED: {backend} {layout} size={size} batch={batch} "
+            f"compile={compile_enabled} (rc={process.returncode})",
+            flush=True,
+        )
+
+def run_transform_matrix(backend, compile_enabled=False, transforms=("all",)):
+    image_profiles = [
+        (224, [4, 8, 16, 32]),
+        (512, [4, 8, 16]),
+        (1024, [4, 8]),
+        (1280, [4]),
+    ]
+    for size, batches in image_profiles:
+        for batch in batches:
+            run(backend, "BHWC", size, batch, compile_enabled, transforms=transforms)
+
+    for size in [64, 96, 128, 160, 256]:
+        run(backend, "DHWC", size, 1, compile_enabled, transforms=transforms)
+
+    for size in [64, 96, 128]:
+        for batch in [1, 2]:
+            run(backend, "BDHWC", size, batch, compile_enabled, transforms=transforms)
+
+    for size in [160, 256]:
+        run(backend, "BDHWC", size, 1, compile_enabled, transforms=transforms)
+```
+
+Run without compilation. Omitting `--compile` is the default and measures eager
+transform calls.
+
+```python
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=False,
+        transforms=["all"],
+    )
+
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=False,
+        transforms=["RandomElasticTransform"],
+    )
+
+selected_transforms = ["Flip", "RandomElasticTransform"]
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=False,
+        transforms=selected_transforms,
+    )
+```
+
+Run with compilation by passing `--compile`. TensorFlow uses
+`tf.function(jit_compile=True)`, JAX uses `jax.jit`, and Torch uses
+`torch.compile` with the Keras-standard `inductor` backend.
+
+```python
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=True,
+        transforms=["all"],
+    )
+
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=True,
+        transforms=["RandomElasticTransform"],
+    )
+
+selected_transforms = ["Flip", "RandomElasticTransform"]
+for backend in ["tensorflow", "torch", "jax"]:
+    run_transform_matrix(
+        backend,
+        compile_enabled=True,
+        transforms=selected_transforms,
+    )
+```
+
+Compilation time is reported separately as `compile_time_ms`. Metadata-dependent
+transforms are skipped because their Python-side metadata and dynamic geometry
+are not part of this compiled tensor-only benchmark. If compilation or the
+first compiled call is unsupported by the active backend compiler, it is
+recorded with `compile_status=not-compile-compatible`, and the remaining
+benchmark continues.
+
 The runner separates warm-up from measured iterations, reuses one prebuilt
 tensor case while creating a fresh bundle for every call, synchronizes backend
 work before stopping the timer, and reports forward timings. Input-case setup
@@ -50,45 +218,9 @@ is reported separately as `case_setup_ms`; it is not included in transform
 timings. The benchmark is a timing tool, not a correctness replacement for
 `test/transforms/`.
 
-`--compile none` is the default and measures eager transform calls. With
-`--compile xla`, TensorFlow uses `tf.function(jit_compile=True)`, JAX uses
-`jax.jit`, and Torch uses `torch.compile` with the Keras-standard `inductor`
-backend with its default graph-break behavior. 
-
-Compilation time is reported separately as `compile_time_ms`. Metadata-dependent transforms
-are skipped because their Python-side metadata and dynamic geometry are not
-part of this compiled tensor-only benchmark. If compilation or the first compiled
-call is unsupported by the active backend compiler, it is recorded with
-`compile_status=not-compile-compatible`.
-and the remaining benchmark continues.
-
-Example:
-
-```bash
-python benchmarks/transforms.py --group cpu+gpu --device both \
-  --layout BDHWC --sizes 64 96 128 160 --batch-size 1 \
-  --iterations 50 --warmup 10 --json /tmp/medicai.json
-```
-
-Common image-size profiles:
-
-```bash
-# 2D: (B, H, W, C), with H=W in each run.
-python benchmarks/transforms.py --layout BHWC --sizes 224 512 1024 --batch-size 1
-
-# 3D: (B, D, H, W, C), with D=H=W in each run.
-python benchmarks/transforms.py --layout BDHWC --sizes 64 96 128 160 --batch-size 1
-```
-
-Use a smaller `--batch-size` or fewer sizes when measuring large 3D volumes;
-memory use grows cubically with the 3D size.
-
-
 ## Recorded Results
 
 The following results report forward median execution time in **milliseconds**. Each transformation has its own section, with separate CPU, GPU, and compiled GPU tables. Every row represents one concrete input shape and batch configuration. The fastest backend in each row is shown in **bold**; `--` means no matching result or unsupported execution.
-
-Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 
 ### CropForeground
 
@@ -115,6 +247,69 @@ Also the following benchmark is performed on Kaggle-Tesla T4 GPU environment.
 | DHWC | (96, 96, 96, 1) | CropForeground | -- | -- | -- |
 | DHWC | (160, 160, 160, 1) | CropForeground | -- | -- | -- |
 | DHWC | (256, 256, 256, 1) | CropForeground | -- | -- | -- |
+
+### RandomElasticTransform
+
+#### CPU
+
+| Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
+| :--- | :--- | :--- | ---: | ---: | ---: |
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 79.79 | **10.94** | 330.06 |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 88.04 | **11.57** | 332.27 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 100.80 | **14.69** | 334.40 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 130.74 | **23.85** | 341.73 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 109.07 | **17.37** | 320.59 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 150.46 | **29.55** | 329.85 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 239.20 | **87.90** | 355.38 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 345.72 | **132.66** | 389.58 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 194.46 | **25.94** | 514.72 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 464.75 | **96.16** | 541.19 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 4009.87 | **495.88** | 800.94 |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 190.25 | **26.19** | 515.06 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 259.86 | **45.00** | 573.52 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 441.13 | **96.37** | 557.12 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3990.26 | **497.37** | 845.69 |
+
+#### GPU
+
+| Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
+| :--- | :--- | :--- | ---: | ---: | ---: |
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 80.24 | **10.18** | 328.19 |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 87.76 | **10.74** | 328.40 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 101.19 | **12.91** | 330.21 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 131.67 | **20.33** | 334.10 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 110.39 | **15.03** | 310.06 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 154.28 | **26.00** | 314.87 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 239.87 | **79.69** | 323.36 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 333.38 | **120.28** | 351.35 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 195.61 | **23.80** | 509.72 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 448.38 | **89.06** | 515.55 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 3983.23 | **468.11** | 590.76 |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 191.02 | **23.56** | 509.00 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 258.67 | **41.39** | 550.65 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 452.95 | **88.64** | 512.58 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3998.28 | **470.19** | 588.94 |
+
+#### GPU (compiled)
+
+| Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
+| :--- | :--- | :--- | ---: | ---: | ---: |
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 1.49 | 13.71 | **1.30** |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | **1.87** | 13.83 | 1.90 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | **2.80** | 14.67 | 3.04 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | **5.37** | 16.33 | 5.95 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | **3.56** | 16.06 | 3.84 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | **7.88** | 19.10 | 9.04 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | **14.97** | 64.34 | 25.75 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | **31.54** | 95.85 | 43.81 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | **3.18** | 23.28 | 3.45 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | **14.34** | 54.06 | 20.65 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 168.94 | 316.21 | **123.51** |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | **3.28** | 23.07 | 3.64 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | **5.57** | 26.03 | 8.10 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | **14.83** | 53.21 | 22.28 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 168.09 | 314.79 | **124.59** |
+
 ### Flip
 
 #### CPU

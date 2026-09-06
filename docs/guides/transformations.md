@@ -146,13 +146,15 @@ predictable.
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomFlip
 
+.. autoclass:: medicai.transforms.RandomRotate
+
 .. autoclass:: medicai.transforms.RandomRotate90
 
 .. autoclass:: medicai.transforms.RandomSpatialCrop
 
 .. autoclass:: medicai.transforms.RandomCropByPosNegLabel
 
-.. autoclass:: medicai.transforms.RandomRotate
+.. autoclass:: medicai.transforms.RandomElasticTransform
 
 .. autoclass:: medicai.transforms.RandomCutOut
 

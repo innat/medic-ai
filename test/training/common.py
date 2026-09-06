@@ -14,6 +14,7 @@ from medicai.transforms import (
     RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -271,11 +272,12 @@ def build_multi_input_output_classification_model(input_shape):
 
 
 def build_transform_pipelines(input_layout: str, *, segmentation: bool):
-    """Return five representative pipelines for use inside training maps.
+    """Return representative pipelines for use inside training maps.
 
     The pipelines keep image and label geometry synchronized when
     ``segmentation=True``. They intentionally contain no data-loader logic;
     the backend-specific test decides how the returned samples are consumed.
+    The final pipeline contains batch-compatible elastic augmentation.
     """
     keys = ["image", "label"] if segmentation else ["image"]
     is_2d = input_layout in {"HWC", "BHWC"}
@@ -480,6 +482,32 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             )
         )
 
+    elastic_interpolation = (
+        {"image": "bilinear", "label": "nearest"}
+        if is_2d and segmentation
+        else (
+            {"image": "trilinear", "label": "nearest"}
+            if segmentation
+            else "bilinear" if is_2d else "trilinear"
+        )
+    )
+    pipelines.append(
+        Compose(
+            [
+                RandomElasticTransform(
+                    keys=keys,
+                    input_layout=input_layout,
+                    interpolation=elastic_interpolation,
+                    control_grid_spacing=(8,) * (2 if is_2d else 3),
+                    alpha=2.0,
+                    sigma=3.0,
+                    prob=1.0,
+                    seed=31,
+                )
+            ]
+        )
+    )
+
     return pipelines
 
 
@@ -502,7 +530,12 @@ def build_gpu_random_pipeline(
     *,
     segmentation: bool,
 ):
-    """Build a batch-layout pipeline for model-side random augmentation."""
+    """Build a batch-layout pipeline for model-side random augmentation.
+
+    Args:
+        input_layout: Batch layout, either ``"BHWC"`` or ``"BDHWC"``.
+        segmentation: Whether image and label tensors must share geometry.
+    """
     keys = ["image", "label"] if segmentation else ["image"]
     flip_axis = 1
     transforms = [
@@ -521,6 +554,22 @@ def build_gpu_random_pipeline(
             prob=1.0,
             input_layout=input_layout,
             seed=17,
+        )
+    )
+    spatial_rank = 2 if input_layout == "BHWC" else 3
+    linear_mode = "bilinear" if spatial_rank == 2 else "trilinear"
+    transforms.append(
+        RandomElasticTransform(
+            keys=keys,
+            input_layout=input_layout,
+            interpolation=(
+                {"image": linear_mode, "label": "nearest"} if segmentation else linear_mode
+            ),
+            control_grid_spacing=(8,) * spatial_rank,
+            alpha=2.0,
+            sigma=3.0,
+            prob=1.0,
+            seed=31,
         )
     )
     return Compose(transforms)

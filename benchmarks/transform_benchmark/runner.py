@@ -67,9 +67,10 @@ def profile(
     iterations: int,
     warmup: int,
     seed: int,
-    compile_mode: str,
+    compile_enabled: bool,
 ) -> dict:
     """Profile one transform case and return a JSON-serializable result."""
+    compile_mode = "compiled" if compile_enabled else "none"
     transform = spec.factory(layout, seed)
     setup_start = time.perf_counter()
     template = make_case(layout, device, spatial_size, batch_size, channels, seed)
@@ -82,9 +83,9 @@ def profile(
     compile_time_ms = None
     compile_status = "not-requested"
     compile_error = None
-    if compile_mode == "xla":
+    if compile_enabled:
         if spec.group == "cpu":
-            raise RuntimeError("Metadata-dependent transforms are not supported by --compile xla.")
+            raise RuntimeError("Metadata-dependent transforms are not supported by --compile.")
         compile_start = time.perf_counter()
         try:
             compiled_forward = compile_forward(transform, keras.config.backend())
@@ -159,7 +160,7 @@ def profile(
         "compile_error": compile_error,
         "inverse_status": (
             "not-compiled"
-            if spec.inverse and compile_mode == "xla"
+            if spec.inverse and compile_enabled
             else "measured" if spec.inverse else "non-invertible"
         ),
         "iterations": iterations,

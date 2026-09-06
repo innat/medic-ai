@@ -23,6 +23,7 @@ Utility classes and functions exported by `medicai.utils`.
 
 ```{eval-rst}
 .. autofunction:: medicai.utils.resize_volumes
+.. autofunction:: medicai.utils.resample_displacement_field
 ```
 
 ## Loss Utilities

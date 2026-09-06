@@ -9,6 +9,7 @@ from medicai.transforms import (
     NormalizeIntensity,
     Orientation,
     RandomCutOut,
+    RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
@@ -148,6 +149,23 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "cpu+gpu",
             lambda layout, s: RandomCutOut(
                 keys=["image"], mask_size=(4, 4), num_cuts=1, prob=1.0, input_layout=layout, seed=s
+            ),
+        ),
+        BenchmarkSpec(
+            "RandomElasticTransform",
+            "cpu+gpu",
+            lambda layout, s: RandomElasticTransform(
+                keys=["image", "label"],
+                input_layout=layout,
+                interpolation={
+                    "image": "trilinear" if is_3d else "bilinear",
+                    "label": "nearest",
+                },
+                control_grid_spacing=(8,) * (3 if is_3d else 2),
+                alpha=3.0,
+                sigma=5.0,
+                prob=1.0,
+                seed=s,
             ),
         ),
     ]

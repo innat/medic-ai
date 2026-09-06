@@ -114,7 +114,14 @@ def _fit_torch_dataset(
     )
 
 
-def _fit_gpu_augmented_model(images, labels, *, input_layout, input_shape, segmentation):
+def _fit_gpu_augmented_model(
+    images,
+    labels,
+    *,
+    input_layout,
+    input_shape,
+    segmentation,
+):
     """Train a Torch model with batch transforms executed in ``train_step``."""
     torch = _require_torch()
     if not torch.cuda.is_available():
@@ -319,6 +326,45 @@ def test_torch_pygrain_trains_2d_classification():
 
     assert len(history.history["loss"]) == 1
     assert np.isfinite(history.history["loss"][0])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "HWC", (32, 48, 1)),
+        (False, "DHWC", (8, 16, 16, 1)),
+        (True, "HWC", (32, 48, 1)),
+        (True, "DHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_torch_dataloader_trains_with_sample_elastic(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Apply the sample-layout elastic pipeline before Torch batching."""
+    if segmentation:
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "HWC"
+            else make_dataset().segmentation_3d()
+        )
+    else:
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "HWC"
+            else make_dataset().classification_3d()
+        )
+    _fit_torch_dataset(
+        images,
+        labels,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        pipeline_index=-1,
+        segmentation=segmentation,
+    )
 
 
 @pytest.mark.integration

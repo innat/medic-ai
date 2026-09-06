@@ -64,10 +64,18 @@ def _fit_sample_transformed(*, segmentation, input_layout, input_shape, pipeline
     """Train from a shuffled PyGrain loader with sample-level transforms."""
     pipeline = build_transform_pipelines(input_layout, segmentation=segmentation)[pipeline_index]
     if segmentation:
-        images, labels = make_dataset().segmentation_2d()
+        images, labels = (
+            make_dataset().segmentation_2d()
+            if input_layout == "HWC"
+            else make_dataset().segmentation_3d()
+        )
         model = build_segmentation_model(input_shape)
     else:
-        images, labels = make_dataset().classification_3d()
+        images, labels = (
+            make_dataset().classification_2d()
+            if input_layout == "HWC"
+            else make_dataset().classification_3d()
+        )
         model = build_classification_model(input_shape)
     loader = _make_pygrain_loader(images, labels, pipeline)
 
@@ -100,7 +108,38 @@ def test_jax_training_uses_sample_transforms_for_3d_classification():
     )
 
 
-def _fit_model_augmented(*, segmentation, input_layout, input_shape):
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("segmentation", "input_layout", "input_shape"),
+    [
+        (False, "HWC", (32, 48, 1)),
+        (False, "DHWC", (8, 16, 16, 1)),
+        (True, "HWC", (32, 48, 1)),
+        (True, "DHWC", (8, 16, 16, 1)),
+    ],
+    ids=["2d-classification", "3d-classification", "2d-segmentation", "3d-segmentation"],
+)
+def test_jax_training_uses_sample_elastic_transforms(
+    segmentation,
+    input_layout,
+    input_shape,
+):
+    """Apply the sample-layout elastic pipeline before JAX batching."""
+    _require_jax()
+    _fit_sample_transformed(
+        segmentation=segmentation,
+        input_layout=input_layout,
+        input_shape=input_shape,
+        pipeline_index=-1,
+    )
+
+
+def _fit_model_augmented(
+    *,
+    segmentation,
+    input_layout,
+    input_shape,
+):
     """Train with random transforms executed inside the JAX train step."""
     _require_jax()
     pipeline = build_gpu_random_pipeline(input_layout, segmentation=segmentation)
