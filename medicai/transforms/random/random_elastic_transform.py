@@ -609,9 +609,7 @@ class RandomElasticTransform(RandomTransform):
         else:
             raise TypeError("`minimum_physical_spacing` must be a number, sequence, or None.")
         if any(not math.isfinite(value) or value <= 0.0 for value in values):
-            raise ValueError(
-                "`minimum_physical_spacing` values must be finite and positive."
-            )
+            raise ValueError("`minimum_physical_spacing` values must be finite and positive.")
         return values
 
     def _normalize_parameter_range(
