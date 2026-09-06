@@ -254,64 +254,61 @@ The following results report forward median execution time in **milliseconds**. 
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 82.11 | **10.96** | -- |
-| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 87.83 | **12.08** | -- |
-| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 101.59 | **15.10** | -- |
-| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 131.18 | **24.18** | -- |
-| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 111.92 | **17.70** | -- |
-| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 155.01 | **29.63** | -- |
-| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 237.23 | **57.27** | -- |
-| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 333.46 | **134.69** | -- |
-| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 194.35 | **25.77** | -- |
-| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 462.33 | **95.94** | -- |
-| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 3960.44 | **492.92** | -- |
-| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 192.42 | **25.42** | -- |
-| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 260.91 | **44.30** | -- |
-| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 456.77 | **96.19** | -- |
-| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3954.55 | **494.25** | -- |
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 79.79 | **10.94** | 330.06 |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 88.04 | **11.57** | 332.27 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 100.80 | **14.69** | 334.40 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 130.74 | **23.85** | 341.73 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 109.07 | **17.37** | 320.59 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 150.46 | **29.55** | 329.85 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 239.20 | **87.90** | 355.38 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 345.72 | **132.66** | 389.58 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 194.46 | **25.94** | 514.72 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 464.75 | **96.16** | 541.19 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 4009.87 | **495.88** | 800.94 |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 190.25 | **26.19** | 515.06 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 259.86 | **45.00** | 573.52 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 441.13 | **96.37** | 557.12 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3990.26 | **497.37** | 845.69 |
 
 #### GPU
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 80.74 | **11.07** | -- |
-| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 90.07 | **11.90** | -- |
-| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 104.57 | **13.55** | -- |
-| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 130.32 | **20.52** | -- |
-| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 110.64 | **14.98** | -- |
-| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 153.37 | **26.26** | -- |
-| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 238.18 | **49.89** | -- |
-| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 334.40 | **122.15** | -- |
-| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 191.56 | **24.16** | -- |
-| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 458.05 | **89.04** | -- |
-| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 3951.38 | **463.32** | -- |
-| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 194.16 | **24.44** | -- |
-| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 264.35 | **41.33** | -- |
-| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 454.85 | **88.73** | -- |
-| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3943.17 | **464.67** | -- |
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 80.24 | **10.18** | 328.19 |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 87.76 | **10.74** | 328.40 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 101.19 | **12.91** | 330.21 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 131.67 | **20.33** | 334.10 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 110.39 | **15.03** | 310.06 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 154.28 | **26.00** | 314.87 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | 239.87 | **79.69** | 323.36 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | 333.38 | **120.28** | 351.35 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 195.61 | **23.80** | 509.72 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 448.38 | **89.06** | 515.55 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 3983.23 | **468.11** | 590.76 |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 191.02 | **23.56** | 509.00 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 258.67 | **41.39** | 550.65 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 452.95 | **88.64** | 512.58 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 3998.28 | **470.19** | 588.94 |
 
 #### GPU (compiled)
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 1.64 | 13.55 | **1.34** |
-| BHWC | (8, 224, 224, 1) | RandomElasticTransform | 2.32 | 16.26 | **1.67** |
-| BHWC | (16, 224, 224, 1) | RandomElasticTransform | 3.66 | 15.16 | **2.91** |
-| BHWC | (32, 224, 224, 1) | RandomElasticTransform | 6.75 | 17.51 | **5.58** |
-| BHWC | (4, 512, 512, 1) | RandomElasticTransform | 4.76 | 17.25 | **3.75** |
-| BHWC | (8, 512, 512, 1) | RandomElasticTransform | 9.63 | 19.47 | **9.10** |
-| BHWC | (16, 512, 512, 1) | RandomElasticTransform | **17.43** | 63.52 | 26.41 |
-| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | **27.62** | 95.94 | 43.57 |
-| DHWC | (96, 96, 96, 1) | RandomElasticTransform | 5.05 | 23.21 | **3.31** |
-| DHWC | (160, 160, 160, 1) | RandomElasticTransform | 25.78 | 54.44 | **20.79** |
-| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 229.41 | 310.83 | **123.66** |
-| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | 5.16 | 22.53 | **3.49** |
-| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | 11.82 | 26.33 | **7.86** |
-| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | 26.27 | 54.10 | **22.68** |
-| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 229.37 | 309.20 | **124.63** |
-
-JAX eager results are shown as `--` because no non-compiled JAX JSON records
-were included in the benchmark result set.
+| BHWC | (4, 224, 224, 1) | RandomElasticTransform | 1.49 | 13.71 | **1.30** |
+| BHWC | (8, 224, 224, 1) | RandomElasticTransform | **1.87** | 13.83 | 1.90 |
+| BHWC | (16, 224, 224, 1) | RandomElasticTransform | **2.80** | 14.67 | 3.04 |
+| BHWC | (32, 224, 224, 1) | RandomElasticTransform | **5.37** | 16.33 | 5.95 |
+| BHWC | (4, 512, 512, 1) | RandomElasticTransform | **3.56** | 16.06 | 3.84 |
+| BHWC | (8, 512, 512, 1) | RandomElasticTransform | **7.88** | 19.10 | 9.04 |
+| BHWC | (16, 512, 512, 1) | RandomElasticTransform | **14.97** | 64.34 | 25.75 |
+| BHWC | (4, 1280, 1280, 1) | RandomElasticTransform | **31.54** | 95.85 | 43.81 |
+| DHWC | (96, 96, 96, 1) | RandomElasticTransform | **3.18** | 23.28 | 3.45 |
+| DHWC | (160, 160, 160, 1) | RandomElasticTransform | **14.34** | 54.06 | 20.65 |
+| DHWC | (256, 256, 256, 1) | RandomElasticTransform | 168.94 | 316.21 | **123.51** |
+| BDHWC | (1, 96, 96, 96, 1) | RandomElasticTransform | **3.28** | 23.07 | 3.64 |
+| BDHWC | (2, 96, 96, 96, 1) | RandomElasticTransform | **5.57** | 26.03 | 8.10 |
+| BDHWC | (1, 160, 160, 160, 1) | RandomElasticTransform | **14.83** | 53.21 | 22.28 |
+| BDHWC | (1, 256, 256, 256, 1) | RandomElasticTransform | 168.09 | 314.79 | **124.59** |
 
 ### Flip
 
