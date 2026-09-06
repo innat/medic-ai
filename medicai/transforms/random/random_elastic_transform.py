@@ -1,4 +1,5 @@
 import itertools
+import math
 from numbers import Number
 from typing import Any, Mapping, Sequence
 
@@ -607,8 +608,10 @@ class RandomElasticTransform(RandomTransform):
             values = tuple(float(value) for value in spacing)
         else:
             raise TypeError("`minimum_physical_spacing` must be a number, sequence, or None.")
-        if any(value <= 0.0 for value in values):
-            raise ValueError("`minimum_physical_spacing` values must be positive.")
+        if any(not math.isfinite(value) or value <= 0.0 for value in values):
+            raise ValueError(
+                "`minimum_physical_spacing` values must be finite and positive."
+            )
         return values
 
     def _normalize_parameter_range(

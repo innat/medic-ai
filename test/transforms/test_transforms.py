@@ -4504,6 +4504,21 @@ def test_random_elastic_transform_mm_requires_minimum_physical_spacing():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "spacing",
+    [float("nan"), float("inf"), float("-inf"), (1.0, float("nan"))],
+)
+def test_random_elastic_transform_rejects_non_finite_minimum_physical_spacing(spacing):
+    with pytest.raises(ValueError, match="finite and positive"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="DHWC",
+            displacement_units="mm",
+            minimum_physical_spacing=spacing,
+        )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_mm_requires_affine_metadata():
     image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
     transform = RandomElasticTransform(
