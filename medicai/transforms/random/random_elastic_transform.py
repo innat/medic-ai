@@ -540,13 +540,10 @@ class RandomElasticTransform(RandomTransform):
         if displacement_units not in {"voxel", "mm"}:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
         self.displacement_units = displacement_units
-        self.minimum_physical_spacing = self._normalize_physical_spacing(
-            minimum_physical_spacing
-        )
+        self.minimum_physical_spacing = self._normalize_physical_spacing(minimum_physical_spacing)
         if displacement_units == "mm" and self.minimum_physical_spacing is None:
             raise ValueError(
-                "`minimum_physical_spacing` is required when "
-                "displacement_units='mm'."
+                "`minimum_physical_spacing` is required when " "displacement_units='mm'."
             )
         if field_interpolation is None:
             field_interpolation = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
@@ -605,14 +602,11 @@ class RandomElasticTransform(RandomTransform):
         elif isinstance(spacing, (tuple, list)):
             if len(spacing) != self.layout_info.spatial_rank:
                 raise ValueError(
-                    "`minimum_physical_spacing` must contain one value per "
-                    "spatial axis."
+                    "`minimum_physical_spacing` must contain one value per " "spatial axis."
                 )
             values = tuple(float(value) for value in spacing)
         else:
-            raise TypeError(
-                "`minimum_physical_spacing` must be a number, sequence, or None."
-            )
+            raise TypeError("`minimum_physical_spacing` must be a number, sequence, or None.")
         if any(value <= 0.0 for value in values):
             raise ValueError("`minimum_physical_spacing` values must be positive.")
         return values
