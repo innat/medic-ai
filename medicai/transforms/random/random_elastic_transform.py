@@ -58,20 +58,29 @@ def _gaussian_smooth_nd(
     sigma: Any,
     spatial_rank: int,
     *,
-    max_sigma: float | None = None,
+    max_sigma: float | Sequence[float] | None = None,
 ) -> Any:
     """Smooth each displacement channel with separable Gaussian kernels."""
-    radius_sigma = max_sigma if max_sigma is not None else sigma
-    if not isinstance(radius_sigma, Number):
+    if max_sigma is None:
+        radius_sigma = (sigma,) * spatial_rank
+    elif isinstance(max_sigma, Number):
+        radius_sigma = (max_sigma,) * spatial_rank
+    else:
+        if len(max_sigma) != spatial_rank:
+            raise ValueError("`max_sigma` must contain one value per spatial axis.")
+        radius_sigma = tuple(max_sigma)
+
+    if any(not isinstance(value, Number) for value in radius_sigma):
         raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
-    radius = max(1, int(round(3.0 * float(radius_sigma))))
     static_spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
+    radii = tuple(max(1, int(round(3.0 * float(value)))) for value in radius_sigma)
     if all(size is not None for size in static_spatial_shape):
-        max_radius = min(int(size) - 1 for size in static_spatial_shape)
-        if max_radius <= 0:
+        radii = tuple(
+            min(radius, int(size) - 1)
+            for radius, size in zip(radii, static_spatial_shape, strict=True)
+        )
+        if any(radius <= 0 for radius in radii):
             return field
-        radius = min(radius, max_radius)
-    kernel = _gaussian_kernel_1d(sigma, radius, dtype="float32")
     shape = ops.shape(field)
     spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
     channels = shape[-1]
@@ -82,7 +91,18 @@ def _gaussian_smooth_nd(
     folded = ops.transpose(field, permutation)
     folded = ops.reshape(folded, [-1] + spatial_shape + [1])
     for axis in range(spatial_rank):
-        folded = _smooth_along_axis(folded, kernel, axis, radius, spatial_rank)
+        if isinstance(sigma, Number) or len(sigma.shape) == 0:
+            sigma_axis = sigma
+        else:
+            sigma_axis = ops.take(sigma, axis, axis=0)
+        kernel = _gaussian_kernel_1d(sigma_axis, radii[axis], dtype="float32")
+        folded = _smooth_along_axis(
+            folded,
+            kernel,
+            axis,
+            radii[axis],
+            spatial_rank,
+        )
 
     folded = ops.reshape(folded, [shape[0], channels] + spatial_shape)
     inverse_permutation = [0] + list(range(2, spatial_rank + 2)) + [1]
@@ -780,18 +800,16 @@ class RandomElasticTransform(RandomTransform):
                     spacing,
                     physical_spacing.dtype,
                 )
-                smooth_sigma = sigma / ops.min(coarse_physical_spacing)
-                # The runtime affine controls the actual smoothing width. The
-                # configured lower bound provides a static radius for graphs.
-                min_coarse_spacing = min(
+                smooth_sigma = sigma / coarse_physical_spacing
+                # The runtime affine controls the actual smoothing widths. The
+                # configured per-axis lower bounds provide static radii for graphs.
+                min_coarse_spacing = tuple(
                     bound * step
-                    for bound, step in zip(
-                        self.minimum_physical_spacing,
-                        spacing,
-                        strict=True,
-                    )
+                    for bound, step in zip(self.minimum_physical_spacing, spacing, strict=True)
                 )
-                max_smooth_sigma = self.sigma[1] / min_coarse_spacing
+                max_smooth_sigma = tuple(
+                    self.sigma[1] / axis_spacing for axis_spacing in min_coarse_spacing
+                )
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)

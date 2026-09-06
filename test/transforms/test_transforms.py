@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from keras import ops
+from medicai.transforms.random import random_elastic_transform as elastic_module
 
 from medicai.transforms import (
     Compose,
@@ -4594,6 +4595,38 @@ def test_random_elastic_transform_mm_rejects_invalid_affine_shape():
 
     with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):
         transform(TensorBundle({"image": image}, {"affine": ops.eye(3)}))
+
+
+@pytest.mark.unit
+def test_random_elastic_transform_mm_uses_per_axis_smoothing(monkeypatch):
+    image = as_tensor(np.zeros((4, 5, 6, 1), dtype=np.float32))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="DHWC",
+        alpha=2.0,
+        sigma=4.0,
+        displacement_units="mm",
+        minimum_physical_spacing=(1.0, 2.0, 4.0),
+        control_grid_spacing=(2, 3, 4),
+        prob=1.0,
+    )
+    captured = {}
+
+    def capture_smoothing(field, sigma, spatial_rank, *, max_sigma=None):
+        captured["sigma"] = ops.convert_to_numpy(sigma)
+        captured["max_sigma"] = max_sigma
+        return field
+
+    monkeypatch.setattr(elastic_module, "_gaussian_smooth_nd", capture_smoothing)
+    affine = ops.diag(ops.convert_to_tensor((2.0, 4.0, 8.0, 1.0), dtype="float32"))
+    transform._sample_or_zero_field(
+        ops.expand_dims(image, axis=0),
+        True,
+        affine=affine,
+    )
+
+    np.testing.assert_allclose(captured["sigma"], (1.0, 1.0 / 3.0, 1.0 / 8.0))
+    np.testing.assert_allclose(captured["max_sigma"], (2.0, 2.0 / 3.0, 0.25))
 
 
 @pytest.mark.unit
