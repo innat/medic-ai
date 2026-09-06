@@ -4505,7 +4505,7 @@ def test_random_elastic_transform_mm_requires_minimum_physical_spacing():
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "spacing",
-    [float("nan"), float("inf"), float("-inf"), (1.0, float("nan"))],
+    [float("nan"), float("inf"), float("-inf"), (1.0, 2.0, float("nan"))],
 )
 def test_random_elastic_transform_rejects_non_finite_minimum_physical_spacing(spacing):
     with pytest.raises(ValueError, match="finite and positive"):
