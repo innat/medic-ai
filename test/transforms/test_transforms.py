@@ -4494,12 +4494,23 @@ def test_random_elastic_transform_validates_field_interpolation_rank(
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_mm_requires_minimum_physical_spacing():
+    with pytest.raises(ValueError, match="minimum_physical_spacing"):
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="DHWC",
+            displacement_units="mm",
+        )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_mm_requires_affine_metadata():
     image = as_tensor(np.zeros((3, 3, 3, 1), dtype=np.float32))
     transform = RandomElasticTransform(
         keys=["image"],
         input_layout="DHWC",
         displacement_units="mm",
+        minimum_physical_spacing=1.0,
     )
 
     with pytest.raises(ValueError, match=r"bundle\.meta\['affine'\]"):
@@ -4538,6 +4549,7 @@ def test_random_elastic_transform_converts_mm_to_tensor_axis_units(
         input_layout=input_layout,
         alpha=2.0,
         displacement_units="mm",
+        minimum_physical_spacing=affine_diagonal[: len(expected)],
         prob=1.0,
     )
     monkeypatch.setattr(
@@ -4566,6 +4578,7 @@ def test_random_elastic_transform_mm_rejects_invalid_affine_shape():
         keys=["image"],
         input_layout="DHWC",
         displacement_units="mm",
+        minimum_physical_spacing=1.0,
     )
 
     with pytest.raises(ValueError, match="Expected a 4x4 affine matrix"):

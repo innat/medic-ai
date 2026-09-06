@@ -273,6 +273,11 @@ class RandomElasticTransform(RandomTransform):
             axis using the corresponding spacing extracted from
             ``bundle.meta["affine"]``. The affine must describe the same
             spatial-axis order as the input tensor.
+        minimum_physical_spacing: Static lower bound for the physical spacing
+            of each tensor spatial axis, in millimeters. Required when
+            ``displacement_units="mm"`` so the Gaussian kernel radius can be
+            bounded safely during graph execution. A scalar is broadcast to
+            every spatial axis.
         field_interpolation: Interpolation used to expand a coarse field. If
             ``None``, 2D fields use ``"bilinear"`` and 3D fields use
             ``"trilinear"``.
@@ -293,7 +298,8 @@ class RandomElasticTransform(RandomTransform):
         3D; ``"bspline"`` is valid for either rank. A nonzero
         ``locked_borders`` value is measured in coarse-grid layers. When
         ``displacement_units="mm"``, every call must provide a validated 4x4
-        affine in ``bundle.meta["affine"]``.
+        affine in ``bundle.meta["affine"]`` and a valid
+        ``minimum_physical_spacing`` bound must have been configured.
 
     Examples:
         A 2D sample-level TensorFlow pipeline.
@@ -465,6 +471,7 @@ class RandomElasticTransform(RandomTransform):
                 alpha=(1.0, 3.0),
                 sigma=4.0,
                 displacement_units="mm",
+                minimum_physical_spacing=(2.0, 1.0, 0.8),
                 control_grid_spacing=(8, 8, 8),
                 locked_borders=1,
                 seed=107,
@@ -491,6 +498,7 @@ class RandomElasticTransform(RandomTransform):
                 alpha=2.0,
                 sigma=3.0,
                 displacement_units="mm",
+                minimum_physical_spacing=0.7,
                 field_interpolation="bspline",
                 seed=108,
             )
@@ -509,6 +517,7 @@ class RandomElasticTransform(RandomTransform):
         input_layout: str,
         control_grid_spacing: int | Sequence[int] | None = None,
         displacement_units: str = "voxel",
+        minimum_physical_spacing: float | Sequence[float] | None = None,
         field_interpolation: str | None = None,
         fill_mode: str = "nearest",
         fill_value: float = 0.0,
@@ -530,6 +539,15 @@ class RandomElasticTransform(RandomTransform):
         self.control_grid_spacing = self._normalize_control_grid_spacing(control_grid_spacing)
         if displacement_units not in {"voxel", "mm"}:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+        self.displacement_units = displacement_units
+        self.minimum_physical_spacing = self._normalize_physical_spacing(
+            minimum_physical_spacing
+        )
+        if displacement_units == "mm" and self.minimum_physical_spacing is None:
+            raise ValueError(
+                "`minimum_physical_spacing` is required when "
+                "displacement_units='mm'."
+            )
         if field_interpolation is None:
             field_interpolation = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
         allowed_field_interpolations = (
@@ -543,7 +561,6 @@ class RandomElasticTransform(RandomTransform):
                 f"{self.layout_info.spatial_rank}D input. Allowed values are "
                 f"{sorted(allowed_field_interpolations)}."
             )
-        self.displacement_units = displacement_units
         self.field_interpolation = field_interpolation
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
@@ -575,6 +592,29 @@ class RandomElasticTransform(RandomTransform):
             raise TypeError("`control_grid_spacing` must be an int, sequence, or None.")
         if any(not isinstance(value, int) or value <= 0 for value in values):
             raise ValueError("`control_grid_spacing` values must be positive integers.")
+        return values
+
+    def _normalize_physical_spacing(
+        self,
+        spacing: float | Sequence[float] | None,
+    ) -> tuple[float, ...] | None:
+        if spacing is None:
+            return None
+        if isinstance(spacing, Number):
+            values = (float(spacing),) * self.layout_info.spatial_rank
+        elif isinstance(spacing, (tuple, list)):
+            if len(spacing) != self.layout_info.spatial_rank:
+                raise ValueError(
+                    "`minimum_physical_spacing` must contain one value per "
+                    "spatial axis."
+                )
+            values = tuple(float(value) for value in spacing)
+        else:
+            raise TypeError(
+                "`minimum_physical_spacing` must be a number, sequence, or None."
+            )
+        if any(value <= 0.0 for value in values):
+            raise ValueError("`minimum_physical_spacing` values must be positive.")
         return values
 
     def _normalize_parameter_range(
@@ -664,6 +704,7 @@ class RandomElasticTransform(RandomTransform):
             "sigma": self.sigma,
             "control_grid_spacing": self.control_grid_spacing,
             "displacement_units": self.displacement_units,
+            "minimum_physical_spacing": self.minimum_physical_spacing,
             "field_interpolation": self.field_interpolation,
             "locked_borders": self.locked_borders,
             "fill_mode": self.fill_mode,
@@ -745,10 +786,17 @@ class RandomElasticTransform(RandomTransform):
                     physical_spacing.dtype,
                 )
                 smooth_sigma = sigma / ops.min(coarse_physical_spacing)
-                # The kernel radius must be statically bounded for graph
-                # execution. The physical spacing can be dynamic metadata, so
-                # use the declared millimeter bound as a conservative radius.
-                max_smooth_sigma = self.sigma[1]
+                # The runtime affine controls the actual smoothing width. The
+                # configured lower bound provides a static radius for graphs.
+                min_coarse_spacing = min(
+                    bound * step
+                    for bound, step in zip(
+                        self.minimum_physical_spacing,
+                        spacing,
+                        strict=True,
+                    )
+                )
+                max_smooth_sigma = self.sigma[1] / min_coarse_spacing
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
