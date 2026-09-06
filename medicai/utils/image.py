@@ -85,6 +85,8 @@ def _resample_linear_axis(field, axis, target_size, align_corners):
 
 
 def _resample_linear_field(field, target_shape, align_corners):
+    # TODO: Revisit and consolidate this separable linear resampling path with
+    # the equivalent interpolation helper inside ``resize_volumes``.
     result = field
     for axis, target_size in enumerate(target_shape):
         result = _resample_linear_axis(result, axis, target_size, align_corners)
@@ -351,6 +353,8 @@ def resize_volumes(volumes, depth, height, width, method="trilinear", align_corn
         Y = ops.tile(Y, [bs])
         X = ops.tile(X, [bs])
 
+        # TODO: Revisit sharing this flatten-and-gather implementation with
+        # the equivalent channel-last gather helper in RandomElasticTransform.
         # Flatten input
         flat = ops.reshape(volumes, (bs * d * h * w, c))
 
