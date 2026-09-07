@@ -75,7 +75,9 @@ def test_resize_volumes_matches_torch_3d_reference(method):
     torch_input = torch.from_numpy(
         np.random.default_rng(7).random((2, 3, 4, 5, 2), dtype=np.float32)
     )
-    target_shape = (3, 6, 7)
+    # Integer upscaling keeps the nearest-neighbor coordinate mapping identical
+    # between this utility and ``torch.nn.functional.interpolate``.
+    target_shape = (6, 8, 10)
 
     torch_kwargs = {"size": target_shape, "mode": method}
     if method == "trilinear":
