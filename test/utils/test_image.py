@@ -10,6 +10,14 @@ def as_tensor(array, dtype=None):
     return ops.convert_to_tensor(np.asarray(array), dtype=dtype)
 
 
+def require_torch():
+    try:
+        import torch
+    except ImportError:
+        pytest.skip("Torch is required for the reference comparison.")
+    return torch
+
+
 def scipy_bspline_reference(field, target_shape):
     """Evaluate the same uniform cubic B-spline control-point convention."""
     field = np.asarray(field)
@@ -58,6 +66,38 @@ def test_resize_volumes_nearest_shape_and_dtype():
 
     assert out.shape == (1, 3, 4, 2, 2)
     assert out.dtype == volumes.dtype
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("method", ["trilinear", "nearest"])
+def test_resize_volumes_matches_torch_3d_reference(method):
+    torch = require_torch()
+    torch_input = torch.from_numpy(
+        # Torch uses (N, C, D, H, W); the utility uses (N, D, H, W, C).
+        np.random.default_rng(7).random((2, 2, 3, 4, 5), dtype=np.float32)
+    )
+    # Integer upscaling keeps the nearest-neighbor coordinate mapping identical
+    # between this utility and ``torch.nn.functional.interpolate``.
+    target_shape = (6, 8, 10)
+
+    torch_kwargs = {"size": target_shape, "mode": method}
+    if method == "trilinear":
+        torch_kwargs["align_corners"] = False
+    torch_output = torch.nn.functional.interpolate(torch_input, **torch_kwargs)
+
+    keras_input = as_tensor(torch_input.numpy().transpose(0, 2, 3, 4, 1))
+    output = resize_volumes(
+        keras_input,
+        depth=target_shape[0],
+        height=target_shape[1],
+        width=target_shape[2],
+        method=method,
+        align_corners=False,
+    )
+    output_np = ops.convert_to_numpy(output)
+    reference_np = torch_output.numpy().transpose(0, 2, 3, 4, 1)
+
+    np.testing.assert_allclose(output_np, reference_np, atol=1e-6, rtol=1e-6)
 
 
 @pytest.mark.unit
