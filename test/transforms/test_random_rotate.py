@@ -290,5 +290,3 @@ def test_random_rotate_allow_missing_keys_and_prob_zero():
 
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomRotate(keys=["image"], factor=0.2, input_layout="DCHW")
-
-

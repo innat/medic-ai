@@ -119,5 +119,3 @@ def test_normalize_intensity_accepts_plain_numpy_inputs():
 
     assert tuple(ops.shape(out["image"])) == (3, 4, 1)
     assert ops.is_tensor(out["image"])
-
-

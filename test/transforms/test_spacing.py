@@ -162,5 +162,3 @@ def test_spacing_uses_fast_resize_path_for_axis_aligned_affine():
     trace = forward.get_applied_transforms()[-1]
 
     assert trace["params"]["used_fast_resize_path"] is True
-
-

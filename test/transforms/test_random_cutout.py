@@ -284,5 +284,3 @@ def test_random_cutout_prob_zero_and_unsupported_rank_rejection():
     )
     with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
-
-

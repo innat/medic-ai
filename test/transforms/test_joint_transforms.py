@@ -150,4 +150,3 @@ def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing
     assert restored_label.dtype == label.dtype
     assert set(np.unique(restored_label)).issubset({0.0, 1.0})
     assert restored.get_applied_transforms() == []
-

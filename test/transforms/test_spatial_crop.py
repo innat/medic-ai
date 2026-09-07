@@ -220,6 +220,7 @@ def test_spatial_crop_records_per_key_crop_bounds_for_mixed_shapes():
     assert image_start.tolist() == [2, 2]
     assert label_start.tolist() == [0, 0]
 
+
 @pytest.mark.unit
 def test_random_spatial_crop_supports_2d_and_3d_channel_last_tensors():
     image_2d = as_tensor(np.arange(30, dtype=np.float32).reshape(5, 6, 1))

@@ -435,6 +435,7 @@ def test_random_shift_intensity_allow_missing_keys_records_empty_trace():
     assert trace["params"]["keys"] == []
     assert not bool(ops.convert_to_numpy(trace["applied"]))
 
+
 @pytest.mark.unit
 def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instances():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
@@ -453,4 +454,3 @@ def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instanc
         ops.convert_to_numpy(image),
     )
     assert restored.get_applied_transforms() == []
-

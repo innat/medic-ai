@@ -277,5 +277,3 @@ def test_crop_foreground_inverse_without_trace_is_noop():
     restored = transform.inverse(bundle)
 
     assert restored is bundle
-
-

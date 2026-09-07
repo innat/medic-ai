@@ -392,4 +392,3 @@ def test_random_crop_by_pos_neg_label_validates_image_reference_key():
 
     with pytest.raises(KeyError, match="reference"):
         transform(TensorBundle({"image": image, "label": label}))
-

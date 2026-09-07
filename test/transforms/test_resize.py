@@ -238,5 +238,3 @@ def test_resize_inverse_without_trace_is_noop():
     restored = resize.inverse(bundle)
 
     assert restored is bundle
-
-

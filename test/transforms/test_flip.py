@@ -267,6 +267,7 @@ def test_random_flip_requires_spatial_axis():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="CHW")
 
+
 @pytest.mark.unit
 def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
     image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
@@ -285,4 +286,3 @@ def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
         ops.convert_to_numpy(image),
     )
     assert restored.get_applied_transforms() == []
-

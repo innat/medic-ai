@@ -105,5 +105,3 @@ def test_signal_fill_empty_uses_same_pixel_kernel_for_sample_and_batch_modes():
         0.0,
         rtol=1e-6,
     )
-
-

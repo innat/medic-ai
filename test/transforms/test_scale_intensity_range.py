@@ -275,6 +275,7 @@ def test_scale_intensity_range_rejects_partial_target_range():
             input_layout="HWC",
         )
 
+
 @pytest.mark.unit
 def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_instances():
     image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
@@ -304,4 +305,3 @@ def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_i
         rtol=1e-6,
     )
     assert restored.get_applied_transforms() == []
-

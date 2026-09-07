@@ -157,5 +157,3 @@ def test_orientation_permutation_changes_spatial_order_and_inverse_restores():
         ops.convert_to_numpy(affine),
         rtol=1e-6,
     )
-
-
