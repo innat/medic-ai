@@ -3,6 +3,7 @@ import pytest
 from keras import ops
 
 from medicai.transforms import (
+    Compose,
     RandomRotate90,
     Rotate90,
     TensorBundle,
@@ -363,4 +364,39 @@ def test_random_rotate90_prob_zero_is_noop_for_rectangular_input():
         ops.convert_to_numpy(image),
     )
 
+@pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_rotate90_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            Rotate90(keys=["image"], k=1, input_layout="HWC"),
+            Rotate90(keys=["image"], k=3, input_layout="HWC"),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
+
+@pytest.mark.unit
+def test_rotate90_inverse_does_not_consume_another_instance_trace():
+    image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
+    first = Rotate90(keys=["image"], k=1, input_layout="HWC")
+    second = Rotate90(keys=["image"], k=2, input_layout="HWC")
+    bundle = first(TensorBundle({"image": image}))
+
+    untouched = second.inverse(bundle)
+
+    assert untouched is bundle
+    assert len(untouched.get_applied_transforms()) == 1
+    restored = first.inverse(bundle)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
 

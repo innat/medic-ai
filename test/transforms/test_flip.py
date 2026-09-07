@@ -3,6 +3,7 @@ import pytest
 from keras import ops
 
 from medicai.transforms import (
+    Compose,
     Flip,
     RandomFlip,
     TensorBundle,
@@ -266,4 +267,22 @@ def test_random_flip_requires_spatial_axis():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=1, input_layout="CHW")
 
+@pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
+            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
 

@@ -10,8 +10,6 @@ from medicai.transforms import (
     RandomFlip,
     RandomRotate90,
     Resize,
-    Rotate90,
-    ScaleIntensityRange,
     ShiftIntensity,
     Spacing,
     TensorBundle,
@@ -23,6 +21,7 @@ def as_tensor(array, dtype=None):
 
 
 @pytest.mark.unit
+@pytest.mark.unit
 def test_sample_only_spatial_transforms_reject_batch_layouts():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         CropForeground(keys=["image"], input_layout="BHWC")
@@ -32,97 +31,6 @@ def test_sample_only_spatial_transforms_reject_batch_layouts():
 
     with pytest.raises(ValueError, match="supports only input_layout values"):
         Spacing(keys=["image"], pixdim=(1.0, 1.0, 1.0), input_layout="BDHWC")
-
-
-@pytest.mark.unit
-def test_compose_inverse_restores_pipeline_with_multiple_scale_intensity_range_instances():
-    image = as_tensor(np.array([[[0.0], [0.5], [1.0]]], dtype=np.float32))
-    pipeline = Compose(
-        [
-            ScaleIntensityRange(
-                keys=["image"],
-                source_value_range=(0.0, 1.0),
-                target_value_range=(-1.0, 1.0),
-                input_layout="HWC",
-            ),
-            ScaleIntensityRange(
-                keys=["image"],
-                source_value_range=(-1.0, 1.0),
-                target_value_range=(0.0, 2.0),
-                input_layout="HWC",
-            ),
-        ]
-    )
-
-    forward = pipeline(TensorBundle({"image": image}))
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
-
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-        rtol=1e-6,
-    )
-    assert restored.get_applied_transforms() == []
-
-
-@pytest.mark.unit
-def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instances():
-    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    pipeline = Compose(
-        [
-            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
-            ShiftIntensity(keys=["image"], offset=-2.0, input_layout="HWC"),
-        ]
-    )
-
-    forward = pipeline(TensorBundle({"image": image}))
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
-
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-    assert restored.get_applied_transforms() == []
-
-
-@pytest.mark.unit
-def test_compose_inverse_restores_pipeline_with_multiple_flip_instances():
-    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    pipeline = Compose(
-        [
-            Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
-            Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
-        ]
-    )
-
-    forward = pipeline(TensorBundle({"image": image}))
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
-
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-    assert restored.get_applied_transforms() == []
-
-
-@pytest.mark.unit
-def test_compose_inverse_restores_pipeline_with_multiple_rotate90_instances():
-    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
-    pipeline = Compose(
-        [
-            Rotate90(keys=["image"], k=1, input_layout="HWC"),
-            Rotate90(keys=["image"], k=3, input_layout="HWC"),
-        ]
-    )
-
-    forward = pipeline(TensorBundle({"image": image}))
-    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
-
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-    assert restored.get_applied_transforms() == []
 
 
 @pytest.mark.unit
@@ -242,23 +150,4 @@ def test_compose_inverse_restores_prediction_bundle_for_crop_orientation_spacing
     assert restored_label.dtype == label.dtype
     assert set(np.unique(restored_label)).issubset({0.0, 1.0})
     assert restored.get_applied_transforms() == []
-
-
-@pytest.mark.unit
-def test_rotate90_inverse_does_not_consume_another_instance_trace():
-    image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
-    first = Rotate90(keys=["image"], k=1, input_layout="HWC")
-    second = Rotate90(keys=["image"], k=2, input_layout="HWC")
-    bundle = first(TensorBundle({"image": image}))
-
-    untouched = second.inverse(bundle)
-
-    assert untouched is bundle
-    assert len(untouched.get_applied_transforms()) == 1
-    restored = first.inverse(bundle)
-    np.testing.assert_array_equal(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-
 

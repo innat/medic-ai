@@ -3,6 +3,7 @@ import pytest
 from keras import ops
 
 from medicai.transforms import (
+    Compose,
     RandomShiftIntensity,
     ShiftIntensity,
     TensorBundle,
@@ -434,4 +435,22 @@ def test_random_shift_intensity_allow_missing_keys_records_empty_trace():
     assert trace["params"]["keys"] == []
     assert not bool(ops.convert_to_numpy(trace["applied"]))
 
+@pytest.mark.unit
+def test_compose_inverse_restores_pipeline_with_multiple_shift_intensity_instances():
+    image = as_tensor(np.arange(12, dtype=np.float32).reshape(3, 4, 1))
+    pipeline = Compose(
+        [
+            ShiftIntensity(keys=["image"], offset=1.0, input_layout="HWC"),
+            ShiftIntensity(keys=["image"], offset=-2.0, input_layout="HWC"),
+        ]
+    )
+
+    forward = pipeline(TensorBundle({"image": image}))
+    restored = pipeline.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+    assert restored.get_applied_transforms() == []
 
