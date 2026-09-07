@@ -1,29 +1,9 @@
 import numpy as np
 import pytest
 from keras import ops
-from medicai.transforms.random import random_elastic_transform as elastic_module
 
 from medicai.transforms import (
-    Compose,
-    CropForeground,
-    Flip,
-    NormalizeIntensity,
-    Orientation,
     RandomCropByPosNegLabel,
-    RandomCutOut,
-    RandomElasticTransform,
-    RandomFlip,
-    RandomRotate,
-    RandomRotate90,
-    RandomShiftIntensity,
-    RandomSpatialCrop,
-    Resize,
-    Rotate90,
-    ScaleIntensityRange,
-    ShiftIntensity,
-    SignalFillEmpty,
-    Spacing,
-    SpatialCrop,
     TensorBundle,
 )
 
@@ -412,5 +392,4 @@ def test_random_crop_by_pos_neg_label_validates_image_reference_key():
 
     with pytest.raises(KeyError, match="reference"):
         transform(TensorBundle({"image": image, "label": label}))
-
 

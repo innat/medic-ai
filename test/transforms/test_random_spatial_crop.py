@@ -1,29 +1,9 @@
 import numpy as np
 import pytest
 from keras import ops
-from medicai.transforms.random import random_elastic_transform as elastic_module
 
 from medicai.transforms import (
-    Compose,
-    CropForeground,
-    Flip,
-    NormalizeIntensity,
-    Orientation,
-    RandomCropByPosNegLabel,
-    RandomCutOut,
-    RandomElasticTransform,
-    RandomFlip,
-    RandomRotate,
-    RandomRotate90,
-    RandomShiftIntensity,
     RandomSpatialCrop,
-    Resize,
-    Rotate90,
-    ScaleIntensityRange,
-    ShiftIntensity,
-    SignalFillEmpty,
-    Spacing,
-    SpatialCrop,
     TensorBundle,
 )
 
@@ -375,5 +355,4 @@ def test_random_spatial_crop_label_aware_mode_supports_multi_channel_labels():
 
     assert tuple(ops.shape(out["image"])) == (2, 2, 1)
     assert tuple(ops.shape(out["label"])) == (2, 2, 2)
-
 

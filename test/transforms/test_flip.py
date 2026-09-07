@@ -1,29 +1,10 @@
 import numpy as np
 import pytest
 from keras import ops
-from medicai.transforms.random import random_elastic_transform as elastic_module
 
 from medicai.transforms import (
-    Compose,
-    CropForeground,
     Flip,
-    NormalizeIntensity,
-    Orientation,
-    RandomCropByPosNegLabel,
-    RandomCutOut,
-    RandomElasticTransform,
     RandomFlip,
-    RandomRotate,
-    RandomRotate90,
-    RandomShiftIntensity,
-    RandomSpatialCrop,
-    Resize,
-    Rotate90,
-    ScaleIntensityRange,
-    ShiftIntensity,
-    SignalFillEmpty,
-    Spacing,
-    SpatialCrop,
     TensorBundle,
 )
 
@@ -279,8 +260,6 @@ def test_random_flip_prob_zero_and_allow_missing_keys():
 
 @pytest.mark.unit
 def test_random_flip_requires_spatial_axis():
-    image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
-
     with pytest.raises(ValueError, match="requires `spatial_axis`"):
         RandomFlip(keys=["image"], prob=1.0, spatial_axis=None, input_layout="HWC")
 
