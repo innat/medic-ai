@@ -73,7 +73,8 @@ def test_resize_volumes_nearest_shape_and_dtype():
 def test_resize_volumes_matches_torch_3d_reference(method):
     torch = require_torch()
     torch_input = torch.from_numpy(
-        np.random.default_rng(7).random((2, 3, 4, 5, 2), dtype=np.float32)
+        # Torch uses (N, C, D, H, W); the utility uses (N, D, H, W, C).
+        np.random.default_rng(7).random((2, 2, 3, 4, 5), dtype=np.float32)
     )
     # Integer upscaling keeps the nearest-neighbor coordinate mapping identical
     # between this utility and ``torch.nn.functional.interpolate``.
