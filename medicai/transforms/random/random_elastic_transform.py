@@ -833,7 +833,7 @@ class RandomElasticTransform(RandomTransform):
                     spacing,
                     physical_spacing.dtype,
                 )
-                smooth_sigma = sigma / coarse_physical_spacing
+                smooth_sigma = ops.reshape(sigma, [shape[0], 1]) / coarse_physical_spacing
                 # The runtime affine controls the actual smoothing widths. The
                 # configured per-axis lower bounds provide static radii for graphs.
                 min_coarse_spacing = tuple(
@@ -846,17 +846,25 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
-            def smooth_sample(inputs):
-                sample_noise, sample_sigma = inputs
-                sample_field = _gaussian_smooth_nd(
-                    ops.expand_dims(sample_noise, axis=0),
-                    ops.maximum(sample_sigma, 1e-3),
+            if noise.shape[0] == 1:
+                field = _gaussian_smooth_nd(
+                    noise,
+                    ops.maximum(smooth_sigma[0], 1e-3),
                     spatial_rank,
                     max_sigma=max_smooth_sigma,
                 )
-                return sample_field[0]
+            else:
+                def smooth_sample(inputs):
+                    sample_noise, sample_sigma = inputs
+                    sample_field = _gaussian_smooth_nd(
+                        ops.expand_dims(sample_noise, axis=0),
+                        ops.maximum(sample_sigma, 1e-3),
+                        spatial_rank,
+                        max_sigma=max_smooth_sigma,
+                    )
+                    return sample_field[0]
 
-            field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
+                field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
