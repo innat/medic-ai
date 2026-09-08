@@ -254,11 +254,6 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
     return ops.where(interior[..., None], field, ops.zeros_like(field))
 
 
-def _map_per_sample(function, elements):
-    """Apply a per-sample function with backend vectorization."""
-    return ops.vectorized_map(function, elements)
-
-
 class RandomElasticTransform(RandomTransform):
     """Apply random smooth elastic deformation to 2D or 3D tensors.
 
@@ -869,7 +864,7 @@ class RandomElasticTransform(RandomTransform):
                     )
                     return sample_field[0]
 
-                field = _map_per_sample(smooth_sample, (noise, smooth_sigma))
+                field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
