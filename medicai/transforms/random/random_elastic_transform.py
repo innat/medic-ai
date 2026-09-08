@@ -254,6 +254,15 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
     return ops.where(interior[..., None], field, ops.zeros_like(field))
 
 
+def _map_per_sample(function, elements):
+    """Apply a per-sample function while avoiding Torch's vmap limitation."""
+    if keras.config.backend() == "torch":
+        # Torch currently rejects non-contiguous memory-format queries inside
+        # vmap when Keras convolution dispatch checks channels-last tensors.
+        return ops.map(function, elements)
+    return ops.vectorized_map(function, elements)
+
+
 class RandomElasticTransform(RandomTransform):
     """Apply random smooth elastic deformation to 2D or 3D tensors.
 
@@ -864,12 +873,7 @@ class RandomElasticTransform(RandomTransform):
                     )
                     return sample_field[0]
 
-                # ``ops.map`` is intentionally used instead of
-                # ``ops.vectorized_map`` here. The Torch backend currently
-                # performs a memory-format query inside ``torch.vmap`` that
-                # is unsupported for convolution inputs. The map operation
-                # remains backend-neutral and preserves per-sample kernels.
-                field = ops.map(smooth_sample, (noise, smooth_sigma))
+                field = _map_per_sample(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
