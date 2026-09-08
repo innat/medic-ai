@@ -864,7 +864,12 @@ class RandomElasticTransform(RandomTransform):
                     )
                     return sample_field[0]
 
-                field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
+                # ``ops.map`` is intentionally used instead of
+                # ``ops.vectorized_map`` here. The Torch backend currently
+                # performs a memory-format query inside ``torch.vmap`` that
+                # is unsupported for convolution inputs. The map operation
+                # remains backend-neutral and preserves per-sample kernels.
+                field = ops.map(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
