@@ -30,7 +30,6 @@ Set the Keras backend before starting Python:
 ```bash
 # Run all transforms on the target device.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
-KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device both
 KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
 
 # Run one selected transform (names are case-insensitive).
@@ -39,28 +38,27 @@ KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
 
 # Run a selected set.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
-  --device both --transform Flip RandomElasticTransform
+  --device gpu --transform Flip RandomElasticTransform
 
 # Use the active backend's compiled path.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile
 ```
 
-`--device` selects which profiles the benchmark runs. To control physical GPU
-visibility, set `CUDA_VISIBLE_DEVICES` in the process environment before the
-backend is imported:
+`--device` selects an isolated process profile. The benchmark configures
+`CUDA_VISIBLE_DEVICES` before importing the Keras backend:
 
 ```bash
-# CPU-only process: no CUDA devices are visible.
-CUDA_VISIBLE_DEVICES="" KERAS_BACKEND=tensorflow \
+# CPU-only process: the benchmark hides all CUDA devices internally.
+KERAS_BACKEND=tensorflow \
   python benchmarks/transforms.py --device cpu
 
-# GPU-only process: expose physical GPU 0, which appears as gpu:0/cuda:0.
+# GPU-only process: the first visible physical GPU appears as gpu:0/cuda:0.
 CUDA_VISIBLE_DEVICES="0" KERAS_BACKEND=tensorflow \
   python benchmarks/transforms.py --device gpu
 
-# Expose physical GPUs 0 and 1 and benchmark one CPU and one GPU profile.
+# If GPUs 0 and 1 are visible, only physical GPU 0 is used by this process.
 CUDA_VISIBLE_DEVICES="0,1" KERAS_BACKEND=tensorflow \
-  python benchmarks/transforms.py --device both
+  python benchmarks/transforms.py --device gpu
 ```
 
 The registry uses two execution groups:
@@ -70,9 +68,9 @@ The registry uses two execution groups:
 - `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
   random augmentation transforms.
 
-For a Python matrix launcher, pass the selected names through the launcher
-instead of changing each subprocess command. Pass `cuda_visible_devices` to
-each subprocess rather than changing `os.environ` after importing Keras:
+For a Python matrix launcher, pass the selected device profile through each
+subprocess rather than changing `os.environ` after importing Keras. The
+benchmark applies the CPU/GPU visibility rule before importing Keras:
 
 ```python
 import os
@@ -87,9 +85,8 @@ def run(
     batch,
     compile_enabled=False,
     group="all",
-    device="both",
+    device="cpu",
     transforms=("all",),
-    cuda_visible_devices=None,
 ):
     transform_label = "-".join(transforms)
     json_path = (
@@ -123,8 +120,6 @@ def run(
         command.append("--compile")
 
     environment = {**os.environ, "KERAS_BACKEND": backend}
-    if cuda_visible_devices is not None:
-        environment["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
     print(
         f"\n=== {backend} {layout} size={size} batch={batch} "
         f"compile={compile_enabled} ===",
@@ -153,8 +148,7 @@ def run_transform_matrix(
     backend,
     compile_enabled=False,
     transforms=("all",),
-    device="both",
-    cuda_visible_devices=None,
+    device="cpu",
 ):
     image_profiles = [
         (224, [4, 8, 16, 32]),
@@ -172,7 +166,6 @@ def run_transform_matrix(
                 compile_enabled,
                 device=device,
                 transforms=transforms,
-                cuda_visible_devices=cuda_visible_devices,
             )
 
     for size in [64, 96, 128, 160, 256]:
@@ -184,7 +177,6 @@ def run_transform_matrix(
             compile_enabled,
             device=device,
             transforms=transforms,
-            cuda_visible_devices=cuda_visible_devices,
         )
 
     for size in [64, 96, 128]:
@@ -197,7 +189,6 @@ def run_transform_matrix(
                 compile_enabled,
                 device=device,
                 transforms=transforms,
-                cuda_visible_devices=cuda_visible_devices,
             )
 
     for size in [160, 256]:
@@ -209,33 +200,15 @@ def run_transform_matrix(
             compile_enabled,
             device=device,
             transforms=transforms,
-            cuda_visible_devices=cuda_visible_devices,
         )
 ```
 
 Examples of isolated launcher runs:
 
 ```python
-# CPU-only: hide all GPUs and run CPU profiles.
-run_transform_matrix(
-    "tensorflow",
-    device="cpu",
-    cuda_visible_devices="",
-)
-
-# GPU 0 only: expose one physical GPU and run GPU profiles.
-run_transform_matrix(
-    "tensorflow",
-    device="gpu",
-    cuda_visible_devices="0",
-)
-
-# CPU and GPU profiles with physical GPUs 0 and 1 visible.
-run_transform_matrix(
-    "tensorflow",
-    device="both",
-    cuda_visible_devices="0,1",
-)
+# Run isolated CPU and GPU matrices as separate subprocesses.
+run_transform_matrix("tensorflow", device="cpu")
+run_transform_matrix("tensorflow", device="gpu")
 ```
 
 Run without compilation. Omitting `--compile` is the default and measures eager
