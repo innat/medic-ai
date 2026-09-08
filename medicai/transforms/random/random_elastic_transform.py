@@ -45,20 +45,12 @@ def _smooth_along_axis(
     axis: int,
     radius: int,
     spatial_rank: int,
-    *,
-    data_format: str = "channels_last",
 ) -> Any:
     kernel_shape = [1] * spatial_rank
     kernel_shape[axis] = 2 * radius + 1
     kernel = ops.reshape(kernel_1d, kernel_shape + [1, 1])
-    spatial_axis = axis + (1 if data_format == "channels_last" else 2)
-    padded = _reflect_pad_axis(tensor, spatial_axis, radius)
-    return ops.conv(
-        padded,
-        kernel,
-        padding="valid",
-        data_format=data_format,
-    )
+    padded = _reflect_pad_axis(tensor, axis + 1, radius)
+    return ops.conv(padded, kernel, padding="valid")
 
 
 def _gaussian_smooth_nd(
@@ -67,7 +59,6 @@ def _gaussian_smooth_nd(
     spatial_rank: int,
     *,
     max_sigma: float | Sequence[float] | None = None,
-    data_format: str = "channels_last",
 ) -> Any:
     """Smooth each displacement channel with separable Gaussian kernels."""
     if max_sigma is None:
@@ -81,10 +72,7 @@ def _gaussian_smooth_nd(
 
     if any(not isinstance(value, Number) for value in radius_sigma):
         raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
-    spatial_offset = 1 if data_format == "channels_last" else 2
-    static_spatial_shape = tuple(
-        field.shape[spatial_offset : spatial_offset + spatial_rank]
-    )
+    static_spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
     radii = tuple(max(1, int(round(3.0 * float(value)))) for value in radius_sigma)
     if all(size is not None for size in static_spatial_shape):
         radii = tuple(
@@ -94,22 +82,14 @@ def _gaussian_smooth_nd(
         if any(radius <= 0 for radius in radii):
             return field
     shape = ops.shape(field)
-    spatial_shape = [shape[index + spatial_offset] for index in range(spatial_rank)]
-    channels = shape[-1] if data_format == "channels_last" else shape[1]
+    spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
+    channels = shape[-1]
 
     # Fold displacement channels into the batch dimension for independent
-    # convolution, then restore the original field layout.
-    if data_format == "channels_last":
-        permutation = [0, spatial_rank + 1] + list(range(1, spatial_rank + 1))
-        folded = ops.transpose(field, permutation)
-    else:
-        folded = field
-    if data_format == "channels_last":
-        folded = ops.reshape(folded, [-1] + spatial_shape + [1])
-    elif data_format == "channels_first":
-        folded = ops.reshape(folded, [-1, 1] + spatial_shape)
-    else:
-        raise ValueError("`data_format` must be 'channels_last' or 'channels_first'.")
+    # convolution, then restore the original channel-last field layout.
+    permutation = [0, spatial_rank + 1] + list(range(1, spatial_rank + 1))
+    folded = ops.transpose(field, permutation)
+    folded = ops.reshape(folded, [-1] + spatial_shape + [1])
     for axis in range(spatial_rank):
         if isinstance(sigma, Number) or len(sigma.shape) == 0:
             sigma_axis = sigma
@@ -122,14 +102,11 @@ def _gaussian_smooth_nd(
             axis,
             radii[axis],
             spatial_rank,
-            data_format=data_format,
         )
 
     folded = ops.reshape(folded, [shape[0], channels] + spatial_shape)
-    if data_format == "channels_last":
-        inverse_permutation = [0] + list(range(2, spatial_rank + 2)) + [1]
-        return ops.transpose(folded, inverse_permutation)
-    return folded
+    inverse_permutation = [0] + list(range(2, spatial_rank + 2)) + [1]
+    return ops.transpose(folded, inverse_permutation)
 
 
 def _flatten_gather(volume: Any, batch_indices: Any, spatial_indices: Sequence[Any]) -> Any:
@@ -278,7 +255,11 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
 
 
 def _map_per_sample(function, elements):
-    """Apply a per-sample function with backend vectorization."""
+    """Apply a per-sample function while avoiding Torch's vmap limitation."""
+    if keras.config.backend() == "torch":
+        # Torch currently rejects non-contiguous memory-format queries inside
+        # vmap when Keras convolution dispatch checks channels-last tensors.
+        return ops.map(function, elements)
     return ops.vectorized_map(function, elements)
 
 
@@ -874,40 +855,23 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
-
-            torch_channel_first = keras.config.backend() == "torch"
-
-            def smooth_single(sample_noise, sample_sigma):
-                sample_field = ops.expand_dims(sample_noise, axis=0)
-                if torch_channel_first:
-                    to_channels_first = [
-                        0,
-                        spatial_rank + 1,
-                        *range(1, spatial_rank + 1),
-                    ]
-                    sample_field = ops.transpose(sample_field, to_channels_first)
-                sample_field = _gaussian_smooth_nd(
-                    sample_field,
-                    ops.maximum(sample_sigma, 1e-3),
+            if noise.shape[0] == 1:
+                field = _gaussian_smooth_nd(
+                    noise,
+                    ops.maximum(smooth_sigma[0], 1e-3),
                     spatial_rank,
                     max_sigma=max_smooth_sigma,
-                    data_format=("channels_first" if torch_channel_first else "channels_last"),
                 )
-                if torch_channel_first:
-                    to_channels_last = [
-                        0,
-                        *range(2, spatial_rank + 2),
-                        1,
-                    ]
-                    sample_field = ops.transpose(sample_field, to_channels_last)
-                return sample_field[0]
-
-            if noise.shape[0] == 1:
-                field = ops.expand_dims(smooth_single(noise[0], smooth_sigma[0]), axis=0)
             else:
                 def smooth_sample(inputs):
                     sample_noise, sample_sigma = inputs
-                    return smooth_single(sample_noise, sample_sigma)
+                    sample_field = _gaussian_smooth_nd(
+                        ops.expand_dims(sample_noise, axis=0),
+                        ops.maximum(sample_sigma, 1e-3),
+                        spatial_rank,
+                        max_sigma=max_smooth_sigma,
+                    )
+                    return sample_field[0]
 
                 field = _map_per_sample(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)

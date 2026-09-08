@@ -168,38 +168,25 @@ def run_transform_matrix(
                 transforms=transforms,
             )
 
-    for size in [64, 96, 128, 160, 256]:
-        run(
-            backend,
-            "DHWC",
-            size,
-            1,
-            compile_enabled,
-            device=device,
-            transforms=transforms,
-        )
+    volume_profiles = [
+        (64, [1, 2]),
+        (96, [1, 2]),
+        (128, [1,2]),
+        (160, [1]),
+        (256, [1]),
+    ]
 
-    for size in [64, 96, 128]:
-        run(
-            backend,
-            "BDHWC",
-            size,
-            batch,
-            compile_enabled,
-            device=device,
-            transforms=transforms,
-        )
-
-    for size in [160, 256]:
-        run(
-            backend,
-            "BDHWC",
-            size,
-            1,
-            compile_enabled,
-            device=device,
-            transforms=transforms,
-        )
+    for size, batches in volume_profiles:
+        for batch in batches:
+            run(
+                backend,
+                "BDHWC",
+                size,
+                batch,
+                compile_enabled,
+                device=device,
+                transforms=transforms,
+            )
 ```
 
 Examples of isolated launcher runs:
