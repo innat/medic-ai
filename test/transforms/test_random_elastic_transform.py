@@ -684,6 +684,31 @@ def test_random_elastic_transform_probability_zero_is_noop():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_applies_per_sample_mask():
+    image = as_tensor(np.arange(18, dtype=np.float32).reshape(2, 3, 3, 1))
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="BHWC",
+        prob=0.5,
+        seed=7,
+    )
+    transform._sample_apply_mask = lambda batch_size: ops.convert_to_tensor(
+        [True, False], dtype="bool"
+    )
+    transform._sample_or_zero_field = lambda tensor, should_apply, affine=None: ops.zeros(
+        (2, 3, 3, 2), dtype="float32"
+    )
+    transform._warp_tensor = lambda tensor, field, interpolation: tensor + 1.0
+
+    output = transform(TensorBundle({"image": image}))
+    output_np = ops.convert_to_numpy(output["image"])
+    image_np = ops.convert_to_numpy(image)
+
+    np.testing.assert_array_equal(output_np[0], image_np[0] + 1.0)
+    np.testing.assert_array_equal(output_np[1], image_np[1])
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_replays_seed_sequence():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     config = dict(keys=["image"], alpha=1.0, sigma=1.0, prob=1.0, input_layout="HWC", seed=7)

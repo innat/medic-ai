@@ -7,7 +7,7 @@ import keras
 from keras import ops
 
 from ...utils.image import resample_displacement_field
-from ..base import RandomTransform, _apply_if_applied
+from ..base import RandomTransform
 from ..spatial.affine_utils import spacing_from_affine
 from ..tensor_bundle import TensorBundle
 from ..utils import (
@@ -259,6 +259,9 @@ class RandomElasticTransform(RandomTransform):
 
     One displacement field is sampled per batch item and shared by all
     selected keys, keeping aligned images and masks geometrically consistent.
+    For batch layouts, ``prob``, ``alpha``, and ``sigma`` are sampled
+    independently for each batch item. For sample layouts, they are sampled
+    once for the single sample.
     Two- and three-dimensional fields can optionally be sampled on a coarse
     grid and expanded to the input resolution. ``control_grid_spacing=None``
     keeps the full-resolution path for both ranks.
@@ -267,10 +270,10 @@ class RandomElasticTransform(RandomTransform):
         keys: Keys of aligned tensors to deform.
         alpha: Maximum displacement magnitude in the units selected by
             ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples a value per call.
+            range samples one value per batch item.
         sigma: Gaussian smoothing width in the units selected by
             ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples a value per call.
+            range samples one value per batch item.
         interpolation: Optional interpolation mode, a sequence aligned with
             ``keys``, or a mapping from key to mode. When omitted, the first
             key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
@@ -280,7 +283,8 @@ class RandomElasticTransform(RandomTransform):
             values are ``"nearest"``, ``"constant"``, ``"reflect"``, and
             ``"wrap"``. The default ``"nearest"`` preserves border values.
         fill_value: Value used outside the input when ``fill_mode="constant"``.
-        prob: Probability of applying the deformation.
+        prob: Per-sample probability of applying the deformation. For a batch,
+            each item receives an independent application decision.
         input_layout: One of ``"HWC"``, ``"DHWC"``, ``"BHWC"``, or
             ``"BDHWC"``.
         control_grid_spacing: Optional spacing between coarse field samples,
@@ -651,15 +655,31 @@ class RandomElasticTransform(RandomTransform):
             )
         return bounds
 
-    def _sample_parameter(self, bounds: tuple[float, float]) -> Any:
+    def _sample_parameter(
+        self,
+        bounds: tuple[float, float],
+        batch_size: Any | None = None,
+    ) -> Any:
+        shape = () if batch_size is None else (batch_size,)
         if bounds[0] == bounds[1]:
-            return bounds[0]
+            if batch_size is None:
+                return bounds[0]
+            return ops.full(shape, bounds[0], dtype="float32")
         return self.random_uniform(
-            shape=(),
+            shape=shape,
             minval=bounds[0],
             maxval=bounds[1],
             dtype="float32",
         )
+
+    def _sample_apply_mask(self, batch_size: Any) -> Any:
+        """Sample one independent application decision for each batch item."""
+        return self.random_uniform(
+            shape=(batch_size,),
+            minval=0.0,
+            maxval=1.0,
+            dtype="float32",
+        ) < self.prob
 
     def _normalize_interpolation(
         self,
@@ -713,6 +733,13 @@ class RandomElasticTransform(RandomTransform):
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
         present_keys = [key for key in self.keys if key in bundle.data]
+        reference = bundle.data[present_keys[0]] if present_keys else None
+        batch_size = (
+            ops.shape(reference)[0]
+            if present_keys and self.layout_info.batched
+            else 1
+        )
+        should_apply = self._sample_apply_mask(batch_size)
         params = {
             "keys": list(present_keys),
             "alpha": self.alpha,
@@ -726,10 +753,10 @@ class RandomElasticTransform(RandomTransform):
             "fill_value": self.fill_value,
             "interpolation": dict(self.interpolation),
             "input_layout": self.input_layout,
-            "should_apply": self.sample_should_apply(),
+            "should_apply": should_apply,
         }
         if not present_keys:
-            params["should_apply"] = False
+            params["should_apply"] = ops.zeros((batch_size,), dtype="bool")
             self.record_random_transform(bundle, params=params, applied=False)
             return bundle
 
@@ -755,19 +782,25 @@ class RandomElasticTransform(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            transformed = _apply_if_applied(
-                params["should_apply"],
-                lambda tensor=batched_tensor, key=key: self._warp_tensor(
-                    tensor, field, self.interpolation[key]
-                ),
-                lambda tensor=batched_tensor: tensor,
+            transformed = self._warp_tensor(
+                batched_tensor,
+                field,
+                self.interpolation[key],
+            )
+            apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (
+                self.layout_info.spatial_rank + 1
+            )
+            transformed = ops.where(
+                ops.reshape(ops.cast(params["should_apply"], "bool"), apply_shape),
+                transformed,
+                batched_tensor,
             )
             bundle.data[key] = restore_from_batch_axis(transformed, added_batch_axis)
 
         self.record_random_transform(
             bundle,
             params=params,
-            applied=params["should_apply"],
+            applied=ops.any(params["should_apply"]),
             kernel=type(self).__name__,
         )
         return bundle
@@ -792,8 +825,8 @@ class RandomElasticTransform(RandomTransform):
 
         def sample_field():
             noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
-            alpha = self._sample_parameter(self.alpha)
-            sigma = self._sample_parameter(self.sigma)
+            alpha = self._sample_parameter(self.alpha, shape[0])
+            sigma = self._sample_parameter(self.sigma, shape[0])
             if self.displacement_units == "mm":
                 physical_spacing = self._physical_spacing(affine)
                 coarse_physical_spacing = physical_spacing * ops.cast(
@@ -813,12 +846,17 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
-            field = _gaussian_smooth_nd(
-                noise,
-                ops.maximum(smooth_sigma, 1e-3),
-                spatial_rank,
-                max_sigma=max_smooth_sigma,
-            )
+            def smooth_sample(inputs):
+                sample_noise, sample_sigma = inputs
+                sample_field = _gaussian_smooth_nd(
+                    ops.expand_dims(sample_noise, axis=0),
+                    ops.maximum(sample_sigma, 1e-3),
+                    spatial_rank,
+                    max_sigma=max_smooth_sigma,
+                )
+                return sample_field[0]
+
+            field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
@@ -830,6 +868,8 @@ class RandomElasticTransform(RandomTransform):
             reduction_axes = tuple(range(1, spatial_rank + 2))
             peak = ops.max(ops.abs(field), axis=reduction_axes, keepdims=True)
             safe_peak = ops.where(peak > 1e-6, peak, ops.ones_like(peak))
+            alpha_shape = [shape[0]] + [1] * (spatial_rank + 1)
+            alpha = ops.reshape(alpha, alpha_shape)
             field = (field / safe_peak) * alpha
             if self.displacement_units == "mm":
                 voxel_spacing = self._physical_spacing(affine)
@@ -846,8 +886,15 @@ class RandomElasticTransform(RandomTransform):
         # branch while tracing a data-loader or compiled training function.
         sampled_field = sample_field()
         zero_field = ops.zeros(output_field_shape, dtype="float32")
+        apply_mask = ops.cast(should_apply, "bool")
+        if getattr(apply_mask, "shape", None) is not None and len(apply_mask.shape) == 0:
+            apply_mask = ops.broadcast_to(
+                ops.reshape(apply_mask, (1,)),
+                (shape[0],),
+            )
+        apply_shape = [shape[0]] + [1] * (spatial_rank + 1)
         return ops.where(
-            ops.cast(should_apply, "bool"),
+            ops.reshape(apply_mask, apply_shape),
             sampled_field,
             zero_field,
         )
