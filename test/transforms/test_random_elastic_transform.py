@@ -14,6 +14,32 @@ def as_tensor(array, dtype=None):
 
 
 @pytest.mark.unit
+def test_gaussian_smoothing_channel_first_matches_channel_last():
+    field = as_tensor(np.random.default_rng(7).random((2, 5, 6, 7, 1), dtype=np.float32))
+    channel_last = elastic_module._gaussian_smooth_nd(
+        field,
+        sigma=1.0,
+        spatial_rank=3,
+        data_format="channels_last",
+    )
+
+    channel_first = elastic_module._gaussian_smooth_nd(
+        ops.transpose(field, (0, 4, 1, 2, 3)),
+        sigma=1.0,
+        spatial_rank=3,
+        data_format="channels_first",
+    )
+    channel_first = ops.transpose(channel_first, (0, 2, 3, 4, 1))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(channel_first),
+        ops.convert_to_numpy(channel_last),
+        atol=1e-5,
+        rtol=1e-5,
+    )
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_supports_2d_sample_and_batch_layouts():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     mask = as_tensor((np.arange(20).reshape(4, 5, 1) > 10).astype(np.int32))

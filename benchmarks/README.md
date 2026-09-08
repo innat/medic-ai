@@ -180,16 +180,15 @@ def run_transform_matrix(
         )
 
     for size in [64, 96, 128]:
-        for batch in [1, 2]:
-            run(
-                backend,
-                "BDHWC",
-                size,
-                batch,
-                compile_enabled,
-                device=device,
-                transforms=transforms,
-            )
+        run(
+            backend,
+            "BDHWC",
+            size,
+            batch,
+            compile_enabled,
+            device=device,
+            transforms=transforms,
+        )
 
     for size in [160, 256]:
         run(
