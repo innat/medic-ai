@@ -709,6 +709,30 @@ def test_random_elastic_transform_applies_per_sample_mask():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_samples_distinct_fields_per_batch_item():
+    image = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
+    config = dict(
+        keys=["image"],
+        input_layout="BHWC",
+        alpha=(1.0, 3.0),
+        sigma=(1.0, 2.0),
+        prob=1.0,
+        seed=17,
+    )
+    first_transform = RandomElasticTransform(**config)
+    second_transform = RandomElasticTransform(**config)
+    apply_mask = ops.ones((2,), dtype="bool")
+
+    first_field = first_transform._sample_or_zero_field(image, apply_mask)
+    second_field = second_transform._sample_or_zero_field(image, apply_mask)
+    first_field_np = ops.convert_to_numpy(first_field)
+    second_field_np = ops.convert_to_numpy(second_field)
+
+    assert not np.array_equal(first_field_np[0], first_field_np[1])
+    np.testing.assert_array_equal(first_field_np, second_field_np)
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_replays_seed_sequence():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     config = dict(keys=["image"], alpha=1.0, sigma=1.0, prob=1.0, input_layout="HWC", seed=7)
