@@ -255,11 +255,7 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
 
 
 def _map_per_sample(function, elements):
-    """Apply a per-sample function while avoiding Torch's vmap limitation."""
-    if keras.config.backend() == "torch":
-        # Torch currently rejects non-contiguous memory-format queries inside
-        # vmap when Keras convolution dispatch checks channels-last tensors.
-        return ops.map(function, elements)
+    """Apply a per-sample function with backend vectorization."""
     return ops.vectorized_map(function, elements)
 
 
