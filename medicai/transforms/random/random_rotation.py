@@ -519,7 +519,9 @@ class RandomRotate(RandomTransform):
             )
         else:
             active = [axis for axis in AXES if axis in angles]
-            if len(active) == 1:
+            # Torch uses coordinate sampling for single-axis 3D rotations
+            # because its affine kernel does not cover this case.
+            if len(active) == 1 and keras.config.backend() != "torch":
                 rotated = rotate_single_axis(
                     batched,
                     angles[active[0]],
