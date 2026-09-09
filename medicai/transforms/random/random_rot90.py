@@ -23,8 +23,8 @@ class RandomRotate90(RandomTransform):
 
     .. note::
 
-        In batch mode, one quarter-turn count ``k`` is sampled per transform call
-        and that same rotation is applied across the whole batch.
+        In batch mode, the apply decision and quarter-turn count ``k`` are
+        sampled independently for each item.
 
         For graph execution, the two selected rotation axes must have equal
         lengths. A 90- or 270-degree rotation swaps those axes, and graph control
@@ -151,11 +151,31 @@ class RandomRotate90(RandomTransform):
         return self.apply_with_params(bundle, params)
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample the shared Bernoulli decision and quarter-turn count."""
-        del bundle
+        """Sample independent decisions and quarter-turn counts per batch item."""
+        present_key = next((key for key in self.keys if key in bundle.data), None)
+        if present_key is None:
+            batch_size = 1
+            parameter_shape = ()
+        elif self.rotate.layout_info.batched:
+            batch_size = ops.shape(bundle.data[present_key])[0]
+            parameter_shape = (batch_size,)
+        else:
+            batch_size = 1
+            parameter_shape = ()
         return {
-            "should_apply": self.sample_should_apply(),
-            "k": self.random_integers(shape=(), minval=1, maxval=self.max_k + 1, dtype="int32"),
+            "should_apply": self.random_uniform(
+                shape=parameter_shape,
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.prob,
+            "k": self.random_integers(
+                shape=parameter_shape,
+                minval=1,
+                maxval=self.max_k + 1,
+                dtype="int32",
+            ),
             "spatial_axis": self.spatial_axis,
             "input_layout": self.input_layout,
         }
@@ -173,7 +193,7 @@ class RandomRotate90(RandomTransform):
         self.record_random_transform(
             bundle,
             params=self.build_trace_params(params, present_keys),
-            applied=params["should_apply"],
+            applied=ops.any(ops.cast(params["should_apply"], "bool")),
             kernel="Rotate90",
         )
         return bundle
@@ -183,7 +203,7 @@ class RandomRotate90(RandomTransform):
         if trace is None:
             return bundle
 
-        applied = trace.get("applied", False)
+        applied = trace["params"].get("should_apply", trace.get("applied", False))
         k = trace["params"].get("k")
 
         def apply_inverse_rotate(tensor, _: str):
@@ -215,8 +235,16 @@ class RandomRotate90(RandomTransform):
             applied = None
         if applied is False:
             return tensor
-        if applied is True:
+        if applied is True or self.rotate.layout_info.batched:
             self._validate_square_rotation_plane(tensor, params["spatial_axis"])
+        if self.rotate.layout_info.batched:
+            return self._rotate_batch_with_broadcast(
+                tensor,
+                params["k"],
+                params["spatial_axis"],
+                params["should_apply"],
+            )
+
         return _apply_if_applied(
             params["should_apply"],
             lambda tensor=tensor: self._rotate_with_dynamic_k(
@@ -226,6 +254,36 @@ class RandomRotate90(RandomTransform):
             ),
             lambda tensor=tensor: tensor,
         )
+
+    def _rotate_batch_with_broadcast(
+        self,
+        tensor,
+        k,
+        spatial_axis: Sequence[int] | None,
+        should_apply,
+    ):
+        """Select one of four fixed-shape rotations independently per item."""
+        effective_k = ops.mod(ops.cast(k, "int32"), 4)
+        effective_k = ops.where(
+            ops.cast(should_apply, "bool"),
+            effective_k,
+            ops.zeros_like(effective_k),
+        )
+        branches = [
+            tensor,
+            self.rotate.rotate_tensor(tensor, k=1, spatial_axis=spatial_axis),
+            self.rotate.rotate_tensor(tensor, k=2, spatial_axis=spatial_axis),
+            self.rotate.rotate_tensor(tensor, k=3, spatial_axis=spatial_axis),
+        ]
+        mask_shape = [ops.shape(tensor)[0]] + [1] * (len(tensor.shape) - 1)
+        result = branches[0]
+        for branch_index in range(1, 4):
+            branch_mask = ops.reshape(
+                ops.equal(effective_k, branch_index),
+                mask_shape,
+            )
+            result = ops.where(branch_mask, branches[branch_index], result)
+        return result
 
     def _rotate_with_dynamic_k(
         self,
@@ -285,6 +343,7 @@ class RandomRotate90(RandomTransform):
         return {
             "keys": list(present_keys),
             "k": params["k"],
+            "should_apply": params["should_apply"],
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
         }
