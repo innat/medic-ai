@@ -733,6 +733,27 @@ def test_random_elastic_transform_samples_distinct_fields_per_batch_item():
 
 
 @pytest.mark.unit
+def test_random_elastic_transform_samples_range_parameters_per_batch_item():
+    transform = RandomElasticTransform(
+        keys=["image"],
+        input_layout="BHWC",
+        alpha=(1.0, 3.0),
+        sigma=(1.0, 2.0),
+        prob=1.0,
+        seed=17,
+    )
+
+    alpha = ops.convert_to_numpy(transform._sample_parameter(transform.alpha, 2))
+    sigma = ops.convert_to_numpy(transform._sample_parameter(transform.sigma, 2))
+
+    assert alpha.shape == (2,)
+    assert sigma.shape == (2,)
+    assert np.all((alpha >= 1.0) & (alpha <= 3.0))
+    assert np.all((sigma >= 1.0) & (sigma <= 2.0))
+    assert not np.isclose(alpha[0], alpha[1]) or not np.isclose(sigma[0], sigma[1])
+
+
+@pytest.mark.unit
 def test_random_elastic_transform_replays_seed_sequence():
     image = as_tensor(np.arange(20, dtype=np.float32).reshape(4, 5, 1))
     config = dict(keys=["image"], alpha=1.0, sigma=1.0, prob=1.0, input_layout="HWC", seed=7)

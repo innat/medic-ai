@@ -185,21 +185,12 @@ def test_random_cutout_validates_arguments():
             input_layout="HWC",
         )
 
-    with pytest.raises(ValueError, match="`cutout_mode` must be one of"):
-        RandomCutOut(
-            keys=["image"],
-            mask_size=(2, 2),
-            num_cuts=1,
-            cutout_mode="plane",
-            input_layout="HWC",
-        )
-
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomCutOut(keys=["image"], mask_size=(2, 2), num_cuts=1, input_layout="CHW")
 
 
 @pytest.mark.unit
-def test_random_cutout_supports_slice_mode_gaussian_mode_and_allow_missing_keys():
+def test_random_cutout_supports_3d_volume_mode_gaussian_fill_and_allow_missing_keys():
     image = as_tensor(np.random.randn(4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
 
@@ -209,7 +200,6 @@ def test_random_cutout_supports_slice_mode_gaussian_mode_and_allow_missing_keys(
         num_cuts=1,
         prob=1.0,
         fill_mode="gaussian",
-        cutout_mode="slice",
         input_layout="DHWC",
     )(TensorBundle({"image": image, "label": label}))
 
@@ -227,7 +217,7 @@ def test_random_cutout_supports_slice_mode_gaussian_mode_and_allow_missing_keys(
 
 
 @pytest.mark.unit
-def test_random_cutout_2d_supports_slice_mode():
+def test_random_cutout_2d_uses_pixel_mask():
     image = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
     label = as_tensor(np.ones((8, 8, 1), dtype=np.float32))
 
@@ -236,11 +226,73 @@ def test_random_cutout_2d_supports_slice_mode():
         mask_size=(2, 2),
         num_cuts=1,
         prob=1.0,
-        cutout_mode="slice",
         input_layout="HWC",
     )(TensorBundle({"image": image, "label": label}))
 
     assert tuple(ops.shape(out["image"])) == (8, 8, 1)
+
+
+@pytest.mark.unit
+def test_random_cutout_samples_application_probability_per_batch_item(monkeypatch):
+    image = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+    transform = RandomCutOut(
+        keys=["image"],
+        mask_size=(4, 4),
+        num_cuts=1,
+        prob=0.5,
+        fill_mode="constant",
+        fill_value=0.0,
+        input_layout="BHWC",
+    )
+    calls = 0
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        del minval, maxval
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return as_tensor([0.0, 1.0], dtype=dtype)
+        return ops.zeros(shape, dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    output = transform(TensorBundle({"image": image}))
+    output_np = ops.convert_to_numpy(output["image"])
+
+    assert np.any(output_np[0] == 0.0)
+    np.testing.assert_array_equal(output_np[1], np.ones((8, 8, 1), dtype=np.float32))
+    applied = output.get_applied_transforms()[-1]["params"]["should_apply"]
+    np.testing.assert_array_equal(ops.convert_to_numpy(applied), [True, False])
+
+
+@pytest.mark.unit
+def test_random_cutout_samples_different_regions_per_batch_item(monkeypatch):
+    image = as_tensor(np.ones((2, 8, 8, 1), dtype=np.float32))
+    transform = RandomCutOut(
+        keys=["image"],
+        mask_size=(2, 2),
+        num_cuts=1,
+        prob=1.0,
+        fill_mode="constant",
+        fill_value=0.0,
+        input_layout="BHWC",
+    )
+    calls = 0
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        del minval, maxval
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return as_tensor([0.0, 0.0], dtype=dtype)
+        return ops.reshape(as_tensor([0.0, 0.0, 0.875, 0.875], dtype=dtype), shape)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    output = transform(TensorBundle({"image": image}))
+    output_np = ops.convert_to_numpy(output["image"])
+
+    assert not np.array_equal(output_np[0], output_np[1])
+    assert np.count_nonzero(output_np[0] == 0.0) == 4
+    assert np.count_nonzero(output_np[1] == 0.0) == 4
 
 
 @pytest.mark.unit

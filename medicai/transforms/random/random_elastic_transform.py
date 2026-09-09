@@ -269,11 +269,13 @@ class RandomElasticTransform(RandomTransform):
     Args:
         keys: Keys of aligned tensors to deform.
         alpha: Maximum displacement magnitude in the units selected by
-            ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples one value per batch item.
+            ``displacement_units``. A scalar uses the same value for every
+            batch item; a ``(min, max)`` range samples one value per batch
+            item.
         sigma: Gaussian smoothing width in the units selected by
-            ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples one value per batch item.
+            ``displacement_units``. A scalar uses the same value for every
+            batch item; a ``(min, max)`` range samples one value per batch
+            item.
         interpolation: Optional interpolation mode, a sequence aligned with
             ``keys``, or a mapping from key to mode. When omitted, the first
             key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
@@ -674,12 +676,15 @@ class RandomElasticTransform(RandomTransform):
 
     def _sample_apply_mask(self, batch_size: Any) -> Any:
         """Sample one independent application decision for each batch item."""
-        return self.random_uniform(
-            shape=(batch_size,),
-            minval=0.0,
-            maxval=1.0,
-            dtype="float32",
-        ) < self.prob
+        return (
+            self.random_uniform(
+                shape=(batch_size,),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.prob
+        )
 
     def _normalize_interpolation(
         self,
@@ -734,11 +739,7 @@ class RandomElasticTransform(RandomTransform):
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
         present_keys = [key for key in self.keys if key in bundle.data]
         reference = bundle.data[present_keys[0]] if present_keys else None
-        batch_size = (
-            ops.shape(reference)[0]
-            if present_keys and self.layout_info.batched
-            else 1
-        )
+        batch_size = ops.shape(reference)[0] if present_keys and self.layout_info.batched else 1
         should_apply = self._sample_apply_mask(batch_size)
         params = {
             "keys": list(present_keys),
@@ -787,9 +788,7 @@ class RandomElasticTransform(RandomTransform):
                 field,
                 self.interpolation[key],
             )
-            apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (
-                self.layout_info.spatial_rank + 1
-            )
+            apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (self.layout_info.spatial_rank + 1)
             transformed = ops.where(
                 ops.reshape(ops.cast(params["should_apply"], "bool"), apply_shape),
                 transformed,
@@ -854,6 +853,7 @@ class RandomElasticTransform(RandomTransform):
                     max_sigma=max_smooth_sigma,
                 )
             else:
+
                 def smooth_sample(inputs):
                     sample_noise, sample_sigma = inputs
                     sample_field = _gaussian_smooth_nd(

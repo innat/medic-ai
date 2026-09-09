@@ -30,13 +30,10 @@ class RandomCutOut(RandomTransform):
         gaussian_std: Standard deviation for Gaussian fill noise.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
-            In batch layouts, one Bernoulli apply decision is sampled for the
-            full batch, while cutout masks are generated per sample.
+            In batch layouts, the Bernoulli apply decision and cutout mask are
+            sampled independently for each sample.
         seed: Optional random seed. Supports ``None``, an integer seed, or a
             ``keras.random.SeedGenerator``.
-        cutout_mode: Either ``"slice"`` for slice-wise masks or ``"volume"``
-            for the same mask across all depth slices. For 2D inputs, both
-            modes behave identically because there is no depth axis.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
     Example:
@@ -130,7 +127,6 @@ class RandomCutOut(RandomTransform):
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
-        cutout_mode: str = "volume",
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
@@ -148,11 +144,6 @@ class RandomCutOut(RandomTransform):
             raise ValueError(
                 f'`fill_mode` must be either "gaussian" or "constant". Got {fill_mode}.'
             )
-        if cutout_mode not in {"slice", "volume"}:
-            raise ValueError(
-                f'`cutout_mode` must be one of {{"slice", "volume"}}. Got {cutout_mode}.'
-            )
-
         self.image_key = keys[0]
         self.mask_size = tuple(mask_size)
         self.num_cuts = num_cuts
@@ -164,7 +155,6 @@ class RandomCutOut(RandomTransform):
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
-        self.cutout_mode = cutout_mode
         self.allow_missing_keys = allow_missing_keys
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -188,7 +178,18 @@ class RandomCutOut(RandomTransform):
         )
         spatial_rank = layout.spatial_rank
 
-        should_apply = self.sample_should_apply()
+        if self.layout_info.batched:
+            should_apply = (
+                self.random_uniform(
+                    shape=(ops.shape(image)[0],),
+                    minval=0.0,
+                    maxval=1.0,
+                    dtype="float32",
+                )
+                < self.prob
+            )
+        else:
+            should_apply = self.sample_should_apply()
         centers = self._sample_cutout_centers(image, spatial_rank)
         noise = (
             self.random_normal(shape=ops.shape(image), stddev=self.gaussian_std, dtype=image.dtype)
@@ -211,15 +212,12 @@ class RandomCutOut(RandomTransform):
     ) -> TensorBundle:
         """Apply the sampled cutout configuration to the selected image key."""
         if self.layout_info.batched:
-            bundle.data[self.image_key] = _apply_if_applied(
+            bundle.data[self.image_key] = self.apply_batch_cutout(
+                params["image"],
+                params["spatial_rank"],
+                params["centers"],
+                params["noise"],
                 params["should_apply"],
-                lambda: self.apply_batch_cutout(
-                    params["image"],
-                    params["spatial_rank"],
-                    params["centers"],
-                    params["noise"],
-                ),
-                lambda: params["image"],
             )
         else:
             bundle.data[self.image_key] = _apply_if_applied(
@@ -247,7 +245,7 @@ class RandomCutOut(RandomTransform):
             "mask_size": self.mask_size,
             "num_cuts": self.num_cuts,
             "fill_mode": self.fill_mode,
-            "cutout_mode": self.cutout_mode,
+            "should_apply": params["should_apply"],
             "input_layout": self.input_layout,
         }
 
@@ -268,21 +266,29 @@ class RandomCutOut(RandomTransform):
         spatial_rank: int,
         centers,
         noise,
+        should_apply,
     ):
         """Apply cutout independently to each sample of a batch."""
-        return ops.map(
-            lambda elems: self.apply_sample_cutout(elems[0], spatial_rank, elems[1], elems[2]),
-            (images, centers, noise),
+        mask = self.generate_batch_cutout_mask(images, spatial_rank, centers)
+        cutout = self.apply_cutout(images, mask, noise)
+        apply_shape = [ops.shape(images)[0]] + [1] * (get_tensor_rank(images) - 1)
+        return ops.where(
+            ops.reshape(ops.cast(should_apply, "bool"), apply_shape),
+            cutout,
+            images,
         )
 
     def apply_cutout(self, image, mask, noise):
         """Apply a generated cutout mask to the image tensor."""
         mask_bool = ops.cast(mask, "bool")
         if self.fill_mode == "gaussian":
-            im_min = ops.min(image)
-            im_max = ops.max(image)
-            nz_min = ops.min(noise)
-            nz_max = ops.max(noise)
+            reduction_axes = (
+                tuple(range(1, get_tensor_rank(image))) if self.layout_info.batched else None
+            )
+            im_min = ops.min(image, axis=reduction_axes, keepdims=True)
+            im_max = ops.max(image, axis=reduction_axes, keepdims=True)
+            nz_min = ops.min(noise, axis=reduction_axes, keepdims=True)
+            nz_max = ops.max(noise, axis=reduction_axes, keepdims=True)
             fill = (im_max - im_min) * (noise - nz_min) / (nz_max - nz_min + 1e-8) + im_min
         else:
             fill = ops.zeros_like(image) + ops.cast(self.fill_value, image.dtype)
@@ -296,23 +302,23 @@ class RandomCutOut(RandomTransform):
         if get_tensor_rank(volume) == 3:
             volume = volume[..., None]
 
-        if self.cutout_mode == "slice":
-            return self._cutout_mask_slice_wise(volume, centers)
         return self._cutout_mask_volume_wise(volume, centers)
+
+    def generate_batch_cutout_mask(self, images, spatial_rank: int, centers):
+        """Generate all batch masks through broadcasted spatial comparisons."""
+        if spatial_rank == 2:
+            return self._cutout_mask_2d_batch(images, centers)
+
+        return self._cutout_mask_volume_batch(images, centers)
 
     def _sample_cutout_centers(self, image, spatial_rank: int):
         """Sample all cutout centers before conditional application."""
         shape = ops.shape(image)
         if self.layout_info.batched:
             batch_size = shape[0]
-            depth = shape[1] if spatial_rank == 3 else None
             prefix = [batch_size, self.num_cuts]
         else:
-            depth = shape[0] if spatial_rank == 3 else None
             prefix = [self.num_cuts]
-
-        if spatial_rank == 3 and self.cutout_mode == "slice":
-            prefix.append(depth)
         if all(isinstance(value, int) for value in prefix):
             center_shape = tuple(prefix) + (2,)
         else:
@@ -349,20 +355,20 @@ class RandomCutOut(RandomTransform):
         cut_any = ops.any(y_mask[:, :, None] & x_mask[:, None, :], axis=0)
         return ops.logical_not(cut_any)[..., None]
 
-    def _cutout_mask_slice_wise(self, volume, centers):
-        shape = ops.shape(volume)
-        depth, height, width = shape[0], shape[1], shape[2]
+    def _cutout_mask_2d_batch(self, images, centers):
+        shape = ops.shape(images)
+        height, width = shape[1], shape[2]
         mask_h, mask_w = self.mask_size
         y_lo = mask_h // 2
         y_hi = mask_h - y_lo
         x_lo = mask_w // 2
         x_hi = mask_w - x_lo
-        y = ops.arange(height)[None, :]
-        x = ops.arange(width)[None, :]
-        cy, cx = centers[:, :, 0], centers[:, :, 1]
-        y_mask = (y >= cy[:, :, None] - y_lo) & (y < cy[:, :, None] + y_hi)
-        x_mask = (x >= cx[:, :, None] - x_lo) & (x < cx[:, :, None] + x_hi)
-        cut_any = ops.any(y_mask[:, :, :, None] & x_mask[:, :, None, :], axis=0)
+        y = ops.arange(height)[None, None, :]
+        x = ops.arange(width)[None, None, :]
+        cy, cx = centers[..., 0], centers[..., 1]
+        y_mask = (y >= cy[..., None] - y_lo) & (y < cy[..., None] + y_hi)
+        x_mask = (x >= cx[..., None] - x_lo) & (x < cx[..., None] + x_hi)
+        cut_any = ops.any(y_mask[..., :, None] & x_mask[..., None, :], axis=1)
         return ops.logical_not(cut_any)[..., None]
 
     def _cutout_mask_volume_wise(self, volume, centers):
@@ -380,4 +386,21 @@ class RandomCutOut(RandomTransform):
         x_mask = (x >= cx[:, None] - x_lo) & (x < cx[:, None] + x_hi)
         cut_any_hw = ops.any(y_mask[:, :, None] & x_mask[:, None, :], axis=0)
         cut_any = ops.broadcast_to(cut_any_hw[None, ...], (depth, height, width))
+        return ops.logical_not(cut_any)[..., None]
+
+    def _cutout_mask_volume_batch(self, volumes, centers):
+        shape = ops.shape(volumes)
+        depth, height, width = shape[1], shape[2], shape[3]
+        mask_h, mask_w = self.mask_size
+        y_lo = mask_h // 2
+        y_hi = mask_h - y_lo
+        x_lo = mask_w // 2
+        x_hi = mask_w - x_lo
+        y = ops.arange(height)[None, None, :]
+        x = ops.arange(width)[None, None, :]
+        cy, cx = centers[..., 0], centers[..., 1]
+        y_mask = (y >= cy[..., None] - y_lo) & (y < cy[..., None] + y_hi)
+        x_mask = (x >= cx[..., None] - x_lo) & (x < cx[..., None] + x_hi)
+        cut_any_hw = ops.any(y_mask[..., :, None] & x_mask[..., None, :], axis=1)
+        cut_any = ops.broadcast_to(cut_any_hw[:, None, ...], (shape[0], depth, height, width))
         return ops.logical_not(cut_any)[..., None]
