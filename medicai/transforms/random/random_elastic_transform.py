@@ -102,7 +102,7 @@ def _smooth_axis_broadcast(
         else:
             weight = ops.reshape(
                 weights[:, tap],
-                [weights.shape[0]] + [1] * (len(spatial_shape) + 1),
+                [ops.shape(weights)[0]] + [1] * (len(spatial_shape) + 1),
             )
         output = output + shifted * weight
     return output
@@ -941,7 +941,11 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
-            if noise.shape[0] == 1:
+            # A scalar sigma has identical smoothing parameters for every
+            # batch item. Keep the efficient shared-kernel convolution path
+            # in that case; broadcasted smoothing is only needed for a true
+            # per-sample sigma range or affine-derived variation.
+            if noise.shape[0] == 1 or self.sigma[0] == self.sigma[1]:
                 field = _gaussian_smooth_nd(
                     noise,
                     ops.maximum(smooth_sigma[0], 1e-3),
