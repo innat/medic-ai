@@ -164,6 +164,35 @@ def test_random_shift_intensity_preserves_shape_and_range():
 
 
 @pytest.mark.unit
+def test_random_shift_intensity_samples_offsets_per_batch_item(monkeypatch):
+    image = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
+    transform = RandomShiftIntensity(
+        keys=["image"], offset=1.0, prob=0.5, input_layout="BHWC"
+    )
+    calls = 0
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        del minval, maxval
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return as_tensor([0.0, 0.0], dtype=dtype)
+        return ops.reshape(as_tensor([0.25, -0.5], dtype=dtype), shape)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    output = transform(TensorBundle({"image": image}))
+    output_np = ops.convert_to_numpy(output["image"])
+
+    np.testing.assert_allclose(output_np[0], 1.25, rtol=1e-6)
+    np.testing.assert_allclose(output_np[1], 0.5, rtol=1e-6)
+    offsets = output.get_applied_transforms()[-1]["params"]["sampled_offsets"]["image"]
+    assert tuple(ops.shape(offsets)) == (2, 1, 1, 1)
+
+    restored = transform.inverse(TensorBundle({"image": output["image"]}, output.meta))
+    np.testing.assert_allclose(ops.convert_to_numpy(restored["image"]), 1.0, rtol=1e-6)
+
+
+@pytest.mark.unit
 def test_random_shift_intensity_inverse_restores_scalar_sample():
     image = as_tensor(np.ones((4, 4, 1), dtype=np.float32))
     transform = RandomShiftIntensity(keys=["image"], offset=0.5, prob=1.0, input_layout="HWC")
