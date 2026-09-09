@@ -71,11 +71,7 @@ def _gaussian_weights_broadcast(sigma: Any, radius: int) -> Any:
         weights = ops.exp(-0.5 * ops.square(offsets / sigma))
     else:
         weights = ops.exp(
-            -0.5
-            * ops.square(
-                ops.expand_dims(offsets, axis=0)
-                / ops.expand_dims(sigma, axis=1)
-            )
+            -0.5 * ops.square(ops.expand_dims(offsets, axis=0) / ops.expand_dims(sigma, axis=1))
         )
     return weights / ops.sum(weights, axis=-1, keepdims=True)
 
@@ -265,10 +261,14 @@ def _linear_sample(
     coordinates: Any,
     fill_mode: str = "nearest",
     fill_value: float = 0.0,
+    normalized: tuple[Any, Any] | None = None,
 ) -> Any:
     """Sample a 2D or 3D channel-last volume with linear interpolation."""
     spatial_rank = coordinates.shape[-1]
-    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    if normalized is None:
+        coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    else:
+        coordinates, valid = normalized
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], volume.dtype) for index in range(spatial_rank)]
     floors = [ops.floor(coordinates[..., index]) for index in range(spatial_rank)]
@@ -304,10 +304,14 @@ def _nearest_sample(
     coordinates: Any,
     fill_mode: str = "nearest",
     fill_value: float = 0.0,
+    normalized: tuple[Any, Any] | None = None,
 ) -> Any:
     """Sample a channel-last volume with nearest-neighbor interpolation."""
     spatial_rank = coordinates.shape[-1]
-    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    if normalized is None:
+        coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    else:
+        coordinates, valid = normalized
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], coordinates.dtype) for index in range(spatial_rank)]
     indices = []
@@ -873,16 +877,39 @@ class RandomElasticTransform(RandomTransform):
             affine=affine,
         )
 
+        batched_inputs = []
         for key in present_keys:
-            tensor = bundle.data[key]
             batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
-                tensor,
+                bundle.data[key],
                 input_layout=self.input_layout,
             )
+            batched_inputs.append((key, batched_tensor, added_batch_axis))
+
+        reference_spatial_shape = tuple(batched.shape[1:-1])
+        share_coordinates = all(
+            tuple(batched_tensor.shape[1:-1]) == reference_spatial_shape
+            for _, batched_tensor, _ in batched_inputs
+        )
+        normalized_coordinates = None
+        if share_coordinates:
+            spatial_rank = self.layout_info.spatial_rank
+            spatial_shape = [ops.shape(batched)[index + 1] for index in range(spatial_rank)]
+            ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
+            mesh = ops.meshgrid(*ranges, indexing="ij")
+            grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
+            coordinates = grid[None, ...] + field
+            normalized_coordinates = _normalize_coordinates(
+                batched,
+                coordinates,
+                self.fill_mode,
+            )
+
+        for key, batched_tensor, added_batch_axis in batched_inputs:
             transformed = self._warp_tensor(
                 batched_tensor,
                 field,
                 self.interpolation[key],
+                normalized_coordinates=normalized_coordinates,
             )
             apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (self.layout_info.spatial_rank + 1)
             transformed = ops.where(
@@ -1019,24 +1046,35 @@ class RandomElasticTransform(RandomTransform):
             )
         return tuple(int(size) for size in spatial_shape)
 
-    def _warp_tensor(self, tensor: Any, field: Any, interpolation: str) -> Any:
+    def _warp_tensor(
+        self,
+        tensor: Any,
+        field: Any,
+        interpolation: str,
+        normalized_coordinates: tuple[Any, Any] | None = None,
+    ) -> Any:
         shape = ops.shape(tensor)
-        spatial_rank = self.layout_info.spatial_rank
-        spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
-        ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
-        mesh = ops.meshgrid(*ranges, indexing="ij")
-        grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
-        coordinates = grid[None, ...] + field
+        if normalized_coordinates is None:
+            spatial_rank = self.layout_info.spatial_rank
+            spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
+            ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
+            mesh = ops.meshgrid(*ranges, indexing="ij")
+            grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
+            coordinates = grid[None, ...] + field
+        else:
+            coordinates = normalized_coordinates[0]
         if interpolation == "nearest":
             return _nearest_sample(
                 tensor,
                 coordinates,
                 fill_mode=self.fill_mode,
                 fill_value=self.fill_value,
+                normalized=normalized_coordinates,
             )
         return _linear_sample(
             tensor,
             coordinates,
             fill_mode=self.fill_mode,
             fill_value=self.fill_value,
+            normalized=normalized_coordinates,
         )
