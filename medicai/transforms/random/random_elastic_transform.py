@@ -53,6 +53,102 @@ def _smooth_along_axis(
     return ops.conv(padded, kernel, padding="valid")
 
 
+def _sigma_for_axis(sigma: Any, axis: int, spatial_rank: int) -> Any:
+    """Return the per-sample smoothing width for one spatial axis."""
+    if isinstance(sigma, Number) or len(sigma.shape) == 0:
+        return sigma
+    if len(sigma.shape) == 1:
+        return sigma
+    if len(sigma.shape) == 2 and sigma.shape[1] == spatial_rank:
+        return ops.take(sigma, axis, axis=1)
+    raise ValueError("sigma must be scalar, rank 1, or rank 2.")
+
+
+def _gaussian_weights_broadcast(sigma: Any, radius: int) -> Any:
+    """Create scalar or per-sample Gaussian weights for fixed tap offsets."""
+    offsets = ops.arange(-radius, radius + 1, dtype="float32")
+    if isinstance(sigma, Number) or len(sigma.shape) == 0:
+        weights = ops.exp(-0.5 * ops.square(offsets / sigma))
+    else:
+        weights = ops.exp(
+            -0.5
+            * ops.square(
+                ops.expand_dims(offsets, axis=0)
+                / ops.expand_dims(sigma, axis=1)
+            )
+        )
+    return weights / ops.sum(weights, axis=-1, keepdims=True)
+
+
+def _smooth_axis_broadcast(
+    tensor: Any,
+    sigma: Any,
+    axis: int,
+    radius: int,
+    spatial_shape: Sequence[int],
+) -> Any:
+    """Smooth one axis using broadcasted per-sample Gaussian weights."""
+    padded_axis = axis + 1
+    padded = _reflect_pad_axis(tensor, padded_axis, radius)
+    weights = _gaussian_weights_broadcast(sigma, radius)
+    output = ops.zeros_like(tensor)
+    size = spatial_shape[axis]
+
+    for tap in range(2 * radius + 1):
+        indices = ops.arange(tap, tap + size, dtype="int32")
+        shifted = ops.take(padded, indices, axis=padded_axis)
+        if len(weights.shape) == 1:
+            weight = weights[tap]
+        else:
+            weight = ops.reshape(
+                weights[:, tap],
+                [weights.shape[0]] + [1] * (len(spatial_shape) + 1),
+            )
+        output = output + shifted * weight
+    return output
+
+
+def _gaussian_smooth_broadcast_nd(
+    field: Any,
+    sigma: Any,
+    spatial_rank: int,
+    *,
+    max_sigma: float | Sequence[float] | None = None,
+) -> Any:
+    """Smooth a field with per-sample sigma without vectorized mapping."""
+    if max_sigma is None:
+        radius_sigma = (sigma,) * spatial_rank
+    elif isinstance(max_sigma, Number):
+        radius_sigma = (max_sigma,) * spatial_rank
+    else:
+        if len(max_sigma) != spatial_rank:
+            raise ValueError("`max_sigma` must contain one value per spatial axis.")
+        radius_sigma = tuple(max_sigma)
+    if any(not isinstance(value, Number) for value in radius_sigma):
+        raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
+
+    spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
+    if any(size is None for size in spatial_shape):
+        raise ValueError("Field spatial dimensions must be statically known.")
+    radii = tuple(
+        min(max(1, int(round(3.0 * float(value)))), int(size) - 1)
+        for value, size in zip(radius_sigma, spatial_shape, strict=True)
+    )
+    if any(radius <= 0 for radius in radii):
+        return field
+
+    result = field
+    for axis, radius in enumerate(radii):
+        result = _smooth_axis_broadcast(
+            result,
+            _sigma_for_axis(sigma, axis, spatial_rank),
+            axis,
+            radius,
+            spatial_shape,
+        )
+    return result
+
+
 def _gaussian_smooth_nd(
     field: Any,
     sigma: Any,
@@ -854,17 +950,12 @@ class RandomElasticTransform(RandomTransform):
                 )
             else:
 
-                def smooth_sample(inputs):
-                    sample_noise, sample_sigma = inputs
-                    sample_field = _gaussian_smooth_nd(
-                        ops.expand_dims(sample_noise, axis=0),
-                        ops.maximum(sample_sigma, 1e-3),
-                        spatial_rank,
-                        max_sigma=max_smooth_sigma,
-                    )
-                    return sample_field[0]
-
-                field = ops.vectorized_map(smooth_sample, (noise, smooth_sigma))
+                field = _gaussian_smooth_broadcast_nd(
+                    noise,
+                    ops.maximum(smooth_sigma, 1e-3),
+                    spatial_rank,
+                    max_sigma=max_smooth_sigma,
+                )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
