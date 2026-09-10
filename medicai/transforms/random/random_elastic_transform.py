@@ -19,6 +19,20 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_DISPLACEMENT_UNITS = {"voxel", "mm"}
+_DEFAULT_DISPLACEMENT_UNITS = "voxel"
+_FILL_MODES = {"nearest", "constant", "reflect", "wrap"}
+_DEFAULT_FILL_MODE = "nearest"
+_FIELD_INTERPOLATIONS = {
+    2: {"bilinear", "bspline"},
+    3: {"trilinear", "bspline"},
+}
+_DEFAULT_LINEAR_INTERPOLATIONS = {2: "bilinear", 3: "trilinear"}
+_INTERPOLATIONS = {
+    2: {"nearest", "bilinear"},
+    3: {"nearest", "trilinear"},
+}
+
 
 def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
     offsets = ops.arange(-radius, radius + 1, dtype=dtype)
@@ -357,14 +371,20 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
 class RandomElasticTransform(RandomTransform):
     """Apply random smooth elastic deformation to 2D or 3D tensors.
 
-    One displacement field is sampled per batch item and shared by all
-    selected keys, keeping aligned images and masks geometrically consistent.
-    For batch layouts, ``prob``, ``alpha``, and ``sigma`` are sampled
-    independently for each batch item. For sample layouts, they are sampled
-    once for the single sample.
-    Two- and three-dimensional fields can optionally be sampled on a coarse
-    grid and expanded to the input resolution. ``control_grid_spacing=None``
-    keeps the full-resolution path for both ranks.
+    The transform samples a smooth displacement field in the input spatial
+    coordinate system, then uses that field to resample every selected tensor.
+    For batch layouts, each sample receives its own application decision and
+    random deformation parameters. The resulting field is shared across the
+    selected keys of that sample, so an image and its segmentation mask remain
+    spatially aligned while using key-specific interpolation modes.
+
+    The field is created from random displacement noise and smoothed with a
+    separable Gaussian filter. ``control_grid_spacing`` can reduce the field
+    to a coarse 2D or 3D grid before smoothing; the coarse field is then
+    resampled to the input resolution using the selected field interpolation.
+    With ``control_grid_spacing=None``, the field is generated at full
+    resolution. Displacements may be expressed in pixels/voxels or converted
+    from physical millimeter units using affine metadata.
 
     Args:
         keys: Keys of aligned tensors to deform.
@@ -643,42 +663,46 @@ class RandomElasticTransform(RandomTransform):
         *,
         input_layout: str,
         control_grid_spacing: int | Sequence[int] | None = None,
-        displacement_units: str = "voxel",
+        displacement_units: str = _DEFAULT_DISPLACEMENT_UNITS,
         minimum_physical_spacing: float | Sequence[float] | None = None,
         field_interpolation: str | None = None,
-        fill_mode: str = "nearest",
+        fill_mode: str = _DEFAULT_FILL_MODE,
         fill_value: float = 0.0,
         locked_borders: int = 0,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         if not keys:
             raise ValueError("`keys` must contain at least one tensor key.")
+
         self.keys = tuple(keys)
         self.alpha = self._normalize_parameter_range(alpha, "alpha", 0.0)
         self.sigma = self._normalize_parameter_range(sigma, "sigma", 1e-6)
+
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.control_grid_spacing = self._normalize_control_grid_spacing(control_grid_spacing)
-        if displacement_units not in {"voxel", "mm"}:
+
+        if displacement_units not in _DISPLACEMENT_UNITS:
             raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
         self.displacement_units = displacement_units
         self.minimum_physical_spacing = self._normalize_physical_spacing(minimum_physical_spacing)
+
         if displacement_units == "mm" and self.minimum_physical_spacing is None:
             raise ValueError(
-                "`minimum_physical_spacing` is required when " "displacement_units='mm'."
+                "`minimum_physical_spacing` is required when "
+                "`displacement_units='mm'`."
             )
+
         if field_interpolation is None:
-            field_interpolation = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-        allowed_field_interpolations = (
-            {"bilinear", "bspline"}
-            if self.layout_info.spatial_rank == 2
-            else {"trilinear", "bspline"}
-        )
+            field_interpolation = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
+
+        allowed_field_interpolations = _FIELD_INTERPOLATIONS[self.layout_info.spatial_rank]
         if field_interpolation not in allowed_field_interpolations:
             raise ValueError(
                 f"`field_interpolation`={field_interpolation!r} is invalid for "
@@ -686,10 +710,12 @@ class RandomElasticTransform(RandomTransform):
                 f"{sorted(allowed_field_interpolations)}."
             )
         self.field_interpolation = field_interpolation
+
         if not isinstance(locked_borders, int) or locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
         self.locked_borders = locked_borders
-        if fill_mode not in {"nearest", "constant", "reflect", "wrap"}:
+
+        if fill_mode not in _FILL_MODES:
             raise ValueError(
                 "`fill_mode` must be one of 'nearest', 'constant', 'reflect', or 'wrap'."
             )
@@ -697,6 +723,7 @@ class RandomElasticTransform(RandomTransform):
             raise TypeError("`fill_value` must be numeric.")
         self.fill_mode = fill_mode
         self.fill_value = float(fill_value)
+
         self.interpolation = self._normalize_interpolation(interpolation)
         self.allow_missing_keys = allow_missing_keys
 
@@ -791,7 +818,7 @@ class RandomElasticTransform(RandomTransform):
         interpolation: str | Sequence[str] | Mapping[str, str] | None,
     ) -> dict[str, str]:
         if interpolation is None:
-            linear_mode = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            linear_mode = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
             result = {
                 key: linear_mode if index == 0 else "nearest" for index, key in enumerate(self.keys)
             }
@@ -809,14 +836,7 @@ class RandomElasticTransform(RandomTransform):
         else:
             raise TypeError("`interpolation` must be a string, sequence, or mapping.")
 
-        valid = (
-            {"nearest", "bilinear"}
-            if self.layout_info.spatial_rank == 2
-            else {
-                "nearest",
-                "trilinear",
-            }
-        )
+        valid = _INTERPOLATIONS[self.layout_info.spatial_rank]
         for key, mode in result.items():
             if mode not in valid:
                 raise ValueError(
