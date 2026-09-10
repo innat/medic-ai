@@ -698,7 +698,7 @@ def test_random_elastic_transform_applies_per_sample_mask():
     transform._sample_or_zero_field = lambda tensor, should_apply, affine=None: ops.zeros(
         (2, 3, 3, 2), dtype="float32"
     )
-    transform._warp_tensor = lambda tensor, field, interpolation: tensor + 1.0
+    transform._warp_tensor = lambda tensor, field, interpolation, **kwargs: tensor + 1.0
 
     output = transform(TensorBundle({"image": image}))
     output_np = ops.convert_to_numpy(output["image"])
