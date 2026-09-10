@@ -138,8 +138,10 @@ def _gaussian_smooth_broadcast_nd(
         raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
 
     spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
+
     if any(size is None for size in spatial_shape):
         raise ValueError("Field spatial dimensions must be statically known.")
+
     radii = tuple(
         min(max(1, int(round(3.0 * float(value)))), int(size) - 1)
         for value, size in zip(radius_sigma, spatial_shape, strict=True)
@@ -178,6 +180,7 @@ def _gaussian_smooth_nd(
 
     if any(not isinstance(value, Number) for value in radius_sigma):
         raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
+
     static_spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
     radii = tuple(max(1, int(round(3.0 * float(value)))) for value in radius_sigma)
     if all(size is not None for size in static_spatial_shape):
@@ -293,7 +296,10 @@ def _linear_sample(
     batch_indices = ops.arange(shape[0], dtype="int32")
     batch_indices = ops.reshape(batch_indices, [shape[0]] + [1] * spatial_rank)
     batch_indices = ops.broadcast_to(batch_indices, ops.shape(floors[0]))
-    output = ops.zeros(list(ops.shape(floors[0])) + [shape[-1]], dtype=volume.dtype)
+    output = ops.zeros(
+        list(ops.shape(floors[0])) + [shape[-1]],
+        dtype=volume.dtype,
+    )
 
     for corner in itertools.product((0, 1), repeat=spatial_rank):
         indices = []
@@ -695,8 +701,7 @@ class RandomElasticTransform(RandomTransform):
 
         if displacement_units == "mm" and self.minimum_physical_spacing is None:
             raise ValueError(
-                "`minimum_physical_spacing` is required when "
-                "`displacement_units='mm'`."
+                "`minimum_physical_spacing` is required when " "`displacement_units='mm'`."
             )
 
         if field_interpolation is None:
@@ -851,9 +856,11 @@ class RandomElasticTransform(RandomTransform):
             if affine is None:
                 raise ValueError(
                     "RandomElasticTransform with displacement_units='mm' "
-                    "requires bundle.meta['affine'] containing a 4x4 affine matrix."
+                    "requires bundle.meta['affine'] containing a 4x4 "
+                    "affine matrix."
                 )
             affine = validate_affine_matrix(affine)
+
         missing_keys = [key for key in self.keys if key not in bundle.data]
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
@@ -861,6 +868,7 @@ class RandomElasticTransform(RandomTransform):
         reference = bundle.data[present_keys[0]] if present_keys else None
         batch_size = ops.shape(reference)[0] if present_keys and self.layout_info.batched else 1
         should_apply = self._sample_apply_mask(batch_size)
+
         params = {
             "keys": list(present_keys),
             "alpha": self.alpha,
@@ -878,7 +886,11 @@ class RandomElasticTransform(RandomTransform):
         }
         if not present_keys:
             params["should_apply"] = ops.zeros((batch_size,), dtype="bool")
-            self.record_random_transform(bundle, params=params, applied=False)
+            self.record_random_transform(
+                bundle,
+                params=params,
+                applied=False,
+            )
             return bundle
 
         reference = bundle.data[present_keys[0]]
@@ -910,6 +922,7 @@ class RandomElasticTransform(RandomTransform):
             tuple(batched_tensor.shape[1:-1]) == reference_spatial_shape
             for _, batched_tensor, _ in batched_inputs
         )
+
         normalized_coordinates = None
         if share_coordinates:
             spatial_rank = self.layout_info.spatial_rank
@@ -918,6 +931,7 @@ class RandomElasticTransform(RandomTransform):
             mesh = ops.meshgrid(*ranges, indexing="ij")
             grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
             coordinates = grid[None, ...] + field
+
             normalized_coordinates = _normalize_coordinates(
                 batched,
                 coordinates,
@@ -933,7 +947,10 @@ class RandomElasticTransform(RandomTransform):
             )
             apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (self.layout_info.spatial_rank + 1)
             transformed = ops.where(
-                ops.reshape(ops.cast(params["should_apply"], "bool"), apply_shape),
+                ops.reshape(
+                    ops.cast(params["should_apply"], "bool"),
+                    apply_shape,
+                ),
                 transformed,
                 batched_tensor,
             )
@@ -958,6 +975,7 @@ class RandomElasticTransform(RandomTransform):
         spatial_rank = self.layout_info.spatial_rank
         spatial_shape = self._static_spatial_shape(tensor)
         spacing = self.control_grid_spacing or (1,) * spatial_rank
+
         coarse_shape = tuple(
             max(1, (size + step - 1) // step)
             for size, step in zip(spatial_shape, spacing, strict=True)
@@ -972,8 +990,7 @@ class RandomElasticTransform(RandomTransform):
             if self.displacement_units == "mm":
                 physical_spacing = self._physical_spacing(affine)
                 coarse_physical_spacing = physical_spacing * ops.cast(
-                    spacing,
-                    physical_spacing.dtype,
+                    spacing, physical_spacing.dtype
                 )
                 smooth_sigma = ops.reshape(sigma, [shape[0], 1]) / coarse_physical_spacing
                 # The runtime affine controls the actual smoothing widths. The
@@ -988,6 +1005,7 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
+
             # A scalar sigma has identical smoothing parameters for every
             # batch item. Keep the efficient shared-kernel convolution path
             # in that case; broadcasted smoothing is only needed for a true
@@ -1000,7 +1018,6 @@ class RandomElasticTransform(RandomTransform):
                     max_sigma=max_smooth_sigma,
                 )
             else:
-
                 field = _gaussian_smooth_broadcast_nd(
                     noise,
                     ops.maximum(smooth_sigma, 1e-3),
@@ -1008,6 +1025,7 @@ class RandomElasticTransform(RandomTransform):
                     max_sigma=max_smooth_sigma,
                 )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
+
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
                     field,
@@ -1021,6 +1039,7 @@ class RandomElasticTransform(RandomTransform):
             alpha_shape = [shape[0]] + [1] * (spatial_rank + 1)
             alpha = ops.reshape(alpha, alpha_shape)
             field = (field / safe_peak) * alpha
+
             if self.displacement_units == "mm":
                 voxel_spacing = self._physical_spacing(affine)
                 field = field / voxel_spacing[None, ...]
@@ -1037,6 +1056,7 @@ class RandomElasticTransform(RandomTransform):
         sampled_field = sample_field()
         zero_field = ops.zeros(output_field_shape, dtype="float32")
         apply_mask = ops.cast(should_apply, "bool")
+
         if getattr(apply_mask, "shape", None) is not None and len(apply_mask.shape) == 0:
             apply_mask = ops.broadcast_to(
                 ops.reshape(apply_mask, (1,)),

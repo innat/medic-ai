@@ -18,6 +18,10 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_SUPPORTED_NUM_SAMPLES = {1}
+_DEFAULT_NUM_SAMPLES = 1
+_DEFAULT_IMAGE_THRESHOLD = 0.0
+
 
 class RandomCropByPosNegLabel(RandomTransform):
     """Randomly crop one image-label patch using positive and negative label sampling.
@@ -36,7 +40,8 @@ class RandomCropByPosNegLabel(RandomTransform):
             supported.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``. In batch
-            layouts, one sampled crop is shared across the full batch.
+            layouts, each batch item receives a crop sampled from its own
+            label mask.
         image_reference_key: Optional key for an intensity reference tensor
             used to constrain negative sampling.
         image_threshold: Threshold applied to ``image_reference_key`` during
@@ -130,11 +135,11 @@ class RandomCropByPosNegLabel(RandomTransform):
         target_shape: Sequence[int],
         pos: int,
         neg: int,
-        num_samples: int = 1,
+        num_samples: int = _DEFAULT_NUM_SAMPLES,
         *,
         input_layout: str,
         image_reference_key: str | None = None,
-        image_threshold: float = 0.0,
+        image_threshold: float = _DEFAULT_IMAGE_THRESHOLD,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -174,7 +179,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         return self.apply_with_params(bundle, params)
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample one crop configuration shared across selected keys."""
+        """Sample one crop configuration for each batch item."""
         image_key, label_key = self.keys
         if image_key not in bundle.data or label_key not in bundle.data:
             if self.allow_missing_keys:
@@ -216,25 +221,38 @@ class RandomCropByPosNegLabel(RandomTransform):
                 image_reference,
                 input_layout=self.input_layout,
             )
+
         center = self.sample_center(
             image_batched,
             label_batched,
             image_reference_batched,
             spatial_rank,
         )
-        crop_size = ops.convert_to_tensor(self.target_shape, dtype="int32")
+
+        crop_size = ops.convert_to_tensor(
+            self.target_shape,
+            dtype="int32",
+        )
+
         if get_tensor_rank(crop_size) != 1 or crop_size.shape[0] != spatial_rank:
             raise ValueError(
-                f"`target_shape` must contain exactly {spatial_rank} values for input shape "
+                f"`target_shape` must contain exactly {spatial_rank} values for "
+                "input shape "
                 f"{image.shape}; received {self.target_shape}."
             )
+
         spatial_shape = get_spatial_shape_for_layout(
             image_batched,
             input_layout=self.batch_input_layout,
         )
+
+        # Keep each crop inside the image while preserving the requested size.
         starts = ops.maximum(center - crop_size // 2, 0)
         ends = ops.minimum(starts + crop_size, spatial_shape)
         starts = ops.maximum(ends - crop_size, 0)
+
+        if not self.layout_info.batched:
+            starts = ops.squeeze(starts, axis=0)
         return {
             "skip": False,
             "crop_start": starts,
@@ -264,7 +282,7 @@ class RandomCropByPosNegLabel(RandomTransform):
 
     def _validate_num_samples(self, num_samples: int) -> None:
         """Validate the currently supported sample count."""
-        if num_samples != 1:
+        if num_samples not in _SUPPORTED_NUM_SAMPLES:
             class_name = type(self).__name__
             raise ValueError(f"{class_name} transformation currently supports only num_samples=1.")
 
@@ -288,12 +306,26 @@ class RandomCropByPosNegLabel(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            cropped = self.crop_tensor(
-                batched_tensor,
-                params["crop_start"],
-                params["crop_size"],
-                input_layout=self.batch_input_layout,
-            )
+
+            # A single slice cannot express different starts for batch items.
+            if self.layout_info.batched:
+                sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
+                cropped = ops.vectorized_map(
+                    lambda values: self.crop_tensor(
+                        values[0],
+                        values[1],
+                        params["crop_size"],
+                        input_layout=sample_layout,
+                    ),
+                    (batched_tensor, params["crop_start"]),
+                )
+            else:
+                cropped = self.crop_tensor(
+                    batched_tensor,
+                    params["crop_start"],
+                    params["crop_size"],
+                    input_layout=self.batch_input_layout,
+                )
             return restore_from_batch_axis(cropped, added_batch_axis)
 
         present_keys = self.crop.apply_to_present_keys(
@@ -342,12 +374,26 @@ class RandomCropByPosNegLabel(RandomTransform):
                 tensor,
                 input_layout=self.input_layout,
             )
-            restored = self.pad_to_original_shape(
-                batched_tensor,
-                crop_start,
-                original_shape,
-                input_layout=self.batch_input_layout,
-            )
+
+            # Restore every item at the start recorded during the forward crop.
+            if self.layout_info.batched:
+                sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
+                restored = ops.vectorized_map(
+                    lambda values: self.pad_to_original_shape(
+                        values[0],
+                        values[1],
+                        original_shape,
+                        input_layout=sample_layout,
+                    ),
+                    (batched_tensor, crop_start),
+                )
+            else:
+                restored = self.pad_to_original_shape(
+                    batched_tensor,
+                    crop_start,
+                    original_shape,
+                    input_layout=self.batch_input_layout,
+                )
             return restore_from_batch_axis(restored, added_batch_axis)
 
         self.crop.apply_to_present_keys(
@@ -365,9 +411,10 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ):
         """Sample one crop center using positive/negative label sampling."""
+        batch_size = ops.shape(label)[0]
         positive = (
             self.random_uniform(
-                shape=(),
+                shape=(batch_size,),
                 minval=0.0,
                 maxval=1.0,
                 dtype="float32",
@@ -375,12 +422,17 @@ class RandomCropByPosNegLabel(RandomTransform):
             < self.pos_ratio
         )
         positive_center = self._sample_positive_center(label, spatial_rank)
-        negative_center = self._sample_negative_center(image, label, image_reference, spatial_rank)
-        return ops.where(positive, positive_center, negative_center)
+        negative_center = self._sample_negative_center(
+            image,
+            label,
+            image_reference,
+            spatial_rank,
+        )
+        return ops.where(positive[:, None], positive_center, negative_center)
 
     def _sample_positive_center(self, label, spatial_rank: int):
         return self._sample_from_mask(
-            ops.any(label > 0, axis=(0, -1)),
+            ops.any(label > 0, axis=-1),
             fallback_shape=get_spatial_shape_for_layout(
                 label,
                 input_layout=self.batch_input_layout,
@@ -396,11 +448,11 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ):
         if image_reference is not None and self.image_threshold is not None:
-            max_intensity_ref = ops.max(image_reference, axis=(0, -1))
-            label_is_zero = ops.any(label == 0, axis=(0, -1))
+            max_intensity_ref = ops.max(image_reference, axis=-1)
+            label_is_zero = ops.any(label == 0, axis=-1)
             valid_mask = label_is_zero & (max_intensity_ref > self.image_threshold)
         else:
-            valid_mask = ops.any(label == 0, axis=(0, -1))
+            valid_mask = ops.any(label == 0, axis=-1)
         return self._sample_from_mask(
             valid_mask,
             fallback_shape=get_spatial_shape_for_layout(
@@ -417,29 +469,33 @@ class RandomCropByPosNegLabel(RandomTransform):
         spatial_rank: int,
     ):
         """Sample one spatial coordinate, falling back to any valid voxel if empty."""
-        valid_flat = ops.reshape(valid_mask, (-1,))
-        valid_indices = ops.reshape(ops.where(valid_flat), (-1,))
-        num_valid = ops.shape(valid_indices)[0]
-        valid_rank = self.random_integers(
-            shape=(),
-            minval=0,
-            maxval=ops.maximum(num_valid, 1),
-            dtype="int32",
+        batch_size = ops.shape(valid_mask)[0]
+        valid_flat = ops.reshape(valid_mask, (batch_size, -1))
+        valid_values = ops.cast(valid_flat, "int32")
+        num_valid = ops.sum(valid_values, axis=1)
+        random_rank = ops.floor(
+            self.random_uniform(
+                shape=(batch_size,),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            * ops.cast(num_valid, "float32")
         )
-        safe_indices = ops.concatenate(
-            [ops.cast(valid_indices, "int32"), ops.zeros((1,), dtype="int32")],
-            axis=0,
+        cumulative = ops.cumsum(valid_values, axis=1)
+        selected_flat = ops.argmax(
+            ops.cast(cumulative > random_rank[:, None], "int32"),
+            axis=1,
         )
-        selected_flat = safe_indices[valid_rank]
-        remaining = selected_flat
+        remaining = ops.cast(selected_flat, "int32")
         coordinates = []
         for dimension in reversed(range(spatial_rank)):
             size = ops.cast(fallback_shape[dimension], "int32")
             coordinates.append(ops.mod(remaining, size))
             remaining = ops.floor_divide(remaining, size)
-        selected = ops.stack(list(reversed(coordinates)), axis=0)
+        selected = ops.stack(list(reversed(coordinates)), axis=-1)
         random_unit = self.random_uniform(
-            shape=(spatial_rank,),
+            shape=(batch_size, spatial_rank),
             minval=0.0,
             maxval=1.0,
             dtype="float32",
@@ -448,7 +504,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             ops.floor(random_unit * ops.cast(fallback_shape[:spatial_rank], "float32")),
             "int32",
         )
-        return ops.where(num_valid > 0, selected, fallback)
+        return ops.where(num_valid[:, None] > 0, selected, fallback)
 
     def _get_last_random_crop_trace(self, bundle: TensorBundle):
         return _pop_last_transform_trace(bundle, type(self).__name__)

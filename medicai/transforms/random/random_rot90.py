@@ -13,6 +13,10 @@ from ..base import (
 from ..spatial.rotate90 import Rotate90
 from ..tensor_bundle import TensorBundle
 
+_DEFAULT_PROB = 0.1
+_DEFAULT_MAX_K = 3
+_DEFAULT_SPATIAL_AXIS = None
+
 
 class RandomRotate90(RandomTransform):
     """Randomly rotate selected tensors by quarter turns.
@@ -118,17 +122,19 @@ class RandomRotate90(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        prob: float = 0.1,
-        max_k: int = 3,
-        spatial_axis: Sequence[int] | None = None,
+        prob: float = _DEFAULT_PROB,
+        max_k: int = _DEFAULT_MAX_K,
+        spatial_axis: Sequence[int] | None = _DEFAULT_SPATIAL_AXIS,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         if max_k < 1:
             raise ValueError(f"`max_k` must be >= 1. Received {max_k}.")
+
         self.keys = _normalize_keys(keys)
         self.max_k = max_k
         self.spatial_axis = spatial_axis
@@ -162,6 +168,7 @@ class RandomRotate90(RandomTransform):
         else:
             batch_size = 1
             parameter_shape = ()
+
         return {
             "should_apply": self.random_uniform(
                 shape=parameter_shape,
@@ -192,7 +199,10 @@ class RandomRotate90(RandomTransform):
         )
         self.record_random_transform(
             bundle,
-            params=self.build_trace_params(params, present_keys),
+            params=self.build_trace_params(
+                params,
+                present_keys,
+            ),
             applied=ops.any(ops.cast(params["should_apply"], "bool")),
             kernel="Rotate90",
         )
@@ -245,6 +255,7 @@ class RandomRotate90(RandomTransform):
                 params["should_apply"],
             )
 
+        # A scalar sample uses conditional branches because its k is scalar.
         return _apply_if_applied(
             params["should_apply"],
             lambda tensor=tensor: self._rotate_with_dynamic_k(
@@ -275,6 +286,7 @@ class RandomRotate90(RandomTransform):
             self.rotate.rotate_tensor(tensor, k=2, spatial_axis=spatial_axis),
             self.rotate.rotate_tensor(tensor, k=3, spatial_axis=spatial_axis),
         ]
+
         mask_shape = [ops.shape(tensor)[0]] + [1] * (len(tensor.shape) - 1)
         result = branches[0]
         for branch_index in range(1, 4):

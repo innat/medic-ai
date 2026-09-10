@@ -14,6 +14,9 @@ from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
 from ..utils import get_tensor_rank, resolve_input_layout
 
+_DEFAULT_PROB = 0.1
+_DEFAULT_CHANNEL_WISE = False
+
 
 class RandomShiftIntensity(RandomTransform):
     """Randomly shift intensity values of selected tensors.
@@ -111,26 +114,30 @@ class RandomShiftIntensity(RandomTransform):
         self,
         keys: Sequence[str],
         offset: Union[float, Tuple[float, float]],
-        prob: float = 0.1,
-        channel_wise: bool = False,
+        prob: float = _DEFAULT_PROB,
+        channel_wise: bool = _DEFAULT_CHANNEL_WISE,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         self.keys = _normalize_keys(keys)
+
         if isinstance(offset, (int, float)):
             self.offset = (-abs(offset), abs(offset))
         else:
             self.offset = (min(offset), max(offset))
 
         self.channel_wise = channel_wise
+
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
         self.allow_missing_keys = allow_missing_keys
+
         self.shift = ShiftIntensity(
             keys=self.keys,
             offset=0.0,
@@ -150,9 +157,11 @@ class RandomShiftIntensity(RandomTransform):
         """Sample an independent Bernoulli decision for each batch item."""
         present_key = next((key for key in self.keys if key in bundle.data), None)
         if present_key is not None and self.shift.layout_info.batched:
-            shape = (ops.shape(bundle.data[present_key])[0],)
+            batch_size = ops.shape(bundle.data[present_key])[0]
+            shape = (batch_size,)
         else:
             shape = ()
+
         return {
             "should_apply": self.random_uniform(
                 shape=shape,
@@ -188,12 +197,14 @@ class RandomShiftIntensity(RandomTransform):
             rank = get_tensor_rank(tensor)
             batched = self.shift.layout_info.batched
             batch_size = ops.shape(tensor)[0] if batched else None
+
             if params["channel_wise"]:
                 offset_shape = (
                     [batch_size] + [1] * (rank - 2) + [tensor.shape[-1]]
                     if batched
                     else [1] * (rank - 1) + [tensor.shape[-1]]
                 )
+
                 offsets = self.random_uniform(
                     shape=offset_shape,
                     minval=params["offset"][0],
@@ -202,6 +213,7 @@ class RandomShiftIntensity(RandomTransform):
                 )
             else:
                 offset_shape = [batch_size] + [1] * (rank - 1) if batched else ()
+
                 offsets = self.random_uniform(
                     shape=offset_shape,
                     minval=params["offset"][0],
@@ -209,12 +221,20 @@ class RandomShiftIntensity(RandomTransform):
                     dtype=tensor.dtype,
                 )
             sampled_offsets[key] = offsets
+
             shifted = self.shift.shift_tensor(tensor, offset=offsets)
             if batched:
                 mask_shape = [ops.shape(tensor)[0]] + [1] * (rank - 1)
-                mask = ops.reshape(ops.cast(params["should_apply"], "bool"), mask_shape)
+                mask = ops.reshape(
+                    ops.cast(params["should_apply"], "bool"),
+                    mask_shape,
+                )
                 return ops.where(mask, shifted, tensor)
-            return _apply_if_applied(params["should_apply"], lambda: shifted, lambda: tensor)
+            return _apply_if_applied(
+                params["should_apply"],
+                lambda: shifted,
+                lambda: tensor,
+            )
 
         self.shift.apply_to_present_keys(bundle, apply_shift, keys=present_keys)
         self.record_random_transform(

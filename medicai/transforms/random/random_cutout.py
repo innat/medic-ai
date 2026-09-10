@@ -12,6 +12,12 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_FILL_MODES = {"constant", "gaussian"}
+_DEFAULT_PROB = 0.5
+_DEFAULT_FILL_MODE = "constant"
+_DEFAULT_FILL_VALUE = 0.0
+_DEFAULT_GAUSSIAN_STD = 0.1
+
 
 class RandomCutOut(RandomTransform):
     """Apply random CutOut augmentation to 2D or 3D image tensors.
@@ -120,27 +126,32 @@ class RandomCutOut(RandomTransform):
         keys: Sequence[str],
         mask_size: Sequence[int],
         num_cuts: int,
-        prob: float = 0.5,
-        fill_mode: str = "constant",
-        fill_value: float = 0.0,
-        gaussian_std: float = 0.1,
+        prob: float = _DEFAULT_PROB,
+        fill_mode: str = _DEFAULT_FILL_MODE,
+        fill_value: float = _DEFAULT_FILL_VALUE,
+        gaussian_std: float = _DEFAULT_GAUSSIAN_STD,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         if len(keys) != 1:
             raise ValueError(
                 "`keys` must contain exactly one image key. " f"Got length {len(keys)}."
             )
+
         if not isinstance(mask_size, (list, tuple)) or len(mask_size) != 2:
             raise ValueError("`mask_size` must be a sequence of two integers: (height, width).")
+
         if not all(isinstance(m, int) and m > 0 for m in mask_size):
             raise ValueError("All values in `mask_size` must be positive integers.")
+
         if num_cuts <= 0:
             raise ValueError("`num_cuts` must be a positive integer.")
-        if fill_mode not in {"gaussian", "constant"}:
+
+        if fill_mode not in _FILL_MODES:
             raise ValueError(
                 f'`fill_mode` must be either "gaussian" or "constant". Got {fill_mode}.'
             )
@@ -179,9 +190,10 @@ class RandomCutOut(RandomTransform):
         spatial_rank = layout.spatial_rank
 
         if self.layout_info.batched:
+            batch_size = ops.shape(image)[0]
             should_apply = (
                 self.random_uniform(
-                    shape=(ops.shape(image)[0],),
+                    shape=(batch_size,),
                     minval=0.0,
                     maxval=1.0,
                     dtype="float32",
@@ -190,9 +202,14 @@ class RandomCutOut(RandomTransform):
             )
         else:
             should_apply = self.sample_should_apply()
+
         centers = self._sample_cutout_centers(image, spatial_rank)
         noise = (
-            self.random_normal(shape=ops.shape(image), stddev=self.gaussian_std, dtype=image.dtype)
+            self.random_normal(
+                shape=ops.shape(image),
+                stddev=self.gaussian_std,
+                dtype=image.dtype,
+            )
             if self.fill_mode == "gaussian"
             else ops.zeros_like(image)
         )
