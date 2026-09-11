@@ -482,6 +482,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             )
             * ops.cast(num_valid, "float32")
         )
+        random_rank = ops.cast(random_rank, "int32")
         cumulative = ops.cumsum(valid_values, axis=1)
         selected_flat = ops.argmax(
             ops.cast(cumulative > random_rank[:, None], "int32"),
