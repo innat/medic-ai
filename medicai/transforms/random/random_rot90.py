@@ -218,6 +218,13 @@ class RandomRotate90(RandomTransform):
 
         def apply_inverse_rotate(tensor, _: str):
             inverse_k = ops.mod(-ops.cast(k, "int32"), 4)
+            if self.rotate.layout_info.batched:
+                return self._rotate_batch_with_broadcast(
+                    tensor,
+                    inverse_k,
+                    trace["params"].get("spatial_axis"),
+                    applied,
+                )
             return _apply_if_applied(
                 applied,
                 lambda tensor=tensor: self._rotate_with_dynamic_k(

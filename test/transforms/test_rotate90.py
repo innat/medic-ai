@@ -300,6 +300,36 @@ def test_random_rotate90_inverse_restores_batched_input():
 
 
 @pytest.mark.unit
+def test_random_rotate90_inverse_restores_mixed_batched_decisions(monkeypatch):
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
+    transform = RandomRotate90(
+        keys=["image"],
+        prob=0.5,
+        max_k=3,
+        input_layout="BHWC",
+    )
+
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: as_tensor([0.0, 1.0], dtype=kwargs["dtype"]),
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_integers",
+        lambda **kwargs: as_tensor([1, 2], dtype=kwargs["dtype"]),
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
 def test_random_rotate90_inverse_restores_when_applied():
     image = as_tensor(np.arange(9, dtype=np.float32).reshape(3, 3, 1))
     transform = RandomRotate90(keys=["image"], prob=1.0, max_k=3, input_layout="HWC")

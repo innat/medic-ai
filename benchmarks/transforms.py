@@ -12,10 +12,11 @@ def _configure_cuda_visibility() -> None:
     """Isolate the process to CPU or its first visible GPU before imports."""
     requested = "cpu"
     arguments = sys.argv[1:]
-    if "--device" in arguments:
-        device_index = arguments.index("--device") + 1
-        if device_index < len(arguments):
-            requested = arguments[device_index]
+    for device_index, argument in enumerate(arguments):
+        if argument == "--device" and device_index + 1 < len(arguments):
+            requested = arguments[device_index + 1]
+        elif argument.startswith("--device="):
+            requested = argument.split("=", 1)[1]
 
     if requested == "cpu":
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
