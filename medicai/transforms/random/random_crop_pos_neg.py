@@ -298,10 +298,13 @@ class RandomCropByPosNegLabel(RandomTransform):
         original_shapes = {}
 
         def apply_crop(tensor: Any, key: str) -> Any:
-            original_shapes[key] = get_spatial_shape_for_layout(
-                tensor,
-                input_layout=self.input_layout,
-            )
+            layout = get_input_layout_info(self.input_layout)
+            spatial_shape = tuple(tensor.shape[axis] for axis in layout.spatial_axes)
+            if any(dimension is None for dimension in spatial_shape):
+                raise ValueError(
+                    "RandomCropByPosNegLabel requires statically known spatial dimensions."
+                )
+            original_shapes[key] = tuple(int(dimension) for dimension in spatial_shape)
             batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
                 tensor,
                 input_layout=self.input_layout,
@@ -531,18 +534,16 @@ class RandomCropByPosNegLabel(RandomTransform):
         """Place one cropped tensor back into its original spatial canvas."""
         layout = get_input_layout_info(input_layout)
         crop_start = ops.cast(crop_start, "int32")
-        original_shape = ops.cast(original_shape, "int32")
-        channel_shape = ops.reshape(ops.shape(tensor)[-1], (1,))
+        original_shape = tuple(int(dimension) for dimension in original_shape)
+        channel_size = tensor.shape[-1]
+        if channel_size is None:
+            raise ValueError("RandomCropByPosNegLabel requires a static channel dimension.")
 
         if layout.batched:
-            target_shape = ops.concatenate(
-                [
-                    ops.reshape(ops.shape(tensor)[0], (1,)),
-                    original_shape,
-                    channel_shape,
-                ],
-                axis=0,
-            )
+            batch_size = tensor.shape[0]
+            if batch_size is None:
+                raise ValueError("RandomCropByPosNegLabel requires a static batch dimension.")
+            target_shape = (batch_size, *original_shape, channel_size)
             start_indices = ops.concatenate(
                 [
                     ops.convert_to_tensor([0], dtype="int32"),
@@ -552,10 +553,7 @@ class RandomCropByPosNegLabel(RandomTransform):
                 axis=0,
             )
         else:
-            target_shape = ops.concatenate(
-                [original_shape, channel_shape],
-                axis=0,
-            )
+            target_shape = (*original_shape, channel_size)
             start_indices = ops.concatenate(
                 [crop_start, ops.convert_to_tensor([0], dtype="int32")],
                 axis=0,
