@@ -310,7 +310,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             cropped = self.crop_tensor(
                 batched_tensor,
                 params["crop_start"],
-                params["crop_size"],
+                self.target_shape,
                 input_layout=self.batch_input_layout,
             )
             return restore_from_batch_axis(cropped, added_batch_axis)
@@ -494,6 +494,11 @@ class RandomCropByPosNegLabel(RandomTransform):
     ):
         """Crop one tensor using the provided layout contract."""
         layout = get_input_layout_info(input_layout)
+        crop_size = tuple(int(value) for value in crop_size)
+        channel_size = tensor.shape[-1]
+        if channel_size is None:
+            raise ValueError("RandomCropByPosNegLabel requires a static channel dimension.")
+
         if layout.batched:
             begin = ops.concatenate(
                 [
@@ -503,14 +508,7 @@ class RandomCropByPosNegLabel(RandomTransform):
                 ],
                 axis=0,
             )
-            size = ops.concatenate(
-                [
-                    ops.reshape(ops.shape(tensor)[0], (1,)),
-                    crop_size,
-                    ops.reshape(ops.shape(tensor)[-1], (1,)),
-                ],
-                axis=0,
-            )
+            size = (1, *crop_size, channel_size)
         else:
             begin = ops.concatenate(
                 [
@@ -519,13 +517,7 @@ class RandomCropByPosNegLabel(RandomTransform):
                 ],
                 axis=0,
             )
-            size = ops.concatenate(
-                [
-                    crop_size,
-                    ops.reshape(ops.shape(tensor)[-1], (1,)),
-                ],
-                axis=0,
-            )
+            size = (*crop_size, channel_size)
         return ops.slice(tensor, start_indices=begin, shape=size)
 
     def pad_to_original_shape(
