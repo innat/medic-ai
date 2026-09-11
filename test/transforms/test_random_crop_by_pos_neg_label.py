@@ -68,9 +68,35 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
 
 
 @pytest.mark.unit
+def test_random_crop_by_pos_neg_label_uses_union_masks_for_multi_label_targets():
+    transform = RandomCropByPosNegLabel(
+        keys=["image", "label"],
+        target_shape=(2, 2),
+        pos=1,
+        neg=1,
+        input_layout="HWC",
+    )
+    label = as_tensor(
+        np.asarray(
+            [
+                [[1, 0], [0, 0]],
+                [[0, 2], [0, 0]],
+            ],
+            dtype=np.int32,
+        )
+    )
+
+    foreground = ops.convert_to_numpy(transform._foreground_mask(label))
+    background = ops.convert_to_numpy(transform._background_mask(label))
+
+    np.testing.assert_array_equal(foreground, [[True, False], [True, False]])
+    np.testing.assert_array_equal(background, [[False, True], [False, True]])
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("input_layout", ["BHWC", "BDHWC"])
 def test_random_crop_by_pos_neg_label_rejects_batch_layouts(input_layout):
-    with pytest.raises(ValueError, match="supports only input_layout values"):
+    with pytest.raises(ValueError, match="does not support batch input_layout"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
             target_shape=(4, 4) if input_layout == "BHWC" else (3, 3, 3),
@@ -222,8 +248,6 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
     with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
 
-    image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    label_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     with pytest.raises(ValueError, match="`target_shape` must contain exactly 2 values"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
@@ -231,7 +255,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
             pos=1,
             neg=1,
             input_layout="HWC",
-        )(TensorBundle({"image": image_2d, "label": label_2d}))
+        )
 
     skip_transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
@@ -256,13 +280,22 @@ def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract
             input_layout="CHW",
         )
 
-    with pytest.raises(ValueError, match="supports only input_layout values"):
+    with pytest.raises(ValueError, match="does not support batch input_layout 'BHWC' yet"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
             target_shape=(2, 2),
             pos=1,
             neg=1,
             input_layout="BHWC",
+        )
+
+    with pytest.raises(ValueError, match="does not support batch input_layout 'BDHWC' yet"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=1,
+            neg=1,
+            input_layout="BDHWC",
         )
 
 
