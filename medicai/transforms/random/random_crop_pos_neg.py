@@ -38,10 +38,10 @@ class RandomCropByPosNegLabel(RandomTransform):
         neg: Relative weight for negative-center sampling.
         num_samples: Number of samples to return. Currently only ``1`` is
             supported.
-        input_layout: Channel-last tensor layout. Supported values are
-            ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``. In batch
-            layouts, each batch item receives a crop sampled from its own
-            label mask.
+        input_layout: Channel-last sample layout. Supported values are
+            ``"HWC"`` and ``"DHWC"``. Batch layouts are intentionally not
+            supported because label-aware dynamic cropping requires a
+            backend-specific per-sample indexing path.
         image_reference_key: Optional key for an intensity reference tensor
             used to constrain negative sampling.
         image_threshold: Threshold applied to ``image_reference_key`` during
@@ -118,11 +118,11 @@ class RandomCropByPosNegLabel(RandomTransform):
                 target_shape=(32, 32),
                 pos=1,
                 neg=1,
-                input_layout="BHWC",
+                input_layout="HWC",
             )
 
             torch.manual_seed(7)
-            image = torch.randn((2, 64, 64, 1))
+            image = torch.randn((64, 64, 1))
             label = (image > 0).to(torch.int32)
             result = transform({"image": image, "label": label})
             output = result["image"]
@@ -156,6 +156,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         self.pos_ratio = pos / (pos + neg)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
+            allowed_layouts=("HWC", "DHWC"),
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
@@ -179,7 +180,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         return self.apply_with_params(bundle, params)
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample one crop configuration for each batch item."""
+        """Sample one crop configuration for the input sample."""
         image_key, label_key = self.keys
         if image_key not in bundle.data or label_key not in bundle.data:
             if self.allow_missing_keys:
@@ -251,8 +252,7 @@ class RandomCropByPosNegLabel(RandomTransform):
         ends = ops.minimum(starts + crop_size, spatial_shape)
         starts = ops.maximum(ends - crop_size, 0)
 
-        if not self.layout_info.batched:
-            starts = ops.squeeze(starts, axis=0)
+        starts = ops.squeeze(starts, axis=0)
         return {
             "skip": False,
             "crop_start": starts,
@@ -307,25 +307,12 @@ class RandomCropByPosNegLabel(RandomTransform):
                 input_layout=self.input_layout,
             )
 
-            # A single slice cannot express different starts for batch items.
-            if self.layout_info.batched:
-                sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
-                cropped = ops.map(
-                    lambda values: self.crop_tensor(
-                        values[0],
-                        values[1],
-                        params["crop_size"],
-                        input_layout=sample_layout,
-                    ),
-                    (batched_tensor, params["crop_start"]),
-                )
-            else:
-                cropped = self.crop_tensor(
-                    batched_tensor,
-                    params["crop_start"],
-                    params["crop_size"],
-                    input_layout=self.batch_input_layout,
-                )
+            cropped = self.crop_tensor(
+                batched_tensor,
+                params["crop_start"],
+                params["crop_size"],
+                input_layout=self.batch_input_layout,
+            )
             return restore_from_batch_axis(cropped, added_batch_axis)
 
         present_keys = self.crop.apply_to_present_keys(
@@ -375,25 +362,12 @@ class RandomCropByPosNegLabel(RandomTransform):
                 input_layout=self.input_layout,
             )
 
-            # Restore every item at the start recorded during the forward crop.
-            if self.layout_info.batched:
-                sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
-                restored = ops.map(
-                    lambda values: self.pad_to_original_shape(
-                        values[0],
-                        values[1],
-                        original_shape,
-                        input_layout=sample_layout,
-                    ),
-                    (batched_tensor, crop_start),
-                )
-            else:
-                restored = self.pad_to_original_shape(
-                    batched_tensor,
-                    crop_start,
-                    original_shape,
-                    input_layout=self.batch_input_layout,
-                )
+            restored = self.pad_to_original_shape(
+                batched_tensor,
+                crop_start,
+                original_shape,
+                input_layout=self.batch_input_layout,
+            )
             return restore_from_batch_axis(restored, added_batch_axis)
 
         self.crop.apply_to_present_keys(

@@ -68,161 +68,16 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_layout():
-    image_2d = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
-    label_2d = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
-    label_2d_np = ops.convert_to_numpy(label_2d)
-    label_2d_np[:, 3:5, 3:5, 0] = 1.0
-    label_2d = as_tensor(label_2d_np)
-
-    out_2d = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(4, 4),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )(TensorBundle({"image": image_2d, "label": label_2d}))
-
-    image_3d = as_tensor(np.random.randn(2, 6, 6, 6, 1).astype(np.float32))
-    label_3d = as_tensor(np.zeros((2, 6, 6, 6, 1), dtype=np.float32))
-    label_3d_np = ops.convert_to_numpy(label_3d)
-    label_3d_np[:, 2:4, 2:4, 2:4, 0] = 1.0
-    label_3d = as_tensor(label_3d_np)
-
-    out_3d = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3, 3),
-        pos=1,
-        neg=1,
-        input_layout="BDHWC",
-    )(TensorBundle({"image": image_3d, "label": label_3d}))
-
-    assert tuple(ops.shape(out_2d["image"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out_2d["label"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out_3d["image"])) == (2, 3, 3, 3, 1)
-    assert tuple(ops.shape(out_3d["label"])) == (2, 3, 3, 3, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
-    assert out_3d.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_accepts_input_layout():
-    image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
-    label = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[:, 3:5, 3:5, 0] = 1.0
-    label = as_tensor(label_np)
-
-    out = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(4, 4),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )(TensorBundle({"image": image, "label": label}))
-
-    assert tuple(ops.shape(out["image"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out["label"])) == (2, 4, 4, 1)
-    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_samples_crop_per_batch_item():
-    image = as_tensor(np.arange(2 * 6 * 6, dtype=np.float32).reshape(2, 6, 6, 1))
-    label = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[0, 1, 1, 0] = 1.0
-    label_np[1, 4, 4, 0] = 1.0
-    label = as_tensor(label_np)
-
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3),
-        pos=1,
-        neg=0,
-        input_layout="BHWC",
-        seed=23,
-    )
-
-    out = transform(TensorBundle({"image": image, "label": label}))
-    crop_start = ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["crop_start"])
-    original = ops.convert_to_numpy(image)
-    output = ops.convert_to_numpy(out["image"])
-
-    assert crop_start.shape == (2, 2)
-    np.testing.assert_allclose(output[0], original[0, 0:3, 0:3, :])
-    np.testing.assert_allclose(output[1], original[1, 3:6, 3:6, :])
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_uses_each_batch_item_label_roi():
-    image = as_tensor(np.arange(5 * 8 * 8 * 8, dtype=np.float32).reshape(5, 8, 8, 8, 1))
-    label = np.zeros((5, 8, 8, 8, 1), dtype=np.int32)
-    roi_coords = [(1, 1, 1), (2, 5, 6), (4, 3, 2), (6, 6, 1), (7, 2, 5)]
-    roi_values = [1, 2, 3, 4, 5]
-    for index, (coordinate, value) in enumerate(zip(roi_coords, roi_values, strict=True)):
-        label[(index, *coordinate, 0)] = value
-
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3, 3),
-        pos=1,
-        neg=0,
-        input_layout="BDHWC",
-        seed=31,
-    )
-    out = transform(TensorBundle({"image": image, "label": as_tensor(label)}))
-
-    starts = ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["crop_start"])
-    cropped_labels = ops.convert_to_numpy(out["label"])
-
-    assert starts.shape == (5, 3)
-    for index, coordinate in enumerate(roi_coords):
-        start = np.maximum(np.asarray(coordinate) - 1, 0)
-        end = start + 3
-        if np.any(end > 8):
-            start = np.maximum(start - (end - 8), 0)
-        assert np.array_equal(starts[index], start)
-        cropped_coordinate = tuple(np.asarray(coordinate) - start)
-        assert cropped_labels[(index, *cropped_coordinate, 0)] == roi_values[index]
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_falls_back_when_reference_threshold_is_unmet():
-    image = as_tensor(np.zeros((5, 8, 8, 8, 1), dtype=np.float32))
-    label = np.zeros((5, 8, 8, 8, 1), dtype=np.int32)
-    reference = np.zeros((5, 8, 8, 8, 1), dtype=np.float32)
-    valid_negative_coords = [(0, 0, 0), (7, 7, 7), (1, 6, 2)]
-    for index, coordinate in enumerate(valid_negative_coords):
-        reference[(index, *coordinate, 0)] = 5.0
-    for index, coordinate in enumerate([(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5)]):
-        label[(index, *coordinate, 0)] = index + 1
-
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3, 3),
-        pos=0,
-        neg=1,
-        input_layout="BDHWC",
-        image_reference_key="reference",
-        image_threshold=3.0,
-        seed=37,
-    )
-    out = transform(
-        TensorBundle(
-            {"image": image, "label": as_tensor(label), "reference": as_tensor(reference)}
+@pytest.mark.parametrize("input_layout", ["BHWC", "BDHWC"])
+def test_random_crop_by_pos_neg_label_rejects_batch_layouts(input_layout):
+    with pytest.raises(ValueError, match="supports only input_layout values"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(4, 4) if input_layout == "BHWC" else (3, 3, 3),
+            pos=1,
+            neg=1,
+            input_layout=input_layout,
         )
-    )
-
-    starts = ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["crop_start"])
-    assert starts.shape == (5, 3)
-    assert tuple(starts[0]) == (0, 0, 0)
-    assert tuple(starts[1]) == (5, 5, 5)
-    assert tuple(starts[2]) == (0, 5, 1)
-    assert np.all(starts[3:] >= 0)
-    assert np.all(starts[3:] <= 5)
-    assert tuple(ops.shape(out["image"])) == (5, 3, 3, 3, 1)
-    assert tuple(ops.shape(out["label"])) == (5, 3, 3, 3, 1)
 
 
 @pytest.mark.unit
@@ -250,41 +105,6 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
 
     assert tuple(ops.shape(restored["image"])) == (6, 6, 1)
     assert tuple(ops.shape(restored["label"])) == (6, 6, 1)
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["label"]),
-        ops.convert_to_numpy(label),
-    )
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_inverse_restores_batched_input_canvas():
-    image = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    image_np = ops.convert_to_numpy(image)
-    image_np[:, 2:5, 2:5, 0] = np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3)
-    image = as_tensor(image_np)
-    label = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[:, 3, 3, 0] = 1.0
-    label = as_tensor(label_np)
-
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3),
-        pos=1,
-        neg=0,
-        input_layout="BHWC",
-    )
-    forward = transform(TensorBundle({"image": image, "label": label}))
-    restored = transform.inverse(
-        TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
-    )
-
-    assert tuple(ops.shape(restored["image"])) == (2, 6, 6, 1)
-    assert tuple(ops.shape(restored["label"])) == (2, 6, 6, 1)
     np.testing.assert_allclose(
         ops.convert_to_numpy(restored["image"]),
         ops.convert_to_numpy(image),
@@ -436,18 +256,14 @@ def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract
             input_layout="CHW",
         )
 
-    image = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    label = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(2, 2),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )
-
-    with pytest.raises(ValueError, match="expects input_layout='BHWC' with rank 4"):
-        transform(TensorBundle({"image": image, "label": label}))
+    with pytest.raises(ValueError, match="supports only input_layout values"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2),
+            pos=1,
+            neg=1,
+            input_layout="BHWC",
+        )
 
 
 @pytest.mark.unit

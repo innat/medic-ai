@@ -106,19 +106,6 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             True,
         ),
         BenchmarkSpec(
-            "RandomCropByPosNegLabel",
-            "cpu+gpu",
-            lambda layout, s: RandomCropByPosNegLabel(
-                keys=["image", "label"],
-                target_shape=crop_shape,
-                pos=1,
-                neg=1,
-                input_layout=layout,
-                seed=s,
-            ),
-            True,
-        ),
-        BenchmarkSpec(
             "RandomFlip",
             "cpu+gpu",
             lambda layout, s: RandomFlip(
@@ -183,6 +170,23 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             ),
         ),
     ]
+    if layout in ("HWC", "DHWC"):
+        specs.insert(
+            8,
+            BenchmarkSpec(
+                "RandomCropByPosNegLabel",
+                "cpu+gpu",
+                lambda layout, s: RandomCropByPosNegLabel(
+                    keys=["image", "label"],
+                    target_shape=crop_shape,
+                    pos=1,
+                    neg=1,
+                    input_layout=layout,
+                    seed=s,
+                ),
+                True,
+            ),
+        )
     if is_3d and layout == "DHWC":
         specs.extend(
             [
