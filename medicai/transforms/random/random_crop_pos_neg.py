@@ -310,7 +310,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             # A single slice cannot express different starts for batch items.
             if self.layout_info.batched:
                 sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
-                cropped = ops.vectorized_map(
+                cropped = ops.map(
                     lambda values: self.crop_tensor(
                         values[0],
                         values[1],
@@ -378,7 +378,7 @@ class RandomCropByPosNegLabel(RandomTransform):
             # Restore every item at the start recorded during the forward crop.
             if self.layout_info.batched:
                 sample_layout = "DHWC" if self.layout_info.spatial_rank == 3 else "HWC"
-                restored = ops.vectorized_map(
+                restored = ops.map(
                     lambda values: self.pad_to_original_shape(
                         values[0],
                         values[1],
@@ -562,16 +562,38 @@ class RandomCropByPosNegLabel(RandomTransform):
         *,
         input_layout: str,
     ):
-        """Pad one tensor back into its original spatial canvas."""
+        """Place one cropped tensor back into its original spatial canvas."""
         layout = get_input_layout_info(input_layout)
         crop_start = ops.cast(crop_start, "int32")
         original_shape = ops.cast(original_shape, "int32")
-        current_shape = get_spatial_shape_for_layout(tensor, input_layout=input_layout)
-        pad_before = crop_start
-        pad_after = ops.maximum(original_shape - crop_start - current_shape, 0)
+        channel_shape = ops.reshape(ops.shape(tensor)[-1], (1,))
 
-        paddings = [[0, 0]] if layout.batched else []
-        for before, after in zip(ops.unstack(pad_before), ops.unstack(pad_after), strict=True):
-            paddings.append([before, after])
-        paddings.append([0, 0])
-        return ops.pad(tensor, paddings)
+        if layout.batched:
+            target_shape = ops.concatenate(
+                [
+                    ops.reshape(ops.shape(tensor)[0], (1,)),
+                    original_shape,
+                    channel_shape,
+                ],
+                axis=0,
+            )
+            start_indices = ops.concatenate(
+                [
+                    ops.convert_to_tensor([0], dtype="int32"),
+                    crop_start,
+                    ops.convert_to_tensor([0], dtype="int32"),
+                ],
+                axis=0,
+            )
+        else:
+            target_shape = ops.concatenate(
+                [original_shape, channel_shape],
+                axis=0,
+            )
+            start_indices = ops.concatenate(
+                [crop_start, ops.convert_to_tensor([0], dtype="int32")],
+                axis=0,
+            )
+
+        canvas = ops.zeros(target_shape, dtype=tensor.dtype)
+        return ops.slice_update(canvas, start_indices, tensor)
