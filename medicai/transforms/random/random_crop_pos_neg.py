@@ -563,12 +563,14 @@ class RandomCropByPosNegLabel(RandomTransform):
         input_layout: str,
     ):
         """Pad one tensor back into its original spatial canvas."""
+        layout = get_input_layout_info(input_layout)
         crop_start = ops.cast(crop_start, "int32")
         original_shape = ops.cast(original_shape, "int32")
         current_shape = get_spatial_shape_for_layout(tensor, input_layout=input_layout)
         pad_before = crop_start
         pad_after = ops.maximum(original_shape - crop_start - current_shape, 0)
-        paddings = [[0, 0]]
+
+        paddings = [[0, 0]] if layout.batched else []
         for before, after in zip(ops.unstack(pad_before), ops.unstack(pad_after), strict=True):
             paddings.append([before, after])
         paddings.append([0, 0])
