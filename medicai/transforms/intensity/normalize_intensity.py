@@ -9,6 +9,12 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_DEFAULT_OFFSET = None
+_DEFAULT_SCALE = None
+_DEFAULT_NONZERO = False
+_DEFAULT_CHANNEL_WISE = False
+_DEFAULT_DTYPE = "float32"
+
 
 class NormalizeIntensity(KeyedTransform):
     """Normalize selected tensors using global or channel-wise intensity statistics.
@@ -124,11 +130,11 @@ class NormalizeIntensity(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offset=None,
-        scale=None,
-        nonzero: bool = False,
-        channel_wise: bool = False,
-        dtype: Any = "float32",
+        offset=_DEFAULT_OFFSET,
+        scale=_DEFAULT_SCALE,
+        nonzero: bool = _DEFAULT_NONZERO,
+        channel_wise: bool = _DEFAULT_CHANNEL_WISE,
+        dtype: Any = _DEFAULT_DTYPE,
         *,
         input_layout: str,
         allow_missing_keys: bool = False,

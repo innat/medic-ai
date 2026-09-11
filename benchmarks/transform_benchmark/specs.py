@@ -8,6 +8,7 @@ from medicai.transforms import (
     Flip,
     NormalizeIntensity,
     Orientation,
+    RandomCropByPosNegLabel,
     RandomCutOut,
     RandomElasticTransform,
     RandomFlip,
@@ -101,6 +102,19 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "cpu+gpu",
             lambda layout, s: SpatialCrop(
                 keys=["image", "label"], crop_size=crop_shape, input_layout=layout
+            ),
+            True,
+        ),
+        BenchmarkSpec(
+            "RandomCropByPosNegLabel",
+            "cpu+gpu",
+            lambda layout, s: RandomCropByPosNegLabel(
+                keys=["image", "label"],
+                target_shape=crop_shape,
+                pos=1,
+                neg=1,
+                input_layout=layout,
+                seed=s,
             ),
             True,
         ),
