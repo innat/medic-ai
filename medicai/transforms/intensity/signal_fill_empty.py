@@ -10,6 +10,8 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_DEFAULT_FILL_VALUE = 0.0
+
 
 class SignalFillEmpty(KeyedTransform):
     """Replace invalid floating-point signal values in selected tensors.
@@ -95,7 +97,7 @@ class SignalFillEmpty(KeyedTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        fill_value: float = 0.0,
+        fill_value: float = _DEFAULT_FILL_VALUE,
         *,
         input_layout: str,
         allow_missing_keys: bool = False,

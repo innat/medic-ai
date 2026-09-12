@@ -13,6 +13,13 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_DEFAULT_MAX_CROP_SIZE = None
+_DEFAULT_RANDOM_CENTER = True
+_DEFAULT_RANDOM_SHAPE = False
+_DEFAULT_INVALID_LABEL = None
+_DEFAULT_MIN_VALID_RATIO = 0.0
+_DEFAULT_MAX_ATTEMPTS = 1
+
 
 class RandomSpatialCrop(RandomTransform):
     """Randomly crop a spatial region from selected tensors.
@@ -122,15 +129,15 @@ class RandomSpatialCrop(RandomTransform):
         self,
         keys: Sequence[str],
         crop_size,
-        max_crop_size=None,
-        random_center: bool = True,
-        random_shape: bool = False,
+        max_crop_size=_DEFAULT_MAX_CROP_SIZE,
+        random_center: bool = _DEFAULT_RANDOM_CENTER,
+        random_shape: bool = _DEFAULT_RANDOM_SHAPE,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
-        invalid_label=None,
-        min_valid_ratio: float = 0.0,
-        max_attempts: int = 1,
+        invalid_label=_DEFAULT_INVALID_LABEL,
+        min_valid_ratio: float = _DEFAULT_MIN_VALID_RATIO,
+        max_attempts: int = _DEFAULT_MAX_ATTEMPTS,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=1.0, seed=seed)
@@ -147,6 +154,7 @@ class RandomSpatialCrop(RandomTransform):
         self.min_valid_ratio = min_valid_ratio
         self.max_attempts = max_attempts
         self.allow_missing_keys = allow_missing_keys
+
         self.crop = SpatialCrop(
             keys=self.keys,
             crop_size=self.crop_size,
@@ -156,8 +164,10 @@ class RandomSpatialCrop(RandomTransform):
 
         if not (0.0 <= min_valid_ratio <= 1.0):
             raise ValueError(f"min_valid_ratio must be in range [0.0, 1.0], got {min_valid_ratio}")
+
         if max_attempts < 1:
             raise ValueError(f"max_attempts must be a positive integer, got {max_attempts}")
+
         if min_valid_ratio > 0.0 and invalid_label is None:
             raise ValueError(
                 "If min_valid_ratio > 0, you must provide an invalid_label (e.g., 0) "
@@ -175,6 +185,7 @@ class RandomSpatialCrop(RandomTransform):
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
         """Sample one crop configuration shared across selected keys."""
         sample_key = self.keys[0]
+
         if sample_key not in bundle.data:
             if self.allow_missing_keys:
                 return {"skip": True}
@@ -187,6 +198,7 @@ class RandomSpatialCrop(RandomTransform):
             transform_name=type(self).__name__,
         )
         spatial_rank = layout.spatial_rank
+
         spatial_shape = get_spatial_shape_for_layout(
             sample_tensor,
             input_layout=self.input_layout,
@@ -197,15 +209,22 @@ class RandomSpatialCrop(RandomTransform):
             center = self._get_random_center(spatial_shape, crop_size, spatial_rank)
         else:
             label_key = self.keys[1] if len(self.keys) > 1 else "label"
+
             if label_key not in bundle.data:
                 raise KeyError(f"`{label_key}` key is required when `invalid_label` is specified.")
+
             center = self._get_label_aware_center(
-                spatial_shape, crop_size, bundle[label_key], spatial_rank
+                spatial_shape,
+                crop_size,
+                bundle[label_key],
+                spatial_rank,
             )
 
+        # Keep the crop within the source while preserving its requested size.
         starts = ops.maximum(center - crop_size // 2, 0)
         ends = ops.minimum(starts + crop_size, spatial_shape)
         starts = ops.maximum(ends - crop_size, 0)
+
         return {
             "skip": False,
             "crop_start": starts,
@@ -262,6 +281,7 @@ class RandomSpatialCrop(RandomTransform):
             original_shape = original_shapes.get(key)
             if original_shape is None:
                 return tensor
+
             return self.crop.pad_to_original_shape(tensor, crop_start, original_shape)
 
         self.crop.apply_to_present_keys(
@@ -293,6 +313,7 @@ class RandomSpatialCrop(RandomTransform):
             crop_size = ops.full((spatial_rank,), self.crop_size, dtype="int32")
         else:
             crop_size = ops.convert_to_tensor(self.crop_size, dtype="int32")
+
             if get_tensor_rank(crop_size) != 1 or crop_size.shape[0] != spatial_rank:
                 raise ValueError(
                     f"Expected spatial rank in (2, 3) with crop_size length matching the "
@@ -300,21 +321,28 @@ class RandomSpatialCrop(RandomTransform):
                 )
 
         if self.random_shape:
-            max_crop_size = (
-                ops.full((spatial_rank,), self.max_crop_size, dtype="int32")
-                if isinstance(self.max_crop_size, int)
-                else (
-                    ops.convert_to_tensor(self.max_crop_size, dtype="int32")
-                    if self.max_crop_size is not None
-                    else spatial_shape
+            if isinstance(self.max_crop_size, int):
+                max_crop_size = ops.full(
+                    (spatial_rank,),
+                    self.max_crop_size,
+                    dtype="int32",
                 )
-            )
+            elif self.max_crop_size is None:
+                max_crop_size = spatial_shape
+            else:
+                max_crop_size = ops.convert_to_tensor(
+                    self.max_crop_size,
+                    dtype="int32",
+                )
+
+            # Non-positive values use the available size for that axis.
             max_crop_size = ops.where(max_crop_size <= 0, spatial_shape, max_crop_size)
             min_s = ops.where(crop_size <= 0, spatial_shape, crop_size)
             max_s = ops.where(max_crop_size <= 0, spatial_shape, max_crop_size)
             max_s = ops.minimum(max_s, spatial_shape)
             min_s = ops.minimum(min_s, max_s)
             span = max_s - min_s + 1
+
             random_unit = self.random_uniform(
                 shape=[spatial_rank],
                 minval=0.0,
@@ -329,11 +357,17 @@ class RandomSpatialCrop(RandomTransform):
             crop_size = ops.minimum(crop_size, spatial_shape)
         return crop_size
 
-    def _get_random_center(self, spatial_shape: Any, crop_size: Any, spatial_rank: int) -> Any:
+    def _get_random_center(
+        self,
+        spatial_shape: Any,
+        crop_size: Any,
+        spatial_rank: int,
+    ) -> Any:
         if not self.random_center:
             return spatial_shape // 2
 
         max_start = ops.maximum(spatial_shape - crop_size, 0)
+
         # Scale one independent uniform draw by each axis's own valid range.
         # A shared tensor-valued randint bound biases shorter axes toward their
         # upper boundary and is an unnecessarily dynamic XLA dependency.
@@ -352,7 +386,11 @@ class RandomSpatialCrop(RandomTransform):
         return random_start + crop_size // 2
 
     def _get_label_aware_center(
-        self, spatial_shape: Any, crop_size: Any, label: Any, spatial_rank: int
+        self,
+        spatial_shape: Any,
+        crop_size: Any,
+        label: Any,
+        spatial_rank: int,
     ) -> Any:
         if get_tensor_rank(label) > spatial_rank:
             valid_mask = ops.any(label != self.invalid_label, axis=-1)

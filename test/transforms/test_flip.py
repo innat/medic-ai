@@ -189,6 +189,28 @@ def test_random_flip_supports_batch_layout_and_records_input_layout():
 
 
 @pytest.mark.unit
+def test_random_flip_samples_application_per_batch_item(monkeypatch):
+    image = as_tensor(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4, 1))
+    transform = RandomFlip(keys=["image"], prob=0.5, spatial_axis=2, input_layout="BHWC")
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: as_tensor([0.0, 1.0], dtype=kwargs["dtype"]),
+    )
+
+    output = transform(TensorBundle({"image": image}))
+    output_np = ops.convert_to_numpy(output["image"])
+    image_np = ops.convert_to_numpy(image)
+
+    np.testing.assert_allclose(output_np[0], image_np[0, :, ::-1, :])
+    np.testing.assert_array_equal(output_np[1], image_np[1])
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output.get_applied_transforms()[-1]["params"]["should_apply"]),
+        [True, False],
+    )
+
+
+@pytest.mark.unit
 def test_random_flip_replays_with_same_integer_seed():
     image = as_tensor(np.arange(6, dtype=np.float32).reshape(2, 3, 1))
 

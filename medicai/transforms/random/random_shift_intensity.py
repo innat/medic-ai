@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Any, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 import keras
 from keras import ops
@@ -12,7 +12,10 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
-from ..utils import get_tensor_rank, resolve_input_layout
+from ..utils import get_input_layout_info, get_tensor_rank, resolve_input_layout
+
+_DEFAULT_PROB = 0.1
+_DEFAULT_CHANNEL_WISE = False
 
 
 class RandomShiftIntensity(RandomTransform):
@@ -110,27 +113,32 @@ class RandomShiftIntensity(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offset: Union[float, Tuple[float, float]],
-        prob: float = 0.1,
-        channel_wise: bool = False,
+        offset: float | tuple[float, float],
+        prob: float = _DEFAULT_PROB,
+        channel_wise: bool = _DEFAULT_CHANNEL_WISE,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         self.keys = _normalize_keys(keys)
+
         if isinstance(offset, (int, float)):
             self.offset = (-abs(offset), abs(offset))
         else:
             self.offset = (min(offset), max(offset))
 
         self.channel_wise = channel_wise
+
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
+        self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
+
         self.shift = ShiftIntensity(
             keys=self.keys,
             offset=0.0,
@@ -147,10 +155,25 @@ class RandomShiftIntensity(RandomTransform):
         return self.apply_with_params(bundle, params)
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample the Bernoulli decision shared across selected keys."""
-        del bundle
+        """Sample an independent Bernoulli decision for each batch item."""
+        present_key = next(
+            (key for key in self.keys if key in bundle.data),
+            None,
+        )
+        if present_key is not None and self.layout_info.batched:
+            batch_size = ops.shape(bundle.data[present_key])[0]
+            shape = (batch_size,)
+        else:
+            shape = ()
+
         return {
-            "should_apply": self.sample_should_apply(),
+            "should_apply": self.random_uniform(
+                shape=shape,
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.prob,
             "channel_wise": self.channel_wise,
             "offset": self.offset,
             "input_layout": self.input_layout,
@@ -175,8 +198,16 @@ class RandomShiftIntensity(RandomTransform):
             return bundle
 
         def apply_shift(tensor, key: str):
+            rank = get_tensor_rank(tensor)
+            batched = self.layout_info.batched
+            batch_size = ops.shape(tensor)[0] if batched else None
+
             if params["channel_wise"]:
-                offset_shape = [1] * (get_tensor_rank(tensor) - 1) + [tensor.shape[-1]]
+                if batched:
+                    offset_shape = [batch_size] + [1] * (rank - 2) + [tensor.shape[-1]]
+                else:
+                    offset_shape = [1] * (rank - 1) + [tensor.shape[-1]]
+
                 offsets = self.random_uniform(
                     shape=offset_shape,
                     minval=params["offset"][0],
@@ -184,26 +215,38 @@ class RandomShiftIntensity(RandomTransform):
                     dtype=tensor.dtype,
                 )
             else:
+                if batched:
+                    offset_shape = [batch_size] + [1] * (rank - 1)
+                else:
+                    offset_shape = ()
+
                 offsets = self.random_uniform(
-                    shape=(),
+                    shape=offset_shape,
                     minval=params["offset"][0],
                     maxval=params["offset"][1],
                     dtype=tensor.dtype,
                 )
             sampled_offsets[key] = offsets
+
+            shifted = self.shift.shift_tensor(tensor, offset=offsets)
+            if batched:
+                mask_shape = [ops.shape(tensor)[0]] + [1] * (rank - 1)
+                mask = ops.reshape(
+                    ops.cast(params["should_apply"], "bool"),
+                    mask_shape,
+                )
+                return ops.where(mask, shifted, tensor)
             return _apply_if_applied(
                 params["should_apply"],
-                lambda tensor=tensor, offsets=offsets: self.shift.shift_tensor(
-                    tensor, offset=offsets
-                ),
-                lambda tensor=tensor: tensor,
+                lambda: shifted,
+                lambda: tensor,
             )
 
         self.shift.apply_to_present_keys(bundle, apply_shift, keys=present_keys)
         self.record_random_transform(
             bundle,
             params=self.build_trace_params(params, sampled_offsets),
-            applied=params["should_apply"],
+            applied=ops.any(ops.cast(params["should_apply"], "bool")),
             kernel="ShiftIntensity",
         )
         return bundle
@@ -213,7 +256,7 @@ class RandomShiftIntensity(RandomTransform):
         if trace is None:
             return bundle
 
-        applied = trace.get("applied", False)
+        applied = trace["params"].get("should_apply", trace.get("applied", False))
         sampled_offsets = trace["params"].get("sampled_offsets", {})
 
         def apply_inverse_shift(tensor, key: str):
@@ -224,11 +267,14 @@ class RandomShiftIntensity(RandomTransform):
             inverse_offset = (
                 -offset if isinstance(offset, Number) else -ops.cast(offset, tensor.dtype)
             )
+            shifted = self.shift.shift_tensor(tensor, offset=inverse_offset)
+            if self.layout_info.batched:
+                mask_shape = [ops.shape(tensor)[0]] + [1] * (get_tensor_rank(tensor) - 1)
+                mask = ops.reshape(ops.cast(applied, "bool"), mask_shape)
+                return ops.where(mask, shifted, tensor)
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor, offset=inverse_offset: self.shift.shift_tensor(
-                    tensor, offset=offset
-                ),
+                lambda: shifted,
                 lambda tensor=tensor: tensor,
             )
 
@@ -247,6 +293,7 @@ class RandomShiftIntensity(RandomTransform):
         """Build random trace metadata for the current intensity shift."""
         return {
             "keys": list(sampled_offsets.keys()),
+            "should_apply": params["should_apply"],
             "channel_wise": params["channel_wise"],
             "offset": params["offset"],
             "input_layout": params["input_layout"],

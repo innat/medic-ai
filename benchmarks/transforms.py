@@ -2,8 +2,38 @@
 
 import argparse
 import json
+import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
+
+
+def _configure_cuda_visibility() -> None:
+    """Isolate the process to CPU or its first visible GPU before imports."""
+    requested = "cpu"
+    arguments = sys.argv[1:]
+    for device_index, argument in enumerate(arguments):
+        if argument == "--device" and device_index + 1 < len(arguments):
+            requested = arguments[device_index + 1]
+        elif argument.startswith("--device="):
+            requested = argument.split("=", 1)[1]
+
+    if requested == "cpu":
+        os.environ["CUDA_VISIBLE_DEVICES"] = ""
+        return
+    if requested == "gpu":
+        visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
+        if visible_devices is None:
+            visible_devices = "0"
+        first_device = next(
+            (device.strip() for device in visible_devices.split(",") if device.strip()),
+            None,
+        )
+        if first_device is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = first_device
+
+
+_configure_cuda_visibility()
 
 if __package__:
     from .common.devices import devices
@@ -20,7 +50,7 @@ else:
 def main() -> None:
     """Parse CLI options and run the selected transform benchmark suite."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", choices=("cpu", "gpu", "both"), default="cpu")
+    parser.add_argument("--device", choices=("cpu", "gpu"), default="cpu")
     parser.add_argument("--group", choices=("cpu", "cpu+gpu", "all"), default="all")
     parser.add_argument(
         "--transform",

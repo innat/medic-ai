@@ -11,6 +11,10 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
+_DEFAULT_TARGET_VALUE_RANGE = None
+_DEFAULT_CLIP = False
+_DEFAULT_DTYPE = "float32"
+
 
 class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
     """Linearly map selected tensor intensities from one numeric range to another.
@@ -138,9 +142,9 @@ class ScaleIntensityRange(KeyedTransform, InvertibleTransform):
         self,
         keys: Sequence[str],
         source_value_range: Sequence[float],
-        target_value_range: Optional[Sequence[float]] = None,
-        clip: bool = False,
-        dtype: Any = "float32",
+        target_value_range: Optional[Sequence[float]] = _DEFAULT_TARGET_VALUE_RANGE,
+        clip: bool = _DEFAULT_CLIP,
+        dtype: Any = _DEFAULT_DTYPE,
         *,
         input_layout: str,
         allow_missing_keys: bool = False,

@@ -249,23 +249,34 @@ def test_random_rotate90_replays_with_same_integer_seed():
 
 
 @pytest.mark.unit
-def test_random_rotate90_shares_sampled_rotation_across_batched_input():
+def test_random_rotate90_samples_rotation_per_batched_item(monkeypatch):
     image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
     transform = RandomRotate90(
         keys=["image"],
         prob=1.0,
         max_k=3,
         input_layout="BHWC",
-        seed=9,
+    )
+
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: ops.zeros(kwargs["shape"], dtype=kwargs["dtype"]),
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_integers",
+        lambda **kwargs: as_tensor([1, 2], dtype=kwargs["dtype"]),
     )
 
     out = transform(TensorBundle({"image": image}))
     rotated = ops.convert_to_numpy(out["image"])
     original = ops.convert_to_numpy(image)
-    k = int(ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["k"]))
+    k = ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["k"])
 
-    np.testing.assert_allclose(rotated[0], np.rot90(original[0], k=k, axes=(0, 1)))
-    np.testing.assert_allclose(rotated[1], np.rot90(original[1], k=k, axes=(0, 1)))
+    assert k.tolist() == [1, 2]
+    np.testing.assert_allclose(rotated[0], np.rot90(original[0], k=1, axes=(0, 1)))
+    np.testing.assert_allclose(rotated[1], np.rot90(original[1], k=2, axes=(0, 1)))
 
 
 @pytest.mark.unit
@@ -277,6 +288,36 @@ def test_random_rotate90_inverse_restores_batched_input():
         max_k=3,
         input_layout="BHWC",
         seed=9,
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_random_rotate90_inverse_restores_mixed_batched_decisions(monkeypatch):
+    image = as_tensor(np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3, 1))
+    transform = RandomRotate90(
+        keys=["image"],
+        prob=0.5,
+        max_k=3,
+        input_layout="BHWC",
+    )
+
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: as_tensor([0.0, 1.0], dtype=kwargs["dtype"]),
+    )
+    monkeypatch.setattr(
+        transform,
+        "random_integers",
+        lambda **kwargs: as_tensor([1, 2], dtype=kwargs["dtype"]),
     )
 
     forward = transform(TensorBundle({"image": image}))

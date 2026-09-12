@@ -8,6 +8,7 @@ from medicai.transforms import (
     Flip,
     NormalizeIntensity,
     Orientation,
+    RandomCropByPosNegLabel,
     RandomCutOut,
     RandomElasticTransform,
     RandomFlip,
@@ -148,7 +149,12 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "RandomCutOut",
             "cpu+gpu",
             lambda layout, s: RandomCutOut(
-                keys=["image"], mask_size=(4, 4), num_cuts=1, prob=1.0, input_layout=layout, seed=s
+                keys=["image"],
+                mask_size=(4, 4, 4) if is_3d else (4, 4),
+                num_cuts=1,
+                prob=1.0,
+                input_layout=layout,
+                seed=s,
             ),
         ),
         BenchmarkSpec(
@@ -169,6 +175,23 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             ),
         ),
     ]
+    if layout in ("HWC", "DHWC"):
+        specs.insert(
+            8,
+            BenchmarkSpec(
+                "RandomCropByPosNegLabel",
+                "cpu+gpu",
+                lambda layout, s: RandomCropByPosNegLabel(
+                    keys=["image", "label"],
+                    target_shape=crop_shape,
+                    pos=1,
+                    neg=1,
+                    input_layout=layout,
+                    seed=s,
+                ),
+                True,
+            ),
+        )
     if is_3d and layout == "DHWC":
         specs.extend(
             [

@@ -1,10 +1,14 @@
-from typing import Sequence, Union
+from typing import Sequence
 
 import keras
+from keras import ops
 
 from ..base import RandomTransform, _apply_if_applied, _pop_last_transform_trace
 from ..spatial.flip import Flip
 from ..tensor_bundle import TensorBundle
+
+_DEFAULT_PROB = 0.1
+_DEFAULT_SPATIAL_AXIS = None
 
 
 class RandomFlip(RandomTransform):
@@ -103,14 +107,15 @@ class RandomFlip(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        prob: float = 0.1,
-        spatial_axis: Union[int, Sequence[int], None] = None,
+        prob: float = _DEFAULT_PROB,
+        spatial_axis: int | Sequence[int] | None = _DEFAULT_SPATIAL_AXIS,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         self.flip = Flip(
             keys=keys,
             spatial_axis=spatial_axis,
@@ -138,26 +143,48 @@ class RandomFlip(RandomTransform):
         if trace is None:
             return bundle
 
-        applied = trace.get("applied", False)
+        applied = trace["params"].get("should_apply", trace.get("applied", False))
 
         def apply_inverse_flip(tensor, _: str):
+            flipped = self.flip.flip_tensor(tensor)
+            if self.flip.layout_info.batched:
+                mask_shape = [ops.shape(tensor)[0]] + [1] * (len(tensor.shape) - 1)
+                mask = ops.reshape(ops.cast(applied, "bool"), mask_shape)
+                return ops.where(mask, flipped, tensor)
             return _apply_if_applied(
                 applied,
-                lambda tensor=tensor: self.flip.flip_tensor(tensor),
+                lambda: flipped,
                 lambda tensor=tensor: tensor,
             )
 
         self.flip.apply_to_present_keys(
-            bundle, apply_inverse_flip, keys=trace["params"].get("keys", [])
+            bundle,
+            apply_inverse_flip,
+            keys=trace["params"].get("keys", []),
         )
         return bundle
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
-        """Sample one Bernoulli decision shared across all selected keys."""
-        del bundle
+        """Sample an independent Bernoulli decision for each batch item."""
+        present_key = next(
+            (key for key in self.flip.keys if key in bundle.data),
+            None,
+        )
+        if present_key is not None and self.flip.layout_info.batched:
+            batch_size = ops.shape(bundle.data[present_key])[0]
+            shape = (batch_size,)
+        else:
+            shape = ()
+
         return {
             "enabled": self.flip.spatial_axis is not None,
-            "should_apply": self.sample_should_apply(),
+            "should_apply": self.random_uniform(
+                shape=shape,
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.prob,
             "spatial_axis": self.flip.spatial_axis,
             "input_layout": self.flip.input_layout,
         }
@@ -167,15 +194,18 @@ class RandomFlip(RandomTransform):
         bundle: TensorBundle,
         params: dict[str, object],
     ) -> TensorBundle:
-        """Apply the shared flip kernel conditionally using sampled params."""
+        """Apply the flip kernel using each item's sampled decision."""
         present_keys = self.flip.apply_to_present_keys(
             bundle,
             lambda tensor, key: self.transform_tensor(tensor, key, params),
         )
         self.record_random_transform(
             bundle,
-            params=self.build_trace_params(params, present_keys),
-            applied=params["should_apply"],
+            params=self.build_trace_params(
+                params,
+                present_keys,
+            ),
+            applied=ops.any(ops.cast(params["should_apply"], "bool")),
             kernel="Flip",
         )
         return bundle
@@ -202,14 +232,12 @@ class RandomFlip(RandomTransform):
     ):
         """Apply the sampled flip decision to one tensor."""
         del key
-        return _apply_if_applied(
-            params["should_apply"],
-            lambda tensor=tensor: self.flip.flip_tensor(
-                tensor,
-                spatial_axis=params["spatial_axis"],
-            ),
-            lambda tensor=tensor: tensor,
-        )
+        flipped = self.flip.flip_tensor(tensor, spatial_axis=params["spatial_axis"])
+        if self.flip.layout_info.batched:
+            mask_shape = [ops.shape(tensor)[0]] + [1] * (len(tensor.shape) - 1)
+            mask = ops.reshape(ops.cast(params["should_apply"], "bool"), mask_shape)
+            return ops.where(mask, flipped, tensor)
+        return _apply_if_applied(params["should_apply"], lambda: flipped, lambda: tensor)
 
     def build_trace_params(
         self,
@@ -219,6 +247,7 @@ class RandomFlip(RandomTransform):
         """Build random trace metadata for the current flip."""
         return {
             "keys": list(present_keys),
+            "should_apply": params["should_apply"],
             "spatial_axis": params["spatial_axis"],
             "input_layout": params["input_layout"],
         }

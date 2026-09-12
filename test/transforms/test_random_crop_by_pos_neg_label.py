@@ -68,87 +68,42 @@ def test_random_crop_by_pos_neg_label_supports_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_random_crop_by_pos_neg_label_supports_batch_mode_and_records_input_layout():
-    image_2d = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
-    label_2d = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
-    label_2d_np = ops.convert_to_numpy(label_2d)
-    label_2d_np[:, 3:5, 3:5, 0] = 1.0
-    label_2d = as_tensor(label_2d_np)
-
-    out_2d = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(4, 4),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )(TensorBundle({"image": image_2d, "label": label_2d}))
-
-    image_3d = as_tensor(np.random.randn(2, 6, 6, 6, 1).astype(np.float32))
-    label_3d = as_tensor(np.zeros((2, 6, 6, 6, 1), dtype=np.float32))
-    label_3d_np = ops.convert_to_numpy(label_3d)
-    label_3d_np[:, 2:4, 2:4, 2:4, 0] = 1.0
-    label_3d = as_tensor(label_3d_np)
-
-    out_3d = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3, 3),
-        pos=1,
-        neg=1,
-        input_layout="BDHWC",
-    )(TensorBundle({"image": image_3d, "label": label_3d}))
-
-    assert tuple(ops.shape(out_2d["image"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out_2d["label"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out_3d["image"])) == (2, 3, 3, 3, 1)
-    assert tuple(ops.shape(out_3d["label"])) == (2, 3, 3, 3, 1)
-    assert out_2d.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
-    assert out_3d.get_applied_transforms()[-1]["params"]["input_layout"] == "BDHWC"
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_accepts_input_layout():
-    image = as_tensor(np.random.randn(2, 8, 8, 1).astype(np.float32))
-    label = as_tensor(np.zeros((2, 8, 8, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[:, 3:5, 3:5, 0] = 1.0
-    label = as_tensor(label_np)
-
-    out = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(4, 4),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )(TensorBundle({"image": image, "label": label}))
-
-    assert tuple(ops.shape(out["image"])) == (2, 4, 4, 1)
-    assert tuple(ops.shape(out["label"])) == (2, 4, 4, 1)
-    assert out.get_applied_transforms()[-1]["params"]["input_layout"] == "BHWC"
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_shares_sampled_crop_across_batched_input():
-    image = as_tensor(np.arange(2 * 6 * 6, dtype=np.float32).reshape(2, 6, 6, 1))
-    label = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[:, 2:4, 2:4, 0] = 1.0
-    label = as_tensor(label_np)
-
+def test_random_crop_by_pos_neg_label_uses_union_masks_for_multi_label_targets():
     transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
-        target_shape=(3, 3),
+        target_shape=(2, 2),
         pos=1,
         neg=1,
-        input_layout="BHWC",
-        seed=23,
+        input_layout="HWC",
+    )
+    label = as_tensor(
+        np.asarray(
+            [
+                [[1, 0], [0, 0]],
+                [[0, 2], [0, 0]],
+            ],
+            dtype=np.int32,
+        )
     )
 
-    out = transform(TensorBundle({"image": image, "label": label}))
-    crop_start = ops.convert_to_numpy(out.get_applied_transforms()[-1]["params"]["crop_start"])
-    original = ops.convert_to_numpy(image)
-    expected = original[:, crop_start[0] : crop_start[0] + 3, crop_start[1] : crop_start[1] + 3, :]
+    foreground = ops.convert_to_numpy(transform._foreground_mask(label))
+    background = ops.convert_to_numpy(transform._background_mask(label))
 
-    np.testing.assert_allclose(ops.convert_to_numpy(out["image"]), expected)
+    np.testing.assert_array_equal(foreground, [[True, False], [True, False]])
+    np.testing.assert_array_equal(background, [[False, True], [False, True]])
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("input_layout", ["BHWC", "BDHWC"])
+def test_random_crop_by_pos_neg_label_rejects_batch_layouts(input_layout):
+    with pytest.raises(ValueError, match="does not support batch input_layout"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(4, 4) if input_layout == "BHWC" else (3, 3, 3),
+            pos=1,
+            neg=1,
+            input_layout=input_layout,
+        )
 
 
 @pytest.mark.unit
@@ -176,41 +131,6 @@ def test_random_crop_by_pos_neg_label_inverse_restores_original_canvas_for_2d():
 
     assert tuple(ops.shape(restored["image"])) == (6, 6, 1)
     assert tuple(ops.shape(restored["label"])) == (6, 6, 1)
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["image"]),
-        ops.convert_to_numpy(image),
-    )
-    np.testing.assert_allclose(
-        ops.convert_to_numpy(restored["label"]),
-        ops.convert_to_numpy(label),
-    )
-
-
-@pytest.mark.unit
-def test_random_crop_by_pos_neg_label_inverse_restores_batched_input_canvas():
-    image = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    image_np = ops.convert_to_numpy(image)
-    image_np[:, 2:5, 2:5, 0] = np.arange(2 * 3 * 3, dtype=np.float32).reshape(2, 3, 3)
-    image = as_tensor(image_np)
-    label = as_tensor(np.zeros((2, 6, 6, 1), dtype=np.float32))
-    label_np = ops.convert_to_numpy(label)
-    label_np[:, 3, 3, 0] = 1.0
-    label = as_tensor(label_np)
-
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(3, 3),
-        pos=1,
-        neg=0,
-        input_layout="BHWC",
-    )
-    forward = transform(TensorBundle({"image": image, "label": label}))
-    restored = transform.inverse(
-        TensorBundle({"image": forward["image"], "label": forward["label"]}, forward.meta)
-    )
-
-    assert tuple(ops.shape(restored["image"])) == (2, 6, 6, 1)
-    assert tuple(ops.shape(restored["label"])) == (2, 6, 6, 1)
     np.testing.assert_allclose(
         ops.convert_to_numpy(restored["image"]),
         ops.convert_to_numpy(image),
@@ -328,8 +248,6 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
     with pytest.raises(ValueError, match="expects input_layout='HWC' with rank 3"):
         transform(TensorBundle({"image": image_1d_like, "label": label_1d_like}))
 
-    image_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    label_2d = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
     with pytest.raises(ValueError, match="`target_shape` must contain exactly 2 values"):
         RandomCropByPosNegLabel(
             keys=["image", "label"],
@@ -337,7 +255,7 @@ def test_random_crop_by_pos_neg_label_rejects_2d_and_supports_allow_missing_keys
             pos=1,
             neg=1,
             input_layout="HWC",
-        )(TensorBundle({"image": image_2d, "label": label_2d}))
+        )
 
     skip_transform = RandomCropByPosNegLabel(
         keys=["image", "label"],
@@ -362,18 +280,23 @@ def test_random_crop_by_pos_neg_label_validates_input_layout_and_layout_contract
             input_layout="CHW",
         )
 
-    image = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    label = as_tensor(np.ones((6, 6, 1), dtype=np.float32))
-    transform = RandomCropByPosNegLabel(
-        keys=["image", "label"],
-        target_shape=(2, 2),
-        pos=1,
-        neg=1,
-        input_layout="BHWC",
-    )
+    with pytest.raises(ValueError, match="does not support batch input_layout 'BHWC' yet"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2),
+            pos=1,
+            neg=1,
+            input_layout="BHWC",
+        )
 
-    with pytest.raises(ValueError, match="expects input_layout='BHWC' with rank 4"):
-        transform(TensorBundle({"image": image, "label": label}))
+    with pytest.raises(ValueError, match="does not support batch input_layout 'BDHWC' yet"):
+        RandomCropByPosNegLabel(
+            keys=["image", "label"],
+            target_shape=(2, 2, 2),
+            pos=1,
+            neg=1,
+            input_layout="BDHWC",
+        )
 
 
 @pytest.mark.unit

@@ -39,6 +39,4 @@ def devices(requested: str) -> list[str]:
         if not gpus:
             raise RuntimeError("--device gpu was requested, but no GPU was detected.")
         return [gpus[0]]
-    if requested == "both":
-        return [cpus[0], *gpus[:1]]
     raise ValueError(f"Unknown device selection: {requested!r}")

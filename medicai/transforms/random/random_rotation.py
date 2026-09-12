@@ -22,8 +22,19 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
-AXES = ("D", "H", "W")
-FILL_MODES = ("constant", "nearest", "wrap", "mirror", "reflect")
+_AXES = ("D", "H", "W")
+_FILL_MODES = ("constant", "nearest", "wrap", "mirror", "reflect")
+_DEFAULT_FACTOR = 0.1
+_DEFAULT_PROB = 0.8
+_DEFAULT_SPACING = None
+_DEFAULT_ANISOTROPY_THRESHOLD = 3.0
+_DEFAULT_INTERPOLATION = None
+_DEFAULT_FILL_MODE = "constant"
+_DEFAULT_FILL_VALUE = None
+_DEFAULT_IMAGE_INTERPOLATION = "bilinear"
+_DEFAULT_LABEL_INTERPOLATION = "nearest"
+_DEFAULT_FILL_VALUE_RESOLVED = 0.0
+_INTERPOLATION_MODES = {"bilinear", "nearest"}
 
 
 def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
@@ -41,8 +52,8 @@ def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
         ranges = {}
         for axis, value in factor.items():
             axis = str(axis).upper()
-            if axis not in AXES:
-                raise ValueError(f"Rotation axes must be drawn from {AXES}. Received {axis!r}.")
+            if axis not in _AXES:
+                raise ValueError(f"Rotation axes must be drawn from {_AXES}. Received {axis!r}.")
             ranges[axis] = _as_range(value)
         return ranges
     return {"D": _as_range(factor)}
@@ -52,7 +63,7 @@ def _apply_anisotropy_policy(ranges, spacing, threshold):
     """Restrict 3D rotations to the coarsest axis for highly anisotropic data."""
     if spacing is None or max(spacing) / min(spacing) <= threshold:
         return dict(ranges)
-    coarse_axis = AXES[list(spacing).index(max(spacing))]
+    coarse_axis = _AXES[list(spacing).index(max(spacing))]
     retained = {axis: value for axis, value in ranges.items() if axis == coarse_axis}
     if not retained:
         raise ValueError(
@@ -102,9 +113,9 @@ def _rotation_matrix_2d(angle: Any, height: Any, width: Any) -> Any:
 def rotate_2d(
     images: Any,
     angles: Any,
-    interpolation: str = "bilinear",
-    fill_mode: str = "constant",
-    fill_value: float = 0.0,
+    interpolation: str = _DEFAULT_IMAGE_INTERPOLATION,
+    fill_mode: str = _DEFAULT_FILL_MODE,
+    fill_value: float = _DEFAULT_FILL_VALUE_RESOLVED,
 ) -> Any:
     """Rotate a ``(B, H, W, C)`` batch with Keras' affine image kernel.
 
@@ -140,9 +151,9 @@ def rotate_single_axis(
     volumes: Any,
     angles: Any,
     axis: str,
-    interpolation: str = "bilinear",
-    fill_mode: str = "constant",
-    fill_value: float = 0.0,
+    interpolation: str = _DEFAULT_IMAGE_INTERPOLATION,
+    fill_mode: str = _DEFAULT_FILL_MODE,
+    fill_value: float = _DEFAULT_FILL_VALUE_RESOLVED,
 ) -> Any:
     """Rotate a ``(B, D, H, W, C)`` batch about one 3D axis.
 
@@ -231,7 +242,12 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
     depth, height, width, channels = volume.shape
     if channels is None:
         raise ValueError("RandomRotate requires a statically known channel dimension.")
-    z, y, x = ops.meshgrid(ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij")
+    z, y, x = ops.meshgrid(
+        ops.arange(depth),
+        ops.arange(height),
+        ops.arange(width),
+        indexing="ij",
+    )
     coordinates = ops.stack(
         [
             ops.cast(z, inverse_matrix.dtype),
@@ -241,7 +257,10 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
         axis=0,
     )
     center = (
-        ops.cast(ops.convert_to_tensor([depth - 1, height - 1, width - 1]), inverse_matrix.dtype)
+        ops.cast(
+            ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
+            inverse_matrix.dtype,
+        )
         / 2.0
     )
     centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
@@ -267,10 +286,10 @@ def rotate_multi_axis(
     angle_d,
     angle_h,
     angle_w,
-    spacing=None,
-    interpolation="bilinear",
-    fill_mode="constant",
-    fill_value=0.0,
+    spacing=_DEFAULT_SPACING,
+    interpolation=_DEFAULT_IMAGE_INTERPOLATION,
+    fill_mode=_DEFAULT_FILL_MODE,
+    fill_value=_DEFAULT_FILL_VALUE_RESOLVED,
     precomputed_matrix=None,
 ):
     """Rotate a ``(B, D, H, W, C)`` batch with batched 3D sampling.
@@ -287,9 +306,8 @@ def rotate_multi_axis(
     )
     inverse_matrix = ops.transpose(matrix, (0, 2, 1))
     if spacing is not None:
-        inverse_matrix = (
-            inverse_matrix * _spacing_scale_matrix(spacing, inverse_matrix.dtype)[None, :, :]
-        )
+        scale_matrix = _spacing_scale_matrix(spacing, inverse_matrix.dtype)
+        inverse_matrix = inverse_matrix * scale_matrix[None, :, :]
 
     def rotate_one(args):
         volume, matrix_one = args
@@ -418,19 +436,20 @@ class RandomRotate(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        factor: float | Sequence[float] | dict[str, Any] = 0.1,
-        prob: float = 0.8,
-        spacing: Sequence[float] | None = None,
-        anisotropy_threshold: float = 3.0,
-        interpolation=None,
-        fill_mode="constant",
-        fill_value=None,
+        factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_FACTOR,
+        prob: float = _DEFAULT_PROB,
+        spacing: Sequence[float] | None = _DEFAULT_SPACING,
+        anisotropy_threshold: float = _DEFAULT_ANISOTROPY_THRESHOLD,
+        interpolation=_DEFAULT_INTERPOLATION,
+        fill_mode=_DEFAULT_FILL_MODE,
+        fill_value=_DEFAULT_FILL_VALUE,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         self.keys = _normalize_keys(keys)
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
@@ -440,10 +459,13 @@ class RandomRotate(RandomTransform):
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         self.ranges = _resolve_axis_ranges(factor)
+
         if any(low > high for low, high in self.ranges.values()):
             raise ValueError("Each rotation range must have lower bound <= upper bound.")
+
         if self.layout_info.spatial_rank == 2 and set(self.ranges) != {"D"}:
             raise ValueError("2D RandomRotate supports only the `D` rotation axis.")
+
         if spacing is not None:
             if self.layout_info.spatial_rank != 3 or len(spacing) != 3:
                 raise ValueError(
@@ -452,25 +474,44 @@ class RandomRotate(RandomTransform):
             spacing = tuple(float(value) for value in spacing)
             if any(value <= 0 for value in spacing):
                 raise ValueError("`spacing` values must be positive.")
+
         self.spacing = spacing
         self.anisotropy_threshold = float(anisotropy_threshold)
-        self.ranges = _apply_anisotropy_policy(self.ranges, self.spacing, self.anisotropy_threshold)
+        self.ranges = _apply_anisotropy_policy(
+            self.ranges,
+            self.spacing,
+            self.anisotropy_threshold,
+        )
+
         self.interpolation = _resolve_per_key(
             self.keys,
             interpolation,
-            lambda _, index: "bilinear" if index == 0 else "nearest",
+            lambda _, index: (
+                _DEFAULT_IMAGE_INTERPOLATION if index == 0 else _DEFAULT_LABEL_INTERPOLATION
+            ),
             "interpolation",
         )
-        self.fill_mode = _resolve_per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
-        self.fill_value = _resolve_per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
+        self.fill_mode = _resolve_per_key(
+            self.keys,
+            fill_mode,
+            lambda *_: _DEFAULT_FILL_MODE,
+            "fill_mode",
+        )
+        self.fill_value = _resolve_per_key(
+            self.keys,
+            fill_value,
+            lambda *_: _DEFAULT_FILL_VALUE_RESOLVED,
+            "fill_value",
+        )
+
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
-            if mode not in ("bilinear", "nearest"):
+            if mode not in _INTERPOLATION_MODES:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             fill_mode_key = str(self.fill_mode[key]).lower()
-            if fill_mode_key not in FILL_MODES:
+            if fill_mode_key not in _FILL_MODES:
                 raise ValueError(
-                    f"Unsupported fill_mode {fill_mode_key!r}; use one of {FILL_MODES}."
+                    f"Unsupported fill_mode {fill_mode_key!r}; use one of {_FILL_MODES}."
                 )
             self.interpolation[key] = mode
             self.fill_mode[key] = fill_mode_key
@@ -481,13 +522,23 @@ class RandomRotate(RandomTransform):
 
     def _sample_angles(self, batch_size, dtype="float32"):
         apply_mask = ops.cast(
-            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
+            self.random_uniform(
+                shape=(batch_size,),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
             < self.prob,
             dtype,
         )
         angles = {}
         for axis, (low, high) in self.ranges.items():
-            sampled = self.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
+            sampled = self.random_uniform(
+                shape=(batch_size,),
+                minval=low,
+                maxval=high,
+                dtype=dtype,
+            )
             angles[axis] = sampled * apply_mask
         return angles, ops.any(apply_mask > 0)
 
@@ -518,7 +569,7 @@ class RandomRotate(RandomTransform):
                 fill_value=self.fill_value[key],
             )
         else:
-            active = [axis for axis in AXES if axis in angles]
+            active = [axis for axis in _AXES if axis in angles]
             # Torch uses coordinate sampling for single-axis 3D rotations
             # because its affine kernel does not cover this case.
             if len(active) == 1 and keras.config.backend() != "torch":
@@ -555,12 +606,15 @@ class RandomRotate(RandomTransform):
 
         reference = bundle.data[present[0]]
         validate_tensor_matches_layout(
-            reference, self.input_layout, transform_name=type(self).__name__
+            reference,
+            self.input_layout,
+            transform_name=type(self).__name__,
         )
         batch_size = ops.shape(reference)[0] if self.layout_info.batched else 1
         angles, applied = self._sample_angles(batch_size, dtype="float32")
         for key in present:
             bundle.data[key] = self._apply_tensor(bundle.data[key], key, angles)
+
         self.record_random_transform(
             bundle,
             params={
@@ -586,7 +640,7 @@ class RandomRotate(RandomTransform):
                 if self.allow_missing_keys:
                     continue
                 raise KeyError(f"Key {key!r} not found in input data.")
-            active = [axis for axis in AXES if axis in angles]
+            active = [axis for axis in _AXES if axis in angles]
             if len(active) > 1 and self.layout_info.spatial_rank == 3:
                 reference = bundle.data[key]
                 batched, added_batch = ensure_batch_axis_for_layout(
@@ -596,6 +650,7 @@ class RandomRotate(RandomTransform):
                 )
                 batch_size = ops.shape(batched)[0]
                 zero = ops.zeros((batch_size,), dtype="float32")
+
                 # Skipped batch items are represented by zero angles in the trace;
                 # rebuilding the matrix therefore preserves identity for them.
                 forward_matrix = _rotation_matrix_3d(
@@ -618,5 +673,9 @@ class RandomRotate(RandomTransform):
                 bundle.data[key] = restore_from_batch_axis(restored, added_batch)
             else:
                 inverse_angles = {axis: -value for axis, value in angles.items()}
-                bundle.data[key] = self._apply_tensor(bundle.data[key], key, inverse_angles)
+                bundle.data[key] = self._apply_tensor(
+                    bundle.data[key],
+                    key,
+                    inverse_angles,
+                )
         return bundle

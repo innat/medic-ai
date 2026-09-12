@@ -7,7 +7,7 @@ import keras
 from keras import ops
 
 from ...utils.image import resample_displacement_field
-from ..base import RandomTransform, _apply_if_applied
+from ..base import RandomTransform
 from ..spatial.affine_utils import spacing_from_affine
 from ..tensor_bundle import TensorBundle
 from ..utils import (
@@ -18,6 +18,27 @@ from ..utils import (
     validate_affine_matrix,
     validate_tensor_matches_layout,
 )
+
+_DISPLACEMENT_UNITS = {"voxel", "mm"}
+_DEFAULT_DISPLACEMENT_UNITS = "voxel"
+_FILL_MODES = {"nearest", "constant", "reflect", "wrap"}
+_DEFAULT_FILL_MODE = "nearest"
+_DEFAULT_FILL_VALUE = 0.0
+_FIELD_INTERPOLATIONS = {
+    2: {"bilinear", "bspline"},
+    3: {"trilinear", "bspline"},
+}
+_DEFAULT_LINEAR_INTERPOLATIONS = {2: "bilinear", 3: "trilinear"}
+_INTERPOLATIONS = {
+    2: {"nearest", "bilinear"},
+    3: {"nearest", "trilinear"},
+}
+_DEFAULT_ALPHA = 20.0
+_DEFAULT_SIGMA = 4.0
+_DEFAULT_PROB = 0.1
+_DEFAULT_CONTROL_GRID_SPACING = None
+_DEFAULT_FIELD_INTERPOLATION = None
+_DEFAULT_LOCKED_BORDERS = 0
 
 
 def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
@@ -53,6 +74,100 @@ def _smooth_along_axis(
     return ops.conv(padded, kernel, padding="valid")
 
 
+def _sigma_for_axis(sigma: Any, axis: int, spatial_rank: int) -> Any:
+    """Return the per-sample smoothing width for one spatial axis."""
+    if isinstance(sigma, Number) or len(sigma.shape) == 0:
+        return sigma
+    if len(sigma.shape) == 1:
+        return sigma
+    if len(sigma.shape) == 2 and sigma.shape[1] == spatial_rank:
+        return ops.take(sigma, axis, axis=1)
+    raise ValueError("sigma must be scalar, rank 1, or rank 2.")
+
+
+def _gaussian_weights_broadcast(sigma: Any, radius: int) -> Any:
+    """Create scalar or per-sample Gaussian weights for fixed tap offsets."""
+    offsets = ops.arange(-radius, radius + 1, dtype="float32")
+    if isinstance(sigma, Number) or len(sigma.shape) == 0:
+        weights = ops.exp(-0.5 * ops.square(offsets / sigma))
+    else:
+        weights = ops.exp(
+            -0.5 * ops.square(ops.expand_dims(offsets, axis=0) / ops.expand_dims(sigma, axis=1))
+        )
+    return weights / ops.sum(weights, axis=-1, keepdims=True)
+
+
+def _smooth_axis_broadcast(
+    tensor: Any,
+    sigma: Any,
+    axis: int,
+    radius: int,
+    spatial_shape: Sequence[int],
+) -> Any:
+    """Smooth one axis using broadcasted per-sample Gaussian weights."""
+    padded_axis = axis + 1
+    padded = _reflect_pad_axis(tensor, padded_axis, radius)
+    weights = _gaussian_weights_broadcast(sigma, radius)
+    output = ops.zeros_like(tensor)
+    size = spatial_shape[axis]
+
+    for tap in range(2 * radius + 1):
+        indices = ops.arange(tap, tap + size, dtype="int32")
+        shifted = ops.take(padded, indices, axis=padded_axis)
+        if len(weights.shape) == 1:
+            weight = weights[tap]
+        else:
+            weight = ops.reshape(
+                weights[:, tap],
+                [ops.shape(weights)[0]] + [1] * (len(spatial_shape) + 1),
+            )
+        output = output + shifted * weight
+    return output
+
+
+def _gaussian_smooth_broadcast_nd(
+    field: Any,
+    sigma: Any,
+    spatial_rank: int,
+    *,
+    max_sigma: float | Sequence[float] | None = None,
+) -> Any:
+    """Smooth a field with per-sample sigma without vectorized mapping."""
+    if max_sigma is None:
+        radius_sigma = (sigma,) * spatial_rank
+    elif isinstance(max_sigma, Number):
+        radius_sigma = (max_sigma,) * spatial_rank
+    else:
+        if len(max_sigma) != spatial_rank:
+            raise ValueError("`max_sigma` must contain one value per spatial axis.")
+        radius_sigma = tuple(max_sigma)
+    if any(not isinstance(value, Number) for value in radius_sigma):
+        raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
+
+    spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
+
+    if any(size is None for size in spatial_shape):
+        raise ValueError("Field spatial dimensions must be statically known.")
+
+    radii = tuple(
+        min(max(1, int(round(3.0 * float(value)))), int(size) - 1)
+        for value, size in zip(radius_sigma, spatial_shape, strict=True)
+    )
+    if any(radius <= 0 for radius in radii):
+        return field
+
+    result = field
+    for axis, radius in enumerate(radii):
+        result = _smooth_axis_broadcast(
+            result,
+            _sigma_for_axis(sigma, axis, spatial_rank),
+            axis,
+            radius,
+            spatial_shape,
+        )
+    return result
+
+
 def _gaussian_smooth_nd(
     field: Any,
     sigma: Any,
@@ -72,6 +187,7 @@ def _gaussian_smooth_nd(
 
     if any(not isinstance(value, Number) for value in radius_sigma):
         raise ValueError("A static maximum sigma is required for Gaussian smoothing.")
+
     static_spatial_shape = tuple(field.shape[1 : spatial_rank + 1])
     radii = tuple(max(1, int(round(3.0 * float(value)))) for value in radius_sigma)
     if all(size is not None for size in static_spatial_shape):
@@ -169,10 +285,14 @@ def _linear_sample(
     coordinates: Any,
     fill_mode: str = "nearest",
     fill_value: float = 0.0,
+    normalized: tuple[Any, Any] | None = None,
 ) -> Any:
     """Sample a 2D or 3D channel-last volume with linear interpolation."""
     spatial_rank = coordinates.shape[-1]
-    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    if normalized is None:
+        coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    else:
+        coordinates, valid = normalized
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], volume.dtype) for index in range(spatial_rank)]
     floors = [ops.floor(coordinates[..., index]) for index in range(spatial_rank)]
@@ -183,7 +303,10 @@ def _linear_sample(
     batch_indices = ops.arange(shape[0], dtype="int32")
     batch_indices = ops.reshape(batch_indices, [shape[0]] + [1] * spatial_rank)
     batch_indices = ops.broadcast_to(batch_indices, ops.shape(floors[0]))
-    output = ops.zeros(list(ops.shape(floors[0])) + [shape[-1]], dtype=volume.dtype)
+    output = ops.zeros(
+        list(ops.shape(floors[0])) + [shape[-1]],
+        dtype=volume.dtype,
+    )
 
     for corner in itertools.product((0, 1), repeat=spatial_rank):
         indices = []
@@ -208,10 +331,14 @@ def _nearest_sample(
     coordinates: Any,
     fill_mode: str = "nearest",
     fill_value: float = 0.0,
+    normalized: tuple[Any, Any] | None = None,
 ) -> Any:
     """Sample a channel-last volume with nearest-neighbor interpolation."""
     spatial_rank = coordinates.shape[-1]
-    coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    if normalized is None:
+        coordinates, valid = _normalize_coordinates(volume, coordinates, fill_mode)
+    else:
+        coordinates, valid = normalized
     shape = ops.shape(volume)
     spatial_sizes = [ops.cast(shape[index + 1], coordinates.dtype) for index in range(spatial_rank)]
     indices = []
@@ -257,20 +384,31 @@ def _lock_field_borders(field: Any, locked_borders: int, spatial_rank: int) -> A
 class RandomElasticTransform(RandomTransform):
     """Apply random smooth elastic deformation to 2D or 3D tensors.
 
-    One displacement field is sampled per batch item and shared by all
-    selected keys, keeping aligned images and masks geometrically consistent.
-    Two- and three-dimensional fields can optionally be sampled on a coarse
-    grid and expanded to the input resolution. ``control_grid_spacing=None``
-    keeps the full-resolution path for both ranks.
+    The transform samples a smooth displacement field in the input spatial
+    coordinate system, then uses that field to resample every selected tensor.
+    For batch layouts, each sample receives its own application decision and
+    random deformation parameters. The resulting field is shared across the
+    selected keys of that sample, so an image and its segmentation mask remain
+    spatially aligned while using key-specific interpolation modes.
+
+    The field is created from random displacement noise and smoothed with a
+    separable Gaussian filter. ``control_grid_spacing`` can reduce the field
+    to a coarse 2D or 3D grid before smoothing; the coarse field is then
+    resampled to the input resolution using the selected field interpolation.
+    With ``control_grid_spacing=None``, the field is generated at full
+    resolution. Displacements may be expressed in pixels/voxels or converted
+    from physical millimeter units using affine metadata.
 
     Args:
         keys: Keys of aligned tensors to deform.
         alpha: Maximum displacement magnitude in the units selected by
-            ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples a value per call.
+            ``displacement_units``. A scalar uses the same value for every
+            batch item; a ``(min, max)`` range samples one value per batch
+            item.
         sigma: Gaussian smoothing width in the units selected by
-            ``displacement_units``. A scalar uses one value; a ``(min, max)``
-            range samples a value per call.
+            ``displacement_units``. A scalar uses the same value for every
+            batch item; a ``(min, max)`` range samples one value per batch
+            item.
         interpolation: Optional interpolation mode, a sequence aligned with
             ``keys``, or a mapping from key to mode. When omitted, the first
             key uses ``"bilinear"`` for 2D or ``"trilinear"`` for 3D, and
@@ -280,7 +418,8 @@ class RandomElasticTransform(RandomTransform):
             values are ``"nearest"``, ``"constant"``, ``"reflect"``, and
             ``"wrap"``. The default ``"nearest"`` preserves border values.
         fill_value: Value used outside the input when ``fill_mode="constant"``.
-        prob: Probability of applying the deformation.
+        prob: Per-sample probability of applying the deformation. For a batch,
+            each item receives an independent application decision.
         input_layout: One of ``"HWC"``, ``"DHWC"``, ``"BHWC"``, or
             ``"BDHWC"``.
         control_grid_spacing: Optional spacing between coarse field samples,
@@ -530,69 +669,93 @@ class RandomElasticTransform(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        alpha: float | Sequence[float] = 20.0,
-        sigma: float | Sequence[float] = 4.0,
+        alpha: float | Sequence[float] = _DEFAULT_ALPHA,
+        sigma: float | Sequence[float] = _DEFAULT_SIGMA,
         interpolation: str | Sequence[str] | Mapping[str, str] | None = None,
-        prob: float = 0.1,
+        prob: float = _DEFAULT_PROB,
         *,
         input_layout: str,
-        control_grid_spacing: int | Sequence[int] | None = None,
-        displacement_units: str = "voxel",
+        control_grid_spacing: int | Sequence[int] | None = _DEFAULT_CONTROL_GRID_SPACING,
+        displacement_units: str = _DEFAULT_DISPLACEMENT_UNITS,
         minimum_physical_spacing: float | Sequence[float] | None = None,
-        field_interpolation: str | None = None,
-        fill_mode: str = "nearest",
-        fill_value: float = 0.0,
-        locked_borders: int = 0,
+        field_interpolation: str | None = _DEFAULT_FIELD_INTERPOLATION,
+        fill_mode: str = _DEFAULT_FILL_MODE,
+        fill_value: float = _DEFAULT_FILL_VALUE,
+        locked_borders: int = _DEFAULT_LOCKED_BORDERS,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
         super().__init__(prob=prob, seed=seed)
+
         if not keys:
             raise ValueError("`keys` must contain at least one tensor key.")
+
         self.keys = tuple(keys)
         self.alpha = self._normalize_parameter_range(alpha, "alpha", 0.0)
         self.sigma = self._normalize_parameter_range(sigma, "sigma", 1e-6)
+
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.control_grid_spacing = self._normalize_control_grid_spacing(control_grid_spacing)
-        if displacement_units not in {"voxel", "mm"}:
-            raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+
+        self._validate_displacement_units(displacement_units)
         self.displacement_units = displacement_units
         self.minimum_physical_spacing = self._normalize_physical_spacing(minimum_physical_spacing)
+
         if displacement_units == "mm" and self.minimum_physical_spacing is None:
             raise ValueError(
-                "`minimum_physical_spacing` is required when " "displacement_units='mm'."
+                "`minimum_physical_spacing` is required when " "`displacement_units='mm'`."
             )
-        if field_interpolation is None:
-            field_interpolation = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-        allowed_field_interpolations = (
-            {"bilinear", "bspline"}
-            if self.layout_info.spatial_rank == 2
-            else {"trilinear", "bspline"}
+
+        self.field_interpolation = self._normalize_field_interpolation(field_interpolation)
+        self.locked_borders = self._normalize_locked_borders(locked_borders)
+        self.fill_mode, self.fill_value = self._normalize_fill_options(
+            fill_mode,
+            fill_value,
         )
-        if field_interpolation not in allowed_field_interpolations:
+
+        self.interpolation = self._normalize_interpolation(interpolation)
+        self.allow_missing_keys = allow_missing_keys
+
+    def _validate_displacement_units(self, units: str) -> None:
+        if units not in _DISPLACEMENT_UNITS:
+            raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+
+    def _normalize_field_interpolation(self, interpolation: str | None) -> str:
+        if interpolation is None:
+            interpolation = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
+
+        allowed = _FIELD_INTERPOLATIONS[self.layout_info.spatial_rank]
+        if interpolation not in allowed:
             raise ValueError(
-                f"`field_interpolation`={field_interpolation!r} is invalid for "
+                f"`field_interpolation`={interpolation!r} is invalid for "
                 f"{self.layout_info.spatial_rank}D input. Allowed values are "
-                f"{sorted(allowed_field_interpolations)}."
+                f"{sorted(allowed)}."
             )
-        self.field_interpolation = field_interpolation
-        if not isinstance(locked_borders, int) or locked_borders < 0:
+        return interpolation
+
+    def _normalize_locked_borders(self, locked_borders: int) -> int:
+        if not isinstance(locked_borders, int) or isinstance(locked_borders, bool):
+            raise TypeError("`locked_borders` must be a non-negative integer.")
+        if locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
-        self.locked_borders = locked_borders
-        if fill_mode not in {"nearest", "constant", "reflect", "wrap"}:
+        return locked_borders
+
+    def _normalize_fill_options(
+        self,
+        fill_mode: str,
+        fill_value: float,
+    ) -> tuple[str, float]:
+        if fill_mode not in _FILL_MODES:
             raise ValueError(
                 "`fill_mode` must be one of 'nearest', 'constant', 'reflect', or 'wrap'."
             )
         if not isinstance(fill_value, Number):
             raise TypeError("`fill_value` must be numeric.")
-        self.fill_mode = fill_mode
-        self.fill_value = float(fill_value)
-        self.interpolation = self._normalize_interpolation(interpolation)
-        self.allow_missing_keys = allow_missing_keys
+        return fill_mode, float(fill_value)
 
     def _normalize_control_grid_spacing(
         self,
@@ -651,14 +814,33 @@ class RandomElasticTransform(RandomTransform):
             )
         return bounds
 
-    def _sample_parameter(self, bounds: tuple[float, float]) -> Any:
+    def _sample_parameter(
+        self,
+        bounds: tuple[float, float],
+        batch_size: Any | None = None,
+    ) -> Any:
+        shape = () if batch_size is None else (batch_size,)
         if bounds[0] == bounds[1]:
-            return bounds[0]
+            if batch_size is None:
+                return bounds[0]
+            return ops.full(shape, bounds[0], dtype="float32")
         return self.random_uniform(
-            shape=(),
+            shape=shape,
             minval=bounds[0],
             maxval=bounds[1],
             dtype="float32",
+        )
+
+    def _sample_apply_mask(self, batch_size: Any) -> Any:
+        """Sample one independent application decision for each batch item."""
+        return (
+            self.random_uniform(
+                shape=(batch_size,),
+                minval=0.0,
+                maxval=1.0,
+                dtype="float32",
+            )
+            < self.prob
         )
 
     def _normalize_interpolation(
@@ -666,7 +848,7 @@ class RandomElasticTransform(RandomTransform):
         interpolation: str | Sequence[str] | Mapping[str, str] | None,
     ) -> dict[str, str]:
         if interpolation is None:
-            linear_mode = "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            linear_mode = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
             result = {
                 key: linear_mode if index == 0 else "nearest" for index, key in enumerate(self.keys)
             }
@@ -684,14 +866,7 @@ class RandomElasticTransform(RandomTransform):
         else:
             raise TypeError("`interpolation` must be a string, sequence, or mapping.")
 
-        valid = (
-            {"nearest", "bilinear"}
-            if self.layout_info.spatial_rank == 2
-            else {
-                "nearest",
-                "trilinear",
-            }
-        )
+        valid = _INTERPOLATIONS[self.layout_info.spatial_rank]
         for key, mode in result.items():
             if mode not in valid:
                 raise ValueError(
@@ -706,13 +881,19 @@ class RandomElasticTransform(RandomTransform):
             if affine is None:
                 raise ValueError(
                     "RandomElasticTransform with displacement_units='mm' "
-                    "requires bundle.meta['affine'] containing a 4x4 affine matrix."
+                    "requires bundle.meta['affine'] containing a 4x4 "
+                    "affine matrix."
                 )
             affine = validate_affine_matrix(affine)
+
         missing_keys = [key for key in self.keys if key not in bundle.data]
         if missing_keys and not self.allow_missing_keys:
             raise KeyError(f"Key {missing_keys[0]!r} not found in input data.")
         present_keys = [key for key in self.keys if key in bundle.data]
+        reference = bundle.data[present_keys[0]] if present_keys else None
+        batch_size = ops.shape(reference)[0] if present_keys and self.layout_info.batched else 1
+        should_apply = self._sample_apply_mask(batch_size)
+
         params = {
             "keys": list(present_keys),
             "alpha": self.alpha,
@@ -726,11 +907,15 @@ class RandomElasticTransform(RandomTransform):
             "fill_value": self.fill_value,
             "interpolation": dict(self.interpolation),
             "input_layout": self.input_layout,
-            "should_apply": self.sample_should_apply(),
+            "should_apply": should_apply,
         }
         if not present_keys:
-            params["should_apply"] = False
-            self.record_random_transform(bundle, params=params, applied=False)
+            params["should_apply"] = ops.zeros((batch_size,), dtype="bool")
+            self.record_random_transform(
+                bundle,
+                params=params,
+                applied=False,
+            )
             return bundle
 
         reference = bundle.data[present_keys[0]]
@@ -749,25 +934,57 @@ class RandomElasticTransform(RandomTransform):
             affine=affine,
         )
 
+        batched_inputs = []
         for key in present_keys:
-            tensor = bundle.data[key]
             batched_tensor, added_batch_axis = ensure_batch_axis_for_layout(
-                tensor,
+                bundle.data[key],
                 input_layout=self.input_layout,
             )
-            transformed = _apply_if_applied(
-                params["should_apply"],
-                lambda tensor=batched_tensor, key=key: self._warp_tensor(
-                    tensor, field, self.interpolation[key]
+            batched_inputs.append((key, batched_tensor, added_batch_axis))
+
+        reference_spatial_shape = tuple(batched.shape[1:-1])
+        share_coordinates = all(
+            tuple(batched_tensor.shape[1:-1]) == reference_spatial_shape
+            for _, batched_tensor, _ in batched_inputs
+        )
+
+        normalized_coordinates = None
+        if share_coordinates:
+            spatial_rank = self.layout_info.spatial_rank
+            spatial_shape = [ops.shape(batched)[index + 1] for index in range(spatial_rank)]
+            ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
+            mesh = ops.meshgrid(*ranges, indexing="ij")
+            grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
+            coordinates = grid[None, ...] + field
+
+            normalized_coordinates = _normalize_coordinates(
+                batched,
+                coordinates,
+                self.fill_mode,
+            )
+
+        for key, batched_tensor, added_batch_axis in batched_inputs:
+            transformed = self._warp_tensor(
+                batched_tensor,
+                field,
+                self.interpolation[key],
+                normalized_coordinates=normalized_coordinates,
+            )
+            apply_shape = [ops.shape(batched_tensor)[0]] + [1] * (self.layout_info.spatial_rank + 1)
+            transformed = ops.where(
+                ops.reshape(
+                    ops.cast(params["should_apply"], "bool"),
+                    apply_shape,
                 ),
-                lambda tensor=batched_tensor: tensor,
+                transformed,
+                batched_tensor,
             )
             bundle.data[key] = restore_from_batch_axis(transformed, added_batch_axis)
 
         self.record_random_transform(
             bundle,
             params=params,
-            applied=params["should_apply"],
+            applied=ops.any(params["should_apply"]),
             kernel=type(self).__name__,
         )
         return bundle
@@ -783,6 +1000,7 @@ class RandomElasticTransform(RandomTransform):
         spatial_rank = self.layout_info.spatial_rank
         spatial_shape = self._static_spatial_shape(tensor)
         spacing = self.control_grid_spacing or (1,) * spatial_rank
+
         coarse_shape = tuple(
             max(1, (size + step - 1) // step)
             for size, step in zip(spatial_shape, spacing, strict=True)
@@ -792,15 +1010,14 @@ class RandomElasticTransform(RandomTransform):
 
         def sample_field():
             noise = self.random_normal(shape=coarse_field_shape, dtype="float32")
-            alpha = self._sample_parameter(self.alpha)
-            sigma = self._sample_parameter(self.sigma)
+            alpha = self._sample_parameter(self.alpha, shape[0])
+            sigma = self._sample_parameter(self.sigma, shape[0])
             if self.displacement_units == "mm":
                 physical_spacing = self._physical_spacing(affine)
                 coarse_physical_spacing = physical_spacing * ops.cast(
-                    spacing,
-                    physical_spacing.dtype,
+                    spacing, physical_spacing.dtype
                 )
-                smooth_sigma = sigma / coarse_physical_spacing
+                smooth_sigma = ops.reshape(sigma, [shape[0], 1]) / coarse_physical_spacing
                 # The runtime affine controls the actual smoothing widths. The
                 # configured per-axis lower bounds provide static radii for graphs.
                 min_coarse_spacing = tuple(
@@ -813,13 +1030,27 @@ class RandomElasticTransform(RandomTransform):
             else:
                 smooth_sigma = sigma / min(spacing)
                 max_smooth_sigma = self.sigma[1] / min(spacing)
-            field = _gaussian_smooth_nd(
-                noise,
-                ops.maximum(smooth_sigma, 1e-3),
-                spatial_rank,
-                max_sigma=max_smooth_sigma,
-            )
+
+            # A scalar sigma has identical smoothing parameters for every
+            # batch item. Keep the efficient shared-kernel convolution path
+            # in that case; broadcasted smoothing is only needed for a true
+            # per-sample sigma range or affine-derived variation.
+            if noise.shape[0] == 1 or self.sigma[0] == self.sigma[1]:
+                field = _gaussian_smooth_nd(
+                    noise,
+                    ops.maximum(smooth_sigma[0], 1e-3),
+                    spatial_rank,
+                    max_sigma=max_smooth_sigma,
+                )
+            else:
+                field = _gaussian_smooth_broadcast_nd(
+                    noise,
+                    ops.maximum(smooth_sigma, 1e-3),
+                    spatial_rank,
+                    max_sigma=max_smooth_sigma,
+                )
             field = _lock_field_borders(field, self.locked_borders, spatial_rank)
+
             if spacing != (1,) * spatial_rank:
                 field = resample_displacement_field(
                     field,
@@ -830,7 +1061,10 @@ class RandomElasticTransform(RandomTransform):
             reduction_axes = tuple(range(1, spatial_rank + 2))
             peak = ops.max(ops.abs(field), axis=reduction_axes, keepdims=True)
             safe_peak = ops.where(peak > 1e-6, peak, ops.ones_like(peak))
+            alpha_shape = [shape[0]] + [1] * (spatial_rank + 1)
+            alpha = ops.reshape(alpha, alpha_shape)
             field = (field / safe_peak) * alpha
+
             if self.displacement_units == "mm":
                 voxel_spacing = self._physical_spacing(affine)
                 field = field / voxel_spacing[None, ...]
@@ -846,8 +1080,16 @@ class RandomElasticTransform(RandomTransform):
         # branch while tracing a data-loader or compiled training function.
         sampled_field = sample_field()
         zero_field = ops.zeros(output_field_shape, dtype="float32")
+        apply_mask = ops.cast(should_apply, "bool")
+
+        if getattr(apply_mask, "shape", None) is not None and len(apply_mask.shape) == 0:
+            apply_mask = ops.broadcast_to(
+                ops.reshape(apply_mask, (1,)),
+                (shape[0],),
+            )
+        apply_shape = [shape[0]] + [1] * (spatial_rank + 1)
         return ops.where(
-            ops.cast(should_apply, "bool"),
+            ops.reshape(apply_mask, apply_shape),
             sampled_field,
             zero_field,
         )
@@ -869,24 +1111,35 @@ class RandomElasticTransform(RandomTransform):
             )
         return tuple(int(size) for size in spatial_shape)
 
-    def _warp_tensor(self, tensor: Any, field: Any, interpolation: str) -> Any:
+    def _warp_tensor(
+        self,
+        tensor: Any,
+        field: Any,
+        interpolation: str,
+        normalized_coordinates: tuple[Any, Any] | None = None,
+    ) -> Any:
         shape = ops.shape(tensor)
-        spatial_rank = self.layout_info.spatial_rank
-        spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
-        ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
-        mesh = ops.meshgrid(*ranges, indexing="ij")
-        grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
-        coordinates = grid[None, ...] + field
+        if normalized_coordinates is None:
+            spatial_rank = self.layout_info.spatial_rank
+            spatial_shape = [shape[index + 1] for index in range(spatial_rank)]
+            ranges = [ops.arange(size, dtype="float32") for size in spatial_shape]
+            mesh = ops.meshgrid(*ranges, indexing="ij")
+            grid = ops.cast(ops.stack(mesh, axis=-1), field.dtype)
+            coordinates = grid[None, ...] + field
+        else:
+            coordinates = normalized_coordinates[0]
         if interpolation == "nearest":
             return _nearest_sample(
                 tensor,
                 coordinates,
                 fill_mode=self.fill_mode,
                 fill_value=self.fill_value,
+                normalized=normalized_coordinates,
             )
         return _linear_sample(
             tensor,
             coordinates,
             fill_mode=self.fill_mode,
             fill_value=self.fill_value,
+            normalized=normalized_coordinates,
         )
