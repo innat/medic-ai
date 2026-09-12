@@ -149,7 +149,12 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "RandomCutOut",
             "cpu+gpu",
             lambda layout, s: RandomCutOut(
-                keys=["image"], mask_size=(4, 4), num_cuts=1, prob=1.0, input_layout=layout, seed=s
+                keys=["image"],
+                mask_size=(4, 4, 4) if is_3d else (4, 4),
+                num_cuts=1,
+                prob=1.0,
+                input_layout=layout,
+                seed=s,
             ),
         ),
         BenchmarkSpec(

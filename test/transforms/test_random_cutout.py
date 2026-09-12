@@ -19,7 +19,7 @@ def test_rand_cutout_preserves_shape_and_records_trace():
 
     out = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(2, 2, 2),
         num_cuts=2,
         prob=1.0,
         fill_mode="constant",
@@ -56,7 +56,7 @@ def test_random_cutout_supports_2d_and_3d():
     label_3d = as_tensor(np.ones((4, 8, 8, 1), dtype=np.float32))
     out_3d = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(2, 2, 2),
         num_cuts=1,
         prob=1.0,
         input_layout="DHWC",
@@ -67,22 +67,23 @@ def test_random_cutout_supports_2d_and_3d():
 
 
 @pytest.mark.unit
-def test_random_cutout_3d_uses_one_mask_across_the_full_depth():
+def test_random_cutout_3d_uses_a_bounded_cuboid():
     image = as_tensor(np.ones((3, 8, 8, 1), dtype=np.float32))
     transform = RandomCutOut(
         keys="image",
-        mask_size=(2, 2),
+        mask_size=(1, 2, 2),
         num_cuts=1,
         input_layout="DHWC",
     )
-    centers = as_tensor([[3, 4]], dtype="int32")
+    centers = as_tensor([[1, 3, 4]], dtype="int32")
 
     mask = ops.convert_to_numpy(
         transform.generate_cutout_mask(image, spatial_rank=3, centers=centers)
     )
 
-    np.testing.assert_array_equal(mask[0], mask[1])
-    np.testing.assert_array_equal(mask[1], mask[2])
+    np.testing.assert_array_equal(mask[0], np.ones((8, 8, 1), dtype=bool))
+    assert np.any(~mask[1])
+    np.testing.assert_array_equal(mask[2], np.ones((8, 8, 1), dtype=bool))
 
 
 @pytest.mark.unit
@@ -121,7 +122,7 @@ def test_random_cutout_supports_batch_layout_and_records_input_layout():
     )(TensorBundle({"image": image_2d, "label": label_2d}))
     out_3d = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(1, 2, 2),
         num_cuts=1,
         prob=1.0,
         input_layout="BDHWC",
@@ -186,7 +187,7 @@ def test_random_cutout_validates_arguments():
     with pytest.raises(ValueError, match="`keys` must contain exactly one image key"):
         RandomCutOut(keys=["image", "label"], mask_size=(2, 2), num_cuts=1, input_layout="HWC")
 
-    with pytest.raises(ValueError, match="`mask_size` must be a sequence of two integers"):
+    with pytest.raises(ValueError, match="`mask_size` must be a sequence of 2 integers"):
         RandomCutOut(keys=["image"], mask_size=(2,), num_cuts=1, input_layout="HWC")
 
     with pytest.raises(ValueError, match="All values in `mask_size` must be positive integers"):
@@ -207,6 +208,14 @@ def test_random_cutout_validates_arguments():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomCutOut(keys=["image"], mask_size=(2, 2), num_cuts=1, input_layout="CHW")
 
+    with pytest.raises(ValueError, match="`mask_size` must be a sequence of 3 integers"):
+        RandomCutOut(
+            keys=["image"],
+            mask_size=(2, 2),
+            num_cuts=1,
+            input_layout="DHWC",
+        )
+
 
 @pytest.mark.unit
 def test_random_cutout_supports_3d_volume_mode_gaussian_fill_and_allow_missing_keys():
@@ -215,7 +224,7 @@ def test_random_cutout_supports_3d_volume_mode_gaussian_fill_and_allow_missing_k
 
     out = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(1, 2, 2),
         num_cuts=1,
         prob=1.0,
         fill_mode="gaussian",
@@ -226,7 +235,7 @@ def test_random_cutout_supports_3d_volume_mode_gaussian_fill_and_allow_missing_k
 
     skip = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(1, 2, 2),
         num_cuts=1,
         input_layout="DHWC",
         allow_missing_keys=True,
@@ -338,7 +347,7 @@ def test_random_cutout_prob_zero_and_unsupported_rank_rejection():
     label = as_tensor(np.random.randint(0, 2, (4, 5, 6, 1)).astype(np.float32))
     out = RandomCutOut(
         keys=["image"],
-        mask_size=(2, 2),
+        mask_size=(1, 2, 2),
         num_cuts=1,
         prob=0.0,
         input_layout="DHWC",
