@@ -23,6 +23,7 @@ _DISPLACEMENT_UNITS = {"voxel", "mm"}
 _DEFAULT_DISPLACEMENT_UNITS = "voxel"
 _FILL_MODES = {"nearest", "constant", "reflect", "wrap"}
 _DEFAULT_FILL_MODE = "nearest"
+_DEFAULT_FILL_VALUE = 0.0
 _FIELD_INTERPOLATIONS = {
     2: {"bilinear", "bspline"},
     3: {"trilinear", "bspline"},
@@ -32,6 +33,12 @@ _INTERPOLATIONS = {
     2: {"nearest", "bilinear"},
     3: {"nearest", "trilinear"},
 }
+_DEFAULT_ALPHA = 20.0
+_DEFAULT_SIGMA = 4.0
+_DEFAULT_PROB = 0.1
+_DEFAULT_CONTROL_GRID_SPACING = None
+_DEFAULT_FIELD_INTERPOLATION = None
+_DEFAULT_LOCKED_BORDERS = 0
 
 
 def _gaussian_kernel_1d(sigma: Any, radius: int, dtype: str = "float32") -> Any:
@@ -662,19 +669,19 @@ class RandomElasticTransform(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        alpha: float | Sequence[float] = 20.0,
-        sigma: float | Sequence[float] = 4.0,
+        alpha: float | Sequence[float] = _DEFAULT_ALPHA,
+        sigma: float | Sequence[float] = _DEFAULT_SIGMA,
         interpolation: str | Sequence[str] | Mapping[str, str] | None = None,
-        prob: float = 0.1,
+        prob: float = _DEFAULT_PROB,
         *,
         input_layout: str,
-        control_grid_spacing: int | Sequence[int] | None = None,
+        control_grid_spacing: int | Sequence[int] | None = _DEFAULT_CONTROL_GRID_SPACING,
         displacement_units: str = _DEFAULT_DISPLACEMENT_UNITS,
         minimum_physical_spacing: float | Sequence[float] | None = None,
-        field_interpolation: str | None = None,
+        field_interpolation: str | None = _DEFAULT_FIELD_INTERPOLATION,
         fill_mode: str = _DEFAULT_FILL_MODE,
-        fill_value: float = 0.0,
-        locked_borders: int = 0,
+        fill_value: float = _DEFAULT_FILL_VALUE,
+        locked_borders: int = _DEFAULT_LOCKED_BORDERS,
         seed: int | keras.random.SeedGenerator | None = None,
         allow_missing_keys: bool = False,
     ):
@@ -694,8 +701,7 @@ class RandomElasticTransform(RandomTransform):
         self.layout_info = get_input_layout_info(self.input_layout)
         self.control_grid_spacing = self._normalize_control_grid_spacing(control_grid_spacing)
 
-        if displacement_units not in _DISPLACEMENT_UNITS:
-            raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+        self._validate_displacement_units(displacement_units)
         self.displacement_units = displacement_units
         self.minimum_physical_spacing = self._normalize_physical_spacing(minimum_physical_spacing)
 
@@ -704,33 +710,52 @@ class RandomElasticTransform(RandomTransform):
                 "`minimum_physical_spacing` is required when " "`displacement_units='mm'`."
             )
 
-        if field_interpolation is None:
-            field_interpolation = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
+        self.field_interpolation = self._normalize_field_interpolation(field_interpolation)
+        self.locked_borders = self._normalize_locked_borders(locked_borders)
+        self.fill_mode, self.fill_value = self._normalize_fill_options(
+            fill_mode,
+            fill_value,
+        )
 
-        allowed_field_interpolations = _FIELD_INTERPOLATIONS[self.layout_info.spatial_rank]
-        if field_interpolation not in allowed_field_interpolations:
+        self.interpolation = self._normalize_interpolation(interpolation)
+        self.allow_missing_keys = allow_missing_keys
+
+    def _validate_displacement_units(self, units: str) -> None:
+        if units not in _DISPLACEMENT_UNITS:
+            raise ValueError("`displacement_units` must be either 'voxel' or 'mm'.")
+
+    def _normalize_field_interpolation(self, interpolation: str | None) -> str:
+        if interpolation is None:
+            interpolation = _DEFAULT_LINEAR_INTERPOLATIONS[self.layout_info.spatial_rank]
+
+        allowed = _FIELD_INTERPOLATIONS[self.layout_info.spatial_rank]
+        if interpolation not in allowed:
             raise ValueError(
-                f"`field_interpolation`={field_interpolation!r} is invalid for "
+                f"`field_interpolation`={interpolation!r} is invalid for "
                 f"{self.layout_info.spatial_rank}D input. Allowed values are "
-                f"{sorted(allowed_field_interpolations)}."
+                f"{sorted(allowed)}."
             )
-        self.field_interpolation = field_interpolation
+        return interpolation
 
-        if not isinstance(locked_borders, int) or locked_borders < 0:
+    def _normalize_locked_borders(self, locked_borders: int) -> int:
+        if not isinstance(locked_borders, int) or isinstance(locked_borders, bool):
+            raise TypeError("`locked_borders` must be a non-negative integer.")
+        if locked_borders < 0:
             raise ValueError("`locked_borders` must be a non-negative integer.")
-        self.locked_borders = locked_borders
+        return locked_borders
 
+    def _normalize_fill_options(
+        self,
+        fill_mode: str,
+        fill_value: float,
+    ) -> tuple[str, float]:
         if fill_mode not in _FILL_MODES:
             raise ValueError(
                 "`fill_mode` must be one of 'nearest', 'constant', 'reflect', or 'wrap'."
             )
         if not isinstance(fill_value, Number):
             raise TypeError("`fill_value` must be numeric.")
-        self.fill_mode = fill_mode
-        self.fill_value = float(fill_value)
-
-        self.interpolation = self._normalize_interpolation(interpolation)
-        self.allow_missing_keys = allow_missing_keys
+        return fill_mode, float(fill_value)
 
     def _normalize_control_grid_spacing(
         self,
