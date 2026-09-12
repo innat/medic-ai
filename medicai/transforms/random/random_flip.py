@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Sequence
 
 import keras
 from keras import ops
@@ -108,7 +108,7 @@ class RandomFlip(RandomTransform):
         self,
         keys: Sequence[str],
         prob: float = _DEFAULT_PROB,
-        spatial_axis: Union[int, Sequence[int], None] = _DEFAULT_SPATIAL_AXIS,
+        spatial_axis: int | Sequence[int] | None = _DEFAULT_SPATIAL_AXIS,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
@@ -166,7 +166,10 @@ class RandomFlip(RandomTransform):
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
         """Sample an independent Bernoulli decision for each batch item."""
-        present_key = next((key for key in self.flip.keys if key in bundle.data), None)
+        present_key = next(
+            (key for key in self.flip.keys if key in bundle.data),
+            None,
+        )
         if present_key is not None and self.flip.layout_info.batched:
             batch_size = ops.shape(bundle.data[present_key])[0]
             shape = (batch_size,)

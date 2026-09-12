@@ -158,7 +158,10 @@ class RandomRotate90(RandomTransform):
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
         """Sample independent decisions and quarter-turn counts per batch item."""
-        present_key = next((key for key in self.keys if key in bundle.data), None)
+        present_key = next(
+            (key for key in self.keys if key in bundle.data),
+            None,
+        )
         if present_key is None:
             batch_size = 1
             parameter_shape = ()
