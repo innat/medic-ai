@@ -34,6 +34,7 @@ _DEFAULT_FILL_VALUE = None
 _DEFAULT_IMAGE_INTERPOLATION = "bilinear"
 _DEFAULT_LABEL_INTERPOLATION = "nearest"
 _DEFAULT_FILL_VALUE_RESOLVED = 0.0
+_INTERPOLATION_MODES = {"bilinear", "nearest"}
 
 
 def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
@@ -241,7 +242,12 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
     depth, height, width, channels = volume.shape
     if channels is None:
         raise ValueError("RandomRotate requires a statically known channel dimension.")
-    z, y, x = ops.meshgrid(ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij")
+    z, y, x = ops.meshgrid(
+        ops.arange(depth),
+        ops.arange(height),
+        ops.arange(width),
+        indexing="ij",
+    )
     coordinates = ops.stack(
         [
             ops.cast(z, inverse_matrix.dtype),
@@ -251,7 +257,10 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
         axis=0,
     )
     center = (
-        ops.cast(ops.convert_to_tensor([depth - 1, height - 1, width - 1]), inverse_matrix.dtype)
+        ops.cast(
+            ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
+            inverse_matrix.dtype,
+        )
         / 2.0
     )
     centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
@@ -297,9 +306,8 @@ def rotate_multi_axis(
     )
     inverse_matrix = ops.transpose(matrix, (0, 2, 1))
     if spacing is not None:
-        inverse_matrix = (
-            inverse_matrix * _spacing_scale_matrix(spacing, inverse_matrix.dtype)[None, :, :]
-        )
+        scale_matrix = _spacing_scale_matrix(spacing, inverse_matrix.dtype)
+        inverse_matrix = inverse_matrix * scale_matrix[None, :, :]
 
     def rotate_one(args):
         volume, matrix_one = args
@@ -498,7 +506,7 @@ class RandomRotate(RandomTransform):
 
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
-            if mode not in ("bilinear", "nearest"):
+            if mode not in _INTERPOLATION_MODES:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             fill_mode_key = str(self.fill_mode[key]).lower()
             if fill_mode_key not in _FILL_MODES:

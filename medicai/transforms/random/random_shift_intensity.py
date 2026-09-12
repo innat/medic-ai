@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Any, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 import keras
 from keras import ops
@@ -113,7 +113,7 @@ class RandomShiftIntensity(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        offset: Union[float, Tuple[float, float]],
+        offset: float | tuple[float, float],
         prob: float = _DEFAULT_PROB,
         channel_wise: bool = _DEFAULT_CHANNEL_WISE,
         *,
@@ -155,7 +155,10 @@ class RandomShiftIntensity(RandomTransform):
 
     def get_random_params(self, bundle: TensorBundle) -> dict[str, object]:
         """Sample an independent Bernoulli decision for each batch item."""
-        present_key = next((key for key in self.keys if key in bundle.data), None)
+        present_key = next(
+            (key for key in self.keys if key in bundle.data),
+            None,
+        )
         if present_key is not None and self.shift.layout_info.batched:
             batch_size = ops.shape(bundle.data[present_key])[0]
             shape = (batch_size,)
@@ -199,11 +202,10 @@ class RandomShiftIntensity(RandomTransform):
             batch_size = ops.shape(tensor)[0] if batched else None
 
             if params["channel_wise"]:
-                offset_shape = (
-                    [batch_size] + [1] * (rank - 2) + [tensor.shape[-1]]
-                    if batched
-                    else [1] * (rank - 1) + [tensor.shape[-1]]
-                )
+                if batched:
+                    offset_shape = [batch_size] + [1] * (rank - 2) + [tensor.shape[-1]]
+                else:
+                    offset_shape = [1] * (rank - 1) + [tensor.shape[-1]]
 
                 offsets = self.random_uniform(
                     shape=offset_shape,
@@ -212,7 +214,10 @@ class RandomShiftIntensity(RandomTransform):
                     dtype=tensor.dtype,
                 )
             else:
-                offset_shape = [batch_size] + [1] * (rank - 1) if batched else ()
+                if batched:
+                    offset_shape = [batch_size] + [1] * (rank - 1)
+                else:
+                    offset_shape = ()
 
                 offsets = self.random_uniform(
                     shape=offset_shape,

@@ -214,7 +214,10 @@ class RandomSpatialCrop(RandomTransform):
                 raise KeyError(f"`{label_key}` key is required when `invalid_label` is specified.")
 
             center = self._get_label_aware_center(
-                spatial_shape, crop_size, bundle[label_key], spatial_rank
+                spatial_shape,
+                crop_size,
+                bundle[label_key],
+                spatial_rank,
             )
 
         # Keep the crop within the source while preserving its requested size.
@@ -318,15 +321,19 @@ class RandomSpatialCrop(RandomTransform):
                 )
 
         if self.random_shape:
-            max_crop_size = (
-                ops.full((spatial_rank,), self.max_crop_size, dtype="int32")
-                if isinstance(self.max_crop_size, int)
-                else (
-                    ops.convert_to_tensor(self.max_crop_size, dtype="int32")
-                    if self.max_crop_size is not None
-                    else spatial_shape
+            if isinstance(self.max_crop_size, int):
+                max_crop_size = ops.full(
+                    (spatial_rank,),
+                    self.max_crop_size,
+                    dtype="int32",
                 )
-            )
+            elif self.max_crop_size is None:
+                max_crop_size = spatial_shape
+            else:
+                max_crop_size = ops.convert_to_tensor(
+                    self.max_crop_size,
+                    dtype="int32",
+                )
 
             # Non-positive values use the available size for that axis.
             max_crop_size = ops.where(max_crop_size <= 0, spatial_shape, max_crop_size)
@@ -379,7 +386,11 @@ class RandomSpatialCrop(RandomTransform):
         return random_start + crop_size // 2
 
     def _get_label_aware_center(
-        self, spatial_shape: Any, crop_size: Any, label: Any, spatial_rank: int
+        self,
+        spatial_shape: Any,
+        crop_size: Any,
+        label: Any,
+        spatial_rank: int,
     ) -> Any:
         if get_tensor_rank(label) > spatial_rank:
             valid_mask = ops.any(label != self.invalid_label, axis=-1)
