@@ -67,6 +67,25 @@ def test_random_cutout_supports_2d_and_3d():
 
 
 @pytest.mark.unit
+def test_random_cutout_3d_uses_one_mask_across_the_full_depth():
+    image = as_tensor(np.ones((3, 8, 8, 1), dtype=np.float32))
+    transform = RandomCutOut(
+        keys="image",
+        mask_size=(2, 2),
+        num_cuts=1,
+        input_layout="DHWC",
+    )
+    centers = as_tensor([[3, 4]], dtype="int32")
+
+    mask = ops.convert_to_numpy(
+        transform.generate_cutout_mask(image, spatial_rank=3, centers=centers)
+    )
+
+    np.testing.assert_array_equal(mask[0], mask[1])
+    np.testing.assert_array_equal(mask[1], mask[2])
+
+
+@pytest.mark.unit
 def test_random_cutout_samples_2d_centers_from_height_and_width():
     image = as_tensor(np.ones((8, 9, 1), dtype=np.float32))
     transform = RandomCutOut(

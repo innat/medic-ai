@@ -1,9 +1,10 @@
+from numbers import Integral
 from typing import Sequence
 
 import keras
 from keras import ops
 
-from ..base import RandomTransform, _apply_if_applied
+from ..base import RandomTransform, _apply_if_applied, _normalize_keys
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     get_input_layout_info,
@@ -16,7 +17,7 @@ _FILL_MODES = {"constant", "gaussian"}
 _DEFAULT_PROB = 0.5
 _DEFAULT_FILL_MODE = "constant"
 _DEFAULT_FILL_VALUE = 0.0
-_DEFAULT_GAUSSIAN_STD = 0.1
+_GAUSSIAN_NOISE_STD = 1.0
 
 
 class RandomCutOut(RandomTransform):
@@ -24,16 +25,19 @@ class RandomCutOut(RandomTransform):
 
     ``RandomCutOut`` samples one or more rectangular masks and replaces the
     corresponding image regions with either a constant value or Gaussian
-    noise.
+    noise. For 2D inputs, each mask removes pixels. For 3D inputs, each mask
+    covers the same H-W region across the complete depth, so no individual
+    slice mode is used.
 
     Args:
-        keys: A single key containing the image tensor to modify.
+        keys: A single key containing the image tensor to modify. The key may
+            be provided as a one-element sequence or a string.
         mask_size: Height-width mask size for each cutout window.
         num_cuts: Number of cutout windows to sample.
         prob: Probability of applying cutout.
-        fill_mode: Either ``"constant"`` or ``"gaussian"``.
+        fill_mode: Either ``"constant"`` or ``"gaussian"``. Gaussian fill
+            uses standard-normal noise rescaled to the input image value range.
         fill_value: Constant fill value used when ``fill_mode="constant"``.
-        gaussian_std: Standard deviation for Gaussian fill noise.
         input_layout: Channel-last tensor layout. Supported values are
             ``"HWC"``, ``"DHWC"``, ``"BHWC"``, and ``"BDHWC"``.
             In batch layouts, the Bernoulli apply decision and cutout mask are
@@ -123,13 +127,12 @@ class RandomCutOut(RandomTransform):
 
     def __init__(
         self,
-        keys: Sequence[str],
+        keys: Sequence[str] | str,
         mask_size: Sequence[int],
         num_cuts: int,
         prob: float = _DEFAULT_PROB,
         fill_mode: str = _DEFAULT_FILL_MODE,
         fill_value: float = _DEFAULT_FILL_VALUE,
-        gaussian_std: float = _DEFAULT_GAUSSIAN_STD,
         *,
         input_layout: str,
         seed: int | keras.random.SeedGenerator | None = None,
@@ -137,7 +140,8 @@ class RandomCutOut(RandomTransform):
     ):
         super().__init__(prob=prob, seed=seed)
 
-        if len(keys) != 1:
+        normalized_keys = _normalize_keys(keys)
+        if len(normalized_keys) != 1:
             raise ValueError(
                 "`keys` must contain exactly one image key. " f"Got length {len(keys)}."
             )
@@ -145,22 +149,23 @@ class RandomCutOut(RandomTransform):
         if not isinstance(mask_size, (list, tuple)) or len(mask_size) != 2:
             raise ValueError("`mask_size` must be a sequence of two integers: (height, width).")
 
-        if not all(isinstance(m, int) and m > 0 for m in mask_size):
+        if not all(
+            isinstance(m, Integral) and not isinstance(m, bool) and m > 0 for m in mask_size
+        ):
             raise ValueError("All values in `mask_size` must be positive integers.")
 
-        if num_cuts <= 0:
+        if not isinstance(num_cuts, Integral) or isinstance(num_cuts, bool) or num_cuts <= 0:
             raise ValueError("`num_cuts` must be a positive integer.")
 
         if fill_mode not in _FILL_MODES:
             raise ValueError(
                 f'`fill_mode` must be either "gaussian" or "constant". Got {fill_mode}.'
             )
-        self.image_key = keys[0]
-        self.mask_size = tuple(mask_size)
-        self.num_cuts = num_cuts
+        self.image_key = normalized_keys[0]
+        self.mask_size = tuple(int(value) for value in mask_size)
+        self.num_cuts = int(num_cuts)
         self.fill_mode = fill_mode
         self.fill_value = fill_value
-        self.gaussian_std = gaussian_std
         self.input_layout = resolve_input_layout(
             input_layout=input_layout,
             transform_name=type(self).__name__,
@@ -207,7 +212,7 @@ class RandomCutOut(RandomTransform):
         noise = (
             self.random_normal(
                 shape=ops.shape(image),
-                stddev=self.gaussian_std,
+                stddev=_GAUSSIAN_NOISE_STD,
                 dtype=image.dtype,
             )
             if self.fill_mode == "gaussian"
