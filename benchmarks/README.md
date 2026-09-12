@@ -279,6 +279,7 @@ and to provide context when comparing timings from another machine.
 | RAM | 30.0 GB total |
 | GPU | NVIDIA Tesla T4, 15. GB VRAM |
 | CUDA toolkit | CUDA 12.8, `nvcc` 12.8.93 |
+| Software | Keras `3.15.1`; TensorFlow `2.20.0`; JAX `0.7.2`; PyTorch `2.10.0+cu128` |
 
 The benchmark environment and software versions can affect the absolute timing;
 use these values primarily for backend and transform comparisons under the same
