@@ -354,7 +354,7 @@ def test_random_shift_intensity_replays_with_same_integer_seed():
 
 
 @pytest.mark.unit
-def test_random_shift_intensity_shares_sampled_offsets_across_batched_input():
+def test_random_shift_intensity_samples_offsets_per_batched_input():
     image = as_tensor(np.arange(2 * 3 * 4 * 2, dtype=np.float32).reshape(2, 3, 4, 2))
     transform = RandomShiftIntensity(
         keys=["image"],
@@ -372,15 +372,16 @@ def test_random_shift_intensity_shares_sampled_offsets_across_batched_input():
     trace = out.get_applied_transforms()[-1]
     sampled_offsets = np.squeeze(ops.convert_to_numpy(trace["params"]["sampled_offsets"]["image"]))
 
+    assert sampled_offsets.shape == (2, 2)
     np.testing.assert_allclose(
-        shifted[0] - shifted[1],
-        original[0] - original[1],
-        rtol=1e-6,
+        delta[0],
+        np.broadcast_to(sampled_offsets[0], delta[0].shape),
+        rtol=1e-5,
         atol=1e-6,
     )
     np.testing.assert_allclose(
-        delta[0],
-        np.broadcast_to(sampled_offsets, delta[0].shape),
+        delta[1],
+        np.broadcast_to(sampled_offsets[1], delta[1].shape),
         rtol=1e-5,
         atol=1e-6,
     )
