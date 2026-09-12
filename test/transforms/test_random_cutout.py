@@ -312,7 +312,10 @@ def test_random_cutout_samples_different_regions_per_batch_item(monkeypatch):
         calls += 1
         if calls == 1:
             return as_tensor([0.0, 0.0], dtype=dtype)
-        return ops.reshape(as_tensor([0.0, 0.0, 0.875, 0.875], dtype=dtype), shape)
+        return ops.reshape(
+            as_tensor([0.125, 0.125, 0.875, 0.875], dtype=dtype),
+            shape,
+        )
 
     monkeypatch.setattr(transform, "random_uniform", sample_uniform)
     output = transform(TensorBundle({"image": image}))

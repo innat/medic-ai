@@ -166,9 +166,7 @@ def test_random_shift_intensity_preserves_shape_and_range():
 @pytest.mark.unit
 def test_random_shift_intensity_samples_offsets_per_batch_item(monkeypatch):
     image = as_tensor(np.ones((2, 3, 4, 1), dtype=np.float32))
-    transform = RandomShiftIntensity(
-        keys=["image"], offset=1.0, prob=0.5, input_layout="BHWC"
-    )
+    transform = RandomShiftIntensity(keys=["image"], offset=1.0, prob=0.5, input_layout="BHWC")
     calls = 0
 
     def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):

@@ -12,7 +12,7 @@ from ..base import (
 )
 from ..intensity.shift_intensity import ShiftIntensity
 from ..tensor_bundle import TensorBundle
-from ..utils import get_tensor_rank, resolve_input_layout
+from ..utils import get_input_layout_info, get_tensor_rank, resolve_input_layout
 
 _DEFAULT_PROB = 0.1
 _DEFAULT_CHANNEL_WISE = False
@@ -136,6 +136,7 @@ class RandomShiftIntensity(RandomTransform):
             input_layout=input_layout,
             transform_name=type(self).__name__,
         )
+        self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
 
         self.shift = ShiftIntensity(
@@ -159,7 +160,7 @@ class RandomShiftIntensity(RandomTransform):
             (key for key in self.keys if key in bundle.data),
             None,
         )
-        if present_key is not None and self.shift.layout_info.batched:
+        if present_key is not None and self.layout_info.batched:
             batch_size = ops.shape(bundle.data[present_key])[0]
             shape = (batch_size,)
         else:
@@ -198,7 +199,7 @@ class RandomShiftIntensity(RandomTransform):
 
         def apply_shift(tensor, key: str):
             rank = get_tensor_rank(tensor)
-            batched = self.shift.layout_info.batched
+            batched = self.layout_info.batched
             batch_size = ops.shape(tensor)[0] if batched else None
 
             if params["channel_wise"]:
@@ -267,7 +268,7 @@ class RandomShiftIntensity(RandomTransform):
                 -offset if isinstance(offset, Number) else -ops.cast(offset, tensor.dtype)
             )
             shifted = self.shift.shift_tensor(tensor, offset=inverse_offset)
-            if self.shift.layout_info.batched:
+            if self.layout_info.batched:
                 mask_shape = [ops.shape(tensor)[0]] + [1] * (get_tensor_rank(tensor) - 1)
                 mask = ops.reshape(ops.cast(applied, "bool"), mask_shape)
                 return ops.where(mask, shifted, tensor)
