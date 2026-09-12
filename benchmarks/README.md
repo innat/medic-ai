@@ -268,13 +268,29 @@ timings. The benchmark is a timing tool, not a correctness replacement for
 
 ## Recorded Results
 
-The following results report forward median execution time in **milliseconds**.
+The recorded measurements below were collected in a Kaggle notebook on the
+following system. These details are included to make the results reproducible
+and to provide context when comparing timings from another machine.
+
+| Component | Configuration |
+| :--- | :--- |
+| CPU | Intel(R) Xeon(R) CPU @ 2.00GHz, x86_64, 64-bit |
+| CPU cache | L1 data: 0.0625 MB; L1 instruction: 0.0625 MB; L2: 2 MB; L3: 40.37 MB |
+| RAM | 30.0 GB total |
+| GPU | NVIDIA Tesla T4, 15. GB VRAM |
+| CUDA toolkit | CUDA 12.8, `nvcc` 12.8.93 |
+
+The benchmark environment and software versions can affect the absolute timing;
+use these values primarily for backend and transform comparisons under the same
+configuration.
+
+The following results report forward median execution time in **milliseconds (ms)**.
 Each transformation has two tables: one for CPU execution and one for GPU
 execution. Each table compares eager execution with compiled mode for
-TensorFlow (XLA), Torch (torch.compile with Inductor), and JAX (XLA).
+TensorFlow (XLA), Torch (`torch.compile` with Inductor), and JAX (XLA).
 Every row represents one concrete input layout, shape, and batch
 configuration. The fastest available result in each row is shown in
-**bold**; -- means the result was unavailable or unsupported.
+**bold**; the `--` means the result was unavailable or unsupported.
 
 ### RandomElasticTransform
 
