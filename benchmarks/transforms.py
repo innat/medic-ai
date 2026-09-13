@@ -51,9 +51,8 @@ def main() -> None:
     """Parse CLI options and run the selected transform benchmark suite."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", choices=("cpu", "gpu"), default="cpu")
-    parser.add_argument("--group", choices=("cpu", "cpu+gpu", "all"), default="all")
     parser.add_argument(
-        "--transform",
+        "--target-transforms",
         nargs="+",
         default=["all"],
         metavar="NAME",
@@ -89,14 +88,12 @@ def main() -> None:
         try:
             specs = _select_specs(
                 transform_specs(args.layout, spatial_size),
-                args.transform,
+                args.target_transforms,
                 layout=args.layout,
             )
         except ValueError as error:
             parser.error(str(error))
         for spec in specs:
-            if args.group != "all" and spec.group != args.group:
-                continue
             for device in devices(args.device):
                 try:
                     result = profile(

@@ -23,52 +23,62 @@ benchmarks/
     └── specs.py                  # Transform benchmark definitions
 ```
 
+## Reports
+
+- [Transforms](REPORT.md)
+
 ## How to run
 
-Set the Keras backend before starting Python:
+**Option 1**: `cli`
+
+The main `cli` arguments are:
+
+- `--device {cpu,gpu}` selects the isolated execution device.
+- `--target-transforms NAME [NAME ...]` selects transforms; the default is
+  `all`.
+- `--layout {HWC,DHWC,BHWC,BDHWC}` selects sample or batch channel-last input.
+- `--sizes SIZE [SIZE ...]` selects square 2D or cubic 3D spatial sizes.
+- `--batch-size N` selects the batch size; use `1` for `HWC` and `DHWC`.
+- `--channels N` selects the channel count.
+- `--iterations N` and `--warmup N` control timing iterations.
+- `--compile` enables TensorFlow XLA, JAX JIT, or Torch Inductor.
+- `--seed N` controls transform randomness, and `--json PATH` saves results.
+
+Examples covering the backend, device, and compilation combinations:
 
 ```bash
-# Run all transforms on the target device.
-KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device cpu
-KERAS_BACKEND=torch python benchmarks/transforms.py --device gpu
-
-# Run one selected transform (names are case-insensitive).
+# Replace the backend with tensorflow, torch, or jax.
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
-  --device cpu --transform RandomElasticTransform
-
-# Run a selected set.
+  --device cpu --layout BDHWC --sizes 96 --batch-size 1
 KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
-  --device gpu --transform Flip RandomElasticTransform
+  --device gpu --layout BDHWC --sizes 96 --batch-size 1
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device cpu --layout BDHWC --sizes 96 --batch-size 1 --compile
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device gpu --layout BDHWC --sizes 96 --batch-size 1 --compile
 
-# Use the active backend's compiled path.
-KERAS_BACKEND=tensorflow python benchmarks/transforms.py --device gpu --compile
+# 2D batch input.
+KERAS_BACKEND=torch python benchmarks/transforms.py \
+  --device gpu --layout BHWC --sizes 224 --batch-size 8
+KERAS_BACKEND=torch python benchmarks/transforms.py \
+  --device gpu --layout BHWC --sizes 224 --batch-size 8 --compile
+
+# 3D sample input. Batch size is explicitly one.
+KERAS_BACKEND=jax python benchmarks/transforms.py \
+  --device cpu --layout DHWC --sizes 96 --batch-size 1
+KERAS_BACKEND=jax python benchmarks/transforms.py \
+  --device gpu --layout DHWC --sizes 96 --batch-size 1 --compile
+
+# Target one or more transforms and optionally save JSON output.
+KERAS_BACKEND=tensorflow python benchmarks/transforms.py \
+  --device gpu --layout BDHWC --sizes 96 --batch-size 1 \
+  --target-transforms RandomElasticTransform RandomRotate \
+  --iterations 50 --warmup 10 --json /tmp/transform_results.json
 ```
 
-`--device` selects an isolated process profile. The benchmark configures
-`CUDA_VISIBLE_DEVICES` before importing the Keras backend:
+**Option 2**: `Python`
 
-```bash
-# CPU-only process: the benchmark hides all CUDA devices internally.
-KERAS_BACKEND=tensorflow \
-  python benchmarks/transforms.py --device cpu
-
-# GPU-only process: the first visible physical GPU appears as gpu:0/cuda:0.
-CUDA_VISIBLE_DEVICES="0" KERAS_BACKEND=tensorflow \
-  python benchmarks/transforms.py --device gpu
-
-# If GPUs 0 and 1 are visible, only physical GPU 0 is used by this process.
-CUDA_VISIBLE_DEVICES="0,1" KERAS_BACKEND=tensorflow \
-  python benchmarks/transforms.py --device gpu
-```
-
-The registry uses two execution groups:
-
-- `cpu`: transforms that depend on medical metadata or are normally applied
-  before batching, such as `CropForeground`, `Orientation`, and `Spacing`.
-- `cpu+gpu`: tensor-only transforms such as intensity, flip, resize, crop, and
-  random augmentation transforms.
-
-For a Python matrix launcher, pass the selected device profile through each
+For a `Python` matrix launcher, pass the selected device profile through each
 subprocess rather than changing `os.environ` after importing Keras. The
 benchmark applies the CPU/GPU visibility rule before importing Keras:
 
@@ -84,7 +94,6 @@ def run(
     size,
     batch,
     compile_enabled=False,
-    group="all",
     device="cpu",
     transforms=("all",),
 ):
@@ -109,13 +118,11 @@ def run(
         str(size),
         "--batch-size",
         str(batch),
-        "--transform",
+        "--target-transforms",
         *transforms,
         "--json",
         json_path,
     ]
-    if group != "all":
-        command.extend(["--group", group])
     if compile_enabled:
         command.append("--compile")
 
@@ -147,40 +154,24 @@ def run(
 def run_transform_matrix(
     backend,
     compile_enabled=False,
+    layout="BDHWC",
     transforms=("all",),
     device="cpu",
 ):
-    image_profiles = [
-        (224,  [4, 8, 16, 32]),
-        (512,  [4, 8, 16]),
-        (1024, [4, 8]),
-        (1280, [4]),
-    ]
-    for size, batches in image_profiles:
+    if layout == "BHWC":
+        profiles = [(224, [4, 8, 16, 32]), (512, [4, 8, 16]), (1024, [4, 8])]
+    elif layout == "DHWC":
+        profiles = [(96, [1]), (160, [1]), (256, [1])]
+    elif layout == "BDHWC":
+        profiles = [(96, [1, 2]), (160, [1]), (256, [1])]
+    else:
+        raise ValueError(f"Unsupported benchmark layout: {layout}")
+
+    for size, batches in profiles:
         for batch in batches:
             run(
                 backend,
-                "BHWC",
-                size,
-                batch,
-                compile_enabled,
-                device=device,
-                transforms=transforms,
-            )
-
-    volume_profiles = [
-        (64,  [1, 2]),
-        (96,  [1, 2]),
-        (128, [1, 2]),
-        (160, [1]),
-        (256, [1]),
-    ]
-
-    for size, batches in volume_profiles:
-        for batch in batches:
-            run(
-                backend,
-                "BDHWC",
+                layout,
                 size,
                 batch,
                 compile_enabled,
@@ -189,73 +180,64 @@ def run_transform_matrix(
             )
 ```
 
-Examples of isolated launcher runs:
+The Python matrix launcher can cover all backend, device, compilation, and
+layout combinations. `BDHWC` is the default 3D batch layout; `BHWC` covers 2D
+batch inputs; and `DHWC` covers 3D sample inputs with batch size one.
 
 ```python
-# Run isolated CPU and GPU matrices as separate subprocesses.
-run_transform_matrix("tensorflow", device="cpu")
-run_transform_matrix("tensorflow", device="gpu")
+backends = ["tensorflow", "torch", "jax"]
+
+for backend in backends:
+    for device in ["cpu", "gpu"]:
+        for compile_enabled in [False, True]:
+            # Default 3D batch layout.
+            run_transform_matrix(
+                backend,
+                compile_enabled=compile_enabled,
+                layout="BDHWC",
+                device=device,
+            )
+
+            # 2D batch layout.
+            run_transform_matrix(
+                backend,
+                compile_enabled=compile_enabled,
+                layout="BHWC",
+                device=device,
+            )
+
+            # 3D sample layout; the launcher uses batch size one.
+            run_transform_matrix(
+                backend,
+                compile_enabled=compile_enabled,
+                layout="DHWC",
+                device=device,
+            )
 ```
 
-Run without compilation. Omitting `--compile` is the default and measures eager
-transform calls.
+To benchmark only selected transforms, pass a tuple of names. Names are
+case-insensitive. TensorFlow uses `tf.function(jit_compile=True)`, JAX uses
+`jax.jit`, and Torch uses `torch.compile` with the `inductor`
+backend when `compile_enabled=True`.
 
 ```python
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=False, # or True
-        transforms=["all"],
-    )
-
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=False, # or True
-        transforms=["RandomElasticTransform"],
-    )
-
-selected_transforms = ["Flip", "RandomElasticTransform"]
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=False, # or True
-        transforms=selected_transforms,
-    )
+selected_transforms = ("RandomElasticTransform", "RandomRotate")
+for backend in backends:
+    for device in ["cpu", "gpu"]:
+        for compile_enabled in [False, True]:
+            run_transform_matrix(
+                backend,
+                compile_enabled=compile_enabled,
+                layout="BDHWC",
+                device=device,
+                transforms=selected_transforms,
+            )
 ```
 
-Run with compilation by passing `--compile`. TensorFlow uses
-`tf.function(jit_compile=True)`, JAX uses `jax.jit`, and Torch uses
-`torch.compile` with the Keras-standard `inductor` backend.
-
-```python
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=True,  # or False
-        transforms=["all"],
-    )
-
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=True,  # or False
-        transforms=["RandomElasticTransform"],
-    )
-
-selected_transforms = ["Flip", "RandomElasticTransform"]
-for backend in ["tensorflow", "torch", "jax"]:
-    run_transform_matrix(
-        backend,
-        compile_enabled=True,  # or False
-        transforms=selected_transforms,
-    )
-```
-
-Compilation time is reported separately as `compile_time_ms`. Metadata-dependent
-transforms are skipped because their Python-side metadata and dynamic geometry
-are not part of this compiled tensor-only benchmark. If compilation or the
-first compiled call is unsupported by the active backend compiler, it is
+Compilation time is reported separately as `compile_time_ms`. Metadata-aware
+transforms are included in the CPU/GPU benchmark profiles, but their
+Python-side metadata or dynamic geometry may not be supported by a backend
+compiler. If compilation or the first compiled call is unsupported, it is
 recorded with `compile_status=not-compile-compatible`, and the remaining
 benchmark continues.
 
@@ -265,570 +247,3 @@ work before stopping the timer, and reports forward timings. Input-case setup
 is reported separately as `case_setup_ms`; it is not included in transform
 timings. The benchmark is a timing tool, not a correctness replacement for
 `test/transforms/`.
-
-## Recorded Results
-
-The recorded measurements below were collected in a Kaggle notebook on the
-following system. These details are included to make the results reproducible
-and to provide context when comparing timings from another machine.
-
-| Component | Configuration |
-| :--- | :--- |
-| CPU | Intel(R) Xeon(R) CPU @ 2.00GHz, x86_64, 64-bit |
-| CPU cache | L1 data: 0.0625 MB; L1 instruction: 0.0625 MB; L2: 2 MB; L3: 40.37 MB |
-| RAM | 30.0 GB total |
-| GPU | NVIDIA Tesla T4, 15. GB VRAM |
-| CUDA toolkit | CUDA 12.8, `nvcc` 12.8.93 |
-| Software | Keras `3.15.1`; TensorFlow `2.20.0`; JAX `0.7.2`; PyTorch `2.10.0+cu128` |
-
-The benchmark environment and software versions can affect the absolute timing;
-use these values primarily for backend and transform comparisons under the same
-configuration.
-
-The following results report forward median execution time in **milliseconds (ms)**.
-Each transformation has two tables: one for CPU execution and one for GPU
-execution. Each table compares eager execution with compiled mode for
-TensorFlow (XLA), Torch (`torch.compile` with Inductor), and JAX (XLA).
-Every row represents one concrete input layout, shape, and batch
-configuration. The fastest available result in each row is shown in
-**bold**; the `--` means the result was unavailable or unsupported.
-
-### RandomElasticTransform
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 87.30 | **8.51** | **31.59** | 33.78 | 35.00 | **7.03** |
-| BHWC | (8, 224, 224, 1) | 111.05 | **16.26** | **59.41** | 67.09 | 57.96 | **12.79** |
-| BHWC | (16, 224, 224, 1) | 156.29 | **31.57** | 124.76 | **102.34** | 110.38 | **24.73** |
-| BHWC | (32, 224, 224, 1) | 249.62 | **75.51** | 261.94 | **231.03** | 221.97 | **60.76** |
-| BHWC | (4, 512, 512, 1) | 188.93 | **26.21** | 185.34 | **177.60** | 129.12 | **37.43** |
-| BHWC | (8, 512, 512, 1) | 305.77 | **63.08** | **351.93** | 373.79 | 290.42 | **87.62** |
-| BHWC | (16, 512, 512, 1) | 574.84 | **141.89** | **663.92** | 690.09 | 675.23 | **202.17** |
-| BHWC | (4, 1024, 1024, 1) | 560.97 | **170.39** | **619.21** | 660.18 | 697.88 | **222.98** |
-| BHWC | (8, 1024, 1024, 1) | 2285.47 | **383.12** | 2687.57 | **2582.35** | 2387.07 | **523.46** |
-| BDHWC | (1, 96, 96, 96, 1) | 301.61 | **45.43** | **172.60** | 179.84 | 227.68 | **61.06** |
-| BDHWC | (1, 160, 160, 160, 1) | 1021.71 | **248.17** | 1213.84 | **824.48** | 1330.18 | **351.87** |
-| BDHWC | (1, 256, 256, 256, 1) | 9277.77 | **973.48** | 10598.85 | **10470.43** | 10131.96 | **1882.05** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 80.84 | **1.37** | **9.24** | 14.14 | 59.71 | **1.25** |
-| BHWC | (8, 224, 224, 1) | 87.56 | **1.84** | **9.97** | 14.33 | 59.94 | **1.72** |
-| BHWC | (16, 224, 224, 1) | 103.17 | **3.03** | **12.07** | 15.81 | 62.57 | **2.77** |
-| BHWC | (32, 224, 224, 1) | 135.70 | **5.46** | **18.13** | 20.49 | 66.28 | **5.47** |
-| BHWC | (4, 512, 512, 1) | 115.96 | **3.87** | **14.05** | 18.40 | 64.41 | **3.45** |
-| BHWC | (8, 512, 512, 1) | 156.24 | **7.77** | **23.66** | 25.79 | 67.59 | **8.89** |
-| BHWC | (16, 512, 512, 1) | 260.22 | **15.00** | 53.30 | **46.58** | 86.83 | **25.73** |
-| BHWC | (4, 1024, 1024, 1) | 259.18 | **14.62** | **42.24** | 44.78 | 89.02 | **24.98** |
-| BHWC | (8, 1024, 1024, 1) | 928.26 | **81.55** | **134.56** | 135.77 | 118.04 | **59.15** |
-| BDHWC | (1, 96, 96, 96, 1) | 196.36 | **3.29** | **21.64** | 25.71 | 114.47 | **3.22** |
-| BDHWC | (1, 160, 160, 160, 1) | 482.23 | **15.72** | **74.27** | 78.47 | 118.35 | **19.47** |
-| BDHWC | (1, 256, 256, 256, 1) | 3927.30 | **168.66** | **390.06** | 394.29 | 336.12 | **123.63** |
-
-### Flip
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 0.94 | **0.85** | **0.34** | 0.41 | 0.44 | **0.42** |
-| BHWC | (8, 224, 224, 1) | 1.16 | **1.15** | **0.59** | 0.65 | 0.69 | **0.68** |
-| BHWC | (16, 224, 224, 1) | **1.64** | 1.65 | **1.04** | 1.26 | **1.27** | **1.27** |
-| BHWC | (32, 224, 224, 1) | **3.12** | 3.36 | **2.33** | 2.91 | **2.72** | 2.84 |
-| BHWC | (4, 512, 512, 1) | **1.98** | 2.14 | **1.34** | 1.61 | 1.71 | **1.65** |
-| BHWC | (8, 512, 512, 1) | **5.15** | 5.60 | **4.53** | 5.05 | 5.06 | **4.82** |
-| BHWC | (16, 512, 512, 1) | **10.04** | 11.32 | **9.64** | 10.78 | **10.02** | 11.11 |
-| BHWC | (4, 1024, 1024, 1) | **9.84** | 10.93 | **9.74** | 10.73 | 13.67 | **12.90** |
-| BHWC | (8, 1024, 1024, 1) | **49.02** | 56.25 | **41.69** | 59.98 | 54.14 | **53.61** |
-| BDHWC | (1, 96, 96, 96, 1) | **1.88** | 2.00 | 1.34 | **1.30** | 1.63 | **1.37** |
-| BDHWC | (1, 160, 160, 160, 1) | **9.48** | 10.71 | **9.32** | 9.62 | 10.00 | **9.74** |
-| BDHWC | (1, 256, 256, 256, 1) | **94.90** | 105.06 | **107.95** | 109.23 | 106.96 | **105.07** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 1.22 | **1.20** | **0.78** | 0.85 | 1.30 | **1.13** |
-| BHWC | (8, 224, 224, 1) | **1.64** | 1.69 | **1.29** | 1.33 | 1.76 | **1.57** |
-| BHWC | (16, 224, 224, 1) | **2.42** | 2.76 | 2.29 | **2.10** | 2.63 | **2.58** |
-| BHWC | (32, 224, 224, 1) | **4.30** | 4.74 | **4.59** | 4.96 | 4.56 | **4.55** |
-| BHWC | (4, 512, 512, 1) | **2.91** | 3.25 | 3.14 | **2.85** | 3.30 | **3.27** |
-| BHWC | (8, 512, 512, 1) | **6.05** | 7.05 | 6.79 | **6.58** | **7.98** | 8.36 |
-| BHWC | (16, 512, 512, 1) | **11.59** | 13.30 | **13.26** | 13.37 | 26.62 | **24.05** |
-| BHWC | (4, 1024, 1024, 1) | **11.95** | 13.17 | **13.02** | 13.56 | 27.08 | **22.65** |
-| BHWC | (8, 1024, 1024, 1) | **67.28** | 82.29 | 80.02 | **79.28** | 56.59 | **54.72** |
-| BDHWC | (1, 96, 96, 96, 1) | **2.58** | 3.01 | **2.62** | 2.93 | 3.09 | **2.70** |
-| BDHWC | (1, 160, 160, 160, 1) | **11.67** | 12.93 | **12.56** | 13.22 | **15.00** | 15.34 |
-| BDHWC | (1, 256, 256, 256, 1) | **131.04** | 163.20 | **158.69** | 160.18 | 107.88 | **105.03** |
-
-### NormalizeIntensity
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 5.71 | **1.27** | 1.64 | **0.49** | 2.88 | **0.91** |
-| BHWC | (8, 224, 224, 1) | 6.82 | **2.00** | 3.32 | **0.78** | 5.11 | **1.57** |
-| BHWC | (16, 224, 224, 1) | 9.40 | **3.30** | 10.23 | **1.33** | 7.69 | **2.78** |
-| BHWC | (32, 224, 224, 1) | 14.02 | **7.53** | 14.20 | **2.57** | 13.72 | **5.95** |
-| BHWC | (4, 512, 512, 1) | 10.86 | **3.91** | 11.53 | **1.72** | 9.06 | **3.34** |
-| BHWC | (8, 512, 512, 1) | 17.79 | **10.54** | 19.11 | **4.63** | 17.87 | **8.73** |
-| BHWC | (16, 512, 512, 1) | 33.30 | **23.02** | 56.74 | **10.13** | 61.57 | **29.15** |
-| BHWC | (4, 1024, 1024, 1) | 35.08 | **19.83** | 57.00 | **10.07** | 59.39 | **29.78** |
-| BHWC | (8, 1024, 1024, 1) | 166.26 | **77.31** | 205.24 | **45.63** | 220.19 | **74.56** |
-| BDHWC | (1, 96, 96, 96, 1) | 10.29 | **4.08** | 6.75 | **1.40** | 8.24 | **3.19** |
-| BDHWC | (1, 160, 160, 160, 1) | 29.71 | **20.91** | 38.44 | **9.95** | 38.26 | **28.97** |
-| BDHWC | (1, 256, 256, 256, 1) | 327.80 | **142.69** | 405.92 | **88.56** | 426.61 | **146.53** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 3.81 | **1.24** | 1.38 | **1.05** | 6.39 | **1.14** |
-| BHWC | (8, 224, 224, 1) | 4.07 | **1.81** | 1.85 | **1.62** | 6.51 | **1.60** |
-| BHWC | (16, 224, 224, 1) | 4.65 | **2.79** | 2.76 | **2.73** | 7.21 | **2.64** |
-| BHWC | (32, 224, 224, 1) | 5.87 | **4.82** | 5.12 | **4.73** | 8.80 | **4.60** |
-| BHWC | (4, 512, 512, 1) | 4.91 | **3.51** | 3.25 | **3.13** | 8.16 | **3.05** |
-| BHWC | (8, 512, 512, 1) | 8.30 | **7.17** | 7.24 | **6.70** | 10.99 | **8.28** |
-| BHWC | (16, 512, 512, 1) | **12.71** | 13.30 | 14.79 | **12.90** | **16.41** | 22.79 |
-| BHWC | (4, 1024, 1024, 1) | **12.85** | 13.17 | 14.86 | **13.70** | **16.61** | 22.63 |
-| BHWC | (8, 1024, 1024, 1) | **58.29** | 82.97 | 83.72 | **77.55** | **44.37** | 54.82 |
-| BDHWC | (1, 96, 96, 96, 1) | 4.75 | **3.21** | 3.17 | **2.67** | 7.95 | **2.83** |
-| BDHWC | (1, 160, 160, 160, 1) | 13.49 | **12.90** | 14.19 | **12.45** | 16.55 | **15.63** |
-| BDHWC | (1, 256, 256, 256, 1) | **110.97** | 162.98 | 163.42 | **157.51** | **83.44** | 105.47 |
-
-### RandomCutOut
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 8.11 | **1.02** | **1.77** | 2.29 | 5.89 | **0.42** |
-| BHWC | (8, 224, 224, 1) | 9.12 | **1.23** | **2.32** | 2.90 | 6.94 | **0.75** |
-| BHWC | (16, 224, 224, 1) | 10.11 | **1.81** | **3.63** | 4.51 | 8.64 | **1.14** |
-| BHWC | (32, 224, 224, 1) | 13.45 | **3.52** | **7.04** | 8.47 | 11.60 | **2.53** |
-| BHWC | (4, 512, 512, 1) | 11.58 | **2.26** | **4.75** | 5.43 | 9.00 | **1.39** |
-| BHWC | (8, 512, 512, 1) | 15.88 | **5.38** | **10.45** | 11.19 | 13.58 | **4.58** |
-| BHWC | (16, 512, 512, 1) | 28.55 | **10.60** | **19.92** | 23.87 | 24.37 | **13.70** |
-| BHWC | (4, 1024, 1024, 1) | 27.01 | **12.79** | **20.70** | 20.81 | 21.77 | **9.62** |
-| BHWC | (8, 1024, 1024, 1) | 96.64 | **41.69** | 96.92 | **39.14** | 98.87 | **39.88** |
-| BDHWC | (1, 96, 96, 96, 1) | 12.12 | **1.81** | **4.10** | 4.64 | 9.61 | **1.25** |
-| BDHWC | (1, 160, 160, 160, 1) | 24.13 | **10.86** | **18.62** | 20.51 | 23.39 | **9.43** |
-| BDHWC | (1, 256, 256, 256, 1) | 198.17 | **102.66** | 205.59 | **104.83** | 221.96 | **101.36** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 12.86 | **1.34** | **2.47** | 2.97 | 14.28 | **1.10** |
-| BHWC | (8, 224, 224, 1) | 13.06 | **1.94** | **2.66** | 3.38 | 14.34 | **1.58** |
-| BHWC | (16, 224, 224, 1) | 13.46 | **2.98** | **3.46** | 4.12 | 15.39 | **2.61** |
-| BHWC | (32, 224, 224, 1) | 15.09 | **4.76** | **5.92** | 6.22 | 17.29 | **4.64** |
-| BHWC | (4, 512, 512, 1) | 14.23 | **3.35** | **4.11** | 4.95 | 15.71 | **3.32** |
-| BHWC | (8, 512, 512, 1) | 17.36 | **6.85** | **8.04** | 8.38 | 19.16 | **8.29** |
-| BHWC | (16, 512, 512, 1) | 22.18 | **13.35** | **14.76** | 24.92 | 25.02 | **22.82** |
-| BHWC | (4, 1024, 1024, 1) | 22.48 | **13.29** | **15.00** | 15.71 | 24.56 | **23.03** |
-| BHWC | (8, 1024, 1024, 1) | 66.72 | **61.49** | 82.62 | **81.80** | **53.82** | 54.48 |
-| BDHWC | (1, 96, 96, 96, 1) | 16.79 | **2.95** | **4.01** | 4.72 | 19.19 | **2.77** |
-| BDHWC | (1, 160, 160, 160, 1) | 26.49 | **12.46** | **14.34** | 14.35 | 29.25 | **15.23** |
-| BDHWC | (1, 256, 256, 256, 1) | **120.69** | 163.54 | **163.25** | 166.39 | **96.14** | 106.10 |
-
-### RandomFlip
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 3.85 | **0.84** | **1.09** | 1.61 | 1.28 | **0.39** |
-| BHWC | (8, 224, 224, 1) | 4.27 | **1.09** | 2.20 | **2.12** | 1.57 | **0.71** |
-| BHWC | (16, 224, 224, 1) | 5.55 | **1.64** | **2.65** | 3.51 | 3.24 | **1.26** |
-| BHWC | (32, 224, 224, 1) | 8.57 | **3.13** | **5.55** | 6.47 | 4.28 | **2.59** |
-| BHWC | (4, 512, 512, 1) | 6.34 | **2.07** | **3.33** | 5.55 | 2.90 | **1.56** |
-| BHWC | (8, 512, 512, 1) | 11.42 | **5.61** | 18.19 | **8.82** | 6.80 | **4.80** |
-| BHWC | (16, 512, 512, 1) | 21.51 | **10.51** | 35.88 | **24.04** | 18.27 | **13.94** |
-| BHWC | (4, 1024, 1024, 1) | 22.06 | **12.10** | 21.60 | **20.82** | 13.46 | **9.23** |
-| BHWC | (8, 1024, 1024, 1) | 81.34 | **24.97** | 79.89 | **57.16** | 55.10 | **38.67** |
-| BDHWC | (1, 96, 96, 96, 1) | 5.96 | **1.83** | **3.10** | 3.60 | 2.95 | **1.32** |
-| BDHWC | (1, 160, 160, 160, 1) | 17.82 | **9.89** | **15.47** | 16.60 | **11.95** | 13.91 |
-| BDHWC | (1, 256, 256, 256, 1) | 161.83 | **105.93** | **182.88** | 183.34 | 153.59 | **101.90** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 5.40 | **1.28** | **1.39** | 2.02 | 3.67 | **1.14** |
-| BHWC | (8, 224, 224, 1) | 6.26 | **1.84** | **1.84** | 2.50 | 3.93 | **1.55** |
-| BHWC | (16, 224, 224, 1) | 7.70 | **2.48** | **3.14** | 3.19 | 4.99 | **2.53** |
-| BHWC | (32, 224, 224, 1) | 11.12 | **4.90** | 5.50 | **4.93** | 6.78 | **4.58** |
-| BHWC | (4, 512, 512, 1) | 8.68 | **3.37** | **3.95** | 4.07 | 5.53 | **3.14** |
-| BHWC | (8, 512, 512, 1) | 14.04 | **6.93** | **7.40** | 7.77 | 10.21 | **7.89** |
-| BHWC | (16, 512, 512, 1) | 24.41 | **13.63** | 14.59 | **14.08** | 29.53 | **22.75** |
-| BHWC | (4, 1024, 1024, 1) | 23.45 | **13.98** | 14.48 | **14.11** | 29.24 | **23.00** |
-| BHWC | (8, 1024, 1024, 1) | 109.03 | **26.77** | 70.37 | **27.94** | 58.43 | **55.19** |
-| BDHWC | (1, 96, 96, 96, 1) | 7.99 | **2.98** | **3.21** | 3.59 | 5.41 | **2.70** |
-| BDHWC | (1, 160, 160, 160, 1) | 23.57 | **13.26** | 14.01 | **13.89** | 17.81 | **16.09** |
-| BDHWC | (1, 256, 256, 256, 1) | 210.30 | **162.97** | **161.18** | 162.23 | 110.30 | **105.45** |
-
-### RandomRotate
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **10.20** | -- | **31.69** | 31.79 | 27.29 | **2.43** |
-| BHWC | (8, 224, 224, 1) | **14.87** | -- | **60.28** | 63.44 | 37.54 | **4.50** |
-| BHWC | (16, 224, 224, 1) | **21.23** | -- | **119.06** | 122.47 | 58.69 | **9.00** |
-| BHWC | (32, 224, 224, 1) | **37.45** | -- | 241.77 | **240.87** | 95.76 | **34.26** |
-| BHWC | (4, 512, 512, 1) | **26.54** | -- | **137.12** | 141.17 | 75.00 | **15.15** |
-| BHWC | (8, 512, 512, 1) | **49.05** | -- | **270.38** | 272.95 | 135.87 | **45.23** |
-| BHWC | (16, 512, 512, 1) | **93.88** | -- | 646.06 | **624.93** | 352.41 | **89.35** |
-| BHWC | (4, 1024, 1024, 1) | **93.15** | -- | 669.52 | **652.35** | 344.21 | **95.24** |
-| BHWC | (8, 1024, 1024, 1) | **220.22** | -- | **1342.96** | 1375.72 | 707.74 | **210.33** |
-| BDHWC | (1, 96, 96, 96, 1) | **27.43** | -- | 135.93 | **133.78** | 75.73 | **10.70** |
-| BDHWC | (1, 160, 160, 160, 1) | **88.84** | -- | 631.81 | **628.21** | 345.34 | **85.01** |
-| BDHWC | (1, 256, 256, 256, 1) | **427.01** | -- | 6343.22 | **6124.15** | 1473.92 | **405.08** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **11.22** | -- | **12.03** | 13.71 | 45.73 | **1.19** |
-| BHWC | (8, 224, 224, 1) | **11.78** | -- | **21.16** | 22.98 | 45.62 | **1.93** |
-| BHWC | (16, 224, 224, 1) | **12.67** | -- | **40.15** | 40.98 | 47.43 | **2.94** |
-| BHWC | (32, 224, 224, 1) | **14.54** | -- | **77.39** | 80.00 | 49.77 | **5.38** |
-| BHWC | (4, 512, 512, 1) | **14.12** | -- | **14.34** | 15.71 | 46.75 | **4.11** |
-| BHWC | (8, 512, 512, 1) | **17.22** | -- | **25.61** | 28.56 | 52.02 | **9.12** |
-| BHWC | (16, 512, 512, 1) | **34.08** | -- | **49.60** | 67.36 | 70.42 | **25.62** |
-| BHWC | (4, 1024, 1024, 1) | **23.93** | -- | **50.76** | 51.42 | 71.66 | **25.89** |
-| BHWC | (8, 1024, 1024, 1) | **93.39** | -- | 152.80 | **108.50** | 105.70 | **64.61** |
-| BDHWC | (1, 96, 96, 96, 1) | **18.15** | -- | **12.58** | 13.60 | 50.33 | **3.39** |
-| BDHWC | (1, 160, 160, 160, 1) | **31.04** | -- | **49.92** | 51.06 | 62.03 | **17.32** |
-| BDHWC | (1, 256, 256, 256, 1) | **181.51** | -- | **303.83** | 306.15 | 170.01 | **122.32** |
-
-### RandomRotate90
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 19.35 | **0.95** | **3.28** | 5.29 | 8.80 | **0.61** |
-| BHWC | (8, 224, 224, 1) | 22.72 | **1.21** | **6.07** | 7.15 | 18.16 | **0.98** |
-| BHWC | (16, 224, 224, 1) | 31.17 | **2.20** | **11.47** | 13.16 | 33.27 | **2.00** |
-| BHWC | (32, 224, 224, 1) | 48.48 | **3.82** | **18.52** | 24.05 | 60.18 | **4.12** |
-| BHWC | (4, 512, 512, 1) | 39.73 | **3.52** | **20.94** | 21.17 | 42.69 | **3.09** |
-| BHWC | (8, 512, 512, 1) | 68.83 | **9.28** | **38.14** | 49.66 | 70.64 | **7.15** |
-| BHWC | (16, 512, 512, 1) | 136.79 | **16.13** | **98.90** | 101.70 | 163.12 | **17.83** |
-| BHWC | (4, 1024, 1024, 1) | 147.18 | **31.18** | **148.71** | 150.61 | 198.01 | **27.73** |
-| BHWC | (8, 1024, 1024, 1) | 491.83 | **71.78** | 470.41 | **341.62** | 787.76 | **98.47** |
-| BDHWC | (1, 96, 96, 96, 1) | 32.06 | **2.14** | **12.55** | 13.52 | 35.40 | **2.27** |
-| BDHWC | (1, 160, 160, 160, 1) | 99.51 | **10.82** | **48.48** | 58.29 | 114.61 | **13.87** |
-| BDHWC | (1, 256, 256, 256, 1) | 832.53 | **122.41** | 582.44 | **579.85** | 1258.21 | **126.34** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 26.13 | **1.26** | **3.17** | 5.37 | 17.78 | **1.09** |
-| BHWC | (8, 224, 224, 1) | 31.28 | **1.71** | **3.78** | 6.00 | 18.52 | **1.68** |
-| BHWC | (16, 224, 224, 1) | 37.78 | **2.93** | **5.19** | 6.80 | 19.53 | **2.54** |
-| BHWC | (32, 224, 224, 1) | 55.26 | **4.97** | **7.22** | 9.31 | 21.71 | **4.38** |
-| BHWC | (4, 512, 512, 1) | 42.18 | **3.48** | **5.76** | 8.05 | 20.51 | **3.23** |
-| BHWC | (8, 512, 512, 1) | 64.15 | **7.50** | **10.29** | 11.90 | 24.97 | **8.00** |
-| BHWC | (16, 512, 512, 1) | 123.34 | **14.31** | **17.70** | 19.35 | 42.96 | **23.02** |
-| BHWC | (4, 1024, 1024, 1) | 114.26 | **13.97** | **18.70** | 19.65 | 42.91 | **23.10** |
-| BHWC | (8, 1024, 1024, 1) | 340.72 | **48.60** | 90.18 | **36.33** | 71.56 | **55.76** |
-| BDHWC | (1, 96, 96, 96, 1) | 36.10 | **3.12** | **5.26** | 6.90 | 20.20 | **2.55** |
-| BDHWC | (1, 160, 160, 160, 1) | 94.79 | **14.09** | **18.28** | 19.82 | 32.80 | **16.58** |
-| BDHWC | (1, 256, 256, 256, 1) | 667.22 | **162.55** | **175.37** | 177.18 | 125.55 | **106.72** |
-
-### RandomShiftIntensity
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 3.82 | **1.00** | **1.06** | 1.34 | 1.34 | **0.43** |
-| BHWC | (8, 224, 224, 1) | 4.08 | **1.28** | **1.36** | 1.67 | 1.49 | **0.75** |
-| BHWC | (16, 224, 224, 1) | 4.85 | **1.92** | **2.03** | 2.31 | 2.03 | **1.18** |
-| BHWC | (32, 224, 224, 1) | 6.53 | **3.59** | **3.55** | 4.10 | 3.71 | **2.43** |
-| BHWC | (4, 512, 512, 1) | 5.17 | **2.27** | **2.59** | 2.82 | 2.39 | **1.53** |
-| BHWC | (8, 512, 512, 1) | 8.58 | **5.43** | **5.89** | 6.22 | 6.18 | **4.56** |
-| BHWC | (16, 512, 512, 1) | 14.31 | **10.99** | **11.73** | 12.11 | **10.67** | 19.70 |
-| BHWC | (4, 1024, 1024, 1) | 13.83 | **10.81** | **11.92** | 12.13 | 10.99 | **9.43** |
-| BHWC | (8, 1024, 1024, 1) | 55.10 | **36.14** | 36.28 | **22.98** | **32.41** | 40.33 |
-| BDHWC | (1, 96, 96, 96, 1) | 4.73 | **1.84** | **2.11** | 2.42 | 2.19 | **1.19** |
-| BDHWC | (1, 160, 160, 160, 1) | 13.45 | **10.56** | **11.50** | 11.55 | 10.56 | **10.06** |
-| BDHWC | (1, 256, 256, 256, 1) | 106.51 | **104.16** | 71.28 | **58.65** | 105.33 | **104.52** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 5.77 | **1.34** | **1.62** | 1.95 | 3.52 | **1.20** |
-| BHWC | (8, 224, 224, 1) | 6.11 | **1.76** | **2.03** | 2.52 | 3.90 | **1.57** |
-| BHWC | (16, 224, 224, 1) | 6.72 | **2.74** | **2.99** | 3.22 | 4.54 | **2.50** |
-| BHWC | (32, 224, 224, 1) | 7.96 | **4.26** | **4.63** | 5.23 | 5.82 | **4.72** |
-| BHWC | (4, 512, 512, 1) | 6.97 | **3.45** | **3.44** | 3.82 | 4.86 | **3.20** |
-| BHWC | (8, 512, 512, 1) | 9.95 | **7.06** | 7.80 | **7.44** | 8.32 | **7.84** |
-| BHWC | (16, 512, 512, 1) | 14.88 | **13.03** | **13.90** | 14.95 | **21.74** | 22.91 |
-| BHWC | (4, 1024, 1024, 1) | 15.09 | **12.98** | **14.51** | 18.67 | **21.54** | 23.11 |
-| BHWC | (8, 1024, 1024, 1) | **58.64** | 70.30 | 80.71 | **34.79** | **43.91** | 55.00 |
-| BDHWC | (1, 96, 96, 96, 1) | 6.65 | **2.91** | 3.56 | **3.42** | 4.67 | **2.72** |
-| BDHWC | (1, 160, 160, 160, 1) | 15.99 | **12.79** | 14.24 | **13.29** | **14.00** | 15.25 |
-| BDHWC | (1, 256, 256, 256, 1) | **113.00** | 163.24 | **159.81** | 160.52 | **81.47** | 105.50 |
-
-### RandomSpatialCrop
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **6.64** | 51.21 | **1.65** | 2.71 | 5.10 | **0.27** |
-| BHWC | (8, 224, 224, 1) | **6.98** | 52.83 | **1.73** | 2.77 | 5.75 | **0.49** |
-| BHWC | (16, 224, 224, 1) | **7.38** | 53.44 | **1.99** | 3.11 | 6.63 | **0.86** |
-| BHWC | (32, 224, 224, 1) | **8.44** | 57.53 | **3.26** | 3.45 | 7.97 | **1.82** |
-| BHWC | (4, 512, 512, 1) | **7.59** | 52.38 | **2.22** | 3.33 | 6.93 | **1.02** |
-| BHWC | (8, 512, 512, 1) | **9.19** | 54.55 | **3.75** | 3.94 | 9.65 | **3.06** |
-| BHWC | (16, 512, 512, 1) | **13.60** | 60.95 | 6.93 | **5.85** | 15.48 | **7.09** |
-| BHWC | (4, 1024, 1024, 1) | **13.14** | 61.67 | 6.96 | **5.54** | 12.59 | **7.37** |
-| BHWC | (8, 1024, 1024, 1) | **36.44** | 75.39 | 16.81 | **10.60** | 30.81 | **14.94** |
-| BDHWC | (1, 96, 96, 96, 1) | **7.39** | 54.55 | **2.08** | 2.97 | 6.57 | **0.82** |
-| BDHWC | (1, 160, 160, 160, 1) | **12.23** | 58.16 | 5.87 | **5.18** | 13.01 | **6.79** |
-| BDHWC | (1, 256, 256, 256, 1) | **77.10** | 125.19 | 30.29 | **18.86** | 80.71 | **74.03** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **13.22** | 93.27 | **3.35** | 4.61 | 17.67 | **1.08** |
-| BHWC | (8, 224, 224, 1) | **13.56** | 92.80 | **3.86** | 5.08 | 18.64 | **1.41** |
-| BHWC | (16, 224, 224, 1) | **13.65** | 92.64 | **4.78** | 5.70 | 18.97 | **2.06** |
-| BHWC | (32, 224, 224, 1) | **15.28** | 90.66 | **6.40** | 7.17 | 21.51 | **3.65** |
-| BHWC | (4, 512, 512, 1) | **14.67** | 88.29 | **5.36** | 6.31 | 19.88 | **2.54** |
-| BHWC | (8, 512, 512, 1) | **17.12** | 90.18 | **6.76** | 8.28 | 22.84 | **4.30** |
-| BHWC | (16, 512, 512, 1) | **23.44** | 96.72 | **13.24** | 13.77 | 35.92 | **21.77** |
-| BHWC | (4, 1024, 1024, 1) | **21.86** | 95.51 | **12.75** | 14.33 | 36.51 | **22.03** |
-| BHWC | (8, 1024, 1024, 1) | **50.40** | 105.96 | 23.81 | **23.04** | 52.55 | **34.87** |
-| BDHWC | (1, 96, 96, 96, 1) | **14.08** | 91.37 | **4.80** | 5.77 | 21.27 | **2.11** |
-| BDHWC | (1, 160, 160, 160, 1) | **21.79** | 97.61 | **11.95** | 12.17 | 30.58 | **10.20** |
-| BDHWC | (1, 256, 256, 256, 1) | **103.95** | 199.26 | **108.81** | 113.24 | 93.33 | **73.34** |
-
-### Resize
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 4.32 | **3.99** | 1.29 | **1.13** | 2.26 | **1.95** |
-| BHWC | (8, 224, 224, 1) | **6.08** | 7.05 | 1.79 | **1.36** | 4.43 | **3.61** |
-| BHWC | (16, 224, 224, 1) | 9.33 | **8.81** | 3.15 | **2.59** | 7.38 | **6.28** |
-| BHWC | (32, 224, 224, 1) | 16.40 | **15.88** | 5.71 | **5.03** | **11.77** | 13.72 |
-| BHWC | (4, 512, 512, 1) | **11.47** | 27.82 | 3.83 | **3.23** | **12.14** | 15.59 |
-| BHWC | (8, 512, 512, 1) | 20.71 | **18.39** | 7.17 | **6.98** | **23.51** | 38.75 |
-| BHWC | (16, 512, 512, 1) | 40.87 | **38.75** | 15.28 | **15.10** | **50.97** | 92.22 |
-| BHWC | (4, 1024, 1024, 1) | **40.02** | 114.95 | 19.20 | **15.43** | **76.31** | 113.36 |
-| BHWC | (8, 1024, 1024, 1) | **85.13** | 180.00 | 66.55 | **31.97** | **176.74** | 244.38 |
-| BDHWC | (1, 96, 96, 96, 1) | 47.76 | **4.94** | 17.95 | **5.65** | 21.23 | **6.10** |
-| BDHWC | (1, 160, 160, 160, 1) | 102.67 | **34.75** | 93.87 | **26.70** | 63.48 | **43.30** |
-| BDHWC | (1, 256, 256, 256, 1) | 758.79 | **247.12** | 1152.73 | **304.27** | 917.24 | **325.34** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 6.29 | **1.12** | 1.44 | **0.78** | 3.00 | **1.07** |
-| BHWC | (8, 224, 224, 1) | 7.73 | **1.77** | 1.77 | **1.15** | 3.61 | **1.41** |
-| BHWC | (16, 224, 224, 1) | 10.55 | **2.62** | 2.66 | **1.77** | 3.95 | **2.29** |
-| BHWC | (32, 224, 224, 1) | 16.09 | **4.52** | 4.39 | **3.66** | 5.46 | **4.15** |
-| BHWC | (4, 512, 512, 1) | 12.03 | **2.78** | 2.90 | **2.27** | 4.39 | **3.13** |
-| BHWC | (8, 512, 512, 1) | 19.40 | **5.65** | 5.75 | **4.06** | 6.90 | **5.64** |
-| BHWC | (16, 512, 512, 1) | 34.39 | **12.72** | 11.44 | **9.75** | 24.89 | **22.76** |
-| BHWC | (4, 1024, 1024, 1) | 34.51 | **10.79** | 11.40 | **10.99** | 24.71 | **23.71** |
-| BHWC | (8, 1024, 1024, 1) | 89.15 | **25.32** | 22.85 | **19.72** | 49.67 | **39.69** |
-| BDHWC | (1, 96, 96, 96, 1) | 69.66 | **2.25** | 6.64 | **2.58** | 29.21 | **2.01** |
-| BDHWC | (1, 160, 160, 160, 1) | 111.66 | **9.29** | 16.17 | **10.13** | 37.09 | **10.55** |
-| BDHWC | (1, 256, 256, 256, 1) | 642.14 | **110.15** | 131.58 | **112.54** | 100.71 | **74.21** |
-
-### Rotate90
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 2.67 | **1.03** | **0.40** | 0.45 | 1.46 | **0.59** |
-| BHWC | (8, 224, 224, 1) | 3.17 | **1.55** | **0.64** | 0.77 | 2.21 | **1.00** |
-| BHWC | (16, 224, 224, 1) | 4.30 | **3.08** | **1.09** | 1.47 | 3.65 | **2.24** |
-| BHWC | (32, 224, 224, 1) | **7.10** | 7.31 | **2.86** | 3.25 | 8.04 | **6.61** |
-| BHWC | (4, 512, 512, 1) | 6.31 | **4.59** | **1.52** | 1.88 | 5.81 | **4.25** |
-| BHWC | (8, 512, 512, 1) | 12.93 | **11.67** | **5.08** | 5.29 | 13.24 | **11.48** |
-| BHWC | (16, 512, 512, 1) | **25.28** | 26.03 | **10.77** | 11.35 | 29.76 | **25.93** |
-| BHWC | (4, 1024, 1024, 1) | 28.38 | **26.16** | 14.72 | **12.01** | 38.38 | **28.18** |
-| BHWC | (8, 1024, 1024, 1) | **100.06** | 106.74 | **42.15** | 60.13 | 193.29 | **103.93** |
-| BDHWC | (1, 96, 96, 96, 1) | 4.22 | **3.34** | **1.22** | 1.41 | 4.21 | **2.61** |
-| BDHWC | (1, 160, 160, 160, 1) | **17.05** | 18.68 | 14.38 | **10.48** | 20.41 | **18.39** |
-| BDHWC | (1, 256, 256, 256, 1) | **168.00** | 189.63 | **105.67** | 114.38 | 303.90 | **188.60** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 3.51 | **1.24** | **0.86** | 0.89 | 2.55 | **1.22** |
-| BHWC | (8, 224, 224, 1) | 4.47 | **1.70** | **1.31** | 1.34 | 2.94 | **1.67** |
-| BHWC | (16, 224, 224, 1) | 6.30 | **2.77** | 2.41 | **2.13** | 3.91 | **2.54** |
-| BHWC | (32, 224, 224, 1) | 10.47 | **4.92** | 4.56 | **3.95** | 5.68 | **4.65** |
-| BHWC | (4, 512, 512, 1) | 7.66 | **3.36** | 3.07 | **2.79** | 4.67 | **3.30** |
-| BHWC | (8, 512, 512, 1) | 13.50 | **7.04** | 6.84 | **6.54** | 9.11 | **8.44** |
-| BHWC | (16, 512, 512, 1) | 25.50 | **13.96** | 13.08 | **12.41** | 27.98 | **22.69** |
-| BHWC | (4, 1024, 1024, 1) | 24.81 | **13.62** | **12.88** | 13.38 | 29.14 | **23.45** |
-| BHWC | (8, 1024, 1024, 1) | 133.99 | **82.41** | 80.26 | **79.57** | 58.10 | **54.98** |
-| BDHWC | (1, 96, 96, 96, 1) | 6.55 | **2.99** | **2.68** | 2.80 | 4.36 | **2.80** |
-| BDHWC | (1, 160, 160, 160, 1) | 24.37 | **13.39** | **12.67** | 13.32 | 16.72 | **16.44** |
-| BDHWC | (1, 256, 256, 256, 1) | 268.92 | **164.78** | 160.14 | **159.65** | 109.04 | **107.21** |
-
-### ScaleIntensityRange
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 1.93 | **0.90** | 0.71 | **0.39** | 0.70 | **0.46** |
-| BHWC | (8, 224, 224, 1) | 2.28 | **1.17** | 1.84 | **0.60** | 1.17 | **0.73** |
-| BHWC | (16, 224, 224, 1) | 3.15 | **1.73** | 5.27 | **1.03** | 1.86 | **1.22** |
-| BHWC | (32, 224, 224, 1) | 5.61 | **3.32** | 7.84 | **2.02** | 3.75 | **2.69** |
-| BHWC | (4, 512, 512, 1) | 3.82 | **2.02** | 7.15 | **1.24** | 2.78 | **1.59** |
-| BHWC | (8, 512, 512, 1) | 7.91 | **5.36** | 10.89 | **3.59** | **5.71** | 8.84 |
-| BHWC | (16, 512, 512, 1) | 15.60 | **12.53** | 29.20 | **7.61** | 24.09 | **11.32** |
-| BHWC | (4, 1024, 1024, 1) | 15.68 | **10.51** | 39.52 | **7.65** | 14.33 | **11.79** |
-| BHWC | (8, 1024, 1024, 1) | 95.55 | **55.61** | 104.70 | **43.55** | 98.79 | **55.82** |
-| BDHWC | (1, 96, 96, 96, 1) | 3.33 | **1.95** | 2.46 | **1.11** | 2.10 | **1.37** |
-| BDHWC | (1, 160, 160, 160, 1) | 15.01 | **10.04** | 16.48 | **8.03** | 12.50 | **11.35** |
-| BDHWC | (1, 256, 256, 256, 1) | 191.60 | **105.64** | 206.86 | **83.77** | 197.47 | **107.52** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **1.22** | 1.27 | 0.90 | **0.84** | 1.68 | **1.26** |
-| BHWC | (8, 224, 224, 1) | **1.39** | 1.76 | **1.32** | 1.43 | 1.99 | **1.60** |
-| BHWC | (16, 224, 224, 1) | **2.04** | 2.74 | **2.16** | 2.55 | 2.64 | **2.56** |
-| BHWC | (32, 224, 224, 1) | **3.01** | 5.04 | **4.66** | 4.95 | **3.73** | 4.43 |
-| BHWC | (4, 512, 512, 1) | **2.28** | 3.25 | **2.66** | 3.16 | **3.09** | 3.29 |
-| BHWC | (8, 512, 512, 1) | **4.93** | 6.91 | **6.76** | 6.81 | **6.31** | 8.22 |
-| BHWC | (16, 512, 512, 1) | **9.83** | 12.98 | 14.15 | **13.26** | **20.41** | 23.67 |
-| BHWC | (4, 1024, 1024, 1) | **9.72** | 13.29 | 13.99 | **13.46** | **19.97** | 22.54 |
-| BHWC | (8, 1024, 1024, 1) | **52.81** | 82.35 | 81.21 | **79.10** | **42.39** | 54.56 |
-| BDHWC | (1, 96, 96, 96, 1) | **2.09** | 2.93 | 2.74 | **2.61** | 2.79 | **2.58** |
-| BDHWC | (1, 160, 160, 160, 1) | **9.52** | 13.03 | 13.33 | **11.99** | **11.60** | 15.26 |
-| BDHWC | (1, 256, 256, 256, 1) | **107.52** | 162.71 | 158.33 | **156.71** | **80.32** | 105.44 |
-
-### ShiftIntensity
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **0.50** | 0.90 | **0.27** | 0.36 | **0.36** | 0.46 |
-| BHWC | (8, 224, 224, 1) | **0.69** | 1.18 | **0.47** | 0.56 | **0.60** | 0.66 |
-| BHWC | (16, 224, 224, 1) | **1.08** | 1.67 | **0.88** | 0.98 | **0.94** | 1.28 |
-| BHWC | (32, 224, 224, 1) | **1.86** | 3.28 | **1.75** | 2.08 | **1.92** | 2.87 |
-| BHWC | (4, 512, 512, 1) | **1.34** | 2.21 | **1.15** | 1.28 | **1.22** | 1.54 |
-| BHWC | (8, 512, 512, 1) | **3.89** | 5.23 | **3.83** | 3.98 | **3.99** | 4.93 |
-| BHWC | (16, 512, 512, 1) | **7.84** | 10.73 | 12.84 | **7.75** | **7.85** | 10.36 |
-| BHWC | (4, 1024, 1024, 1) | **7.78** | 10.64 | 8.16 | **7.94** | **8.37** | 14.85 |
-| BHWC | (8, 1024, 1024, 1) | **37.49** | 54.44 | **40.80** | 43.27 | **40.68** | 53.16 |
-| BDHWC | (1, 96, 96, 96, 1) | **1.17** | 1.83 | **0.92** | 1.07 | **1.16** | 1.39 |
-| BDHWC | (1, 160, 160, 160, 1) | **7.64** | 10.14 | **7.99** | 8.08 | **7.90** | 22.90 |
-| BDHWC | (1, 256, 256, 256, 1) | **72.70** | 105.84 | **77.57** | 81.84 | **76.82** | 106.96 |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | **0.68** | 1.29 | **0.75** | 0.86 | **0.88** | 1.12 |
-| BHWC | (8, 224, 224, 1) | **0.94** | 1.78 | **1.19** | 1.43 | **1.21** | 1.68 |
-| BHWC | (16, 224, 224, 1) | **1.49** | 2.61 | **2.27** | 2.30 | **1.77** | 2.47 |
-| BHWC | (32, 224, 224, 1) | **2.71** | 4.91 | **4.11** | 4.67 | **2.98** | 4.53 |
-| BHWC | (4, 512, 512, 1) | **1.76** | 3.37 | **2.83** | 3.43 | **2.32** | 3.21 |
-| BHWC | (8, 512, 512, 1) | **4.79** | 6.87 | **5.89** | 6.62 | **5.65** | 8.18 |
-| BHWC | (16, 512, 512, 1) | **9.74** | 13.66 | **12.74** | 13.11 | **18.93** | 23.74 |
-| BHWC | (4, 1024, 1024, 1) | **9.78** | 13.36 | **13.10** | 13.65 | **18.89** | 22.54 |
-| BHWC | (8, 1024, 1024, 1) | **52.01** | 81.83 | 80.30 | **79.07** | **40.02** | 54.93 |
-| BDHWC | (1, 96, 96, 96, 1) | **1.68** | 3.00 | **2.55** | 2.60 | **1.97** | 2.75 |
-| BDHWC | (1, 160, 160, 160, 1) | **9.69** | 13.13 | 12.23 | **11.55** | **10.93** | 15.32 |
-| BDHWC | (1, 256, 256, 256, 1) | **106.76** | 163.30 | **155.61** | 158.38 | **76.96** | 105.36 |
-
-### SignalFillEmpty
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 2.64 | **0.80** | 1.36 | **0.58** | 0.76 | **0.45** |
-| BHWC | (8, 224, 224, 1) | 3.49 | **1.07** | 2.53 | **0.99** | 1.47 | **0.69** |
-| BHWC | (16, 224, 224, 1) | 4.44 | **1.55** | 4.51 | **1.80** | 2.89 | **1.14** |
-| BHWC | (32, 224, 224, 1) | 7.26 | **3.21** | 9.66 | **3.82** | 5.26 | **2.04** |
-| BHWC | (4, 512, 512, 1) | 5.43 | **2.11** | 5.91 | **2.38** | 3.11 | **1.47** |
-| BHWC | (8, 512, 512, 1) | 9.94 | **5.16** | 13.82 | **5.94** | 7.89 | **6.08** |
-| BHWC | (16, 512, 512, 1) | 22.34 | **10.08** | 37.16 | **12.05** | 22.13 | **11.58** |
-| BHWC | (4, 1024, 1024, 1) | 19.36 | **10.20** | 29.07 | **12.02** | 16.48 | **11.43** |
-| BHWC | (8, 1024, 1024, 1) | 78.03 | **50.28** | 128.12 | **52.36** | 90.50 | **49.54** |
-| BDHWC | (1, 96, 96, 96, 1) | 4.91 | **1.77** | 5.18 | **2.03** | 3.18 | **1.23** |
-| BDHWC | (1, 160, 160, 160, 1) | 18.64 | **9.93** | 28.09 | **11.77** | 35.33 | **10.95** |
-| BDHWC | (1, 256, 256, 256, 1) | 153.85 | **97.62** | 296.61 | **97.84** | 184.18 | **96.86** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 1.71 | **1.27** | 1.04 | **0.85** | 2.19 | **1.16** |
-| BHWC | (8, 224, 224, 1) | 1.85 | **1.69** | 1.56 | **1.34** | 2.46 | **1.69** |
-| BHWC | (16, 224, 224, 1) | **2.51** | 2.84 | 2.64 | **2.21** | 3.37 | **2.38** |
-| BHWC | (32, 224, 224, 1) | **4.39** | 4.72 | 4.77 | **4.43** | 4.64 | **4.55** |
-| BHWC | (4, 512, 512, 1) | **3.09** | 3.22 | 3.27 | **3.14** | 3.98 | **3.31** |
-| BHWC | (8, 512, 512, 1) | **6.13** | 7.05 | **6.57** | 6.81 | **7.05** | 8.28 |
-| BHWC | (16, 512, 512, 1) | **11.11** | 13.63 | 14.06 | **13.24** | **13.00** | 23.95 |
-| BHWC | (4, 1024, 1024, 1) | **11.12** | 13.49 | 14.01 | **13.20** | **12.60** | 22.69 |
-| BHWC | (8, 1024, 1024, 1) | **55.18** | 82.45 | 81.36 | **79.68** | **41.37** | 54.65 |
-| BDHWC | (1, 96, 96, 96, 1) | **2.73** | 2.95 | **2.64** | 2.74 | 3.31 | **2.70** |
-| BDHWC | (1, 160, 160, 160, 1) | **11.01** | 12.91 | 13.28 | **12.61** | **12.50** | 15.10 |
-| BDHWC | (1, 256, 256, 256, 1) | **108.66** | 162.85 | 160.68 | **156.69** | **80.08** | 105.38 |
-
-### SpatialCrop
-
-#### CPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 6.53 | **0.77** | 1.56 | **1.04** | 3.96 | **0.35** |
-| BHWC | (8, 224, 224, 1) | 6.86 | **0.97** | 1.74 | **1.11** | 4.22 | **0.56** |
-| BHWC | (16, 224, 224, 1) | 7.15 | **1.33** | 2.06 | **1.42** | 5.07 | **0.98** |
-| BHWC | (32, 224, 224, 1) | 8.33 | **2.43** | 3.07 | **1.94** | 5.86 | **2.03** |
-| BHWC | (4, 512, 512, 1) | 7.39 | **2.11** | 2.29 | **1.57** | 5.03 | **1.19** |
-| BHWC | (8, 512, 512, 1) | 9.15 | **3.10** | 3.11 | **2.16** | 7.23 | **2.96** |
-| BHWC | (16, 512, 512, 1) | 15.63 | **8.17** | 6.95 | **4.07** | 12.45 | **7.81** |
-| BHWC | (4, 1024, 1024, 1) | 13.06 | **8.64** | 6.60 | **3.97** | 12.25 | **8.07** |
-| BHWC | (8, 1024, 1024, 1) | 37.05 | **17.40** | 16.55 | **9.48** | 33.82 | **18.37** |
-| BDHWC | (1, 96, 96, 96, 1) | 7.22 | **1.35** | 2.09 | **1.39** | 5.01 | **0.93** |
-| BDHWC | (1, 160, 160, 160, 1) | 12.19 | **7.39** | 5.80 | **3.56** | 10.89 | **6.77** |
-| BDHWC | (1, 256, 256, 256, 1) | 76.21 | **70.92** | 39.59 | **25.57** | 83.41 | **75.09** |
-
-#### GPU
-
-| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
-| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | 13.32 | **1.08** | 3.34 | **2.15** | 16.81 | **1.06** |
-| BHWC | (8, 224, 224, 1) | 13.42 | **1.54** | 3.72 | **2.46** | 16.99 | **1.32** |
-| BHWC | (16, 224, 224, 1) | 14.68 | **2.04** | 4.63 | **3.41** | 17.70 | **2.02** |
-| BHWC | (32, 224, 224, 1) | 15.39 | **3.78** | 6.19 | **4.46** | 20.06 | **3.59** |
-| BHWC | (4, 512, 512, 1) | 14.50 | **2.72** | 4.77 | **3.68** | 18.23 | **2.61** |
-| BHWC | (8, 512, 512, 1) | 16.27 | **4.62** | 7.29 | **5.79** | 20.89 | **4.32** |
-| BHWC | (16, 512, 512, 1) | 21.34 | **9.98** | 13.30 | **11.33** | 36.48 | **21.77** |
-| BHWC | (4, 1024, 1024, 1) | 21.21 | **10.41** | 13.59 | **11.11** | 36.58 | **21.82** |
-| BHWC | (8, 1024, 1024, 1) | 54.04 | **20.04** | 24.67 | **21.49** | 49.25 | **35.18** |
-| BDHWC | (1, 96, 96, 96, 1) | 13.55 | **2.28** | 4.40 | **3.46** | 20.24 | **2.03** |
-| BDHWC | (1, 160, 160, 160, 1) | 20.20 | **8.82** | 11.28 | **9.90** | 28.52 | **10.33** |
-| BDHWC | (1, 256, 256, 256, 1) | **102.93** | 111.07 | 109.43 | **107.74** | 93.71 | **73.78** |
