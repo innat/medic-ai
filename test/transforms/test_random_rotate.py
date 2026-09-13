@@ -70,6 +70,39 @@ def test_random_rotate_replays_with_same_integer_seed():
 
 
 @pytest.mark.unit
+def test_random_rotate_samples_distinct_angles_per_batch_item_and_aligns_keys(monkeypatch):
+    """Use independent batch angles while preserving image/label geometry."""
+    image = as_tensor(np.arange(2 * 9 * 9, dtype=np.float32).reshape(2, 9, 9, 1))
+    label = image * 2.0
+    transform = RandomRotate(
+        keys=["image", "label"],
+        factor=0.2,
+        prob=1.0,
+        input_layout="BHWC",
+        interpolation={"image": "nearest", "label": "nearest"},
+    )
+    calls = 0
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        del minval, maxval
+        nonlocal calls
+        calls += 1
+        values = [0.0, 0.0] if calls == 1 else [0.0, 1.0]
+        return as_tensor(values, dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    output = transform(TensorBundle({"image": image, "label": label}))
+
+    trace = output.get_applied_transforms()[-1]
+    angles = ops.convert_to_numpy(trace["params"]["angles"]["D"])
+    assert not np.isclose(angles[0], angles[1])
+
+    output_image = ops.convert_to_numpy(output["image"])
+    output_label = ops.convert_to_numpy(output["label"])
+    np.testing.assert_allclose(output_label, output_image * 2.0)
+
+
+@pytest.mark.unit
 def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     transform = RandomRotate(

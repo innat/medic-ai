@@ -433,7 +433,7 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
             )
         )
 
-    if segmentation:
+    if segmentation and input_layout in {"HWC", "DHWC"}:
         pipelines.append(
             Compose(
                 [

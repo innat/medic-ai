@@ -53,7 +53,6 @@ def _failed_result(
         "iterations": iterations,
         "warmup": warmup,
         "transform": spec.name,
-        "group": spec.group,
     }
 
 
@@ -84,8 +83,6 @@ def profile(
     compile_status = "not-requested"
     compile_error = None
     if compile_enabled:
-        if spec.group == "cpu":
-            raise RuntimeError("Metadata-dependent transforms are not supported by --compile.")
         compile_start = time.perf_counter()
         try:
             compiled_forward = compile_forward(transform, keras.config.backend())
@@ -166,5 +163,4 @@ def profile(
         "iterations": iterations,
         "warmup": warmup,
         "transform": spec.name,
-        "group": spec.group,
     }
