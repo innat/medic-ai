@@ -400,7 +400,7 @@ augmentation = Compose(
     [
          RandomElasticTransform(
             keys=["image"],
-            input_layout="HWC",
+            input_layout="BHWC",
             alpha=4.0,
             sigma=6.0,
             control_grid_spacing=(16, 16),
