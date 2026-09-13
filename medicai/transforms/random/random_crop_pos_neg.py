@@ -1,3 +1,20 @@
+"""Backend-neutral label-aware random cropping for sample-level inputs.
+
+The transform validates a channel-last ``HWC`` or ``DHWC`` sample, promotes it
+to a singleton batch internally, and reduces all label channels into one
+foreground mask and one background mask. A positive or negative center is
+sampled according to the configured ``pos:neg`` ratio; empty candidate masks
+fall back to a uniformly sampled spatial coordinate. The resulting crop
+coordinates are shared across the selected image and label keys, preserving
+their spatial alignment.
+
+Cropping delegates to the deterministic ``SpatialCrop`` kernel and records
+the crop start, size, and original spatial shapes so ``inverse()`` can place
+each result back on its original canvas. Batch layouts are intentionally
+rejected because per-sample label-aware dynamic cropping requires a separate
+backend-specific indexing path.
+"""
+
 from __future__ import annotations
 
 from numbers import Integral

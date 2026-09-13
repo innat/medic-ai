@@ -1,3 +1,22 @@
+"""Backend-neutral random elastic deformation kernels for channel-last tensors.
+
+Sample layouts are promoted to a singleton batch internally, and batch layouts
+receive independent apply decisions, displacement fields, and sampled
+parameters per item. Each field is generated from random displacement noise,
+smoothed with separable Gaussian kernels, and optionally sampled on a coarse
+control grid before being resampled to the full spatial shape. The field can
+be interpreted in pixel/voxel or millimeter units, with affine metadata
+required for physical-unit conversion, and its outer coarse-grid layers can
+be locked to zero.
+
+The same per-sample field is applied to all selected keys so images and labels
+remain aligned, while each key can use an appropriate interpolation mode.
+Rank-specific nearest and linear image sampling support 2D and 3D layouts;
+bilinear/trilinear or B-spline interpolation is available for coarse-field
+resampling. Elastic deformation is non-invertible because resampling can
+discard information.
+"""
+
 import itertools
 import math
 from numbers import Number

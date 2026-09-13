@@ -1,10 +1,14 @@
-"""Backend-neutral batched random rotation kernels.
+"""Backend-neutral random rotation kernels for channel-last medical tensors.
 
-The implementation has two 3D paths. Single-axis rotations fold the batch and
-the untouched spatial axis into one 2D affine-transform batch. Multi-axis
-rotations build a batched 3x3 matrix and use coordinate sampling for genuine
-3D linear interpolation. Both paths preserve channel-last layouts and use
-Keras random streams so they remain dispatchable across supported backends.
+Sample inputs are promoted to a singleton batch and restored afterward. For
+batch inputs, probability gates and rotation angles are sampled independently
+for every item, while all selected keys share the same per-item parameters.
+Two 3D paths are used: single-axis rotations fold the batch and untouched
+spatial axis into one 2D affine-transform batch, while multi-axis rotations
+build one 3x3 matrix per item and use vectorized coordinate sampling for
+genuine 3D interpolation. The 2D path uses Keras' affine image operation.
+All paths preserve channel-last layouts and record the sampled geometry for
+inverse transformation.
 """
 
 from typing import Any, Sequence

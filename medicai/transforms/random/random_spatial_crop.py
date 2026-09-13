@@ -1,3 +1,15 @@
+"""Backend-neutral random spatial cropping for channel-last tensors.
+
+Sample layouts are promoted through the deterministic
+:class:`~medicai.transforms.SpatialCrop` kernel and restored after cropping.
+The transform samples one crop configuration per call, including one center
+and optional dynamic crop size, and shares that configuration across all
+selected keys so images and labels remain aligned. A label-aware mode can
+favor valid regions while enforcing the configured validity ratio. Batch
+layouts currently use the same crop for every item; per-sample batch crops
+are not supported. The sampled crop bounds are recorded for inverse padding.
+"""
+
 from typing import Any, Sequence
 
 import keras

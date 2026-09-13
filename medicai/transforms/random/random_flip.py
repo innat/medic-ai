@@ -1,3 +1,13 @@
+"""Backend-neutral random flips for channel-last medical image tensors.
+
+Sample layouts are processed directly, while batch layouts receive an
+independent Bernoulli apply decision for each item. The selected spatial axes
+are flipped with the deterministic :class:`~medicai.transforms.Flip` kernel,
+and the same per-item decision is broadcast across all selected keys so
+images and labels remain aligned. The transform preserves the configured
+2D/3D channel-last layout and records the decision needed for inversion.
+"""
+
 from typing import Sequence
 
 import keras

@@ -1,3 +1,14 @@
+"""Backend-neutral random CutOut kernels for channel-last image tensors.
+
+Sample layouts are handled directly, while batch layouts are processed per
+sample: each item receives an independent apply decision and cutout mask. The
+mask rank follows the input layout, using a 2D rectangle for ``HWC``/``BHWC``
+and a full ``D``-``H``-``W`` cuboid for ``DHWC``/``BDHWC``. The mask is
+broadcast across channels and filled with either a constant or image-range
+Gaussian noise. CutOut modifies one image key and is non-invertible because
+the masked values are discarded.
+"""
+
 from numbers import Integral
 from typing import Sequence
 

@@ -1,3 +1,17 @@
+"""Backend-neutral random quarter-turn rotations for channel-last tensors.
+
+Sample layouts are processed directly, while batch layouts receive an
+independent apply decision and quarter-turn count for each item. The sampled
+parameters are broadcast across all selected keys and delegated to the
+deterministic :class:`~medicai.transforms.Rotate90` kernel, keeping images
+and labels spatially aligned while preserving channel-last 2D/3D layouts.
+
+For graph execution, the two selected rotation axes must have equal lengths
+so the applied and skipped branches retain the same shape. The sampled
+quarter-turn count and apply mask are recorded so the operation can be
+inverted with the corresponding opposite rotation.
+"""
+
 from typing import Sequence
 
 import keras

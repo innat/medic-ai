@@ -1,3 +1,14 @@
+"""Backend-neutral random intensity shifts for channel-last tensors.
+
+The transform samples an independent apply decision for each batch item and
+an additive offset for each selected tensor. Offsets can be shared across
+channels or sampled independently per channel, then broadcast over the
+spatial dimensions through the deterministic
+:class:`~medicai.transforms.ShiftIntensity` kernel. Sample and batch layouts
+retain their channel-last 2D/3D shapes, and sampled offsets are recorded so
+the applied shifts can be inverted exactly.
+"""
+
 from numbers import Number
 from typing import Any, Sequence
 
