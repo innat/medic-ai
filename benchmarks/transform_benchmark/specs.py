@@ -175,19 +175,22 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
                 True,
             ),
         )
+    if layout in ("HWC", "DHWC"):
+        specs.append(
+            BenchmarkSpec(
+                "CropForeground",
+                lambda layout, s: CropForeground(
+                    keys=["image", "label"],
+                    source_key="image",
+                    k_divisible=(4, 4, 4) if layout == "DHWC" else (4, 4),
+                    input_layout=layout,
+                ),
+                True,
+            )
+        )
     if is_3d and layout == "DHWC":
         specs.extend(
             [
-                BenchmarkSpec(
-                    "CropForeground",
-                    lambda layout, s: CropForeground(
-                        keys=["image", "label"],
-                        source_key="image",
-                        k_divisible=(4, 4, 4),
-                        input_layout=layout,
-                    ),
-                    True,
-                ),
                 BenchmarkSpec(
                     "Orientation",
                     lambda layout, s: Orientation(

@@ -26,6 +26,83 @@ Every row represents one concrete input layout, shape, and batch
 configuration. The fastest available result in each row is shown in
 **bold**; the `--` means the result was unavailable or unsupported.
 
+The following four sample-level transforms were measured separately with the
+JAX backend using `DHWC`, spatial size `96`, and batch size `1`. Their results
+use the same CPU/GPU table format as the other transformations. The JAX-XLA
+column is `--` when compilation was not compatible.
+
+### RandomCropByPosNegLabel
+
+#### CPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **44.66** | -- | **14.64** | 24.67 | 22.52 | **12.39** |
+| DHWC | (160, 160, 160, 1) | **129.92** | -- | **59.99** | 87.94 | 82.81 | **75.34** |
+| DHWC | (256, 256, 256, 1) | **676.77** | -- | **459.45** | 493.98 | 562.83 | **345.11** |
+
+#### GPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **57.72** | -- | **7.90** | -- | 37.72 | **1.98** |
+| DHWC | (160, 160, 160, 1) | **134.19** | -- | **15.95** | -- | 47.07 | **10.81** |
+| DHWC | (256, 256, 256, 1) | **670.65** | -- | **124.05** | -- | 112.13 | **75.26** |
+
+### Spacing
+
+#### CPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **44.83** | -- | 8.68 | **3.50** | **20.86** | -- |
+| DHWC | (160, 160, 160, 1) | **61.85** | -- | 22.45 | **8.17** | **33.40** | -- |
+| DHWC | (256, 256, 256, 1) | **179.14** | -- | 183.30 | **30.41** | **227.23** | -- |
+
+#### GPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **76.40** | -- | 6.64 | **4.26** | **41.84** | -- |
+| DHWC | (160, 160, 160, 1) | **92.45** | -- | 7.97 | **5.39** | **44.38** | -- |
+| DHWC | (256, 256, 256, 1) | **161.12** | -- | **17.71** | 20.19 | **57.31** | -- |
+
+### Orientation
+
+#### CPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **17.57** | -- | **2.73** | -- | 12.54 | -- |
+| DHWC | (160, 160, 160, 1) | **38.72** | -- | **8.40** | -- | **40.33** | -- |
+| DHWC | (256, 256, 256, 1) | **253.27** | -- | **51.87** | -- | **277.99** | -- |
+
+#### GPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **28.83** | -- | **5.99** | -- | 32.41 | -- |
+| DHWC | (160, 160, 160, 1) | **38.59** | -- | **15.96** | -- | **44.85** | -- |
+| DHWC | (256, 256, 256, 1) | **200.41** | -- | **164.22** | -- | **138.30** | -- |
+
+### CropForeground
+
+#### CPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **12.04** | -- | **6.70** | 9.84 | 136.61 | -- |
+| DHWC | (160, 160, 160, 1) | **18.97** | -- | **29.77** | 44.08 | **154.51** | -- |
+| DHWC | (256, 256, 256, 1) | **73.06** | -- | **161.21** | 200.28 | **285.10** | -- |
+
+#### GPU
+
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
+| :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| DHWC | (96, 96, 96, 1) | **18.60** | -- | 5.88 | **4.55** | 285.90 | -- |
+| DHWC | (160, 160, 160, 1) | **27.06** | -- | 16.26 | **15.76** | **345.72** | -- |
+| DHWC | (256, 256, 256, 1) | **124.85** | -- | 164.33 | **163.49** | **383.45** | -- |
+
 ### RandomElasticTransform
 
 #### CPU
