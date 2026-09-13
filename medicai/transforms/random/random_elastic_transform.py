@@ -469,7 +469,8 @@ class RandomElasticTransform(RandomTransform):
         seed: Optional integer or Keras ``SeedGenerator``.
         allow_missing_keys: If ``True``, missing keys are skipped.
 
-    Validation rules:
+    .. note::
+
         ``input_layout`` determines the spatial rank: ``HWC``/``BHWC`` are
         2D and ``DHWC``/``BDHWC`` are 3D. ``control_grid_spacing`` must have
         exactly one positive value per spatial axis when given. The default

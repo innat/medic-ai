@@ -36,13 +36,6 @@ class RandomShiftIntensity(RandomTransform):
     and applies them with a given probability using the deterministic
     :class:`~medicai.transforms.ShiftIntensity` kernel.
 
-    .. note::
-
-        Offsets may be sampled once per tensor or separately per channel depending
-        on ``channel_wise``. During inversion, the transform uses the sampled
-        offsets stored in the transform trace and applies the inverse only to the
-        traced keys.
-
     Args:
         keys: Keys of the tensors to shift.
         offset: Symmetric scalar magnitude or explicit ``(min, max)`` offset

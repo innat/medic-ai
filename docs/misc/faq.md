@@ -2,55 +2,52 @@
 
 ## Which Keras backend should I use?
 
-Use the backend that best matches your training and deployment environment.
+Use a backend that best matches your training and deployment environment.
 `medicai` is designed for Keras 3 workflows across the TensorFlow, PyTorch,
 and JAX backends.
 
-In practice:
-
-- Choose `tensorflow` if your pipeline is centered around `tf.data`,
-  TensorFlow tooling, or TPU workflows.
-- Choose `torch` if your team primarily works in the PyTorch ecosystem.
-- Choose `jax` if you prefer JAX-native training and compilation workflows.
-
-The `medicai.transforms` API uses backend-native `keras.ops`, so transforms can
+The `medicai` API uses backend-native `keras.ops`, so transforms can
 run with the selected TensorFlow, PyTorch, or JAX backend. The data-loading API
 should match that backend when transforms are executed outside the model.
 
-If you want a fully backend-specific data pipeline, you can also mix `medicai`
-models with ecosystem-native tooling such as
-[TorchIO](https://github.com/TorchIO-project/torchio) for PyTorch-oriented
-medical imaging workflows.
+| Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
+| :--- | :---: | :---: | :---: | :---: |
+| TensorFlow | ✓ | ✗ | ✓ | ✓ |
+| Torch | ✓ | ✓ | ✗ | ✓ |
+| JAX | ✓ | ✗ | ✗ | ✓ |
+
 
 ## Does medicai support 2D and 3D medical images?
 
-Yes. `medicai` is designed for both 2D and 3D medical imaging workflows.
+Yes. `medicai` is designed for both 2D and 3D medical imaging workflows with **channel-last** format.
 
-In general:
+For the `medicai` models API:
 
-- Use input shapes like `(height, width, channels)` for 2D images.
-- Use input shapes like `(depth, height, width, channels)` for 3D volumes.
+- 2D images: `(height, width, channels)`
+- 3D volumes: `(depth, height, width, channels)`
 
-Many model builders automatically construct either a 2D or 3D variant based on
-the input shape you provide. This makes it easier to move between slice-based
-and volumetric workflows without learning a completely separate API.
+For the `medicai` transforms API, the corresponding **channel-last** layouts are:
 
-That said, support still depends on the specific model or transform. If you are
-unsure, check the corresponding model guide or API reference page for that
-component.
+| Data type | 2D | 3D |
+| :--- | :--- | :--- |
+| Single sample | `HWC` | `DHWC` |
+| Batch | `BHWC` | `BDHWC` |
+
+Most transforms support both sample-level and batch-level layouts. Some
+operations are intentionally sample-only because they inspect spatial
+content or metadata for one image at a time, including `CropForeground`,
+`Orientation`, `Spacing`, and `RandomCropByPosNegLabel`. Check each transform's
+documentation for its supported layouts and backend/XLA limitations.
+
+For segmentation, pass aligned image and label tensors through the same
+spatial transform using multiple keys. Spatial transforms reuse the same
+sampled geometry for those keys, while image and label interpolation can be
+configured independently where supported.
+
 
 ## Does medicai provide ImageNet pre-trained weights for models?
 
-No, not at the moment.
-
-The library is currently focused on medical imaging workflows, so pre-trained
-ImageNet weights have not been a primary focus yet. In some cases they may offer
-only limited gains for highly specialized medical domains, but that can vary by
-task and dataset.
-
-This may change in the future if there is enough community demand or strong
-evidence that pre-trained weights are consistently useful in real-world
-`medicai` workflows.
+No, not at the moment. It will be supported soon for all encoders.
 
 
 ## How do I report an issue?

@@ -560,7 +560,8 @@ class RandomChoice(RandomTransform):
     dtype per key across branches. It does not preserve eager-style wrapper
     trace bookkeeping used for ``inverse()``.
 
-    When to use this:
+    .. note::
+
         Use ``RandomChoice`` when an augmentation pipeline should sample from a
         pool of candidate transforms rather than always applying the same
         sequence. It is a good fit for "pick one of these" or "pick a few of

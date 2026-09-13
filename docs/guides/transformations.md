@@ -17,13 +17,13 @@ When `torch` is the active backend, `medicai.transforms` use Torch-backed
 Keras operations. The same applies to the `tensorflow` and `jax` backends.
 
 If you want a common dataloader that supports all backends out of the box,
-the recommended option is **PyGrain**, which provides efficient parallel data
+the recommended option is [**PyGrain**](https://google-grain.readthedocs.io/en/latest/), which provides efficient parallel data
 loading and multithreading and multiprocessing worker support.
 
 
-**Input Conventions**
+**Overview**
 
-``medicai`` transforms use **channel-last** tensors and provide the
+The ``medicai`` transforms use **channel-last** tensors and provide the
 `input_layout` argument to make the execution mode explicit:
 
 - single 2D tensors use: `input_layout="HWC"`
@@ -31,46 +31,39 @@ loading and multithreading and multiprocessing worker support.
 - batched 2D tensors use: `input_layout="BHWC"`
 - batched 3D tensors use: `input_layout="BDHWC"`
 
+The transforms below support eager execution on both CPU and GPU when the
+selected Keras backend and device provide the required operations. This table
+describes device support, not XLA or compiled-mode compatibility. Refer to
+the transform docstrings and the [recorded benchmark report](../misc/transform.md)
+for backend-specific compilation limitations and measurements.
 
-**Dual-mode transforms**
+| Transform | Supported Layout | CPU | GPU |
+| :--- | :--- | :---: | :---: |
+| `NormalizeIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `ScaleIntensityRange` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `ShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `SignalFillEmpty` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `Flip` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `Rotate90` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `Resize` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `SpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `CropForeground` | `HWC`, `DHWC` | ✓ | ✓ |
+| `Orientation` | `DHWC` | ✓ | ✓ |
+| `Spacing` | `DHWC` | ✓ | ✓ |
+| `RandomFlip` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomRotate90` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomRotate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomSpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomCropByPosNegLabel` | `HWC`, `DHWC` | ✓ | ✓ |
+| `RandomCutOut` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomElasticTransform` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 
-These transforms can process either one sample or an already-batched tensor,
-depending on `input_layout`:
-
-- `Flip`
-- `Rotate90`
-- `Resize`
-- `SpatialCrop`
-- `RandomFlip`
-- `RandomRotate90`
-- `RandomRotate`
-- `RandomShiftIntensity`
-- `RandomSpatialCrop`
-- `RandomCropByPosNegLabel`
-- `RandomCutOut`
-
-They support both sample layouts (`"HWC"` or `"DHWC"`) and batch layouts
-(`"BHWC"` or `"BDHWC"`). Callers should therefore provide spatial arguments
-appropriate to the input rank instead of relying on implicit defaults.
-
-**Sample-only transforms**
-
-These transforms process one sample at a time because they depend on
-sample-specific metadata or spatial decisions:
-
-- `CropForeground`
-- `Spacing`
-- `Orientation`
-
-They support only sample layouts (`"HWC"` or `"DHWC"`).
-
-```{note}
-Two spatial transforms are intentionally sample-level and 3D-only. They do not
-support 2D input or batched input:
-
-- `Spacing`
-- `Orientation`
-```
+`Spacing` and `Orientation` are intentionally restricted to 3D sample
+layouts because they require sample-specific spatial metadata. The other
+sample-only transforms in the table do not currently support batched layouts.
+Callers should provide spatial arguments appropriate to the input rank instead
+of relying on implicit defaults.
 
 ## Spatial
 
@@ -133,15 +126,6 @@ All public random transforms inherit the shared `RandomTransform` seed contract.
 - `None` for ordinary non-deterministic randomness
 - an integer seed for reproducible replay
 - `keras.random.SeedGenerator` for stateful seeded sampling
-
-```{note}
-
-For currently dual-mode random transforms, using a batch layout causes one
-random decision or sampled parameter set to be shared across the entire
-incoming batch tensor. This keeps inversion and trace behavior simple and
-predictable.
-```
-
 
 ```{eval-rst}
 .. autoclass:: medicai.transforms.RandomFlip

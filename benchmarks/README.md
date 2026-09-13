@@ -25,7 +25,7 @@ benchmarks/
 
 ## Reports
 
-- [Transforms](REPORT.md)
+- [Recorded transform results](../docs/misc/transform.md)
 
 ## How to run
 

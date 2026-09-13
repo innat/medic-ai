@@ -225,6 +225,8 @@ html_context = {
 html_sidebars = {
     "guides/example": [],
     "examples/**": [],
+    "misc/faq": [],
+    "misc/contribution": [],
 }
 
 myst_enable_extensions = [

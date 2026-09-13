@@ -179,12 +179,13 @@ backend-specific XLA limitations are documented by the individual transform.
 > refer to the transform docstrings and [Transform Benchmarks](benchmarks/README.md)
 > for backend-specific limitations and measurements.
 
-**Transform Benchmark Snapshot**: The following compact tables show forward
-median execution time on a Tesla T4 GPU. They use the benchmark artifacts with
-50 measured iterations and 10 warm-up iterations. The five transforms below
-are representative lightweight operations shared across all three backends;
-the fastest backend in each row is shown in **bold**. For the complete CPU,
-GPU, and compiled results, see [Transform Benchmarks](benchmarks/README.md).
+**Transform Benchmark Snapshot**: The following compact tables show eager
+forward median execution time on a Tesla T4 GPU. They use the recorded
+benchmark results with 50 measured iterations and 10 warm-up iterations. The
+five transforms below are representative operations shared across all three
+backends; the fastest eager backend in each row is shown in **bold**. For the
+complete CPU, GPU, and compiled results, see the [recorded benchmark report](docs/misc/transform.md)
+and [Transform Benchmarks](benchmarks/README.md).
 
 ### 2D GPU (`BHWC`)
 
@@ -192,16 +193,16 @@ Batch size is 4 and the channel count is 1.
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| BHWC | (4, 224, 224, 1) | ShiftIntensity | **0.66** | 0.80 | 0.97 |
-| BHWC | (4, 224, 224, 1) | ScaleIntensityRange | 1.32 | **0.95** | 1.80 |
-| BHWC | (4, 224, 224, 1) | Flip | 1.24 | **0.84** | 1.46 |
-| BHWC | (4, 224, 224, 1) | SignalFillEmpty | 1.68 | **1.15** | 2.38 |
-| BHWC | (4, 224, 224, 1) | Rotate90 | 3.56 | **0.90** | 2.82 |
-| BHWC | (4, 512, 512, 1) | ShiftIntensity | **2.04** | 2.93 | 2.44 |
-| BHWC | (4, 512, 512, 1) | ScaleIntensityRange | **2.45** | 3.19 | 3.33 |
-| BHWC | (4, 512, 512, 1) | Flip | **2.94** | 3.12 | 3.85 |
-| BHWC | (4, 512, 512, 1) | SignalFillEmpty | **2.85** | 3.12 | 3.77 |
-| BHWC | (4, 512, 512, 1) | Rotate90 | 7.66 | **3.12** | 4.85 |
+| BHWC | (4, 224, 224, 1) | ShiftIntensity | **0.68** | 0.75 | 0.88 |
+| BHWC | (4, 224, 224, 1) | ScaleIntensityRange | 1.22 | **0.90** | 1.68 |
+| BHWC | (4, 224, 224, 1) | Flip | 1.22 | **0.78** | 1.30 |
+| BHWC | (4, 224, 224, 1) | SignalFillEmpty | 1.71 | **1.04** | 2.19 |
+| BHWC | (4, 224, 224, 1) | Rotate90 | 3.51 | **0.86** | 2.55 |
+| BHWC | (4, 512, 512, 1) | ShiftIntensity | **1.76** | 2.83 | 2.32 |
+| BHWC | (4, 512, 512, 1) | ScaleIntensityRange | **2.28** | 2.66 | 3.09 |
+| BHWC | (4, 512, 512, 1) | Flip | **2.91** | 3.14 | 3.30 |
+| BHWC | (4, 512, 512, 1) | SignalFillEmpty | **3.09** | 3.27 | 3.98 |
+| BHWC | (4, 512, 512, 1) | Rotate90 | 7.66 | **3.07** | 4.67 |
 
 ### 3D GPU (`BDHWC`)
 
@@ -209,16 +210,16 @@ Batch size is 1 and the channel count is 1.
 
 | Layout | Shape | Transform | TensorFlow (ms) | Torch (ms) | JAX (ms) |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| BDHWC | (1, 96, 96, 96, 1) | ShiftIntensity | **1.77** | 2.75 | 2.03 |
-| BDHWC | (1, 96, 96, 96, 1) | ScaleIntensityRange | **2.10** | 2.59 | 2.84 |
-| BDHWC | (1, 96, 96, 96, 1) | Flip | **2.37** | 2.88 | 3.36 |
-| BDHWC | (1, 96, 96, 96, 1) | SignalFillEmpty | **2.81** | 3.19 | 3.74 |
-| BDHWC | (1, 96, 96, 96, 1) | Rotate90 | 6.71 | **2.95** | 4.59 |
-| BDHWC | (1, 256, 256, 256, 1) | ShiftIntensity | 104.17 | 157.50 | **76.23** |
-| BDHWC | (1, 256, 256, 256, 1) | ScaleIntensityRange | 107.23 | 159.67 | **78.02** |
-| BDHWC | (1, 256, 256, 256, 1) | Flip | 127.52 | 159.66 | **106.23** |
-| BDHWC | (1, 256, 256, 256, 1) | SignalFillEmpty | 108.10 | 161.55 | **78.67** |
-| BDHWC | (1, 256, 256, 256, 1) | Rotate90 | 266.93 | 158.05 | **107.67** |
+| BDHWC | (1, 96, 96, 96, 1) | ShiftIntensity | **1.68** | 2.55 | 1.97 |
+| BDHWC | (1, 96, 96, 96, 1) | ScaleIntensityRange | **2.09** | 2.74 | 2.79 |
+| BDHWC | (1, 96, 96, 96, 1) | Flip | **2.58** | 2.62 | 3.09 |
+| BDHWC | (1, 96, 96, 96, 1) | SignalFillEmpty | 2.73 | **2.64** | 3.31 |
+| BDHWC | (1, 96, 96, 96, 1) | Rotate90 | 6.55 | **2.68** | 4.36 |
+| BDHWC | (1, 256, 256, 256, 1) | ShiftIntensity | 106.76 | 155.61 | **76.96** |
+| BDHWC | (1, 256, 256, 256, 1) | ScaleIntensityRange | 107.52 | 158.33 | **80.32** |
+| BDHWC | (1, 256, 256, 256, 1) | Flip | 131.04 | 158.69 | **107.88** |
+| BDHWC | (1, 256, 256, 256, 1) | SignalFillEmpty | 108.66 | 160.68 | **80.08** |
+| BDHWC | (1, 256, 256, 256, 1) | Rotate90 | 268.92 | 160.14 | **109.04** |
 
 > **Note**: These values are representative measurements rather than universal
 > performance guarantees. Backend versions, device type, memory pressure,
