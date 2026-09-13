@@ -420,11 +420,11 @@ class GPUAugmentedModel(keras.Model):
         return self.backbone(inputs, training=training)
 
     def train_step(self, *args, **kwargs):
-        if keras.backend.backend() == "jax":
+        if keras.config.backend() == "jax":
             return self._jax_train_step(*args, **kwargs)
-        elif keras.backend.backend() == "tensorflow":
+        elif keras.config.backend() == "tensorflow":
             return self._tensorflow_train_step(*args, **kwargs)
-        elif keras.backend.backend() == "torch":
+        elif keras.config.backend() == "torch":
             return self._torch_train_step(*args, **kwargs)
 
     def _jax_train_step(self, state, data):
