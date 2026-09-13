@@ -32,49 +32,107 @@ print(f"medicai version: {medicai.version()}")
 
 ## Transformations
 
-`medicai.transforms` is designed for medical imaging workflows and is
-implemented with backend-native Keras operations for volumetric data.
+The `medicai.transforms` is designed for medical imaging workflows and is
+implemented with backend-native Keras operations for 2D and 3D medical data.
+Set `KERAS_BACKEND` before importing `keras` or `medicai`.
 
 ```{eval-rst}
 .. note::
 
-   Volumetric transforms in ``medicai.transforms`` use ``keras.ops`` and run
-   with the selected Keras backend, including ``tensorflow``, ``torch``, and
-   ``jax``.
+   Transforms use ``keras.ops`` and run with the selected ``tensorflow``,
+   ``torch``, or ``jax`` backend. They use channel-last layouts:
 
-   The transforms can be integrated into a variety of data loading workflows,
-   including:
+   - single 2D samples: ``HWC``
+   - single 3D samples: ``DHWC``
+   - batches of 2D samples: ``BHWC``
+   - batches of 3D samples: ``BDHWC``
 
-   - ``tf.data.Dataset``
-   - ``keras.utils.PyDataset`` by converting samples to ``numpy``
-   - ``torch.utils.data.Dataset`` and ``DataLoader`` by converting samples to ``numpy``
-
-   The appropriate conversion at the data-loader boundary depends on the
-   selected backend and data-loading API.
+   Most transforms support both sample and batch layouts. Check the individual
+   transform documentation for sample-only operations and backend-specific
+   XLA or compiled-mode limitations.
 ```
 
-Example preprocessing pipeline:
+Choose a dataloader that is supported by the selected Keras backend:
+
+| Keras backend | PyGrain | `torch.utils.data` | `tf.data` | `keras.utils.PyDataset` |
+| :--- | :---: | :---: | :---: | :---: |
+| TensorFlow | ✓ | ✗ | ✓ | ✓ |
+| Torch | ✓ | ✓ | ✗ | ✓ |
+| JAX | ✓ | ✗ | ✗ | ✓ |
+
+For an end-to-end pipeline that can be reused across all three backends,
+prefer [**PyGrain**](https://github.com/google/grain) or `keras.utils.PyDataset`. PyGrain is recommended for
+parallel data loading and supports multithreading and multiprocessing workers.
+
+Some examples preprocessing with different backends:
 
 ```python
-from medicai.transforms import Compose, NormalizeIntensity, RandFlip
+import os
+os.environ["KERAS_BACKEND"] = "torch"
 
-transforms = Compose(
-    [
-        NormalizeIntensity(keys=["image"]),
-        RandFlip(
-            keys=["image", "label"], 
-            prob=0.5, 
-            spatial_axis=[0]
-        ),
-    ]
+import torch
+from medicai.transforms import RandomElasticTransform
+
+images = torch.randn((4, 224, 224, 3))
+affine = torch.diag(torch.tensor([0.7, 0.7, 1.0, 1.0]))
+transform = RandomElasticTransform(
+    keys=["image"],
+    input_layout="BHWC",
+    alpha=2.0,
+    sigma=3.0,
+    displacement_units="mm",
+    minimum_physical_spacing=0.7,
+    field_interpolation="bspline",
+    seed=108,
 )
+result = transform({"image": images}, {"affine": affine})
+```
+
+```python
+import os
+os.environ["KERAS_BACKEND"] = "jax"
+
+import jax
+from medicai.transforms import RandomRotate
+
+transform = RandomRotate(
+    keys=["image"],
+    factor={"H": 0.1, "W": 0.1},
+    prob=0.5,
+    input_layout="DHWC",
+)
+image = jax.random.normal(
+    jax.random.PRNGKey(7), shape=(32, 64, 64, 1)
+)
+result = transform({"image": image})
+```
+```python
+import os
+os.environ["KERAS_BACKEND"] = "tensorflow"
+
+import keras
+from medicai.transforms import Flip, RandomChoice, ShiftIntensity
+
+transform = RandomChoice(
+    transforms=[
+        Flip(keys=["image"], spatial_axis=0, input_layout="HWC"),
+        Flip(keys=["image"], spatial_axis=1, input_layout="HWC"),
+        ShiftIntensity(keys=["image"], offset=0.1, input_layout="HWC"),
+    ],
+    num_choices=(1, 2),
+    weights=[1.0, 1.0, 0.5],
+)
+
+image = keras.random.normal((64, 64, 1), seed=7)
+result = transform({"image": image})
 ```
 
 ## Models
 
 Inspect the registered model zoo:
 
-```sh
+```python
+import medicai
 medicai.models.list_models()
 ```
 ```bash
@@ -305,7 +363,8 @@ multi-scale reconstruction.
 
 - Standard Keras training with `model.fit()`
 - Custom training loops with TensorFlow, PyTorch, or JAX
-- Input pipelines built with `tf.data`, `torch.utils.data`, or `pygrain`
+- Input pipelines built with a backend-compatible dataloader. See the
+  compatibility table in [Transformations](#transformations).
 
 Example Keras workflow:
 
@@ -325,6 +384,74 @@ model.compile(
 model.fit(
     train_dataset, validation_data=val_dataset, epochs=10
 )
+```
+
+### GPU-side augmentation
+
+Many of the batch-level `medicai.transforms` can run inside the model's training
+step so augmentation is performed on the selected GPU instead of inside
+the dataloader. The dataloader should return unaugmented batches in `B[D]HWC` layout.
+
+```python
+import keras
+from medicai.transforms import Compose, RandomElasticTransform
+
+augmentation = Compose(
+    [
+         RandomElasticTransform(
+            keys=["image"],
+            input_layout="HWC",
+            alpha=4.0,
+            sigma=6.0,
+            control_grid_spacing=(16, 16),
+            field_interpolation="bilinear",
+        )
+    ]
+)
+
+
+class GPUAugmentedModel(keras.Model):
+    def __init__(self, backbone, augmentation):
+        super().__init__()
+        self.backbone = backbone
+        self.augmentation = augmentation
+
+    def call(self, inputs, training=None):
+        return self.backbone(inputs, training=training)
+
+    def train_step(self, *args, **kwargs):
+        if keras.backend.backend() == "jax":
+            return self._jax_train_step(*args, **kwargs)
+        elif keras.backend.backend() == "tensorflow":
+            return self._tensorflow_train_step(*args, **kwargs)
+        elif keras.backend.backend() == "torch":
+            return self._torch_train_step(*args, **kwargs)
+
+    def _jax_train_step(self, state, data):
+        images, labels = data
+        images = self.augmentation({"image": images})["image"]
+        return super().train_step(state, (images, labels))
+
+    def _tensorflow_train_step(self, data):
+        images, labels = data
+        images = self.augmentation({"image": images})["image"]
+        return super().train_step((images, labels))
+
+    def _torch_train_step(self, data):
+        images, labels = data
+        images = self.augmentation({"image": images})["image"]
+        return super().train_step((images, labels))
+
+
+with keras.device("gpu:0"):
+    augmented_model = GPUAugmentedModel(model, augmentation)
+    augmented_model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+
+augmented_model.fit(train_dataset, epochs=10)
 ```
 
 ## Inference
