@@ -28,21 +28,19 @@ The data are released after preprocessing:
 - **Skull-stripped** for consistency
 
 
-**Dataset Format and TFRecord Conversion**: The original BraTS scans are provided in ``.nii``. To enable **efficient training pipelines**, we convert the NIfTI files into **TFRecord** format:
-
-- The conversion process is documented [here](https://www.kaggle.com/code/ipythonx/brats-nii-to-tfrecord)
-- The preprocessed TFRecord dataset is available [here](https://www.kaggle.com/datasets/ipythonx/brats2020)
-- Each TFRecord file contains **up to 20 cases**
-
-Since BraTS does not provide publicly available ground-truth labels for validation or test sets, we will **hold out a subset of TFRecord files** from training for validation purposes.
+**Dataset Format**: The original BraTS scans are provided as ``.nii`` files.
+This example reads the NIfTI files directly and uses PyGrain to build the
+training and validation input pipelines. Since BraTS does not provide
+publicly available ground-truth labels for validation or test sets, we hold
+out a subset of cases from training for validation.
 
 ---
 
 In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor segmentation. We will walk through:
 
 1. **Loading the Dataset**
-    - Read TFRecord files that contain ``image``, ``label``, and ``affine`` matrix information.
-    - Build efficient data pipelines using the ``tf.data`` API for training and evaluation.
+    - Discover the four modality files and segmentation mask for each case.
+    - Build efficient PyGrain pipelines for training and evaluation.
 2. **Medical Image Preprocessing**
     - Apply image transformations provided by ``medicai`` to prepare the data for model input.
 3. **Model Building**
@@ -57,42 +55,48 @@ In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor
 
 
 ```{note}
-This example uses two Tesla T4 GPUs available in the Kaggle environment. You can also run it on a TPU VM. The only required change is to switch the mixed precision policy from ``mixed_float16`` to ``mixed_bfloat16``.
+This example uses two Tesla T4 GPUs available in the Kaggle environment. You can also run it on a TPU VM. The only required change is to switch the mixed precision policy from ``mixed_float16`` to ``mixed_bfloat16``. You can also run this code example directly on Kaggle with either Multi-GPU or TPU-VM. Kaggle [notebook](https://www.kaggle.com/code/ipythonx/medicai-3d-brats-segmentation-in-keras/).
 ```
 
+## Installation
+
+```python
+from IPython.display import clear_output
+
+!pip install keras -qU
+!pip install grain -qU
+!pip install git+https://github.com/innat/medic-ai.git -qU
+
+clear_output()
+```
 
 ## Imports
 
 ```python
 import os, warnings
-os.environ["KERAS_BACKEND"] = "jax" # 'tensorflow', 'torch', 'jax'
+os.environ["KERAS_BACKEND"] = "torch" # choose any: 'tensorflow', 'torch', 'jax'
 warnings.filterwarnings('ignore')
 
 import numpy as np
 import pandas as pd
+import nibabel as nib
+import grain.python as pygrain
 
 import keras
 from keras import ops
-import tensorflow as tf
 
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.colors import ListedColormap
 
-import medicai
 from medicai.transforms import (
     Compose,
     CropForeground,
-    Resize,
-    Spacing,
-    Orientation,
     RandomShiftIntensity,
-    RandomRotate90,
     RandomFlip,
     RandomSpatialCrop,
     NormalizeIntensity,
-    RandomCropByPosNegLabel,
-    LambdaTransform
+    LambdaTransform,
 )
 from medicai.models import SwinUNETR
 from medicai.metrics import BinaryDiceMetric
@@ -100,7 +104,10 @@ from medicai.losses import BinaryDiceCELoss
 from medicai.utils.inference import SlidingWindowInference
 from medicai.callbacks import SlidingWindowInferenceCallback
 
-# enable mixed precision
+# Disable flash attention for distributed training compatibility.
+keras.config.disable_flash_attention()
+
+# Enable mixed precision.
 keras.mixed_precision.set_global_policy("mixed_float16")
 
 # reproducibility
@@ -109,13 +116,11 @@ keras.utils.set_random_seed(101)
 print(
     f"keras backend: {keras.config.backend()}\n"
     f"keras version: {keras.version()}\n"
-    f"tensorflow version: {tf.__version__}\n"
 )
 ```
 ```bash
-keras backend: jax
-keras version: 3.13.2
-tensorflow version: 2.19.0
+keras backend: torch
+keras version: 3.15.1
 ```
 
 ### Distributed Settings
@@ -123,10 +128,14 @@ tensorflow version: 2.19.0
 The ``DataParallel`` class in the Keras distribution API is designed for the data parallelism strategy in distributed training.
 
 ```python
-devices = keras.distribution.list_devices()
-data_parallel = keras.distribution.DataParallel(devices=devices)
-keras.distribution.set_distribution(data_parallel)
-total_device = len(devices)
+try:
+    devices = keras.distribution.list_devices()
+    data_parallel = keras.distribution.DataParallel(devices=devices)
+    keras.distribution.set_distribution(data_parallel)
+    total_device = len(devices)
+except Exception:
+    # Keras distribution support depends on the active backend.
+    total_device = 1
 ```
 
 ## Prepare Multi-label Brain Tumor Labels
@@ -146,8 +155,7 @@ These region-wise groupings allow for evaluation across different tumor structur
 
 ```python
 def process_brats_targets(label):
-    """
-    Convert labels to multi channels based on BRATS classes using TensorFlow.
+    """Convert BraTS labels to TC, WT, and ET channels using ``keras.ops``.
 
     Label definitions:
     - 1: necrotic and non-enhancing tumor core
@@ -159,24 +167,21 @@ def process_brats_targets(label):
     - Channel 1 (WT): Whole tumor (labels 1, 2, or 4)
     - Channel 2 (ET): Enhancing tumor (label 4)
     """
-    label = tf.convert_to_tensor(label)
+    label = ops.convert_to_tensor(label)
 
-    if (
-        label.shape.rank is not None
-        and label.shape.rank > 0
-        and label.shape[-1] == 1
-    ):
-        label = tf.squeeze(label, axis=-1)
+    shape = label.shape
+    if shape is not None and len(shape) > 0 and shape[-1] == 1:
+        label = ops.squeeze(label, axis=-1)
 
-    tc = tf.logical_or(tf.equal(label, 1), tf.equal(label, 4))
-    wt = tf.logical_or(tc, tf.equal(label, 2))
-    et = tf.equal(label, 4)
+    tc = ops.logical_or(ops.equal(label, 1), ops.equal(label, 4))
+    wt = ops.logical_or(tc, ops.equal(label, 2))
+    et = ops.equal(label, 4)
 
-    return tf.stack(
+    return ops.stack(
         [
-            tf.cast(tc, tf.float32),
-            tf.cast(wt, tf.float32),
-            tf.cast(et, tf.float32),
+            ops.cast(tc, "float32"),
+            ops.cast(wt, "float32"),
+            ops.cast(et, "float32"),
         ],
         axis=-1,
     )
@@ -184,33 +189,21 @@ def process_brats_targets(label):
 
 ## Transformation
 
-Each ``medicai`` transformation expects the input to have the shape ``(depth, height, width, channel)``. The original ``.nii`` (and converted ``.tfrecord``) format contains the input shape of ``(height, width, depth)``. To make it compatible with ``medicai``, we need to re-arrange the shape axes.
+Each ``medicai`` transformation expects the input to have the shape
+``(depth, height, width, channel)``. The original **NIfTI** arrays contain the
+spatial shape ``(height, width, depth)``. To make them compatible with
+``medicai``, we rearrange the spatial axes before applying the pipeline.
 
-```{note}
-The BraTS example does not require the ``affine`` matrix. It is included here only to demonstrate how metadata can be handled and updated during preprocessing.
-```
 
 ```python
-def rearrange_shape(sample):
-    # unpack sample
-    image = sample["image"]
-    label = sample["label"]
-    affine = sample["affine"]
-
-    # special case
-    image = tf.transpose(image, perm=[2, 1, 0, 3])  # whdc -> dhwc
-    label = tf.transpose(label, perm=[2, 1, 0])  # whd -> dhw
-    cols = tf.gather(affine, [2, 1, 0], axis=1)  # (whd) -> (dhw)
-    affine = tf.concat([cols, affine[:, 3:]], axis=1)
-
-    # update sample with new / updated tensor
-    sample["image"] = image
-    sample["label"] = label
-    sample["affine"] = affine
-    return sample
+def depth_first(sample):
+    """Convert NIfTI arrays from ``(H, W, D, C)`` to ``(D, H, W, C)``."""
+    image = ops.transpose(sample["image"], (2, 1, 0, 3))
+    label = ops.transpose(sample["label"], (2, 1, 0))
+    return image, label
 ```
 
-Each transformation class of ``medicai`` expects input as either a dictionary or a ``TensorBundle`` object. When a dictionary of input data (along with metadata) is passed, it is automatically wrapped into a ``TensorBundle`` instance. The examples below demonstrate how transformations are used in this way.
+Each transformation class of ``medicai`` expects input as either a dictionary or a ``TensorBundle`` object. When a dictionary of input data (along with metadata) is passed, it is automatically wrapped into a ``TensorBundle`` instance.
 
 
 ```python
@@ -218,9 +211,8 @@ num_classes = 3
 epochs = 25
 input_shape = (96, 96, 96, 4)
 
-def train_transformation(sample):
-    meta = {"affine": sample["affine"]}
-    data = {"image": sample["image"], "label": sample["label"]}
+def train_transformation(image, label):
+    data = {"image": image, "label": label}
     pipeline = Compose([
         LambdaTransform(
             keys=["label"],
@@ -231,32 +223,53 @@ def train_transformation(sample):
             keys=("image", "label"),
             source_key="image",
             k_divisible=[96, 96, 96],
+            input_layout="DHWC",
         ),
         RandomSpatialCrop(
             keys=["image", "label"],
             crop_size=(96, 96, 96),
+            input_layout="DHWC",
         ),
-        RandomFlip(keys=["image", "label"], spatial_axis=[0], prob=0.5),
-        RandomFlip(keys=["image", "label"], spatial_axis=[1], prob=0.5),
-        RandomFlip(keys=["image", "label"], spatial_axis=[2], prob=0.5),
+        RandomFlip(
+            keys=["image", "label"],
+            spatial_axis=0,
+            prob=0.5,
+            input_layout="DHWC",
+        ),
+        RandomFlip(
+            keys=["image", "label"],
+            spatial_axis=1,
+            prob=0.5,
+            input_layout="DHWC",
+        ),
+        RandomFlip(
+            keys=["image", "label"],
+            spatial_axis=2,
+            prob=0.5,
+            input_layout="DHWC",
+        ),
         NormalizeIntensity(
             keys=["image"],
             nonzero=True,
-            channel_wise=True
+            channel_wise=True,
+            input_layout="DHWC",
         ),
         RandomShiftIntensity(
             keys=["image"],
             offset=0.10,
-            prob=1.0
+            prob=1.0,
+            input_layout="DHWC",
         )
     ])
-    result = pipeline(data, meta)
+
+    with keras.device("cpu:0"):
+        result = pipeline(data)
+
     return result["image"], result["label"]
 
 
-def val_transformation(sample):
-    meta = {"affine": sample["affine"]}
-    data = {"image": sample["image"], "label": sample["label"]}
+def val_transformation(image, label):
+    data = {"image": image, "label": label}
     pipeline = Compose([
         LambdaTransform(
             keys=["label"],
@@ -266,163 +279,115 @@ def val_transformation(sample):
         NormalizeIntensity(
             keys=["image"],
             nonzero=True,
-            channel_wise=True
+            channel_wise=True,
+            input_layout="DHWC",
         )
     ])
-    result = pipeline(data, meta)
+
+    with keras.device("cpu:0"):
+        result = pipeline(data)
+
     return result["image"], result["label"]
+```
+
+## Create Data Records
+
+We will be using BraTS dataset from Kaggle, data [source](https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation).
+
+```python
+def load_datalist(root_dir):
+    modalities = ["flair", "t1", "t1ce", "t2"]
+    records = []
+
+    for case in sorted(os.listdir(root_dir)):
+        case_dir = os.path.join(root_dir, case)
+        if not os.path.isdir(case_dir):
+            continue
+
+        image_paths = [
+            os.path.join(case_dir, f"{case}_{modality}.nii")
+            for modality in modalities
+        ]
+        label_path = os.path.join(case_dir, f"{case}_seg.nii")
+
+        if all(os.path.exists(path) for path in image_paths + [label_path]):
+            records.append({"image": image_paths, "label": label_path})
+
+    return records
+
+def load_nifti(sample):
+    images = [
+        nib.load(path).get_fdata(dtype=np.float32)
+        for path in sample["image"]
+    ]
+    image = np.stack(images, axis=-1)  # (H, W, D, 4)
+    label = nib.load(sample["label"]).get_fdata(dtype=np.float32)
+    return {"image": image, "label": label.astype(np.uint8)}
+
+
+root_dir = "/kaggle/input/brats20-dataset-training-validation"
+data_dir = (
+    f"{root_dir}/BraTS2020_TrainingData/"
+    "MICCAI_BraTS2020_TrainingData"
+)
+records = load_datalist(data_dir)
+validation_records = records[-8:]
+train_records = records[:-8]
+
+print(f"Training:   {len(train_records)}")
+print(f"Validation: {len(validation_records)}")
+```
+```bash
+Training:   360
+Validation: 8
 ```
 
 ## Dataloader
 
 ```python
-def parse_tfrecord_fn(example_proto):
-    feature_description = {
-        # Image raw data
-        "flair_raw": tf.io.FixedLenFeature([], tf.string),
-        "t1_raw": tf.io.FixedLenFeature([], tf.string),
-        "t1ce_raw": tf.io.FixedLenFeature([], tf.string),
-        "t2_raw": tf.io.FixedLenFeature([], tf.string),
-        "label_raw": tf.io.FixedLenFeature([], tf.string),
-        # Image shape
-        "flair_shape": tf.io.FixedLenFeature([3], tf.int64),
-        "t1_shape": tf.io.FixedLenFeature([3], tf.int64),
-        "t1ce_shape": tf.io.FixedLenFeature([3], tf.int64),
-        "t2_shape": tf.io.FixedLenFeature([3], tf.int64),
-        "label_shape": tf.io.FixedLenFeature([3], tf.int64),
-        # Affine matrices (4x4 = 16 values)
-        "flair_affine": tf.io.FixedLenFeature([16], tf.float32),
-        "t1_affine": tf.io.FixedLenFeature([16], tf.float32),
-        "t1ce_affine": tf.io.FixedLenFeature([16], tf.float32),
-        "t2_affine": tf.io.FixedLenFeature([16], tf.float32),
-        "label_affine": tf.io.FixedLenFeature([16], tf.float32),
-        # Voxel Spacing (pixdim)
-        "flair_pixdim": tf.io.FixedLenFeature([8], tf.float32),
-        "t1_pixdim": tf.io.FixedLenFeature([8], tf.float32),
-        "t1ce_pixdim": tf.io.FixedLenFeature([8], tf.float32),
-        "t2_pixdim": tf.io.FixedLenFeature([8], tf.float32),
-        "label_pixdim": tf.io.FixedLenFeature([8], tf.float32),
-        # Filenames
-        "flair_filename": tf.io.FixedLenFeature([], tf.string),
-        "t1_filename": tf.io.FixedLenFeature([], tf.string),
-        "t1ce_filename": tf.io.FixedLenFeature([], tf.string),
-        "t2_filename": tf.io.FixedLenFeature([], tf.string),
-        "label_filename": tf.io.FixedLenFeature([], tf.string),
-    }
+class BraTSDataset(pygrain.RandomAccessDataSource):
+    def __init__(self, records):
+        self.records = records
 
-    example = tf.io.parse_single_example(example_proto, feature_description)
+    def __len__(self):
+        return len(self.records)
 
-    # Decode image and label data
-    flair = tf.io.decode_raw(example["flair_raw"], tf.float32)
-    t1 = tf.io.decode_raw(example["t1_raw"], tf.float32)
-    t1ce = tf.io.decode_raw(example["t1ce_raw"], tf.float32)
-    t2 = tf.io.decode_raw(example["t2_raw"], tf.float32)
-    label = tf.io.decode_raw(example["label_raw"], tf.float32)
-
-    # Reshape to original dimensions
-    flair = tf.reshape(flair, example["flair_shape"])
-    t1 = tf.reshape(t1, example["t1_shape"])
-    t1ce = tf.reshape(t1ce, example["t1ce_shape"])
-    t2 = tf.reshape(t2, example["t2_shape"])
-    label = tf.reshape(label, example["label_shape"])
-
-    # Decode affine matrices
-    flair_affine = tf.reshape(example["flair_affine"], (4, 4))
-    t1_affine = tf.reshape(example["t1_affine"], (4, 4))
-    t1ce_affine = tf.reshape(example["t1ce_affine"], (4, 4))
-    t2_affine = tf.reshape(example["t2_affine"], (4, 4))
-    label_affine = tf.reshape(example["label_affine"], (4, 4))
-
-    # add channel axis
-    flair = flair[..., None]
-    t1 = t1[..., None]
-    t1ce = t1ce[..., None]
-    t2 = t2[..., None]
-    image = tf.concat([flair, t1, t1ce, t2], axis=-1)
-
-    return {
-        "image": image,
-        "label": label,
-        "affine": flair_affine,  # Since affine is the same for all
-    }
-
-```
-
-```python
-def train_dataloader(
-    tfrecord_datalist,
-    batch_size=1,
-    shuffle_buffer=100,
-):
-    dataset = tf.data.TFRecordDataset(tfrecord_datalist)
-    dataset = dataset.shuffle(shuffle_buffer)
-    dataset = dataset.map(
-        parse_tfrecord_fn,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.map(
-        rearrange_shape,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.map(
-        train_transformation,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.batch(
-        batch_size,
-        drop_remainder=True,
-    )
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
-    return dataset
+    def __getitem__(self, index):
+        return self.records[index]
 
 
-def val_dataloader(
-    tfrecord_datalist,
-    batch_size=1,
-):
-    dataset = tf.data.TFRecordDataset(tfrecord_datalist)
-    dataset = dataset.map(
-        parse_tfrecord_fn,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.map(
-        rearrange_shape,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.map(
-        val_transformation,
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
-    return dataset
-
-```
-
-The training batch size can be set to more than 1 depending on the environment and available resources. However, we intentionally keep the validation batch size as 1 to handle variable-sized samples more flexibly. While padded or ragged batches are alternative options, a batch size of 1 ensures simplicity and consistency during evaluation, especially for 3D medical data.
-
-
-```python
-tfrecord_pattern = "/kaggle/input/brats2020/training_shard_*.tfrec"
-datalist = sorted(
-    tf.io.gfile.glob(tfrecord_pattern),
-    key=lambda x: int(x.split("_")[-1].split(".")[0]),
+train_ds = (
+    pygrain.MapDataset
+    .source(BraTSDataset(train_records))
+    .shuffle(seed=42)
+    .map(load_nifti)
+    .map(depth_first)
+    .map(lambda sample: train_transformation(*sample))
+    .batch(1 * total_device)
+    .to_iter_dataset(read_options=pygrain.ReadOptions(num_threads=4))
 )
 
-train_datalist = datalist[:-1]
-val_datalist = datalist[-1:]
-train_batch = 1 * total_device
+val_ds = (
+    pygrain.MapDataset
+    .source(BraTSDataset(validation_records))
+    .map(load_nifti)
+    .map(depth_first)
+    .map(lambda sample: val_transformation(*sample))
+    .batch(1)
+    .to_iter_dataset(read_options=pygrain.ReadOptions(num_threads=4))
+)
 
-train_ds = train_dataloader(train_datalist, batch_size=train_batch)
-val_ds = val_dataloader(val_datalist, batch_size=1)
 ```
+
+The training batch size can be set to more than `1` depending on the environment and available resources. However, we intentionally keep the validation batch size as `1` to handle variable-sized samples more flexibly.
+
 
 **sanity check**: Fetch a single validation sample to inspect its shape and values.
 
 ```python
 val_x, val_y = next(iter(val_ds))
-test_image = val_x.numpy().squeeze()
-test_mask = val_y.numpy().squeeze()
+test_image = val_x.squeeze()
+test_mask = val_y.squeeze()
 print(test_image.shape, test_mask.shape, np.unique(test_mask))
 print(test_image.min(), test_image.max())
 ```
@@ -466,13 +431,14 @@ for i in range(3):
     plt.imshow(test_mask[slice_no, :, :, i])
 plt.show()
 ```
-
+```
 image shape: (155, 240, 240, 4)
-
+```
 ![](../../assets/examples/brain_tumor/brats_sample2.png)
     
+```
 label shape: (155, 240, 240, 3)
-
+```
 ![](../../assets/examples/brain_tumor/brats_sample3.png)
     
 
@@ -643,6 +609,10 @@ To evaluate the model, we perform sliding window inference on the validation dat
  - Enhancing Tumor (ET)
 
 ```python
+model.load_weights(
+    "brats.model.weights.h5"
+)
+
 swi = SlidingWindowInference(
     model,
     num_classes=num_classes,
@@ -717,37 +687,43 @@ Dice Score on enhancing tumor (ET): 0.8446
 
 ## Analyse and Visualize
 
-Let's analyse the model predictions and visualize them. First, we will implement the test transformation pipeline. This is same as validation transformation.
+Let's analyse the model predictions and visualize them. First, let's load one validation case through PyGrain and check its properties.
 
 ```python
-def test_transformation(sample):
-    return val_transformation(sample)
-```
-
-Let's load the ``tfrecord`` file and check its properties.
-
-```python
-index = 0
-dataset = tf.data.TFRecordDataset(val_datalist[index])
-dataset = dataset.map(parse_tfrecord_fn, num_parallel_calls=tf.data.AUTOTUNE)
-dataset = dataset.map(rearrange_shape, num_parallel_calls=tf.data.AUTOTUNE)
-
+dataset = (
+    pygrain.MapDataset
+    .source(BraTSDataset(validation_records))
+    .map(load_nifti)
+    .map(depth_first)
+)
 sample = next(iter(dataset))
-orig_image = sample["image"]
-orig_label = sample["label"]
-print(orig_image.shape, orig_label.shape, np.unique(orig_label))
+orig_image, orig_label = sample
+print(
+    orig_image.shape, orig_label.shape, np.unique(ops.convert_to_numpy(orig_label))
+)
+```
+```bash
+(155, 240, 240, 4) (155, 240, 240) [0 1 2 4]
 ```
 Run the transformation to prepare the inputs.
 
 ```python
-pre_image, pre_label = test_transformation(sample)
-print(pre_image.shape, pre_label.shape)
+pre_image, pre_label = val_transformation(*sample)
+print(
+    pre_image.shape, pre_label.shape
+)
+```
+```bash
+torch.Size([155, 240, 240, 4]) torch.Size([155, 240, 240, 3])
 ```
 Pass the preprocessed sample to the inference object, ensuring that a batch axis is added to the input beforehand.
 
 ```python
 y_pred = swi(pre_image[None, ...])
 print(y_pred.shape)
+```
+```bash
+(1, 155, 240, 240, 3)
 ```
 After running inference, we remove the batch dimension and apply a ``sigmoid`` activation to obtain class probabilities. We then threshold the probabilities at ``0.5`` to generate the final binary segmentation map.
 
@@ -756,6 +732,9 @@ y_pred_logits = y_pred.squeeze(axis=0)
 y_pred_prob = ops.convert_to_numpy(ops.sigmoid(y_pred_logits))
 segment = (y_pred_prob > 0.5).astype(int)
 print(segment.shape, np.unique(segment))
+```
+```bash
+((155, 240, 240, 3), array([0, 1]))
 ```
 
 We compare the ground truth (``pre_label``) and the predicted segmentation (``segment``) for each tumor sub-region. Each sub-plot shows a specific channel corresponding to a tumor type: TC, WT, and ET. Here we visualize the ``80th`` axial slice across the three channels.
@@ -798,12 +777,11 @@ prediction[segment[..., 1] == 1] = 2
 prediction[segment[..., 0] == 1] = 1
 prediction[segment[..., 2] == 1] = 4
 
-print("label ", orig_label.shape, np.unique(orig_label))
-print("predicted ", prediction.shape, np.unique(prediction))
+print('label ', orig_label.shape, np.unique(ops.convert_to_numpy(orig_label)))
+print('predicted ', prediction.shape, np.unique(ops.convert_to_numpy(prediction)))
 ```
-
-```
-label  (155, 240, 240) [0. 1. 2. 4.]
+```bash
+label  (155, 240, 240) [0 1 2 4]
 predicted  (155, 240, 240) [0. 1. 2. 4.]
 ```
 
