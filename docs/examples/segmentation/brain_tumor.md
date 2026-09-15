@@ -55,7 +55,8 @@ In this tutorial, we provide a step-by-step, end-to-end workflow for brain tumor
 
 
 ```{note}
-This example uses two Tesla T4 GPUs available in the Kaggle environment. You can also run it on a TPU VM. The only required change is to switch the mixed precision policy from ``mixed_float16`` to ``mixed_bfloat16``. You can also run this code example directly on Kaggle with either Multi-GPU or TPU-VM. Kaggle [notebook](https://www.kaggle.com/code/ipythonx/medicai-3d-brats-segmentation-in-keras/).
+This example uses two Tesla T4 GPUs available in the Kaggle environment. You can also run it on a TPU VM. The only required change is to switch the mixed precision policy from ``mixed_float16`` to ``mixed_bfloat16``. You can also run this code example directly on Kaggle with either Multi-GPU or TPU-VM. Kaggle [gpu-notebook](https://www.kaggle.com/code/ipythonx/medicai-3d-brats-segmentation-in-keras/) and [tpu-notebook](https://www.kaggle.com/code/ipythonx/3d-brats-segmentation-in-keras-tpu-vm). This code example has also been added to the official Keras.io examples and can be run directly on Colab using a subset of the BraTS dataset; Keras-io [link](https://keras.io/examples/vision/brain_tumor_segmentation/).
+
 ```
 
 ## Installation
@@ -679,10 +680,10 @@ print(f"Dice Score on enhancing tumor (ET): {dice_score_et:.4f}")
 ```
 
 ```bash
-Dice Score: 0.7939
-Dice Score on tumor core (TC): 0.6186
-Dice Score on whole tumor (WT): 0.9184
-Dice Score on enhancing tumor (ET): 0.8446
+Dice Score: 0.9150
+Dice Score on tumor core (TC): 0.8937
+Dice Score on whole tumor (WT): 0.9442
+Dice Score on enhancing tumor (ET): 0.9072
 ```
 
 ## Analyse and Visualize
