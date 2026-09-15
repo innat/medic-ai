@@ -1,17 +1,27 @@
 # Blood Cell Multiclass Classification
 
-In this tutorial, we are going to cover:
+This tutorial covers:
 
-- Load the Blood Cell Microscope dataset from **MedMNIST**, an ``8`` class ``2D`` classification dataset.
-- Build a data loader using the ``tf.data`` API.
-- Build a multiclass classification model.
-- Train the model using the Keras training API.
-- Compute **GradCAM** visualizations.
+- Loading the Blood Cell Microscope dataset from **MedMNIST**, an ``8``-class ``2D`` classification dataset.
+- Building a data loader using the ``tf.data`` API.
+- Building a multiclass classification model.
+- Training the model using the Keras training API.
+- Computing **GradCAM** visualizations.
 
 
-[MedMNIST](https://medmnist.com/), a large-scale MNIST-like collection of standardized biomedical images, including ``12`` datasets for 2D and ``6`` datasets for 3D. It has larger sizes: ``64x64``, ``128x128``, and ``224x224`` for 2D, and ``64x64x64`` for 3D.
+[MedMNIST](https://medmnist.com/) is a large-scale, MNIST-like collection of standardized biomedical images, including ``12`` datasets for 2D and ``6`` datasets for 3D. The datasets are available at sizes of ``64x64``, ``128x128``, and ``224x224`` for 2D, and ``64x64x64`` for 3D.
 
-## Setup 
+```{note}
+This code example uses the ``tf.data`` API to build the data loader, so the
+``tensorflow`` backend is required. To use another backend, use
+``torch.utils.data`` with the ``torch`` backend or use a **PyGrain** data loader,
+which works with all backends.
+
+This example uses Tesla T4 GPUs available in the Kaggle environment. You can also run it directly on Kaggle using this [GPU notebook](https://www.kaggle.com/code/ipythonx/medicai-x-medmnist-x-multi-class-x-gradcam).
+
+```
+
+## Setup
 
 ```bash
 pip install git+https://github.com/innat/MedMNIST.git -q
@@ -22,25 +32,39 @@ pip install git+https://github.com/innat/medic-ai.git -q
 
 ```python
 import os
-os.environ["KERAS_BACKEND"] = "tensorflow" # tensorflow, torch, jax
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["KERAS_BACKEND"] = "tensorflow"
 
-import tensorflow as tf
 import keras
-
 import medmnist
 from medmnist import INFO
+import tensorflow as tf
 
 from medicai.utils import GradCAM
-from medicai.models import EfficientNetV2B0
+from medicai.models import EfficientNetV2B1
+from medicai.transforms import (
+    Compose,
+    RandomFlip,
+    RandomRotate,
+    RandomElasticTransform,
+    ScaleIntensityRange,
+)
 
 import textwrap
 import numpy as np 
 import pandas as pd
 from matplotlib import pyplot as plt
 
+print(
+    f"keras backend: {keras.config.backend()}\n"
+    f"keras version: {keras.version()}\n"
+)
+```
+```python
 # reproducibility
 keras.utils.set_random_seed(101)
+
+# Enable mixed precision.
+keras.mixed_precision.set_global_policy("mixed_float16")
 ```
 
 ## Data Acquisition
@@ -93,35 +117,84 @@ print('Val set ', x_val.shape, y_val.shape)
 print('Test set ', x_test.shape, y_test.shape)
 ```
 
-## Data Loader
-
-Before training, we convert the raw NumPy arrays into performant ``tf.data`` pipelines. We apply lightweight image augmentation to the training split only, keep validation and test preprocessing deterministic, and use batching plus prefetching to make GPU training smoother.
-
-The augmentation pipeline below applies simple geometric perturbations to improve robustness. Because ``RandomCrop`` changes the spatial size, we resize the image back to ``input_size`` before feeding it to the classifier. We also cast labels into a tensor format that works cleanly with Keras sparse classification losses.
+## Transformation
 
 ```python
-# Define augmentation layers
-aug_layers = [
-    keras.layers.RandomFlip("horizontal_and_vertical"),
-    keras.layers.RandomRotation(0.2, fill_mode="nearest"),
-    keras.layers.RandomZoom(0.2, fill_mode="nearest"),
-    keras.layers.RandomCrop(
-        int(input_size // 1.5),
-        int(input_size // 1.5)
-    ),
-]
+train_augmenter = Compose(
+    [
+        ScaleIntensityRange(
+            keys=["image"],
+            source_value_range=(0.0, 255.0),
+            target_value_range=(0.0, 1.0),
+            clip=True,
+            input_layout="BHWC",
+        ),
+        RandomFlip(
+            keys=["image"],
+            spatial_axis=1,
+            prob=0.6,
+            input_layout="BHWC",
+        ),
+        RandomFlip(
+            keys=["image"],
+            spatial_axis=2,
+            prob=0.6,
+            input_layout="BHWC",
+        ),
+        RandomRotate(
+            keys=["image"],
+            factor=0.3,
+            interpolation="bilinear",
+            fill_mode="nearest",
+            prob=0.7,
+            input_layout="BHWC",
+        ),
+        RandomElasticTransform(
+            keys=["image"],
+            input_layout="BHWC",
+            alpha=(2.0, 5.0),
+            sigma=(4.0, 8.0),
+            control_grid_spacing=(16, 16),
+            field_interpolation="bspline",
+            prob=0.8,
+        )
+    ]
+)
 
-def augment_data(x, y):
-    for layer in aug_layers:
-        x = layer(x)
-    x = keras.layers.Resizing(
-        input_size, input_size, interpolation="bilinear"
-    )(x)
-    y = tf.cast(
-        tf.cast(y, tf.int32), tf.float32
-    )
-    return x, y
+val_augmenter = Compose(
+    [
+        ScaleIntensityRange(
+            keys=["image"],
+            source_value_range=(0.0, 255.0),
+            target_value_range=(0.0, 1.0),
+            clip=True,
+            input_layout="BHWC",
+        ),
+    ]
+)
 ```
+```python
+def train_transformation(image, label):
+    result = train_augmenter(
+        {
+            "image": image
+        }
+    )
+    return result["image"], label
+
+def val_transformation(image, label):
+    result = val_augmenter(
+        {
+            "image": image
+        }
+    )
+    return result["image"], label
+```
+
+## Data Loader
+
+Before training, we convert the raw NumPy arrays into efficient ``tf.data`` pipelines. We apply lightweight image augmentation only to the training split, keep validation and test preprocessing deterministic, and use batching and prefetching to improve GPU utilization.
+
 
 ```python
 def get_tf_dataset(x, y, batch_size=32, shuffle=True, augment=False):
@@ -134,14 +207,18 @@ def get_tf_dataset(x, y, batch_size=32, shuffle=True, augment=False):
 
     if augment:
         ds = ds.map(
-            augment_data, num_parallel_calls=tf.data.AUTOTUNE
+            train_transformation, num_parallel_calls=tf.data.AUTOTUNE
+        )
+    else:
+        ds = ds.map(
+            val_transformation, num_parallel_calls=tf.data.AUTOTUNE
         )
 
     ds = ds.prefetch(tf.data.AUTOTUNE)
     return ds
 ```
 
-This helper wraps the NumPy arrays into a reusable ``tf.data`` input pipeline. During augmented training, ``drop_remainder=True`` keeps batch shapes consistent, while validation and test loaders keep all remaining samples for evaluation.
+This helper wraps the NumPy arrays in a reusable ``tf.data`` input pipeline. During augmented training, ``drop_remainder=True`` keeps batch shapes consistent, while the validation and test loaders retain all remaining samples for evaluation.
 
 ```python
 train_ds = get_tf_dataset(
@@ -157,34 +234,38 @@ test_ds = get_tf_dataset(
 )
 ```
 
-To sanity-check the pipeline, the next helper draws a few samples from a dataset batch. Note that ``class_ids`` is used only for the plot title lookup here; it does not filter the dataset to that specific class.
+To sanity-check the pipeline, the next helper draws a few samples from a dataset batch. The class labels are used only for the plot title lookup; they do not filter the dataset to a specific class.
 
 ```python
 def plot_dataset_samples(dataset, n=9):
     plt.figure(figsize=(10, 10))
+
     cols = int(np.ceil(np.sqrt(n)))
     rows = int(np.ceil(n / cols))
-    
+
     for i, (images, labels) in enumerate(dataset.unbatch().take(n)):
         ax = plt.subplot(rows, cols, i + 1)
+
         img = images.numpy()
         lbl = np.squeeze(labels.numpy())
 
-        # handle grayscale or float images
-        if img.ndim == 2:
-            plt.imshow(img, cmap='gray')
-        else:
-            plt.imshow(img.astype("uint8"))
+        # Keep images in the normalized [0, 1] range for plotting.
+        img = np.clip(img, 0.0, 1.0)
 
+        # Convert (H, W, 1) grayscale images to (H, W).
+        if img.ndim == 3 and img.shape[-1] == 1:
+            img = img[..., 0]
+
+        if img.ndim == 2:
+            ax.imshow(img, cmap="gray", vmin=0.0, vmax=1.0)
+        else:
+            ax.imshow(img, vmin=0.0, vmax=1.0)
         class_name = label_map[str(int(lbl))]
-        plt.title(
-            "\n".join(textwrap.wrap(class_name, width=12))
-        )
-        plt.axis("off")
+        ax.set_title("\n".join(textwrap.wrap(class_name, width=12)))
+        ax.axis("off")
+
     plt.tight_layout()
     plt.show()
-
-# print(label_map)
 ```
 
 ```python
@@ -202,10 +283,10 @@ plot_dataset_samples(val_ds,  n=6)
 
 ## Model
 
-For this task, we use ``EfficientNetV2B0`` as a multiclass image classifier with a ``softmax`` prediction head. After creating the network, we configure the optimizer, classification loss, and accuracy metric using the standard Keras training workflow.
+For this task, we use ``EfficientNetV2B1`` as a multiclass image classifier with a ``softmax`` prediction head. After creating the network, we configure the optimizer, classification loss, and accuracy metric using the standard Keras training workflow.
 
 ```python
-model = EfficientNetV2B0(
+model = EfficientNetV2B1(
     input_shape=(
         input_size, input_size, 3
     ),
@@ -218,7 +299,7 @@ model.count_params() / 1e6
 ```
 
 ```python
-# define optomizer, loss, metrics
+# Define the optimizer, loss, and metrics.
 optim = keras.optimizers.AdamW(
     learning_rate=1e-4,
     weight_decay=1e-5,
@@ -230,7 +311,7 @@ metrics = [
     keras.metrics.SparseCategoricalAccuracy(name='acc'),
 ]
 
-# compile keras model with defined optimozer, loss and metrics
+# Compile the Keras model with the defined optimizer, loss, and metrics.
 model.compile(
     optimizer=optim,
     loss=loss_fn,
@@ -246,8 +327,8 @@ The model is trained on the augmented training dataset while monitoring validati
 
 ```python
 model_ckpt_callback = keras.callbacks.ModelCheckpoint(
-    filepath='model.weights.h5', 
-    save_freq='epoch', 
+    filepath='bloodmnist.weights.h5',
+    save_freq='epoch',
     verbose=0, 
     monitor='val_loss', 
     save_weights_only=True, 
@@ -268,7 +349,7 @@ model.fit(
 Once training is complete, we reload the best saved weights and measure performance on the held-out test split. This gives us a cleaner estimate of how well the classifier generalizes to unseen blood cell images.
 
 ```python
-model.load_weights('model.weights.h5')
+model.load_weights('bloodmnist.weights.h5')
 results = model.evaluate(test_ds)
 print("test loss, test acc:", results)
 ```
@@ -277,8 +358,8 @@ print("test loss, test acc:", results)
 
 To make the predictions easier to interpret, we generate ``GradCAM`` heatmaps on test images. These visualizations highlight the image regions that most strongly influenced the model's decision for a selected target class, which is especially useful for sanity-checking model attention in medical imaging workflows.
 
-- Pick target layers. Inspect `model.layers` to get target layer's name.
-- Pick target class index. Inspect `label_map` to select target class.
+- Pick a target layer. Inspect `model.layers` to find its name.
+- Pick a target class index. Inspect `label_map` to select the target class.
 
 The visualization helper below shuffles one batch from the test dataset, filters it to the requested target class, and then generates ``GradCAM`` heatmaps for a few matching samples. Because it operates on a single shuffled batch, it is normal to occasionally see no matches for a rare class in that batch.
 
@@ -291,14 +372,14 @@ def plot_gradcam_results(
     target_index=0,
     n=3,
 ):
-    # Temporarily shuffle dataset to get variation in output
+    # Temporarily shuffle the dataset to vary the visualized samples.
     ds_vis = test_ds.shuffle(buffer_size=2048)
     test_x, test_y = next(iter(ds_vis))
 
     test_y = test_y.numpy().squeeze()
     test_x = test_x.numpy()
 
-    # Select only samples with the target class
+    # Select only samples with the target class.
     mask = test_y == target_index
     test_x = test_x[mask]
     test_y = test_y[mask]
@@ -309,20 +390,20 @@ def plot_gradcam_results(
         )
         return
 
-    # Number of samples to visualize
+    # Limit the number of samples to visualize.
     n = min(n, len(test_x))
 
-    # Model predictions
+    # Generate model predictions.
     preds = model.predict(test_x[:n], verbose=0)
     pred_classes = preds.argmax(-1)
 
-    # Compute Grad-CAM heatmaps
+    # Compute Grad-CAM heatmaps.
     heatmaps = grad_cam.compute_heatmap(
         test_x[:n],
         target_class_index=target_index,
     )
 
-    # Create figure
+    # Create the figure.
     fig, axes = plt.subplots(
         n,
         3,
