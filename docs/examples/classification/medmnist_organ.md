@@ -2,16 +2,26 @@
 
 In this tutorial, we are going to cover:
 
-- Load the **OrganMNIST3D** subset from **MedMNIST**, an ``11`` class ``3D`` classification dataset.
-- Build volumetric data pipelines with ``medicai.transforms`` and ``tf.data``.
-- Train a ``3D`` classification model using the Keras training API.
-- Evaluate the model on the held-out test split.
-- Visualize representative slices from volumetric samples.
+- Loading the **OrganMNIST3D** subset from **MedMNIST**, an ``11``-class ``3D`` classification dataset.
+- Building volumetric data pipelines with ``medicai.transforms`` and ``tf.data``.
+- Training a ``3D`` classification model using the Keras training API.
+- Evaluating the model on the held-out test split.
+- Visualizing representative slices from volumetric samples.
 
 [MedMNIST](https://medmnist.com/) is a standardized biomedical benchmark
 collection that includes both ``2D`` and ``3D`` datasets. In this example, we
 work with ``organmnist3d``, where each sample is a ``64 x 64 x 64`` grayscale
 volume and the target is one of ``11`` anatomical classes.
+
+```{note}
+This example uses the ``tf.data`` API to build the data loader, so the
+``tensorflow`` backend is required. To use the ``torch`` backend with a native
+loader, use ``torch.utils.data``. For a data pipeline shared across TensorFlow,
+Torch, and JAX, use **PyGrain** or ``keras.utils.PyDataset`` instead.
+
+The example can be run with the Tesla T4 GPUs available in the Kaggle
+environment.
+```
 
 ## Setup
 
@@ -24,11 +34,11 @@ pip install git+https://github.com/innat/medic-ai.git -q
 
 ```python
 import os
-os.environ["KERAS_BACKEND"] = "tensorflow" # tensorflow, torch, jax
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["KERAS_BACKEND"] = "tensorflow"
 
 import tensorflow as tf
 import keras
+from keras import ops
 
 import medmnist
 from medmnist import INFO
@@ -45,11 +55,13 @@ from medicai.transforms import (
 )
 
 import numpy as np 
-import pandas as pd
 from matplotlib import pyplot as plt
 
 # reproducibility
 keras.utils.set_random_seed(101)
+
+# Enable mixed precision.
+keras.mixed_precision.set_global_policy("mixed_float16")
 ```
 
 ## Data Acquisition
@@ -143,41 +155,57 @@ the ``[0, 1]`` range.
 train_pipeline = Compose([
     LambdaTransform(
         keys=["image"],
-        fn=lambda tensor: tf.cast(tensor[..., None], dtype='float32'),
+        fn=lambda tensor: ops.cast(
+            ops.expand_dims(tensor, axis=-1), "float32"
+            ),
         name="channel_last",
     ),
     ScaleIntensityRange(
         keys=["image"],
-        input_min=0,
-        input_max=255,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         clip=True,
+        input_layout="DHWC",
     ),
-    RandomFlip(keys=["image"], spatial_axis=[0], prob=0.5),
-    RandomFlip(keys=["image"], spatial_axis=[1], prob=0.5),
-    RandomFlip(keys=["image"], spatial_axis=[2], prob=0.5),
+    RandomFlip(
+        keys=["image"],
+        spatial_axis=0,
+        prob=0.5,
+        input_layout="DHWC",
+    ),
+    RandomFlip(
+        keys=["image"],
+        spatial_axis=1,
+        prob=0.5,
+        input_layout="DHWC",
+    ),
+    RandomFlip(
+        keys=["image"],
+        spatial_axis=2,
+        prob=0.5,
+        input_layout="DHWC",
+    ),
     RandomRotate90(
         keys=["image"],
         prob=0.1,
         max_k=3,
-        spatial_axis=(0, 1),
+        spatial_axis=(1, 2),
+        input_layout="DHWC",
     ),
 ])
 
 val_pipeline = Compose([
     LambdaTransform(
         keys=["image"],
-        fn=lambda tensor: tf.cast(tensor[..., None], dtype='float32'),
+        fn=lambda tensor: ops.cast(ops.expand_dims(tensor, axis=-1), "float32"),
         name="channel_last",
     ),
     ScaleIntensityRange(
         keys=["image"],
-        input_min=0,
-        input_max=255,
-        output_min=0.0,
-        output_max=1.0,
+        source_value_range=(0.0, 255.0),
+        target_value_range=(0.0, 1.0),
         clip=True,
+        input_layout="DHWC",
     ),
 ])
 ```
