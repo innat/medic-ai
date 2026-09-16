@@ -328,9 +328,9 @@ create_plot(data, output, title1="Original", title2="RandomRotate")
 
 ``RandomElasticTransform`` applies a smooth, non-linear deformation field to
 the volume. It is useful for simulating plausible anatomical variation during
-training. The same field is applied to the image and label, with trilinear
-interpolation for the image and nearest-neighbor interpolation for the label.
-Here, the deformation field is resampled with a B-spline field interpolation
+training. The same field is applied to the image and label, with **trilinear**
+interpolation for the image and **nearest-neighbor** interpolation for the label.
+Here, the deformation field is resampled with a **B-spline** field interpolation
 and generated on a coarse ``(16, 16, 16)`` control grid.
 
 ```python
