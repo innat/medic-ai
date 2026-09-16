@@ -2,12 +2,12 @@
 
 Available transformation-oriented example references:
 
-- [Walk Through Transformation](transformation_in_action.md)
+- [Illustration of 3D Medical Transformation](transforms_in_3d.md)
 
 ```{toctree}
 :hidden:
 :maxdepth: 1
 :titlesonly:
 
-transformation_in_action
+transforms_in_3d
 ```
