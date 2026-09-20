@@ -94,11 +94,29 @@ def _homogeneous_matrix(linear: Any, translation: Any) -> Any:
     linear = ops.convert_to_tensor(linear)
     translation = ops.cast(ops.convert_to_tensor(translation), linear.dtype)
     rank = linear.shape[-1]
-    linear_batch_shape = linear.shape[:-2]
-    translation_batch_shape = translation.shape[:-1]
-    batch_shape = linear_batch_shape or translation_batch_shape
-    linear = ops.broadcast_to(linear, batch_shape + (rank, rank))
-    translation = ops.broadcast_to(translation, batch_shape + (rank,))
+
+    # Keep the two supported forms explicit.  In particular, TensorFlow can
+    # interpret tuple arithmetic on TensorShape values differently from the
+    # other Keras backends when the translation is batched.
+    linear_rank = len(linear.shape)
+    translation_rank = len(translation.shape)
+    if linear_rank == 2 and translation_rank == 2:
+        batch_size = translation.shape[0]
+        linear = ops.broadcast_to(
+            ops.expand_dims(linear, axis=0),
+            (batch_size, rank, rank),
+        )
+    elif linear_rank == 3 and translation_rank == 1:
+        batch_size = linear.shape[0]
+        translation = ops.broadcast_to(
+            ops.expand_dims(translation, axis=0),
+            (batch_size, rank),
+        )
+    elif linear_rank != translation_rank + 1:
+        raise ValueError(
+            "`linear` and `translation` must both be unbatched or use the "
+            "same leading batch shape."
+        )
 
     top = ops.concatenate((linear, ops.expand_dims(translation, axis=-1)), axis=-1)
     bottom = ops.concatenate(
