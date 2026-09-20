@@ -143,6 +143,10 @@ def centered_affine_matrix(
     )
     zero = ops.zeros_like(center)
     identity = ops.eye(spatial_rank, dtype=dtype)
+    identity = ops.broadcast_to(
+        identity,
+        linear.shape[:-2] + (spatial_rank, spatial_rank),
+    )
     centered = compose_affine_matrices(
         _homogeneous_matrix(identity, center),
         _homogeneous_matrix(linear, zero),

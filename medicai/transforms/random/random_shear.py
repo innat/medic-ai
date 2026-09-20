@@ -111,8 +111,33 @@ def _shear_matrix_2d(coefficients, spatial_shape, inverse=False):
         axis=-1,
     )
     if inverse:
+        matrix = ops.stack(
+            [
+                matrix[:, 0], matrix[:, 1], matrix[:, 2],
+                matrix[:, 3], matrix[:, 4], matrix[:, 5],
+                ops.zeros_like(matrix[:, 0]),
+                ops.zeros_like(matrix[:, 0]),
+                ops.ones_like(matrix[:, 0]),
+            ],
+            axis=-1,
+        )
         matrix = ops.linalg.inv(ops.reshape(matrix, (-1, 3, 3)))
-        matrix = ops.reshape(matrix, (-1, 9))
+        matrix = ops.stack(
+            [
+                matrix[:, 0, 0], matrix[:, 0, 1], matrix[:, 0, 2],
+                matrix[:, 1, 0], matrix[:, 1, 1], matrix[:, 1, 2],
+                matrix[:, 2, 0], matrix[:, 2, 1], matrix[:, 2, 2],
+            ],
+            axis=-1,
+        )
+        matrix = ops.stack(
+            [
+                matrix[:, 0], matrix[:, 1], matrix[:, 2],
+                matrix[:, 3], matrix[:, 4], matrix[:, 5],
+                matrix[:, 6], matrix[:, 7],
+            ],
+            axis=-1,
+        )
     return matrix
 
 
