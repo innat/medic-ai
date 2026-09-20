@@ -215,7 +215,7 @@ def sample_affine_volume(
         )
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
-    order = 1 if interpolation.lower() == "bilinear" else 0
+    order = 1 if interpolation.lower() in {"bilinear", "trilinear"} else 0
     return ops.stack(
         [
             ops.image.map_coordinates(

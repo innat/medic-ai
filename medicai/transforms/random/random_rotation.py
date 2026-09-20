@@ -37,9 +37,13 @@ _DEFAULT_INTERPOLATION = None
 _DEFAULT_FILL_MODE = "constant"
 _DEFAULT_FILL_VALUE = None
 _DEFAULT_IMAGE_INTERPOLATION = "bilinear"
+_DEFAULT_3D_IMAGE_INTERPOLATION = "trilinear"
 _DEFAULT_LABEL_INTERPOLATION = "nearest"
 _DEFAULT_FILL_VALUE_RESOLVED = 0.0
-_INTERPOLATION_MODES = {"bilinear", "nearest"}
+_INTERPOLATION_MODES = {
+    2: {"bilinear", "nearest"},
+    3: {"trilinear", "nearest"},
+}
 
 
 def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
@@ -255,7 +259,7 @@ def rotate_multi_axis(
     angle_h,
     angle_w,
     spacing=_DEFAULT_SPACING,
-    interpolation=_DEFAULT_IMAGE_INTERPOLATION,
+    interpolation=_DEFAULT_3D_IMAGE_INTERPOLATION,
     fill_mode=_DEFAULT_FILL_MODE,
     fill_value=_DEFAULT_FILL_VALUE_RESOLVED,
     precomputed_matrix=None,
@@ -455,7 +459,13 @@ class RandomRotate(RandomTransform):
             self.keys,
             interpolation,
             lambda _, index: (
-                _DEFAULT_IMAGE_INTERPOLATION if index == 0 else _DEFAULT_LABEL_INTERPOLATION
+                (
+                    _DEFAULT_IMAGE_INTERPOLATION
+                    if self.layout_info.spatial_rank == 2
+                    else _DEFAULT_3D_IMAGE_INTERPOLATION
+                )
+                if index == 0
+                else _DEFAULT_LABEL_INTERPOLATION
             ),
             "interpolation",
         )
@@ -474,7 +484,7 @@ class RandomRotate(RandomTransform):
 
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
-            if mode not in _INTERPOLATION_MODES:
+            if mode not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             fill_mode_key = str(self.fill_mode[key]).lower()
             if fill_mode_key not in _FILL_MODES:

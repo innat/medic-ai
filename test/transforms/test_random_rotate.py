@@ -179,12 +179,12 @@ def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value()
     transform = RandomRotate(
         keys=["image", "label"],
         input_layout="DHWC",
-        interpolation={"image": "BILINEAR", "label": "NEAREST"},
+        interpolation={"image": "TRILINEAR", "label": "NEAREST"},
         fill_mode={"image": "reflect", "label": "constant"},
         fill_value={"image": -1.0, "label": 2.0},
     )
 
-    assert transform.interpolation == {"image": "bilinear", "label": "nearest"}
+    assert transform.interpolation == {"image": "trilinear", "label": "nearest"}
     assert transform.fill_mode == {"image": "reflect", "label": "constant"}
     assert transform.fill_value == {"image": -1.0, "label": 2.0}
 

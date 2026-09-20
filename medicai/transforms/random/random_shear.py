@@ -21,7 +21,10 @@ _DEFAULT_SHEAR_FACTOR = 0.0
 _DEFAULT_INTERPOLATION = None
 _DEFAULT_FILL_MODE = "constant"
 _DEFAULT_FILL_VALUE = 0.0
-_INTERPOLATION_MODES = {"bilinear", "nearest"}
+_INTERPOLATION_MODES = {
+    2: {"bilinear", "nearest"},
+    3: {"trilinear", "nearest"},
+}
 _FILL_MODES = {"constant", "nearest", "reflect", "wrap", "mirror"}
 _AXES_2D = ("xy", "yx")
 _AXES_3D = ("zy", "zx", "yz", "yx", "xz", "xy")
@@ -217,7 +220,11 @@ class RandomShear(RandomTransform):
         self.interpolation = _resolve_per_key(
             self.keys,
             interpolation,
-            lambda _, index: "bilinear" if index == 0 else "nearest",
+            lambda _, index: (
+                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            )
+            if index == 0
+            else "nearest",
             "interpolation",
         )
         self.fill_mode = _resolve_per_key(
@@ -229,7 +236,7 @@ class RandomShear(RandomTransform):
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
             boundary = str(self.fill_mode[key]).lower()
-            if mode not in _INTERPOLATION_MODES:
+            if mode not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             if boundary not in _FILL_MODES:
                 raise ValueError(f"Unsupported fill_mode {boundary!r}.")

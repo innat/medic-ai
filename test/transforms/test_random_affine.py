@@ -82,3 +82,14 @@ def test_random_affine_inverse_reuses_recorded_matrix():
     assert tuple(ops.shape(restored["image"])) == tuple(ops.shape(image))
     assert np.isfinite(ops.convert_to_numpy(restored["image"])).all()
     assert restored.get_applied_transforms() == []
+
+
+@pytest.mark.unit
+def test_random_affine_accepts_trilinear_for_3d_images_and_nearest_labels():
+    transform = RandomAffine(
+        keys=["image", "label"],
+        interpolation={"image": "trilinear", "label": "nearest"},
+        input_layout="DHWC",
+    )
+
+    assert transform.interpolation == {"image": "trilinear", "label": "nearest"}

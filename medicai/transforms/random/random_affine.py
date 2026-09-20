@@ -21,7 +21,10 @@ from .affine import (
     sample_affine_volume,
 )
 
-_INTERPOLATION_MODES = {"bilinear", "nearest"}
+_INTERPOLATION_MODES = {
+    2: {"bilinear", "nearest"},
+    3: {"trilinear", "nearest"},
+}
 _FILL_MODES = {"constant", "nearest", "reflect", "wrap", "mirror"}
 
 
@@ -206,7 +209,11 @@ class RandomAffine(RandomTransform):
         self.shear_ranges = _axis_ranges(shear_factor, shear_axes, "shear_factor")
         self.interpolation = _per_key(
             self.keys, interpolation,
-            lambda _, index: "bilinear" if index == 0 else "nearest",
+            lambda _, index: (
+                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
+            )
+            if index == 0
+            else "nearest",
             "interpolation",
         )
         self.fill_mode = _per_key(
@@ -218,7 +225,9 @@ class RandomAffine(RandomTransform):
         for key in self.keys:
             self.interpolation[key] = str(self.interpolation[key]).lower()
             self.fill_mode[key] = str(self.fill_mode[key]).lower()
-            if self.interpolation[key] not in _INTERPOLATION_MODES:
+            if self.interpolation[key] not in _INTERPOLATION_MODES[
+                self.layout_info.spatial_rank
+            ]:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             if self.fill_mode[key] not in _FILL_MODES:
                 raise ValueError(f"Unsupported fill_mode {self.fill_mode[key]!r}.")
