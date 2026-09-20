@@ -186,10 +186,17 @@ def rotate_single_axis(
     merged = ops.reshape(transposed, (-1, dim0, dim1, channels))
     repeated_angles = ops.repeat(angles, folded, axis=0)
     matrices = _rotation_matrix_2d(repeated_angles, dim0, dim1)
+    
+    # A single-axis 3D rotation is a stack of 2D plane rotations. The
+    # unchanged axis does not require interpolation, so 3D trilinear
+    # interpolation is exactly bilinear interpolation on each plane.
+    kernel_interpolation = (
+        "bilinear" if interpolation.lower() == "trilinear" else interpolation
+    )
     rotated = ops.image.affine_transform(
         merged,
         matrices,
-        interpolation=interpolation.lower(),
+        interpolation=kernel_interpolation.lower(),
         fill_mode=fill_mode,
         fill_value=fill_value,
     )

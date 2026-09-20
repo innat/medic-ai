@@ -190,6 +190,23 @@ def test_random_rotate_resolves_per_key_interpolation_fill_mode_and_fill_value()
 
 
 @pytest.mark.unit
+def test_random_rotate_uses_trilinear_for_single_axis_3d_rotation():
+    image = as_tensor(np.random.randn(3, 5, 6, 1).astype(np.float32))
+    transform = RandomRotate(
+        keys=["image"],
+        factor={"D": 0.1},
+        interpolation="trilinear",
+        prob=1.0,
+        input_layout="DHWC",
+        seed=7,
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(output["image"])) == tuple(ops.shape(image))
+
+
+@pytest.mark.unit
 def test_random_rotate_supports_batch_layout_and_records_input_layout():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     label = as_tensor(np.random.randint(0, 2, (2, 4, 5, 6, 1)).astype(np.float32))
