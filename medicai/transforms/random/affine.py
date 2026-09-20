@@ -96,7 +96,7 @@ def _homogeneous_matrix(linear: Any, translation: Any) -> Any:
     rank = linear.shape[-1]
     linear_batch_shape = linear.shape[:-2]
     translation_batch_shape = translation.shape[:-1]
-    batch_shape = translation_batch_shape or linear_batch_shape
+    batch_shape = linear_batch_shape or translation_batch_shape
     linear = ops.broadcast_to(linear, batch_shape + (rank, rank))
     translation = ops.broadcast_to(translation, batch_shape + (rank,))
 
@@ -145,25 +145,12 @@ def centered_affine_matrix(
         (ops.convert_to_tensor(spatial_shape, dtype="float32") - 1.0) / 2.0,
         dtype,
     )
-    zero = ops.zeros_like(center)
-    identity = ops.eye(spatial_rank, dtype=dtype)
-    identity = ops.broadcast_to(
-        identity,
-        linear.shape[:-2] + (spatial_rank, spatial_rank),
-    )
-    centered = compose_affine_matrices(
-        _homogeneous_matrix(identity, center),
-        _homogeneous_matrix(linear, zero),
-        _homogeneous_matrix(identity, -center),
-    )
-
-    if translation is None:
-        return centered
-
-    return compose_affine_matrices(
-        _homogeneous_matrix(identity, translation),
-        centered,
-    )
+    centered_translation = center - ops.einsum("...ij,j->...i", linear, center)
+    if translation is not None:
+        centered_translation = centered_translation + ops.cast(
+            ops.convert_to_tensor(translation), dtype
+        )
+    return _homogeneous_matrix(linear, centered_translation)
 
 
 def sample_affine_volume(
