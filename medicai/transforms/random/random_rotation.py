@@ -17,6 +17,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
+from .affine import compose_affine_matrices, sample_affine_volume
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -227,7 +228,7 @@ def _rotation_matrix_3d(angle_d, angle_h, angle_w):
         ],
         axis=-2,
     )
-    return rotation_w @ rotation_h @ rotation_d
+    return compose_affine_matrices(rotation_w, rotation_h, rotation_d)
 
 
 def _spacing_scale_matrix(spacing, dtype):
@@ -243,46 +244,9 @@ def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_va
     three coordinate axes this corresponds to order-1, commonly called
     trilinear interpolation. ``nearest`` uses order 0 for discrete labels.
     """
-    depth, height, width, channels = volume.shape
-    if channels is None:
-        raise ValueError("RandomRotate requires a statically known channel dimension.")
-    z, y, x = ops.meshgrid(
-        ops.arange(depth),
-        ops.arange(height),
-        ops.arange(width),
-        indexing="ij",
+    return sample_affine_volume(
+        volume, inverse_matrix, interpolation, fill_mode, fill_value
     )
-    coordinates = ops.stack(
-        [
-            ops.cast(z, inverse_matrix.dtype),
-            ops.cast(y, inverse_matrix.dtype),
-            ops.cast(x, inverse_matrix.dtype),
-        ],
-        axis=0,
-    )
-    center = (
-        ops.cast(
-            ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
-            inverse_matrix.dtype,
-        )
-        / 2.0
-    )
-    centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
-    input_coordinates = ops.einsum("ij,jdhw->idhw", inverse_matrix, centered)
-    input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
-    channels_out = []
-    order = 1 if interpolation.lower() == "bilinear" else 0
-    for channel in range(channels):
-        channels_out.append(
-            ops.image.map_coordinates(
-                volume[..., channel],
-                input_coordinates,
-                order=order,
-                fill_mode=fill_mode,
-                fill_value=fill_value,
-            )
-        )
-    return ops.stack(channels_out, axis=-1)
 
 
 def rotate_multi_axis(

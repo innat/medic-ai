@@ -10,12 +10,16 @@ from medicai.transforms import (
     Orientation,
     RandomCropByPosNegLabel,
     RandomCutOut,
+    RandomAffine,
     RandomElasticTransform,
     RandomFlip,
     RandomRotate,
     RandomRotate90,
     RandomShiftIntensity,
+    RandomShear,
     RandomSpatialCrop,
+    RandomTranslate,
+    RandomZoom,
     Resize,
     Rotate90,
     ScaleIntensityRange,
@@ -132,6 +136,39 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             True,
         ),
         BenchmarkSpec(
+            "RandomTranslate",
+            lambda layout, s: RandomTranslate(
+                keys=["image", "label"],
+                factor=0.1,
+                prob=1.0,
+                seed=s,
+                input_layout=layout,
+            ),
+            True,
+        ),
+        BenchmarkSpec(
+            "RandomZoom",
+            lambda layout, s: RandomZoom(
+                keys=["image", "label"],
+                zoom_factor=0.1,
+                prob=1.0,
+                seed=s,
+                input_layout=layout,
+            ),
+            True,
+        ),
+        BenchmarkSpec(
+            "RandomShear",
+            lambda layout, s: RandomShear(
+                keys=["image", "label"],
+                shear_factor=0.1,
+                prob=1.0,
+                seed=s,
+                input_layout=layout,
+            ),
+            True,
+        ),
+        BenchmarkSpec(
             "RandomCutOut",
             lambda layout, s: RandomCutOut(
                 keys=["image"],
@@ -157,6 +194,20 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
                 prob=1.0,
                 seed=s,
             ),
+        ),
+        BenchmarkSpec(
+            "RandomAffine",
+            lambda layout, s: RandomAffine(
+                keys=["image", "label"],
+                rotation_factor=0.1,
+                zoom_factor=0.1,
+                translation_factor=0.1,
+                shear_factor=0.1,
+                prob=1.0,
+                seed=s,
+                input_layout=layout,
+            ),
+            True,
         ),
     ]
     if layout in ("HWC", "DHWC"):

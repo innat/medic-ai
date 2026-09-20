@@ -55,6 +55,10 @@ for backend-specific compilation limitations and measurements.
 | `RandomRotate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomSpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomTranslate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
+| `RandomZoom` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
+| `RandomShear` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
+| `RandomAffine` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
 | `RandomCropByPosNegLabel` | `HWC`, `DHWC` | ✓ | ✓ |
 | `RandomCutOut` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomElasticTransform` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
@@ -133,6 +137,14 @@ All public random transforms inherit the shared `RandomTransform` seed contract.
 .. autoclass:: medicai.transforms.RandomRotate
 
 .. autoclass:: medicai.transforms.RandomRotate90
+
+.. autoclass:: medicai.transforms.RandomTranslate
+
+.. autoclass:: medicai.transforms.RandomZoom
+
+.. autoclass:: medicai.transforms.RandomShear
+
+.. autoclass:: medicai.transforms.RandomAffine
 
 .. autoclass:: medicai.transforms.RandomSpatialCrop
 
