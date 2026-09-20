@@ -110,7 +110,7 @@ def _zoom_one_volume(volume, scales, interpolation, fill_mode, fill_value):
 class RandomZoom(RandomTransform):
     """Randomly zoom channel-last 2D images or 3D volumes around their center.
 
-    ``zoom_factor`` follows the Keras-style relative convention. A scalar
+    ``factor`` follows the Keras-style relative convention. A scalar
     ``0.2`` samples a factor in ``[-0.2, 0.2]`` independently for each active
     axis, then converts it to a scale of ``1 + factor``. A mapping can provide
     independent factors for Cartesian axes: ``x`` and ``y`` for 2D, or
@@ -121,7 +121,7 @@ class RandomZoom(RandomTransform):
 
     Args:
         keys: Tensor keys to zoom together.
-        zoom_factor: A scalar or two-value factor range, or an axis mapping.
+        factor: A scalar or two-value factor range, or an axis mapping.
         prob: Per-sample probability of applying the zoom.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
@@ -134,7 +134,7 @@ class RandomZoom(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        zoom_factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_ZOOM_FACTOR,
+        factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_ZOOM_FACTOR,
         prob: float = _DEFAULT_PROB,
         interpolation=_DEFAULT_INTERPOLATION,
         fill_mode=_DEFAULT_FILL_MODE,
@@ -154,7 +154,7 @@ class RandomZoom(RandomTransform):
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         self.ranges = _resolve_axis_ranges(
-            zoom_factor, self.layout_info.spatial_rank
+            factor, self.layout_info.spatial_rank
         )
         self.interpolation = _resolve_per_key(
             self.keys,

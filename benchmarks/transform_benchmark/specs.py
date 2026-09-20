@@ -150,7 +150,7 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "RandomZoom",
             lambda layout, s: RandomZoom(
                 keys=["image", "label"],
-                zoom_factor=0.1,
+                factor=0.1,
                 prob=1.0,
                 seed=s,
                 input_layout=layout,
@@ -161,7 +161,7 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             "RandomShear",
             lambda layout, s: RandomShear(
                 keys=["image", "label"],
-                shear_factor=0.1,
+                factor=0.1,
                 prob=1.0,
                 seed=s,
                 input_layout=layout,

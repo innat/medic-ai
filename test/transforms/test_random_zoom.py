@@ -15,7 +15,7 @@ def test_random_zoom_preserves_shape_and_aligns_selected_keys():
     label = image * 2.0
     transform = RandomZoom(
         keys=["image", "label"],
-        zoom_factor=0.0,
+        factor=0.0,
         prob=1.0,
         input_layout="BHWC",
         interpolation={"image": "nearest", "label": "nearest"},
@@ -35,7 +35,7 @@ def test_random_zoom_accepts_3d_axis_factors():
     image = as_tensor(np.zeros((2, 3, 4, 5, 1), dtype=np.float32))
     transform = RandomZoom(
         keys=["image"],
-        zoom_factor={"z": 0.1, "x": 0.2, "y": 0.3},
+        factor={"z": 0.1, "x": 0.2, "y": 0.3},
         prob=1.0,
         input_layout="BDHWC",
     )

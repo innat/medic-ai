@@ -31,13 +31,13 @@ def layout_cases():
         ),
         pytest.param(
             lambda layout: RandomZoom(
-                keys=["image"], zoom_factor=0.0, prob=1.0, input_layout=layout
+                keys=["image"], factor=0.0, prob=1.0, input_layout=layout
             ),
             id="zoom",
         ),
         pytest.param(
             lambda layout: RandomShear(
-                keys=["image"], shear_factor=0.0, prob=1.0, input_layout=layout
+                keys=["image"], factor=0.0, prob=1.0, input_layout=layout
             ),
             id="shear",
         ),
@@ -64,7 +64,7 @@ def test_affine_components_support_all_channel_last_layouts(transform_factory, l
         pytest.param(
             lambda: RandomZoom(
                 keys=["image"],
-                zoom_factor=0.1,
+                factor=0.1,
                 prob=1.0,
                 input_layout="BHWC",
                 seed=17,
@@ -74,7 +74,7 @@ def test_affine_components_support_all_channel_last_layouts(transform_factory, l
         pytest.param(
             lambda: RandomShear(
                 keys=["image"],
-                shear_factor=0.1,
+                factor=0.1,
                 prob=1.0,
                 input_layout="BHWC",
                 seed=17,

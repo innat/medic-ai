@@ -171,7 +171,7 @@ def _shear_one_volume(volume, inverse_linear, interpolation, fill_mode, fill_val
 class RandomShear(RandomTransform):
     """Randomly shear channel-last 2D images or 3D volumes.
 
-    ``shear_factor`` is a dimensionless matrix coefficient. A scalar samples
+    ``factor`` is a dimensionless matrix coefficient. A scalar samples
     every supported axis-pair coefficient symmetrically. Mappings can select
     individual terms: ``xy`` and ``yx`` are supported for 2D; ``zy``, ``zx``,
     ``yz``, ``yx``, ``xz``, and ``xy`` are supported for 3D. The first letter
@@ -179,7 +179,7 @@ class RandomShear(RandomTransform):
 
     Args:
         keys: Tensor keys to shear together.
-        shear_factor: A scalar, two-value range, or axis-pair mapping.
+        factor: A scalar, two-value range, or axis-pair mapping.
         prob: Per-sample probability of applying the shear.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
@@ -192,7 +192,7 @@ class RandomShear(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        shear_factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_SHEAR_FACTOR,
+        factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_SHEAR_FACTOR,
         prob: float = _DEFAULT_PROB,
         interpolation=_DEFAULT_INTERPOLATION,
         fill_mode=_DEFAULT_FILL_MODE,
@@ -212,7 +212,7 @@ class RandomShear(RandomTransform):
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         self.ranges = _resolve_shear_ranges(
-            shear_factor, self.layout_info.spatial_rank
+            factor, self.layout_info.spatial_rank
         )
         self.interpolation = _resolve_per_key(
             self.keys,

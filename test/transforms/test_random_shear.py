@@ -15,7 +15,7 @@ def test_random_shear_preserves_shape_and_aligns_selected_keys():
     label = image * 2.0
     transform = RandomShear(
         keys=["image", "label"],
-        shear_factor=0.0,
+        factor=0.0,
         prob=1.0,
         input_layout="BHWC",
         interpolation={"image": "nearest", "label": "nearest"},
@@ -35,7 +35,7 @@ def test_random_shear_accepts_3d_axis_pair_factors():
     image = as_tensor(np.zeros((2, 3, 4, 5, 1), dtype=np.float32))
     transform = RandomShear(
         keys=["image"],
-        shear_factor={axis: 0.1 for axis in ("zy", "zx", "yz", "yx", "xz", "xy")},
+        factor={axis: 0.1 for axis in ("zy", "zx", "yz", "yx", "xz", "xy")},
         prob=1.0,
         input_layout="BDHWC",
     )
