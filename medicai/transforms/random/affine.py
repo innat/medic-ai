@@ -94,7 +94,11 @@ def _homogeneous_matrix(linear: Any, translation: Any) -> Any:
     linear = ops.convert_to_tensor(linear)
     translation = ops.cast(ops.convert_to_tensor(translation), linear.dtype)
     rank = linear.shape[-1]
-    translation = ops.broadcast_to(translation, linear.shape[:-2] + (rank,))
+    linear_batch_shape = linear.shape[:-2]
+    translation_batch_shape = translation.shape[:-1]
+    batch_shape = translation_batch_shape or linear_batch_shape
+    linear = ops.broadcast_to(linear, batch_shape + (rank, rank))
+    translation = ops.broadcast_to(translation, batch_shape + (rank,))
 
     top = ops.concatenate((linear, ops.expand_dims(translation, axis=-1)), axis=-1)
     bottom = ops.concatenate(
