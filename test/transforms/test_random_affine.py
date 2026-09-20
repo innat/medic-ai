@@ -93,3 +93,94 @@ def test_random_affine_accepts_trilinear_for_3d_images_and_nearest_labels():
     )
 
     assert transform.interpolation == {"image": "trilinear", "label": "nearest"}
+
+
+@pytest.mark.unit
+def test_random_affine_uses_rank_aware_default_interpolation():
+    image_2d = RandomAffine(keys=["image", "label"], input_layout="BHWC")
+    image_3d = RandomAffine(keys=["image", "label"], input_layout="BDHWC")
+
+    assert image_2d.interpolation == {"image": "bilinear", "label": "nearest"}
+    assert image_3d.interpolation == {"image": "trilinear", "label": "nearest"}
+
+
+@pytest.mark.unit
+def test_random_affine_accepts_disabled_and_axis_specific_components():
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor=None,
+        zoom_factor={"z": 0.1, "x": (0.0, 0.2)},
+        translation_factor={"y": 0.1},
+        shear_factor={"xy": 0.05, "yx": (-0.1, 0.1)},
+        input_layout="DHWC",
+    )
+
+    assert transform.rotation_ranges == {
+        "z": (0.0, 0.0),
+        "y": (0.0, 0.0),
+        "x": (0.0, 0.0),
+    }
+    assert transform.zoom_ranges["z"] == (-0.1, 0.1)
+    assert transform.zoom_ranges["x"] == (0.0, 0.2)
+    assert transform.translation_ranges["y"] == (-0.1, 0.1)
+    assert transform.shear_ranges["xy"] == (-0.05, 0.05)
+
+
+@pytest.mark.unit
+def test_random_affine_probability_zero_records_skip_without_changing_input():
+    image = as_tensor(np.arange(2 * 5 * 6, dtype=np.float32).reshape(2, 5, 6, 1))
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor=0.2,
+        zoom_factor=0.2,
+        translation_factor=0.2,
+        shear_factor=0.2,
+        prob=0.0,
+        interpolation="nearest",
+        input_layout="BHWC",
+        seed=13,
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output["image"]), ops.convert_to_numpy(image)
+    )
+    assert not bool(ops.convert_to_numpy(output.get_applied_transforms()[-1]["applied"]))
+
+
+@pytest.mark.unit
+def test_random_affine_rejects_wrong_rank_interpolation():
+    with pytest.raises(ValueError, match="Unsupported interpolation"):
+        RandomAffine(keys=["image"], interpolation="bilinear", input_layout="DHWC")
+
+    with pytest.raises(ValueError, match="Unsupported interpolation"):
+        RandomAffine(keys=["image"], interpolation="trilinear", input_layout="BHWC")
+
+
+@pytest.mark.unit
+def test_random_affine_resolves_per_key_interpolation_and_fill_options():
+    transform = RandomAffine(
+        keys=["image", "label"],
+        interpolation={"image": "trilinear", "label": "nearest"},
+        fill_mode={"image": "reflect", "label": "constant"},
+        fill_value={"image": -1.0, "label": 2.0},
+        input_layout="DHWC",
+    )
+
+    assert transform.interpolation == {"image": "trilinear", "label": "nearest"}
+    assert transform.fill_mode == {"image": "reflect", "label": "constant"}
+    assert transform.fill_value == {"image": -1.0, "label": 2.0}
+
+
+@pytest.mark.unit
+def test_random_affine_allows_missing_keys_when_requested():
+    transform = RandomAffine(
+        keys=["image", "label"],
+        input_layout="HWC",
+        allow_missing_keys=True,
+    )
+
+    output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
+
+    assert "image" in output.data

@@ -69,3 +69,45 @@ def test_random_translate_samples_independent_offsets_per_batch_item(monkeypatch
     offsets = output.get_applied_transforms()[-1]["params"]["offsets"]["y"]
 
     assert not np.isclose(ops.convert_to_numpy(offsets)[0], ops.convert_to_numpy(offsets)[1])
+
+
+@pytest.mark.unit
+def test_random_translate_resolves_rank_aware_defaults_and_per_key_options():
+    transform = RandomTranslate(
+        keys=["image", "label"],
+        factor={"z": 0.1, "x": (0.0, 0.2)},
+        interpolation={"image": "trilinear", "label": "nearest"},
+        fill_mode={"image": "reflect", "label": "constant"},
+        fill_value={"image": -1.0, "label": 2.0},
+        input_layout="DHWC",
+    )
+
+    assert transform.interpolation == {"image": "trilinear", "label": "nearest"}
+    assert transform.fill_mode == {"image": "reflect", "label": "constant"}
+    assert transform.fill_value == {"image": -1.0, "label": 2.0}
+    assert transform.ranges["z"] == (-0.1, 0.1)
+    assert transform.ranges["x"] == (0.0, 0.2)
+
+
+@pytest.mark.unit
+def test_random_translate_rejects_wrong_rank_interpolation_and_unknown_axis():
+    with pytest.raises(ValueError, match="Unsupported interpolation"):
+        RandomTranslate(
+            keys=["image"], factor=0.1, interpolation="bilinear", input_layout="DHWC"
+        )
+
+    with pytest.raises(ValueError, match="Translation factor axes"):
+        RandomTranslate(keys=["image"], factor={"invalid": 0.1}, input_layout="HWC")
+
+
+@pytest.mark.unit
+def test_random_translate_allows_missing_keys():
+    transform = RandomTranslate(
+        keys=["image", "label"],
+        factor=0.0,
+        input_layout="HWC",
+        allow_missing_keys=True,
+    )
+    output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
+
+    assert "image" in output.data
