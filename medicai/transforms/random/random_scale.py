@@ -16,6 +16,7 @@ from ..utils import (
 )
 from .affine import (
     apply_plane_affine_3d,
+    normalize_resampling_options,
     resolve_axis_ranges,
     resolve_per_key,
     sample_affine_volumes,
@@ -85,6 +86,12 @@ class RandomScale(RandomTransform):
 
     This keeps images, masks, and labels spatially aligned while allowing each
     batch item to receive a different random scale.
+
+    Resampling uses ``float32`` internally and restores the original input
+    dtype. Use floating-point image tensors with bilinear or trilinear
+    interpolation to preserve fractional values, and use nearest interpolation
+    for discrete labels. Integer images with linear interpolation may lose
+    fractional values when cast back.
 
     .. note::
 
@@ -219,15 +226,14 @@ class RandomScale(RandomTransform):
         self.fill_value = resolve_per_key(
             self.keys, fill_value, lambda *_: _DEFAULT_FILL_VALUE, "fill_value"
         )
-        for key in self.keys:
-            mode = str(self.interpolation[key]).lower()
-            boundary = str(self.fill_mode[key]).lower()
-            if mode not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
-                raise ValueError(f"Unsupported interpolation for key {key!r}.")
-            if boundary not in _FILL_MODES:
-                raise ValueError(f"Unsupported fill_mode {boundary!r}.")
-            self.interpolation[key] = mode
-            self.fill_mode[key] = boundary
+        self.interpolation, self.fill_mode = normalize_resampling_options(
+            self.keys,
+            self.interpolation,
+            self.fill_mode,
+            self.layout_info.spatial_rank,
+            _INTERPOLATION_MODES,
+            _FILL_MODES,
+        )
 
     @property
     def invertible(self) -> bool:

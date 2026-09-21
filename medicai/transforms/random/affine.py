@@ -46,6 +46,27 @@ def resolve_axis_ranges(value, axes, name, range_fn):
     return {axis: value_range for axis in axes}
 
 
+def normalize_resampling_options(
+    keys,
+    interpolation,
+    fill_mode,
+    spatial_rank,
+    interpolation_modes,
+    fill_modes,
+):
+    """Normalize and validate per-key interpolation and boundary options."""
+    for key in keys:
+        interpolation[key] = str(interpolation[key]).lower()
+        fill_mode[key] = str(fill_mode[key]).lower()
+
+        if interpolation[key] not in interpolation_modes[spatial_rank]:
+            raise ValueError(f"Unsupported interpolation for key {key!r}.")
+        if fill_mode[key] not in fill_modes:
+            raise ValueError(f"Unsupported fill_mode {fill_mode[key]!r}.")
+
+    return interpolation, fill_mode
+
+
 def compose_affine_matrices(*matrices: Any) -> Any:
     """Compose homogeneous affine matrices from left to right.
 

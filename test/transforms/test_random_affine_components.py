@@ -278,6 +278,23 @@ def test_affine_components_restore_float_image_dtype(transform_type):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomScale, RandomShear])
+def test_affine_components_restore_integer_image_dtype_with_nearest(transform_type):
+    image = as_tensor(np.arange(4 * 5, dtype=np.int32).reshape(4, 5, 1))
+    transform = transform_type(
+        keys=["image"],
+        factor=0.0,
+        prob=1.0,
+        interpolation="nearest",
+        input_layout="HWC",
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    assert output["image"].dtype == image.dtype
+
+
+@pytest.mark.unit
 def test_random_scale_samples_distinct_parameters_per_batch_item(monkeypatch):
     transform = RandomScale(
         keys=["image"],

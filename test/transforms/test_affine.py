@@ -8,6 +8,7 @@ from medicai.transforms.random.affine import (
     centered_affine_matrix,
     compose_affine_matrices,
     invert_affine_matrix,
+    normalize_resampling_options,
     resample_affine_keys,
 )
 
@@ -132,3 +133,44 @@ def test_resample_affine_keys_shares_matrix_and_preserves_key_options():
         ("bilinear", "reflect", 0.0),
         ("nearest", "constant", 1.0),
     ]
+
+
+@pytest.mark.unit
+def test_normalize_resampling_options_lowercases_and_validates_per_key_values():
+    interpolation, fill_mode = normalize_resampling_options(
+        keys=("image", "label"),
+        interpolation={"image": "BILINEAR", "label": "NEAREST"},
+        fill_mode={"image": "Reflect", "label": "CONSTANT"},
+        spatial_rank=2,
+        interpolation_modes={2: {"bilinear", "nearest"}},
+        fill_modes={"constant", "reflect"},
+    )
+
+    assert interpolation == {"image": "bilinear", "label": "nearest"}
+    assert fill_mode == {"image": "reflect", "label": "constant"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("option", "value", "message"),
+    [
+        ("interpolation", {"image": "trilinear"}, "Unsupported interpolation"),
+        ("fill_mode", {"image": "wrap"}, "Unsupported fill_mode"),
+    ],
+)
+def test_normalize_resampling_options_rejects_invalid_values(option, value, message):
+    options = {
+        "interpolation": {"image": "bilinear"},
+        "fill_mode": {"image": "constant"},
+    }
+    options[option] = value
+
+    with pytest.raises(ValueError, match=message):
+        normalize_resampling_options(
+            keys=("image",),
+            interpolation=options["interpolation"],
+            fill_mode=options["fill_mode"],
+            spatial_rank=2,
+            interpolation_modes={2: {"bilinear", "nearest"}},
+            fill_modes={"constant", "reflect"},
+        )

@@ -139,3 +139,42 @@ def test_random_translate_uses_plane_path_for_xy_only_3d_translation(monkeypatch
         ops.convert_to_numpy(output["label"]),
         ops.convert_to_numpy(output["image"]) + 1.0,
     )
+
+
+@pytest.mark.unit
+def test_random_translate_inverse_restores_integer_pixel_wrap_translation():
+    image = as_tensor(np.arange(6 * 6, dtype=np.float32).reshape(6, 6, 1))
+    transform = RandomTranslate(
+        keys=["image"],
+        factor=(1.0 / 6.0, 1.0 / 6.0),
+        prob=1.0,
+        interpolation="nearest",
+        fill_mode="wrap",
+        input_layout="HWC",
+    )
+
+    forward = transform(TensorBundle({"image": image}))
+    restored = transform.inverse(forward)
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]),
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("fill_mode", ["nearest", "constant", "reflect", "wrap"])
+def test_random_translate_supports_documented_boundary_modes(fill_mode):
+    image = as_tensor(np.arange(5 * 6, dtype=np.float32).reshape(5, 6, 1))
+    transform = RandomTranslate(
+        keys=["image"],
+        factor=(0.1, 0.1),
+        prob=1.0,
+        interpolation="nearest",
+        fill_mode=fill_mode,
+        input_layout="HWC",
+    )
+
+    output = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(output["image"])) == tuple(ops.shape(image))

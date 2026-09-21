@@ -19,6 +19,7 @@ from .affine import (
     centered_affine_matrix,
     compose_affine_matrices,
     invert_affine_matrix,
+    normalize_resampling_options,
     resolve_per_key,
     resolve_axis_ranges,
     sample_affine_volumes,
@@ -159,6 +160,12 @@ class RandomAffine(RandomTransform):
     The forward matrix is composed as ``translation @ rotation @ shear @
     scale``. Its inverse is used for sampling, and the realized matrices are
     recorded for inverse execution.
+
+    Affine sampling uses ``float32`` internally and restores each input's
+    original dtype. Use floating-point image tensors with bilinear or
+    trilinear interpolation when fractional intensity values must be
+    preserved; use nearest interpolation for discrete labels. Integer images
+    with linear interpolation may lose fractional values when cast back.
 
     .. note::
 
@@ -367,9 +374,7 @@ class RandomAffine(RandomTransform):
             )
             axes = ("z", "y", "x")
             shear_axes = ("zy", "zx", "yz", "yx", "xz", "xy")
-        self.scale_ranges = resolve_axis_ranges(
-            scale_factor, axes, "scale_factor", _scale_range
-        )
+        self.scale_ranges = resolve_axis_ranges(scale_factor, axes, "scale_factor", _scale_range)
         self.translation_ranges = resolve_axis_ranges(
             translation_factor, axes, "translation_factor", _range
         )
@@ -386,13 +391,14 @@ class RandomAffine(RandomTransform):
         )
         self.fill_mode = resolve_per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
         self.fill_value = resolve_per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
-        for key in self.keys:
-            self.interpolation[key] = str(self.interpolation[key]).lower()
-            self.fill_mode[key] = str(self.fill_mode[key]).lower()
-            if self.interpolation[key] not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
-                raise ValueError(f"Unsupported interpolation for key {key!r}.")
-            if self.fill_mode[key] not in _FILL_MODES:
-                raise ValueError(f"Unsupported fill_mode {self.fill_mode[key]!r}.")
+        self.interpolation, self.fill_mode = normalize_resampling_options(
+            self.keys,
+            self.interpolation,
+            self.fill_mode,
+            self.layout_info.spatial_rank,
+            _INTERPOLATION_MODES,
+            _FILL_MODES,
+        )
 
     @property
     def invertible(self):
