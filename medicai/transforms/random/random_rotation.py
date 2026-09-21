@@ -66,7 +66,10 @@ def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any], spati
             ranges[axis] = _as_range(value)
         return ranges
     value_range = _as_range(factor)
-    return {axis: value_range for axis in _AXES[:spatial_rank]}
+    if spatial_rank == 2:
+        # A 2D image rotates in the H-W plane, represented by the z axis.
+        return {"z": value_range}
+    return {axis: value_range for axis in _AXES}
 
 
 def _apply_anisotropy_policy(ranges, spacing, threshold):
