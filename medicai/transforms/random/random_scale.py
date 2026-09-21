@@ -1,4 +1,4 @@
-"""Backend-neutral random zoom for channel-last medical tensors."""
+"""Backend-neutral random scaling for channel-last medical tensors."""
 
 from typing import Any, Sequence
 
@@ -100,7 +100,7 @@ def _zoom_matrix_2d(scales, spatial_shape):
     )
 
 
-class RandomZoom(RandomTransform):
+class RandomScale(RandomTransform):
     """Randomly zoom channel-last 2D images or 3D volumes around their center.
 
     ``factor`` follows the Keras-style relative convention. A scalar
@@ -131,9 +131,9 @@ class RandomZoom(RandomTransform):
         .. code-block:: python
 
             import tensorflow as tf
-            from medicai.transforms import RandomZoom
+            from medicai.transforms import RandomScale
 
-            transform = RandomZoom(
+            transform = RandomScale(
                 keys=["image", "label"],
                 factor={"z": 0.1, "y": 0.15, "x": 0.15},
                 interpolation={"image": "trilinear", "label": "nearest"},
@@ -150,9 +150,9 @@ class RandomZoom(RandomTransform):
         .. code-block:: python
 
             import jax
-            from medicai.transforms import RandomZoom
+            from medicai.transforms import RandomScale
 
-            transform = RandomZoom(
+            transform = RandomScale(
                 keys=["image"],
                 factor={"y": 0.2, "x": 0.2},
                 input_layout="BHWC",
@@ -167,9 +167,9 @@ class RandomZoom(RandomTransform):
         .. code-block:: python
 
             import torch
-            from medicai.transforms import RandomZoom
+            from medicai.transforms import RandomScale
 
-            transform = RandomZoom(
+            transform = RandomScale(
                 keys=["image"], factor=0.1, input_layout="BHWC", seed=7
             )
             image = torch.randn((8, 128, 128, 3))
@@ -316,7 +316,7 @@ class RandomZoom(RandomTransform):
             bundle,
             params={"keys": present, "scales": scales, "input_layout": self.input_layout},
             applied=applied,
-            kernel="random_zoom",
+            kernel="random_scale",
         )
         return bundle
 

@@ -22,7 +22,7 @@ from medicai.transforms.random.random_shift_intensity import RandomShiftIntensit
 from medicai.transforms.random.random_spatial_crop import RandomSpatialCrop
 from medicai.transforms.random.random_shear import RandomShear
 from medicai.transforms.random.random_translate import RandomTranslate
-from medicai.transforms.random.random_zoom import RandomZoom
+from medicai.transforms.random.random_scale import RandomScale
 from medicai.transforms.spatial.crop_foreground import CropForeground
 from medicai.transforms.spatial.flip import Flip
 from medicai.transforms.spatial.orientation import Orientation

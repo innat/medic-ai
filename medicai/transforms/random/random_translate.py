@@ -106,7 +106,7 @@ class RandomTranslate(RandomTransform):
     and shared across all selected keys.
 
     Public axis names are ``x`` and ``y`` for 2D, and ``z``, ``y``, and ``x``
-    for 3D. They map to channel-last tensor axes ``W``, ``H``, and ``D``
+    for 3D. They map to channel-last tensor axes ``D``, ``H``, and ``W``
     as ``x -> W``, ``y -> H``, and ``z -> D``; the internal sampler uses
     tensor order ``(D, H, W)``.
 

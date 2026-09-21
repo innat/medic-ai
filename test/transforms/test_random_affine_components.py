@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.transforms import RandomShear, RandomTranslate, RandomZoom, TensorBundle
+from medicai.transforms import RandomScale, RandomShear, RandomTranslate, TensorBundle
 
 
 def as_tensor(array, dtype=None):
@@ -30,7 +30,7 @@ def layout_cases():
             id="translate",
         ),
         pytest.param(
-            lambda layout: RandomZoom(keys=["image"], factor=0.0, prob=1.0, input_layout=layout),
+            lambda layout: RandomScale(keys=["image"], factor=0.0, prob=1.0, input_layout=layout),
             id="zoom",
         ),
         pytest.param(
@@ -58,7 +58,7 @@ def test_affine_components_support_all_channel_last_layouts(transform_factory, l
             id="translate",
         ),
         pytest.param(
-            lambda: RandomZoom(
+            lambda: RandomScale(
                 keys=["image"],
                 factor=0.1,
                 prob=1.0,
@@ -101,7 +101,7 @@ def test_affine_components_are_deterministic_and_invert_identity(transform_facto
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "transform_type",
-    [RandomTranslate, RandomZoom, RandomShear],
+    [RandomTranslate, RandomScale, RandomShear],
 )
 @pytest.mark.parametrize(
     "layout, expected_image_interpolation",
@@ -123,7 +123,7 @@ def test_affine_components_use_rank_aware_default_interpolation(
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomZoom, RandomShear])
+@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomScale, RandomShear])
 def test_affine_components_accept_scalar_range_and_axis_mapping(transform_type):
     scalar = transform_type(keys=["image"], factor=0.1, input_layout="HWC")
     ranged = transform_type(keys=["image"], factor=(-0.1, 0.2), input_layout="HWC")
@@ -143,7 +143,7 @@ def test_affine_components_accept_scalar_range_and_axis_mapping(transform_type):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomZoom, RandomShear])
+@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomScale, RandomShear])
 @pytest.mark.parametrize(
     "layout, interpolation",
     [("HWC", "trilinear"), ("DHWC", "bilinear")],
@@ -160,7 +160,7 @@ def test_affine_components_reject_wrong_rank_interpolation(transform_type, layou
 
 @pytest.mark.unit
 def test_affine_components_allow_missing_keys_when_requested():
-    for transform_type in (RandomTranslate, RandomZoom, RandomShear):
+    for transform_type in (RandomTranslate, RandomScale, RandomShear):
         transform = transform_type(
             keys=["image", "label"],
             factor=0.0,
@@ -174,7 +174,7 @@ def test_affine_components_allow_missing_keys_when_requested():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomZoom, RandomShear])
+@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomScale, RandomShear])
 def test_affine_components_resolve_per_key_interpolation_and_fill_options(transform_type):
     transform = transform_type(
         keys=["image", "label"],
@@ -191,7 +191,7 @@ def test_affine_components_resolve_per_key_interpolation_and_fill_options(transf
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomZoom, RandomShear])
+@pytest.mark.parametrize("transform_type", [RandomTranslate, RandomScale, RandomShear])
 def test_affine_components_reject_unknown_factor_axes(transform_type):
     with pytest.raises(ValueError, match="factor axes"):
         transform_type(

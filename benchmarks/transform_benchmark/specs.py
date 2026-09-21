@@ -19,7 +19,7 @@ from medicai.transforms import (
     RandomShear,
     RandomSpatialCrop,
     RandomTranslate,
-    RandomZoom,
+    RandomScale,
     Resize,
     Rotate90,
     ScaleIntensityRange,
@@ -147,8 +147,8 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             True,
         ),
         BenchmarkSpec(
-            "RandomZoom",
-            lambda layout, s: RandomZoom(
+            "RandomScale",
+            lambda layout, s: RandomScale(
                 keys=["image", "label"],
                 factor=0.1,
                 prob=1.0,
@@ -200,7 +200,7 @@ def transform_specs(layout: str, spatial_size: int) -> list[BenchmarkSpec]:
             lambda layout, s: RandomAffine(
                 keys=["image", "label"],
                 rotation_factor=0.1,
-                zoom_factor=0.1,
+                scale_factor=0.1,
                 translation_factor=0.1,
                 shear_factor=0.1,
                 prob=1.0,

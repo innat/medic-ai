@@ -56,7 +56,7 @@ def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
     return -float(value), float(value)
 
 
-def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
+def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any], spatial_rank: int):
     if isinstance(factor, dict):
         ranges = {}
         for axis, value in factor.items():
@@ -65,7 +65,8 @@ def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
                 raise ValueError(f"Rotation axes must be drawn from {_AXES}. Received {axis!r}.")
             ranges[axis] = _as_range(value)
         return ranges
-    return {"z": _as_range(factor)}
+    value_range = _as_range(factor)
+    return {axis: value_range for axis in _AXES[:spatial_rank]}
 
 
 def _apply_anisotropy_policy(ranges, spacing, threshold):
@@ -282,10 +283,11 @@ class RandomRotate(RandomTransform):
     """Apply random 2D or 3D rotations to channel-last sample or batch tensors.
 
     The transform accepts ``HWC``, ``DHWC``, ``BHWC``, and ``BDHWC`` layouts.
-    A scalar or two-value ``factor`` rotates around the depth axis (the H-W
-    plane). A dictionary can specify independent ranges for ``z``, ``y``, and
-    ``x`` axes, mapping to tensor axes ``D``, ``H``, and ``W`` respectively.
-    In 2D, only the ``z`` rotation axis is valid.
+    A scalar or two-value ``factor`` applies the same range independently to
+    every spatial rotation axis. In 2D this means ``z`` only (the H-W plane);
+    in 3D it means ``z``, ``y``, and ``x``. A dictionary can specify independent
+    ranges for ``z``, ``y``, and ``x`` axes, mapping to tensor axes ``D``, ``H``,
+    and ``W`` respectively.
 
     ``prob`` is sampled independently for each batch item. A skipped item gets
     zero angles and is therefore an exact identity. Selected keys share the
@@ -313,16 +315,18 @@ class RandomRotate(RandomTransform):
     Args:
         keys: Tensor keys to rotate together.
         factor: A non-negative maximum angle, a ``(min, max)`` range, or a
-            mapping from ``z``, ``y``, and ``x`` to either form. These map to
-            tensor axes ``D``, ``H``, and ``W`` respectively. Angles are in
-            radians.
+            mapping from ``z``, ``y``, and ``x`` to either form. A scalar or
+            two-value range applies to every valid spatial rotation axis.
+            These map to tensor axes ``D``, ``H``, and ``W`` respectively.
+            Angles are in radians.
         prob: Per-sample probability of applying the rotation.
         spacing: Optional 3D voxel spacing used for physical-space correction.
         anisotropy_threshold: If the largest spacing divided by the smallest
             spacing exceeds this value, restrict rotation to the coarsest
             physical axis. This applies only when ``spacing`` is provided.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
-            Supported modes are ``"bilinear"`` and ``"nearest"``.
+            Supported modes are ``"bilinear"`` or ``"nearest"`` for 2D and
+            ``"trilinear"`` or ``"nearest"`` for 3D.
         fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
             ``"wrap"``, ``"mirror"``, or ``"reflect"``.
         fill_value: One value, one value per key, or a key-to-value mapping.
@@ -421,7 +425,7 @@ class RandomRotate(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_axis_ranges(factor)
+        self.ranges = _resolve_axis_ranges(factor, self.layout_info.spatial_rank)
 
         if any(low > high for low, high in self.ranges.values()):
             raise ValueError("Each rotation range must have lower bound <= upper bound.")

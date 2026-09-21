@@ -26,7 +26,7 @@ def test_random_affine_identity_preserves_shape_and_alignment(layout, shape):
     transform = RandomAffine(
         keys=["image", "label"],
         rotation_factor=0.0,
-        zoom_factor=0.0,
+        scale_factor=0.0,
         translation_factor=0.0,
         shear_factor=0.0,
         prob=1.0,
@@ -49,7 +49,7 @@ def test_random_affine_records_one_composed_geometry():
     transform = RandomAffine(
         keys=["image"],
         rotation_factor=0.1,
-        zoom_factor=0.1,
+        scale_factor=0.1,
         translation_factor=0.1,
         shear_factor=0.1,
         prob=1.0,
@@ -70,7 +70,7 @@ def test_random_affine_inverse_reuses_recorded_matrix():
     transform = RandomAffine(
         keys=["image"],
         rotation_factor=0.1,
-        zoom_factor=0.1,
+        scale_factor=0.1,
         translation_factor=0.1,
         shear_factor=0.1,
         prob=1.0,
@@ -112,7 +112,7 @@ def test_random_affine_accepts_disabled_and_axis_specific_components():
     transform = RandomAffine(
         keys=["image"],
         rotation_factor=None,
-        zoom_factor={"z": 0.1, "x": (0.0, 0.2)},
+        scale_factor={"z": 0.1, "x": (0.0, 0.2)},
         translation_factor={"y": 0.1},
         shear_factor={"xy": 0.05, "yx": (-0.1, 0.1)},
         input_layout="DHWC",
@@ -123,8 +123,8 @@ def test_random_affine_accepts_disabled_and_axis_specific_components():
         "y": (0.0, 0.0),
         "x": (0.0, 0.0),
     }
-    assert transform.zoom_ranges["z"] == (-0.1, 0.1)
-    assert transform.zoom_ranges["x"] == (0.0, 0.2)
+    assert transform.scale_ranges["z"] == (-0.1, 0.1)
+    assert transform.scale_ranges["x"] == (0.0, 0.2)
     assert transform.translation_ranges["y"] == (-0.1, 0.1)
     assert transform.shear_ranges["xy"] == (-0.05, 0.05)
 
@@ -135,7 +135,7 @@ def test_random_affine_probability_zero_records_skip_without_changing_input():
     transform = RandomAffine(
         keys=["image"],
         rotation_factor=0.2,
-        zoom_factor=0.2,
+        scale_factor=0.2,
         translation_factor=0.2,
         shear_factor=0.2,
         prob=0.0,
@@ -198,7 +198,7 @@ def test_random_affine_uses_plane_path_for_hw_separable_3d_geometry(monkeypatch)
     transform = RandomAffine(
         keys=["image"],
         rotation_factor={"z": 0.1},
-        zoom_factor={"x": 0.1, "y": 0.1},
+        scale_factor={"x": 0.1, "y": 0.1},
         translation_factor={"x": 0.1, "y": 0.1},
         shear_factor={"xy": 0.05, "yx": 0.05},
         interpolation="trilinear",
@@ -221,7 +221,7 @@ def test_random_affine_general_3d_path_does_not_use_vectorized_map(monkeypatch):
     transform = RandomAffine(
         keys=["image"],
         rotation_factor={"x": 0.1},
-        zoom_factor={"z": 0.1},
+        scale_factor={"z": 0.1},
         translation_factor={"z": 0.1},
         shear_factor={"zx": 0.05},
         interpolation="trilinear",

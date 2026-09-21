@@ -272,7 +272,6 @@ def sample_affine_volume(
     if translation is not None:
         input_coordinates = input_coordinates + ops.reshape(translation, (3, 1, 1, 1))
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
-    input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
     order = 1 if interpolation.lower() in {"bilinear", "trilinear"} else 0
     return ops.stack(
         [
@@ -327,7 +326,7 @@ def _normalize_batched_coordinates(
                 ops.logical_and(coordinate >= 0.0, coordinate <= size_value - 1.0),
             )
             normalized.append(ops.clip(coordinate, 0.0, size_value - 1.0))
-        elif fill_mode in {"reflect", "mirror"}:
+        elif fill_mode == "mirror":
             static_size = volume.shape[axis + 1]
             if static_size == 1:
                 normalized.append(ops.zeros_like(coordinate))
@@ -336,6 +335,21 @@ def _normalize_batched_coordinates(
                 reflected = ops.mod(ops.abs(coordinate), period)
                 edge = ops.cast(int(static_size) - 1, coordinate.dtype)
                 normalized.append(ops.where(reflected <= edge, reflected, period - reflected))
+        elif fill_mode == "reflect":
+            static_size = volume.shape[axis + 1]
+            if static_size == 1:
+                normalized.append(ops.zeros_like(coordinate))
+            else:
+                period = ops.cast(2 * int(static_size), coordinate.dtype)
+                reflected = ops.mod(coordinate, period)
+                edge = ops.cast(int(static_size), coordinate.dtype)
+                normalized.append(
+                    ops.where(
+                        reflected < edge,
+                        reflected,
+                        period - 1.0 - reflected,
+                    )
+                )
         elif fill_mode == "wrap":
             normalized.append(ops.mod(coordinate, size_value))
         else:

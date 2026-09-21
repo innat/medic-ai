@@ -56,7 +56,7 @@ for backend-specific compilation limitations and measurements.
 | `RandomShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomSpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomTranslate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
-| `RandomZoom` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
+| `RandomScale` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
 | `RandomShear` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
 | `RandomAffine` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
 | `RandomCropByPosNegLabel` | `HWC`, `DHWC` | ✓ | ✓ |
@@ -140,7 +140,7 @@ All public random transforms inherit the shared `RandomTransform` seed contract.
 
 .. autoclass:: medicai.transforms.RandomTranslate
 
-.. autoclass:: medicai.transforms.RandomZoom
+.. autoclass:: medicai.transforms.RandomScale
 
 .. autoclass:: medicai.transforms.RandomShear
 

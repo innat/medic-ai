@@ -166,7 +166,7 @@ backend-specific XLA limitations are documented by the individual transform.
 | RandomRotate | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomRotate90 | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
 | RandomTranslate | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
-| RandomZoom | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
+| RandomScale | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomShear | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomAffine | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomElasticTransform | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |

@@ -120,6 +120,13 @@ def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
 
 
 @pytest.mark.unit
+def test_random_rotate_scalar_factor_targets_all_3d_axes():
+    transform = RandomRotate(keys=["image"], factor=0.1, prob=1.0, input_layout="BDHWC", seed=3)
+
+    assert set(transform.ranges) == {"z", "y", "x"}
+
+
+@pytest.mark.unit
 def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
     image = as_tensor(np.random.randn(1, 4, 5, 6, 1).astype(np.float32))
     transform = RandomRotate(

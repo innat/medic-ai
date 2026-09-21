@@ -177,7 +177,7 @@ class RandomAffine(RandomTransform):
         keys: Tensor keys to transform together.
         rotation_factor: Rotation range or axis mapping using ``z``, ``y``,
             and ``x`` axes.
-        zoom_factor: Relative zoom range or axis mapping.
+        scale_factor: Relative scale range or axis mapping.
         translation_factor: Relative translation range or axis mapping.
         shear_factor: Dimensionless shear range or axis-pair mapping.
         prob: Per-sample probability of applying the affine transform.
@@ -200,7 +200,7 @@ class RandomAffine(RandomTransform):
             transform = RandomAffine(
                 keys=["image", "label"],
                 rotation_factor={"z": 0.1, "x": 0.05},
-                zoom_factor={"z": 0.1, "y": 0.15, "x": 0.15},
+                scale_factor={"z": 0.1, "y": 0.15, "x": 0.15},
                 translation_factor={"z": 0.05, "y": 0.1, "x": 0.1},
                 shear_factor={"zy": 0.05, "zx": 0.05, "xy": 0.1, "yx": 0.1},
                 interpolation={"image": "trilinear", "label": "nearest"},
@@ -222,7 +222,7 @@ class RandomAffine(RandomTransform):
             transform = RandomAffine(
                 keys=["image"],
                 rotation_factor={"z": 0.1},
-                zoom_factor={"y": 0.1, "x": 0.1},
+                scale_factor={"y": 0.1, "x": 0.1},
                 translation_factor={"y": 0.1, "x": 0.1},
                 input_layout="BHWC",
                 seed=7,
@@ -239,18 +239,56 @@ class RandomAffine(RandomTransform):
 
             transform = RandomAffine(
                 keys=["image"], rotation_factor=0.1,
-                zoom_factor=0.1, translation_factor=0.1,
+                scale_factor=0.1, translation_factor=0.1,
                 shear_factor=0.05, input_layout="BHWC", seed=7
             )
             image = torch.randn((8, 128, 128, 3))
             result = transform({"image": image})
+
+        Conservative 3D augmentation for anatomy-sensitive segmentation:
+
+        .. code-block:: python
+
+            from medicai.transforms import RandomAffine
+
+            transform = RandomAffine(
+                keys=["image", "label"],
+                rotation_factor={"z": 0.05},       # approximately +/-3 degrees
+                scale_factor={"z": 0.03},           # approximately +/-3 percent
+                translation_factor={"z": 0.03},    # approximately +/-3 percent
+                shear_factor={"zy": 0.03},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                fill_mode={"image": "constant", "label": "constant"},
+                fill_value={"image": 0.0, "label": 0.0},
+                input_layout="DHWC",
+                prob=0.3,
+                seed=7,
+            )
+            result = transform({"image": image, "label": label})
+
+        For in-plane-only augmentation, keep the depth axis unchanged and
+        configure the H-W plane explicitly:
+
+        .. code-block:: python
+
+            transform = RandomAffine(
+                keys=["image", "label"],
+                rotation_factor={"z": 0.1},
+                scale_factor={"y": 0.05, "x": 0.05},
+                translation_factor={"y": 0.05, "x": 0.05},
+                shear_factor={"xy": 0.05, "yx": 0.05},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                input_layout="DHWC",
+                prob=0.5,
+                seed=7,
+            )
     """
 
     def __init__(
         self,
         keys: Sequence[str],
         rotation_factor=None,
-        zoom_factor=None,
+        scale_factor=None,
         translation_factor=None,
         shear_factor=None,
         prob=0.5,
@@ -283,7 +321,7 @@ class RandomAffine(RandomTransform):
             self.rotation_ranges = _axis_ranges(rotation_factor, ("z", "y", "x"), "rotation_factor")
             axes = ("z", "y", "x")
             shear_axes = ("zy", "zx", "yz", "yx", "xz", "xy")
-        self.zoom_ranges = _axis_ranges(zoom_factor, axes, "zoom_factor")
+        self.scale_ranges = _axis_ranges(scale_factor, axes, "scale_factor")
         self.translation_ranges = _axis_ranges(translation_factor, axes, "translation_factor")
         self.shear_ranges = _axis_ranges(shear_factor, shear_axes, "shear_factor")
         self.interpolation = _per_key(
@@ -317,7 +355,7 @@ class RandomAffine(RandomTransform):
             "float32",
         )
         rotation = _sample(self, self.rotation_ranges, batch_size, "float32", gate)
-        zoom = _sample(self, self.zoom_ranges, batch_size, "float32", gate)
+        scale = _sample(self, self.scale_ranges, batch_size, "float32", gate)
         translation = _sample(self, self.translation_ranges, batch_size, "float32", gate)
         shear = _sample(self, self.shear_ranges, batch_size, "float32", gate)
         applied = ops.any(gate > 0)
@@ -326,7 +364,7 @@ class RandomAffine(RandomTransform):
             linear_rotation = _rotation_2d(rotation["z"])
             linear_shear = _shear_2d(ops.stack([shear["xy"], shear["yx"]], -1))
             linear_scale = ops.eye(2, dtype="float32") * ops.reshape(
-                ops.stack([1.0 + zoom["y"], 1.0 + zoom["x"]], -1), (-1, 2, 1)
+                ops.stack([1.0 + scale["y"], 1.0 + scale["x"]], -1), (-1, 2, 1)
             )
             offset = ops.stack(
                 [
@@ -346,7 +384,7 @@ class RandomAffine(RandomTransform):
                 )
             )
             linear_scale = ops.eye(3, dtype="float32") * ops.reshape(
-                ops.stack([1.0 + zoom["z"], 1.0 + zoom["y"], 1.0 + zoom["x"]], -1), (-1, 3, 1)
+                ops.stack([1.0 + scale["z"], 1.0 + scale["y"], 1.0 + scale["x"]], -1), (-1, 3, 1)
             )
             offset = ops.stack(
                 [
@@ -404,7 +442,7 @@ class RandomAffine(RandomTransform):
             axis for axis, (low, high) in self.rotation_ranges.items() if low != 0.0 or high != 0.0
         }
         zoom_axes = {
-            axis for axis, (low, high) in self.zoom_ranges.items() if low != 0.0 or high != 0.0
+            axis for axis, (low, high) in self.scale_ranges.items() if low != 0.0 or high != 0.0
         }
         translation_axes = {
             axis
