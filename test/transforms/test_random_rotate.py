@@ -94,7 +94,7 @@ def test_random_rotate_samples_distinct_angles_per_batch_item_and_aligns_keys(mo
     output = transform(TensorBundle({"image": image, "label": label}))
 
     trace = output.get_applied_transforms()[-1]
-    angles = ops.convert_to_numpy(trace["params"]["angles"]["D"])
+    angles = ops.convert_to_numpy(trace["params"]["angles"]["z"])
     assert not np.isclose(angles[0], angles[1])
 
     output_image = ops.convert_to_numpy(output["image"])
@@ -107,7 +107,7 @@ def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
     image = as_tensor(np.random.randn(2, 4, 5, 6, 1).astype(np.float32))
     transform = RandomRotate(
         keys=["image"],
-        factor={"h": (-0.1, 0.1), "W": 0.1},
+        factor={"y": (-0.1, 0.1), "x": 0.1},
         prob=1.0,
         input_layout="BDHWC",
         seed=3,
@@ -116,7 +116,7 @@ def test_random_rotate_supports_axis_ranges_and_multi_axis_3d_rotation():
     out = transform(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(out["image"])) == (2, 4, 5, 6, 1)
-    assert set(out.get_applied_transforms()[-1]["params"]["angles"]) == {"H", "W"}
+    assert set(out.get_applied_transforms()[-1]["params"]["angles"]) == {"y", "x"}
 
 
 @pytest.mark.unit
@@ -124,7 +124,7 @@ def test_random_rotate_multi_axis_inverse_uses_recorded_geometry():
     image = as_tensor(np.random.randn(1, 4, 5, 6, 1).astype(np.float32))
     transform = RandomRotate(
         keys=["image"],
-        factor={"h": 0.1, "w": 0.1},
+        factor={"y": 0.1, "x": 0.1},
         prob=1.0,
         input_layout="BDHWC",
         seed=11,
@@ -161,7 +161,7 @@ def test_random_rotate_inverse_preserves_mixed_probability_batch(monkeypatch):
     monkeypatch.setattr(transform, "random_uniform", sample_uniform)
     forward = transform(TensorBundle({"image": image}))
     trace = forward.get_applied_transforms()[-1]
-    angles = ops.convert_to_numpy(trace["params"]["angles"]["D"])
+    angles = ops.convert_to_numpy(trace["params"]["angles"]["z"])
     assert np.allclose(angles[0], 0.0)
     assert not np.isclose(angles[1], 0.0)
     forward_image = ops.convert_to_numpy(forward["image"])
@@ -194,7 +194,7 @@ def test_random_rotate_uses_trilinear_for_single_axis_3d_rotation():
     image = as_tensor(np.random.randn(3, 5, 6, 1).astype(np.float32))
     transform = RandomRotate(
         keys=["image"],
-        factor={"D": 0.1},
+        factor={"z": 0.1},
         interpolation="trilinear",
         prob=1.0,
         input_layout="DHWC",
@@ -247,11 +247,11 @@ def test_random_rotate_uses_same_batch_kernel_for_sample_and_batch_modes():
     transform = RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="DHWC")
 
     sample_out = ops.convert_to_numpy(
-        transform._apply_tensor(sample, "image", {"D": sample_angles})
+        transform._apply_tensor(sample, "image", {"z": sample_angles})
     )
     batch_out = ops.convert_to_numpy(
         RandomRotate(keys=["image"], factor=0.2, prob=1.0, input_layout="BDHWC")._apply_tensor(
-            batch, "image", {"D": batch_angles}
+            batch, "image", {"z": batch_angles}
         )
     )
 
@@ -315,8 +315,8 @@ def test_random_rotate_validates_arguments_and_fill_modes():
         transform = RandomRotate(keys=["image"], fill_mode=mode, input_layout="HWC")
         assert transform.fill_mode["image"] == mode
 
-    with pytest.raises(ValueError, match="supports only the `D` rotation axis"):
-        RandomRotate(keys=["image"], factor={"H": 0.1}, input_layout="HWC")
+    with pytest.raises(ValueError, match="supports only the `z` rotation axis"):
+        RandomRotate(keys=["image"], factor={"y": 0.1}, input_layout="HWC")
 
     image = as_tensor(np.random.randn(8, 8, 1).astype(np.float32))
     out = RandomRotate(keys=["image"], factor=0.0, prob=1.0, input_layout="HWC")(

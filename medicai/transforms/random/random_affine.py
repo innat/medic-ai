@@ -15,10 +15,11 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 from .affine import (
+    apply_plane_affine_3d,
     centered_affine_matrix,
     compose_affine_matrices,
     invert_affine_matrix,
-    sample_affine_volume,
+    sample_affine_volumes,
 )
 
 _INTERPOLATION_MODES = {
@@ -50,10 +51,7 @@ def _axis_ranges(value, axes, name):
         unknown = set(value) - set(axes)
         if unknown:
             raise ValueError(f"{name} axes must be drawn from {axes}.")
-        return {
-            axis: _range(value[axis], name) if axis in value else (0.0, 0.0)
-            for axis in axes
-        }
+        return {axis: _range(value[axis], name) if axis in value else (0.0, 0.0) for axis in axes}
     value_range = _range(value, name)
     return {axis: value_range for axis in axes}
 
@@ -75,9 +73,7 @@ def _per_key(keys, value, default, name):
 
 def _sample(transform, ranges, batch_size, dtype, gate):
     values = {
-        name: transform.random_uniform(
-            shape=(batch_size,), minval=low, maxval=high, dtype=dtype
-        )
+        name: transform.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
         * gate
         for name, (low, high) in ranges.items()
     }
@@ -99,19 +95,36 @@ def _rotation_3d(angles):
     z, y, x = angles[:, 0], angles[:, 1], angles[:, 2]
     one, zero = ops.ones_like(z), ops.zeros_like(z)
     cz, sz, cy, sy, cx, sx = (
-        ops.cos(z), ops.sin(z), ops.cos(y), ops.sin(y), ops.cos(x), ops.sin(x)
+        ops.cos(z),
+        ops.sin(z),
+        ops.cos(y),
+        ops.sin(y),
+        ops.cos(x),
+        ops.sin(x),
     )
     rz = ops.stack(
-        [ops.stack([one, zero, zero], -1), ops.stack([zero, cz, -sz], -1),
-         ops.stack([zero, sz, cz], -1)], -2
+        [
+            ops.stack([one, zero, zero], -1),
+            ops.stack([zero, cz, -sz], -1),
+            ops.stack([zero, sz, cz], -1),
+        ],
+        -2,
     )
     ry = ops.stack(
-        [ops.stack([cy, zero, sy], -1), ops.stack([zero, one, zero], -1),
-         ops.stack([-sy, zero, cy], -1)], -2
+        [
+            ops.stack([cy, zero, sy], -1),
+            ops.stack([zero, one, zero], -1),
+            ops.stack([-sy, zero, cy], -1),
+        ],
+        -2,
     )
     rx = ops.stack(
-        [ops.stack([cx, -sx, zero], -1), ops.stack([sx, cx, zero], -1),
-         ops.stack([zero, zero, one], -1)], -2
+        [
+            ops.stack([cx, -sx, zero], -1),
+            ops.stack([sx, cx, zero], -1),
+            ops.stack([zero, zero, one], -1),
+        ],
+        -2,
     )
     return compose_affine_matrices(rz, ry, rx)
 
@@ -131,31 +144,25 @@ def _shear_3d(values):
     zy, zx, yz, yx, xz, xy = [values[:, i] for i in range(6)]
     one = ops.ones_like(zy)
     return ops.stack(
-        [ops.stack([one, zy, zx], -1), ops.stack([yz, one, yx], -1),
-         ops.stack([xz, xy, one], -1)], -2
+        [ops.stack([one, zy, zx], -1), ops.stack([yz, one, yx], -1), ops.stack([xz, xy, one], -1)],
+        -2,
     )
 
 
 def _matrix_to_keras_2d(matrix):
     return ops.stack(
-        [matrix[:, 1, 1], matrix[:, 1, 0], matrix[:, 1, 2],
-         matrix[:, 0, 1], matrix[:, 0, 0], matrix[:, 0, 2],
-         ops.zeros_like(matrix[:, 0, 0]), ops.zeros_like(matrix[:, 0, 0])],
+        [
+            matrix[:, 1, 1],
+            matrix[:, 1, 0],
+            matrix[:, 1, 2],
+            matrix[:, 0, 1],
+            matrix[:, 0, 0],
+            matrix[:, 0, 2],
+            ops.zeros_like(matrix[:, 0, 0]),
+            ops.zeros_like(matrix[:, 0, 0]),
+        ],
         -1,
     )
-
-
-def _centered_parts(matrix, spatial_shape):
-    rank = len(spatial_shape)
-    linear = matrix[:, :rank, :rank]
-    center = ops.cast(
-        (ops.convert_to_tensor(spatial_shape, dtype="float32") - 1.0) / 2.0,
-        matrix.dtype,
-    )
-    translation = matrix[:, :rank, rank] + ops.einsum(
-        "bij,j->bi", linear, center
-    ) - center
-    return linear, translation
 
 
 class RandomAffine(RandomTransform):
@@ -165,6 +172,78 @@ class RandomAffine(RandomTransform):
     scale``. Its inverse is used for sampling, and the realized matrices are
     recorded for inverse execution. Parameters are sampled independently per
     batch item and shared across selected image and label keys.
+
+    Args:
+        keys: Tensor keys to transform together.
+        rotation_factor: Rotation range or axis mapping using ``z``, ``y``,
+            and ``x`` axes.
+        zoom_factor: Relative zoom range or axis mapping.
+        translation_factor: Relative translation range or axis mapping.
+        shear_factor: Dimensionless shear range or axis-pair mapping.
+        prob: Per-sample probability of applying the affine transform.
+        interpolation: One mode, one mode per key, or a key-to-mode mapping.
+        fill_mode: Boundary behavior for newly exposed values.
+        fill_value: Constant boundary value when ``fill_mode="constant"``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        seed: Optional integer or Keras seed generator.
+        allow_missing_keys: If ``True``, missing requested keys are skipped.
+
+    Example:
+
+        TensorFlow backend:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomAffine
+
+            transform = RandomAffine(
+                keys=["image", "label"],
+                rotation_factor={"z": 0.1, "x": 0.05},
+                zoom_factor={"z": 0.1, "y": 0.15, "x": 0.15},
+                translation_factor={"z": 0.05, "y": 0.1, "x": 0.1},
+                shear_factor={"zy": 0.05, "zx": 0.05, "xy": 0.1, "yx": 0.1},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                input_layout="BDHWC",
+                prob=0.5,
+                seed=7,
+            )
+            image = tf.random.normal((2, 32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
+            result = transform({"image": image, "label": label})
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import jax
+            from medicai.transforms import RandomAffine
+
+            transform = RandomAffine(
+                keys=["image"],
+                rotation_factor={"z": 0.1},
+                zoom_factor={"y": 0.1, "x": 0.1},
+                translation_factor={"y": 0.1, "x": 0.1},
+                input_layout="BHWC",
+                seed=7,
+            )
+            image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
+            result = transform({"image": image})
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import torch
+            from medicai.transforms import RandomAffine
+
+            transform = RandomAffine(
+                keys=["image"], rotation_factor=0.1,
+                zoom_factor=0.1, translation_factor=0.1,
+                shear_factor=0.05, input_layout="BHWC", seed=7
+            )
+            image = torch.randn((8, 128, 128, 3))
+            result = transform({"image": image})
     """
 
     def __init__(
@@ -208,26 +287,21 @@ class RandomAffine(RandomTransform):
         self.translation_ranges = _axis_ranges(translation_factor, axes, "translation_factor")
         self.shear_ranges = _axis_ranges(shear_factor, shear_axes, "shear_factor")
         self.interpolation = _per_key(
-            self.keys, interpolation,
+            self.keys,
+            interpolation,
             lambda _, index: (
-                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-            )
-            if index == 0
-            else "nearest",
+                ("bilinear" if self.layout_info.spatial_rank == 2 else "trilinear")
+                if index == 0
+                else "nearest"
+            ),
             "interpolation",
         )
-        self.fill_mode = _per_key(
-            self.keys, fill_mode, lambda *_: "constant", "fill_mode"
-        )
-        self.fill_value = _per_key(
-            self.keys, fill_value, lambda *_: 0.0, "fill_value"
-        )
+        self.fill_mode = _per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
+        self.fill_value = _per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
         for key in self.keys:
             self.interpolation[key] = str(self.interpolation[key]).lower()
             self.fill_mode[key] = str(self.fill_mode[key]).lower()
-            if self.interpolation[key] not in _INTERPOLATION_MODES[
-                self.layout_info.spatial_rank
-            ]:
+            if self.interpolation[key] not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             if self.fill_mode[key] not in _FILL_MODES:
                 raise ValueError(f"Unsupported fill_mode {self.fill_mode[key]!r}.")
@@ -238,17 +312,13 @@ class RandomAffine(RandomTransform):
 
     def _matrices(self, spatial_shape, batch_size):
         gate = ops.cast(
-            self.random_uniform(
-                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
-            )
+            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
             < self.prob,
             "float32",
         )
         rotation = _sample(self, self.rotation_ranges, batch_size, "float32", gate)
         zoom = _sample(self, self.zoom_ranges, batch_size, "float32", gate)
-        translation = _sample(
-            self, self.translation_ranges, batch_size, "float32", gate
-        )
+        translation = _sample(self, self.translation_ranges, batch_size, "float32", gate)
         shear = _sample(self, self.shear_ranges, batch_size, "float32", gate)
         applied = ops.any(gate > 0)
         rank = self.layout_info.spatial_rank
@@ -299,25 +369,58 @@ class RandomAffine(RandomTransform):
         batched, added_batch = ensure_batch_axis_for_layout(
             tensor, input_layout=self.input_layout, allowed_spatial_ranks=(2, 3)
         )
-        spatial_shape = ops.shape(batched)[1:-1]
         if self.layout_info.spatial_rank == 2:
             output = ops.image.affine_transform(
-                ops.cast(batched, "float32"), _matrix_to_keras_2d(matrix),
-                interpolation=self.interpolation[key], fill_mode=self.fill_mode[key],
+                ops.cast(batched, "float32"),
+                _matrix_to_keras_2d(matrix),
+                interpolation=self.interpolation[key],
+                fill_mode=self.fill_mode[key],
                 fill_value=self.fill_value[key],
             )
         else:
-            linear, translation = _centered_parts(matrix, spatial_shape)
-
-            def sample(args):
-                volume, sample_matrix, sample_offset = args
-                return sample_affine_volume(
-                    volume, sample_matrix, self.interpolation[key],
-                    self.fill_mode[key], self.fill_value[key], sample_offset
+            if self._is_hw_separable():
+                output = apply_plane_affine_3d(
+                    batched,
+                    _matrix_to_keras_2d(matrix[:, 1:, 1:]),
+                    ("y", "x"),
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
                 )
+                return restore_from_batch_axis(output, added_batch)
 
-            output = ops.vectorized_map(sample, (batched, linear, translation))
+            output = sample_affine_volumes(
+                batched,
+                matrix,
+                self.interpolation[key],
+                self.fill_mode[key],
+                self.fill_value[key],
+            )
         return restore_from_batch_axis(output, added_batch)
+
+    def _is_hw_separable(self):
+        """Return whether the configured 3D geometry leaves depth unchanged."""
+        rotation_axes = {
+            axis for axis, (low, high) in self.rotation_ranges.items() if low != 0.0 or high != 0.0
+        }
+        zoom_axes = {
+            axis for axis, (low, high) in self.zoom_ranges.items() if low != 0.0 or high != 0.0
+        }
+        translation_axes = {
+            axis
+            for axis, (low, high) in self.translation_ranges.items()
+            if low != 0.0 or high != 0.0
+        }
+        shear_axes = {
+            axis for axis, (low, high) in self.shear_ranges.items() if low != 0.0 or high != 0.0
+        }
+        return (
+            keras.config.backend() != "torch"
+            and rotation_axes <= {"z"}
+            and zoom_axes <= {"x", "y"}
+            and translation_axes <= {"x", "y"}
+            and shear_axes <= {"xy", "yx"}
+        )
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         present = [key for key in self.keys if key in bundle.data]

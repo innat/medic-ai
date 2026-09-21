@@ -43,12 +43,8 @@ def test_centered_affine_identity_and_known_scale():
 
 @pytest.mark.unit
 def test_affine_composition_and_inverse_restore_identity():
-    translation = as_tensor(
-        [[1.0, 0.0, 3.0], [0.0, 1.0, -2.0], [0.0, 0.0, 1.0]]
-    )
-    scale = as_tensor(
-        [[2.0, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 1.0]]
-    )
+    translation = as_tensor([[1.0, 0.0, 3.0], [0.0, 1.0, -2.0], [0.0, 0.0, 1.0]])
+    scale = as_tensor([[2.0, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 1.0]])
     composed = compose_affine_matrices(translation, scale)
     restored = compose_affine_matrices(composed, invert_affine_matrix(composed))
 

@@ -97,7 +97,7 @@ from medicai.transforms import RandomRotate
 
 transform = RandomRotate(
     keys=["image"],
-    factor={"H": 0.1, "W": 0.1},
+    factor={"y": 0.1, "x": 0.1},
     prob=0.5,
     input_layout="DHWC",
 )

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 from keras import ops
 
 from medicai.transforms import RandomTranslate, TensorBundle
@@ -92,9 +93,7 @@ def test_random_translate_resolves_rank_aware_defaults_and_per_key_options():
 @pytest.mark.unit
 def test_random_translate_rejects_wrong_rank_interpolation_and_unknown_axis():
     with pytest.raises(ValueError, match="Unsupported interpolation"):
-        RandomTranslate(
-            keys=["image"], factor=0.1, interpolation="bilinear", input_layout="DHWC"
-        )
+        RandomTranslate(keys=["image"], factor=0.1, interpolation="bilinear", input_layout="DHWC")
 
     with pytest.raises(ValueError, match="Translation factor axes"):
         RandomTranslate(keys=["image"], factor={"invalid": 0.1}, input_layout="HWC")
@@ -111,3 +110,31 @@ def test_random_translate_allows_missing_keys():
     output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
 
     assert "image" in output.data
+
+
+@pytest.mark.unit
+def test_random_translate_uses_plane_path_for_xy_only_3d_translation(monkeypatch):
+    if keras.config.backend() == "torch":
+        pytest.skip("Torch uses the general 3D sampler for this path.")
+
+    image = as_tensor(np.zeros((2, 3, 5, 6, 1), dtype=np.float32))
+    label = image + 1.0
+    transform = RandomTranslate(
+        keys=["image", "label"],
+        factor={"x": 0.1, "y": 0.1},
+        prob=1.0,
+        input_layout="BDHWC",
+        seed=7,
+    )
+
+    monkeypatch.setattr(
+        "medicai.transforms.random.random_translate.sample_affine_volumes",
+        lambda *args, **kwargs: pytest.fail("general 3D sampler was used"),
+    )
+    output = transform(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(output["image"])) == (2, 3, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(output["label"]),
+        ops.convert_to_numpy(output["image"]) + 1.0,
+    )

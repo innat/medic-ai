@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 from keras import ops
 
 from medicai.transforms import RandomAffine, TensorBundle
@@ -12,8 +13,12 @@ def as_tensor(array, dtype=None):
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "layout, shape",
-    [("HWC", (5, 6, 1)), ("DHWC", (3, 5, 6, 1)), ("BHWC", (2, 5, 6, 1)),
-     ("BDHWC", (2, 3, 5, 6, 1))],
+    [
+        ("HWC", (5, 6, 1)),
+        ("DHWC", (3, 5, 6, 1)),
+        ("BHWC", (2, 5, 6, 1)),
+        ("BDHWC", (2, 3, 5, 6, 1)),
+    ],
 )
 def test_random_affine_identity_preserves_shape_and_alignment(layout, shape):
     image = as_tensor(np.arange(np.prod(shape), dtype=np.float32).reshape(shape))
@@ -75,9 +80,7 @@ def test_random_affine_inverse_reuses_recorded_matrix():
     )
 
     forward = transform(TensorBundle({"image": image}))
-    restored = transform.inverse(
-        TensorBundle({"image": forward["image"]}, forward.meta)
-    )
+    restored = transform.inverse(TensorBundle({"image": forward["image"]}, forward.meta))
 
     assert tuple(ops.shape(restored["image"])) == tuple(ops.shape(image))
     assert np.isfinite(ops.convert_to_numpy(restored["image"])).all()
@@ -184,3 +187,53 @@ def test_random_affine_allows_missing_keys_when_requested():
     output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
 
     assert "image" in output.data
+
+
+@pytest.mark.unit
+def test_random_affine_uses_plane_path_for_hw_separable_3d_geometry(monkeypatch):
+    if keras.config.backend() == "torch":
+        pytest.skip("Torch uses the general 3D sampler for this path.")
+
+    image = as_tensor(np.zeros((2, 3, 5, 6, 1), dtype=np.float32))
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor={"z": 0.1},
+        zoom_factor={"x": 0.1, "y": 0.1},
+        translation_factor={"x": 0.1, "y": 0.1},
+        shear_factor={"xy": 0.05, "yx": 0.05},
+        interpolation="trilinear",
+        input_layout="BDHWC",
+        seed=7,
+    )
+
+    monkeypatch.setattr(
+        "medicai.transforms.random.random_affine.sample_affine_volumes",
+        lambda *args, **kwargs: pytest.fail("general 3D sampler was used"),
+    )
+    output = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(output["image"])) == (2, 3, 5, 6, 1)
+
+
+@pytest.mark.unit
+def test_random_affine_general_3d_path_does_not_use_vectorized_map(monkeypatch):
+    image = as_tensor(np.zeros((2, 3, 5, 6, 1), dtype=np.float32))
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor={"x": 0.1},
+        zoom_factor={"z": 0.1},
+        translation_factor={"z": 0.1},
+        shear_factor={"zx": 0.05},
+        interpolation="trilinear",
+        input_layout="BDHWC",
+        seed=7,
+    )
+
+    monkeypatch.setattr(
+        ops,
+        "vectorized_map",
+        lambda *args, **kwargs: pytest.fail("vectorized_map was used"),
+    )
+    output = transform(TensorBundle({"image": image}))
+
+    assert tuple(ops.shape(output["image"])) == (2, 3, 5, 6, 1)

@@ -30,15 +30,11 @@ def layout_cases():
             id="translate",
         ),
         pytest.param(
-            lambda layout: RandomZoom(
-                keys=["image"], factor=0.0, prob=1.0, input_layout=layout
-            ),
+            lambda layout: RandomZoom(keys=["image"], factor=0.0, prob=1.0, input_layout=layout),
             id="zoom",
         ),
         pytest.param(
-            lambda layout: RandomShear(
-                keys=["image"], factor=0.0, prob=1.0, input_layout=layout
-            ),
+            lambda layout: RandomShear(keys=["image"], factor=0.0, prob=1.0, input_layout=layout),
             id="shear",
         ),
     ],
@@ -133,9 +129,11 @@ def test_affine_components_accept_scalar_range_and_axis_mapping(transform_type):
     ranged = transform_type(keys=["image"], factor=(-0.1, 0.2), input_layout="HWC")
     mapped = transform_type(
         keys=["image"],
-        factor={"x": 0.1, "y": (0.0, 0.2)}
-        if transform_type is not RandomShear
-        else {"xy": 0.1, "yx": (0.0, 0.2)},
+        factor=(
+            {"x": 0.1, "y": (0.0, 0.2)}
+            if transform_type is not RandomShear
+            else {"xy": 0.1, "yx": (0.0, 0.2)}
+        ),
         input_layout="HWC",
     )
 
@@ -150,9 +148,7 @@ def test_affine_components_accept_scalar_range_and_axis_mapping(transform_type):
     "layout, interpolation",
     [("HWC", "trilinear"), ("DHWC", "bilinear")],
 )
-def test_affine_components_reject_wrong_rank_interpolation(
-    transform_type, layout, interpolation
-):
+def test_affine_components_reject_wrong_rank_interpolation(transform_type, layout, interpolation):
     with pytest.raises(ValueError, match="Unsupported interpolation"):
         transform_type(
             keys=["image"],

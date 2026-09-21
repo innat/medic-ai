@@ -6,11 +6,11 @@ Matrices represent forward geometry. Resampling code must use their inverse as
 the output-to-input sampling matrix.
 """
 
+import itertools
 from collections.abc import Callable, Mapping, MutableMapping, Sequence
 from typing import Any
 
 from keras import ops
-
 
 AFFINE_AXES_2D = ("x", "y")
 AFFINE_AXES_3D = ("z", "x", "y")
@@ -87,6 +87,63 @@ def resample_affine_keys(
             fill_value[key],
         )
     return data
+
+
+def apply_plane_affine_3d(
+    volumes: Any,
+    matrices: Any,
+    plane_axes: tuple[str, str],
+    interpolation: str,
+    fill_mode: str,
+    fill_value: float,
+) -> Any:
+    """Apply batched 2D affine matrices to planes of 3D volumes.
+
+    The untouched spatial axis is folded into the batch dimension. This keeps
+    separable 3D affine operations on Keras' optimized 2D image kernel.
+    """
+    axis_indices = {"z": 1, "y": 2, "x": 3}
+    if len(plane_axes) != 2 or len(set(plane_axes)) != 2:
+        raise ValueError("`plane_axes` must contain two distinct spatial axes.")
+    if any(axis not in axis_indices for axis in plane_axes):
+        raise ValueError("`plane_axes` must use only 'z', 'y', and 'x'.")
+
+    untouched = next(axis for axis in axis_indices if axis not in plane_axes)
+    permutation = (
+        0,
+        axis_indices[untouched],
+        axis_indices[plane_axes[0]],
+        axis_indices[plane_axes[1]],
+        4,
+    )
+    transposed = ops.transpose(volumes, permutation)
+    batch, folded, height, width, channels = transposed.shape
+    if None in (batch, folded, height, width, channels):
+        raise ValueError("Plane-wise 3D affine sampling requires static shapes.")
+
+    merged = ops.reshape(transposed, (batch * folded, height, width, channels))
+    repeated_matrices = ops.repeat(matrices, folded, axis=0)
+    kernel_interpolation = "bilinear" if interpolation.lower() == "trilinear" else interpolation
+    sampled = ops.image.affine_transform(
+        ops.cast(merged, "float32"),
+        repeated_matrices,
+        interpolation=kernel_interpolation,
+        fill_mode=fill_mode,
+        fill_value=fill_value,
+    )
+    sampled = ops.reshape(sampled, (batch, folded, height, width, channels))
+
+    transposed_positions = {
+        axis: position for position, axis in enumerate((untouched, *plane_axes))
+    }
+    inverse_permutation = (
+        0,
+        transposed_positions["z"] + 1,
+        transposed_positions["y"] + 1,
+        transposed_positions["x"] + 1,
+        4,
+    )
+    return ops.transpose(sampled, inverse_permutation)
 
 
 def _homogeneous_matrix(linear: Any, translation: Any) -> Any:
@@ -203,16 +260,17 @@ def sample_affine_volume(
         ],
         axis=0,
     )
-    center = ops.cast(
-        ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
-        inverse_matrix.dtype,
-    ) / 2.0
+    center = (
+        ops.cast(
+            ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
+            inverse_matrix.dtype,
+        )
+        / 2.0
+    )
     centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
     input_coordinates = ops.einsum("ij,jdhw->idhw", inverse_matrix, centered)
     if translation is not None:
-        input_coordinates = input_coordinates + ops.reshape(
-            translation, (3, 1, 1, 1)
-        )
+        input_coordinates = input_coordinates + ops.reshape(translation, (3, 1, 1, 1))
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
     input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
     order = 1 if interpolation.lower() in {"bilinear", "trilinear"} else 0
@@ -228,4 +286,170 @@ def sample_affine_volume(
             for channel in range(channels)
         ],
         axis=-1,
+    )
+
+
+def _flatten_batched_gather(volume: Any, batch_indices: Any, indices: Sequence[Any]) -> Any:
+    """Gather channel vectors from batched channel-last volumes."""
+    shape = ops.shape(volume)
+    flat_index = indices[0]
+    spatial_sizes = shape[1:-1]
+    for axis, index in enumerate(indices[1:], start=1):
+        flat_index = flat_index * spatial_sizes[axis] + index
+
+    spatial_size = 1
+    for size in spatial_sizes:
+        spatial_size = spatial_size * size
+    flat_index = batch_indices * spatial_size + flat_index
+
+    flattened = ops.reshape(volume, (-1, shape[-1]))
+    gathered = ops.take(flattened, ops.reshape(flat_index, (-1,)), axis=0)
+    return ops.reshape(gathered, list(ops.shape(flat_index)) + [shape[-1]])
+
+
+def _normalize_batched_coordinates(
+    volume: Any,
+    coordinates: Any,
+    fill_mode: str,
+) -> tuple[Any, Any]:
+    """Apply affine sampler boundary rules to ``(B, ..., rank)`` coordinates."""
+    spatial_rank = coordinates.shape[-1]
+    shape = ops.shape(volume)
+    valid = ops.ones_like(coordinates[..., 0], dtype="bool")
+    normalized = []
+    for axis in range(spatial_rank):
+        size = shape[axis + 1]
+        coordinate = coordinates[..., axis]
+        size_value = ops.cast(size, coordinate.dtype)
+        if fill_mode == "constant":
+            valid = ops.logical_and(
+                valid,
+                ops.logical_and(coordinate >= 0.0, coordinate <= size_value - 1.0),
+            )
+            normalized.append(ops.clip(coordinate, 0.0, size_value - 1.0))
+        elif fill_mode in {"reflect", "mirror"}:
+            static_size = volume.shape[axis + 1]
+            if static_size == 1:
+                normalized.append(ops.zeros_like(coordinate))
+            else:
+                period = ops.cast(2 * (int(static_size) - 1), coordinate.dtype)
+                reflected = ops.mod(ops.abs(coordinate), period)
+                edge = ops.cast(int(static_size) - 1, coordinate.dtype)
+                normalized.append(ops.where(reflected <= edge, reflected, period - reflected))
+        elif fill_mode == "wrap":
+            normalized.append(ops.mod(coordinate, size_value))
+        else:
+            normalized.append(ops.clip(coordinate, 0.0, size_value - 1.0))
+    return ops.stack(normalized, axis=-1), valid
+
+
+def _sample_batched_coordinates(
+    volumes: Any,
+    coordinates: Any,
+    interpolation: str,
+    fill_mode: str,
+    fill_value: float,
+) -> Any:
+    """Sample channel-last volumes with broadcasted nearest/linear gathers."""
+    spatial_rank = coordinates.shape[-1]
+    coordinates, valid = _normalize_batched_coordinates(volumes, coordinates, fill_mode)
+    shape = ops.shape(volumes)
+    spatial_sizes = [ops.cast(shape[index + 1], coordinates.dtype) for index in range(spatial_rank)]
+    batch_indices = ops.arange(shape[0], dtype="int32")
+    batch_indices = ops.reshape(batch_indices, [shape[0]] + [1] * spatial_rank)
+    batch_indices = ops.broadcast_to(batch_indices, ops.shape(coordinates[..., 0]))
+
+    if interpolation.lower() in {"nearest"}:
+        indices = [
+            ops.cast(
+                ops.clip(
+                    ops.round(coordinates[..., axis]),
+                    0.0,
+                    spatial_sizes[axis] - 1.0,
+                ),
+                "int32",
+            )
+            for axis in range(spatial_rank)
+        ]
+        output = _flatten_batched_gather(volumes, batch_indices, indices)
+    else:
+        floors = [ops.floor(coordinates[..., axis]) for axis in range(spatial_rank)]
+        fractions = [
+            (coordinates[..., axis] - floors[axis])[..., None] for axis in range(spatial_rank)
+        ]
+        output = ops.zeros(list(ops.shape(floors[0])) + [shape[-1]], dtype=volumes.dtype)
+        for corner in itertools.product((0, 1), repeat=spatial_rank):
+            indices = []
+            weight = ops.ones_like(fractions[0])
+            for axis, bit in enumerate(corner):
+                coordinate = ops.clip(
+                    floors[axis] + bit,
+                    0.0,
+                    spatial_sizes[axis] - 1.0,
+                )
+                indices.append(ops.cast(coordinate, "int32"))
+                weight = weight * (fractions[axis] if bit else (1.0 - fractions[axis]))
+            output = output + _flatten_batched_gather(volumes, batch_indices, indices) * weight
+
+    if fill_mode == "constant":
+        output = ops.where(valid[..., None], output, ops.cast(fill_value, output.dtype))
+    return output
+
+
+def sample_affine_volumes(
+    volumes: Any,
+    matrices: Any,
+    interpolation: str,
+    fill_mode: str,
+    fill_value: float,
+) -> Any:
+    """Sample a batch of channel-last 3D volumes without per-sample mapping.
+
+    ``matrices`` may be batched ``(B, 3, 3)`` centered linear matrices,
+    ``(B, 3, 4)`` centered affine matrices, or full ``(B, 4, 4)`` homogeneous
+    output-to-input matrices in uncentered coordinates.
+    """
+    depth, height, width, channels = volumes.shape[1:]
+    if None in (depth, height, width, channels):
+        raise ValueError("Batched affine sampling requires static volume shapes.")
+
+    z, y, x = ops.meshgrid(ops.arange(depth), ops.arange(height), ops.arange(width), indexing="ij")
+    grid = ops.stack(
+        [ops.cast(z, matrices.dtype), ops.cast(y, matrices.dtype), ops.cast(x, matrices.dtype)],
+        axis=-1,
+    )
+    grid = ops.broadcast_to(
+        grid,
+        (volumes.shape[0], depth, height, width, 3),
+    )
+    if matrices.shape[-2:] == (3, 3):
+        center = (
+            ops.cast(ops.convert_to_tensor([depth - 1, height - 1, width - 1]), matrices.dtype)
+            / 2.0
+        )
+        centered = grid - center
+        coordinates = ops.einsum("bij,bdhwj->bdhwi", matrices, centered) + center
+    elif matrices.shape[-2:] == (3, 4):
+        center = (
+            ops.cast(ops.convert_to_tensor([depth - 1, height - 1, width - 1]), matrices.dtype)
+            / 2.0
+        )
+        centered = grid - center
+        coordinates = (
+            ops.einsum("bij,bdhwj->bdhwi", matrices[..., :3], centered)
+            + matrices[..., 3][:, None, None, None, :]
+            + center
+        )
+    elif matrices.shape[-2:] == (4, 4):
+        homogeneous = ops.concatenate((grid, ops.ones_like(grid[..., :1])), axis=-1)
+        coordinates = ops.einsum("bij,bdhwj->bdhwi", matrices, homogeneous)[..., :3]
+    else:
+        raise ValueError("`matrices` must have trailing shape (3, 3), (3, 4), or (4, 4).")
+
+    return _sample_batched_coordinates(
+        ops.cast(volumes, "float32"),
+        coordinates,
+        interpolation,
+        fill_mode,
+        fill_value,
     )

@@ -6,7 +6,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
-from .affine import sample_affine_volume
+from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -51,12 +51,10 @@ def _resolve_shear_ranges(factor, spatial_rank):
         unknown = set(factor) - set(axes)
         if unknown:
             raise ValueError(
-                f"Shear factor axes must be drawn from {axes}; "
-                f"received {sorted(unknown)}."
+                f"Shear factor axes must be drawn from {axes}; " f"received {sorted(unknown)}."
             )
         return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0)
-            for axis in axes
+            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
         }
     value_range = _factor_range(factor)
     return {axis: value_range for axis in axes}
@@ -116,8 +114,12 @@ def _shear_matrix_2d(coefficients, spatial_shape, inverse=False):
     if inverse:
         matrix = ops.stack(
             [
-                matrix[:, 0], matrix[:, 1], matrix[:, 2],
-                matrix[:, 3], matrix[:, 4], matrix[:, 5],
+                matrix[:, 0],
+                matrix[:, 1],
+                matrix[:, 2],
+                matrix[:, 3],
+                matrix[:, 4],
+                matrix[:, 5],
                 ops.zeros_like(matrix[:, 0]),
                 ops.zeros_like(matrix[:, 0]),
                 ops.ones_like(matrix[:, 0]),
@@ -127,17 +129,28 @@ def _shear_matrix_2d(coefficients, spatial_shape, inverse=False):
         matrix = ops.linalg.inv(ops.reshape(matrix, (-1, 3, 3)))
         matrix = ops.stack(
             [
-                matrix[:, 0, 0], matrix[:, 0, 1], matrix[:, 0, 2],
-                matrix[:, 1, 0], matrix[:, 1, 1], matrix[:, 1, 2],
-                matrix[:, 2, 0], matrix[:, 2, 1], matrix[:, 2, 2],
+                matrix[:, 0, 0],
+                matrix[:, 0, 1],
+                matrix[:, 0, 2],
+                matrix[:, 1, 0],
+                matrix[:, 1, 1],
+                matrix[:, 1, 2],
+                matrix[:, 2, 0],
+                matrix[:, 2, 1],
+                matrix[:, 2, 2],
             ],
             axis=-1,
         )
         matrix = ops.stack(
             [
-                matrix[:, 0], matrix[:, 1], matrix[:, 2],
-                matrix[:, 3], matrix[:, 4], matrix[:, 5],
-                matrix[:, 6], matrix[:, 7],
+                matrix[:, 0],
+                matrix[:, 1],
+                matrix[:, 2],
+                matrix[:, 3],
+                matrix[:, 4],
+                matrix[:, 5],
+                matrix[:, 6],
+                matrix[:, 7],
             ],
             axis=-1,
         )
@@ -165,12 +178,6 @@ def _inverse_linear_3d(coefficients, inverse=False):
     return ops.linalg.inv(matrix) if inverse else matrix
 
 
-def _shear_one_volume(volume, inverse_linear, interpolation, fill_mode, fill_value):
-    return sample_affine_volume(
-        volume, inverse_linear, interpolation, fill_mode, fill_value
-    )
-
-
 class RandomShear(RandomTransform):
     """Randomly shear channel-last 2D images or 3D volumes.
 
@@ -190,6 +197,54 @@ class RandomShear(RandomTransform):
         input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
+
+    Example:
+
+        TensorFlow backend:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomShear
+
+            transform = RandomShear(
+                keys=["image", "label"],
+                factor={"zy": 0.05, "zx": 0.05, "xy": 0.1, "yx": 0.1},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                input_layout="BDHWC",
+                prob=0.5,
+                seed=7,
+            )
+            image = tf.random.normal((2, 32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
+            result = transform({"image": image, "label": label})
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import jax
+            from medicai.transforms import RandomShear
+
+            transform = RandomShear(
+                keys=["image"], factor={"xy": 0.1, "yx": 0.1},
+                input_layout="BHWC", seed=7
+            )
+            image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
+            result = transform({"image": image})
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import torch
+            from medicai.transforms import RandomShear
+
+            transform = RandomShear(
+                keys=["image"], factor=0.1, input_layout="BHWC", seed=7
+            )
+            image = torch.randn((8, 128, 128, 3))
+            result = transform({"image": image})
     """
 
     def __init__(
@@ -214,17 +269,15 @@ class RandomShear(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_shear_ranges(
-            factor, self.layout_info.spatial_rank
-        )
+        self.ranges = _resolve_shear_ranges(factor, self.layout_info.spatial_rank)
         self.interpolation = _resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
-                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-            )
-            if index == 0
-            else "nearest",
+                ("bilinear" if self.layout_info.spatial_rank == 2 else "trilinear")
+                if index == 0
+                else "nearest"
+            ),
             "interpolation",
         )
         self.fill_mode = _resolve_per_key(
@@ -249,18 +302,14 @@ class RandomShear(RandomTransform):
 
     def _sample_coefficients(self, batch_size, dtype="float32"):
         apply_mask = ops.cast(
-            self.random_uniform(
-                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
-            )
+            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
             < self.prob,
             dtype,
         )
         coefficients = {}
         for axis_pair, (low, high) in self.ranges.items():
             coefficients[axis_pair] = (
-                self.random_uniform(
-                    shape=(batch_size,), minval=low, maxval=high, dtype=dtype
-                )
+                self.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
                 * apply_mask
             )
         return coefficients, ops.any(apply_mask > 0)
@@ -276,9 +325,7 @@ class RandomShear(RandomTransform):
         )
         if self.layout_info.spatial_rank == 2:
             values = ops.stack([coefficients["xy"], coefficients["yx"]], axis=-1)
-            matrix = _shear_matrix_2d(
-                values, ops.shape(batched)[1:-1], inverse=inverse
-            )
+            matrix = _shear_matrix_2d(values, ops.shape(batched)[1:-1], inverse=inverse)
             output = ops.image.affine_transform(
                 ops.cast(batched, "float32"),
                 matrix,
@@ -287,22 +334,43 @@ class RandomShear(RandomTransform):
                 fill_value=self.fill_value[key],
             )
         else:
-            values = ops.stack(
-                [coefficients[axis] for axis in _AXES_3D], axis=-1
-            )
+            values = ops.stack([coefficients[axis] for axis in _AXES_3D], axis=-1)
             matrices = _inverse_linear_3d(values, inverse=inverse)
 
-            def shear_one(args):
-                volume, matrix = args
-                return _shear_one_volume(
-                    volume,
-                    matrix,
-                    self.interpolation[key],
-                    self.fill_mode[key],
-                    self.fill_value[key],
+            active_pairs = {
+                pair for pair, (low, high) in self.ranges.items() if low != 0.0 or high != 0.0
+            }
+            if keras.config.backend() != "torch" and active_pairs and active_pairs <= {"xy", "yx"}:
+                plane_axes = ("y", "x")
+                plane_values = ops.stack(
+                    [
+                        coefficients["xy"],
+                        coefficients["yx"],
+                    ],
+                    axis=-1,
                 )
+                plane_matrices = _shear_matrix_2d(
+                    plane_values,
+                    ops.stack([ops.shape(batched)[2], ops.shape(batched)[3]]),
+                    inverse=inverse,
+                )
+                output = apply_plane_affine_3d(
+                    batched,
+                    plane_matrices,
+                    plane_axes,
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
+                )
+                return restore_from_batch_axis(output, added_batch)
 
-            output = ops.vectorized_map(shear_one, (batched, matrices))
+            output = sample_affine_volumes(
+                batched,
+                matrices,
+                self.interpolation[key],
+                self.fill_mode[key],
+                self.fill_value[key],
+            )
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:

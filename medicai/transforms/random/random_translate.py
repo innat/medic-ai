@@ -6,7 +6,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _pop_last_transform_trace
-from .affine import sample_affine_volume
+from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -15,6 +15,7 @@ from ..utils import (
     restore_from_batch_axis,
     validate_tensor_matches_layout,
 )
+
 _DEFAULT_PROB = 0.5
 _DEFAULT_FACTOR = 0.0
 _DEFAULT_INTERPOLATION = None
@@ -68,8 +69,7 @@ def _resolve_factor_ranges(factor, spatial_rank):
                 f"received {sorted(unknown)}."
             )
         return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0)
-            for axis in axes
+            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
         }
 
     value_range = _factor_range(factor)
@@ -94,21 +94,7 @@ def _translation_matrix_3d(offsets: Any) -> Any:
     identity = ops.eye(3, dtype=offsets.dtype)
     identity = ops.broadcast_to(identity, (batch, 3, 3))
     inverse_offsets = -offsets
-    return ops.concatenate(
-        [identity, ops.expand_dims(inverse_offsets, axis=-1)], axis=-1
-    )
-
-
-def _translate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_value):
-    """Sample one volume with a 3D affine matrix containing translation."""
-    return sample_affine_volume(
-        volume,
-        inverse_matrix[:, :3],
-        interpolation,
-        fill_mode,
-        fill_value,
-        translation=inverse_matrix[:, 3],
-    )
+    return ops.concatenate([identity, ops.expand_dims(inverse_offsets, axis=-1)], axis=-1)
 
 
 class RandomTranslate(RandomTransform):
@@ -119,8 +105,8 @@ class RandomTranslate(RandomTransform):
     of the dimension size. Parameters are sampled independently per batch item
     and shared across all selected keys.
 
-    Public axis names are ``x`` and ``y`` for 2D, and ``z``, ``x``, and ``y``
-    for 3D. They map to channel-last tensor axes ``W``, ``D``, and ``H``
+    Public axis names are ``x`` and ``y`` for 2D, and ``z``, ``y``, and ``x``
+    for 3D. They map to channel-last tensor axes ``W``, ``H``, and ``D``
     as ``x -> W``, ``y -> H``, and ``z -> D``; the internal sampler uses
     tensor order ``(D, H, W)``.
 
@@ -137,6 +123,54 @@ class RandomTranslate(RandomTransform):
         input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
+
+    Example:
+
+        TensorFlow backend:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomTranslate
+
+            transform = RandomTranslate(
+                keys=["image", "label"],
+                factor={"z": 0.05, "y": 0.1, "x": 0.1},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                input_layout="BDHWC",
+                prob=0.5,
+                seed=7,
+            )
+            image = tf.random.normal((2, 32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
+            result = transform({"image": image, "label": label})
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import jax
+            from medicai.transforms import RandomTranslate
+
+            transform = RandomTranslate(
+                keys=["image"], factor={"y": 0.1, "x": 0.1},
+                input_layout="BHWC", seed=7
+            )
+            image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
+            result = transform({"image": image})
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import torch
+            from medicai.transforms import RandomTranslate
+
+            transform = RandomTranslate(
+                keys=["image"], factor=0.1, input_layout="BHWC", seed=7
+            )
+            image = torch.randn((8, 128, 128, 3))
+            result = transform({"image": image})
     """
 
     def __init__(
@@ -169,10 +203,10 @@ class RandomTranslate(RandomTransform):
             self.keys,
             interpolation,
             lambda _, index: (
-                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-            )
-            if index == 0
-            else "nearest",
+                ("bilinear" if self.layout_info.spatial_rank == 2 else "trilinear")
+                if index == 0
+                else "nearest"
+            ),
             "interpolation",
         )
         self.fill_mode = _resolve_per_key(
@@ -203,18 +237,14 @@ class RandomTranslate(RandomTransform):
 
     def _sample_offsets(self, batch_size, dtype="float32"):
         apply_mask = ops.cast(
-            self.random_uniform(
-                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
-            )
+            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
             < self.prob,
             dtype,
         )
         offsets = {}
         for axis, (low, high) in self.ranges.items():
             offsets[axis] = (
-                self.random_uniform(
-                    shape=(batch_size,), minval=low, maxval=high, dtype=dtype
-                )
+                self.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
                 * apply_mask
             )
         return offsets, ops.any(apply_mask > 0)
@@ -251,17 +281,27 @@ class RandomTranslate(RandomTransform):
         else:
             matrices = _translation_matrix_3d(offset_tensor)
 
-            def translate_one(args):
-                volume, matrix = args
-                return _translate_one_volume(
-                    volume,
-                    matrix,
-                    self.interpolation[key],
-                    self.fill_mode[key],
-                    self.fill_value[key],
+            active_axes = {
+                axis for axis, (low, high) in self.ranges.items() if low != 0.0 or high != 0.0
+            }
+            if keras.config.backend() != "torch" and active_axes and active_axes <= {"x", "y"}:
+                output = apply_plane_affine_3d(
+                    batched,
+                    _translation_matrix_2d(offset_tensor[:, 1:]),
+                    ("y", "x"),
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
                 )
+                return restore_from_batch_axis(output, added_batch)
 
-            output = ops.vectorized_map(translate_one, (batched, matrices))
+            output = sample_affine_volumes(
+                batched,
+                matrices,
+                self.interpolation[key],
+                self.fill_mode[key],
+                self.fill_value[key],
+            )
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -300,9 +340,7 @@ class RandomTranslate(RandomTransform):
         trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle
-        offsets = {
-            axis: -value for axis, value in trace["params"]["offsets"].items()
-        }
+        offsets = {axis: -value for axis, value in trace["params"]["offsets"].items()}
         for key in trace["params"]["keys"]:
             if key in bundle.data:
                 bundle.data[key] = self._apply_tensor(bundle.data[key], key, offsets)

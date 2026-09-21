@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import keras
 from keras import ops
 
 from medicai.transforms import RandomShear, TensorBundle
@@ -83,3 +84,31 @@ def test_random_shear_allows_missing_keys():
     output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
 
     assert "image" in output.data
+
+
+@pytest.mark.unit
+def test_random_shear_uses_plane_path_for_xy_only_3d_shear(monkeypatch):
+    if keras.config.backend() == "torch":
+        pytest.skip("Torch uses the general 3D sampler for this path.")
+
+    image = as_tensor(np.zeros((2, 3, 5, 6, 1), dtype=np.float32))
+    label = image + 1.0
+    transform = RandomShear(
+        keys=["image", "label"],
+        factor={"xy": 0.1, "yx": 0.1},
+        prob=1.0,
+        input_layout="BDHWC",
+        seed=7,
+    )
+
+    monkeypatch.setattr(
+        "medicai.transforms.random.random_shear.sample_affine_volumes",
+        lambda *args, **kwargs: pytest.fail("general 3D sampler was used"),
+    )
+    output = transform(TensorBundle({"image": image, "label": label}))
+
+    assert tuple(ops.shape(output["image"])) == (2, 3, 5, 6, 1)
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(output["label"]),
+        ops.convert_to_numpy(output["image"]) + 1.0,
+    )

@@ -6,7 +6,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
-from .affine import sample_affine_volume
+from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -51,12 +51,10 @@ def _resolve_axis_ranges(factor, spatial_rank):
         unknown = set(factor) - set(axes)
         if unknown:
             raise ValueError(
-                f"Zoom factor axes must be drawn from {axes}; "
-                f"received {sorted(unknown)}."
+                f"Zoom factor axes must be drawn from {axes}; " f"received {sorted(unknown)}."
             )
         return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0)
-            for axis in axes
+            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
         }
     value_range = _factor_range(factor)
     return {axis: value_range for axis in axes}
@@ -102,14 +100,6 @@ def _zoom_matrix_2d(scales, spatial_shape):
     )
 
 
-def _zoom_one_volume(volume, scales, interpolation, fill_mode, fill_value):
-    """Sample one 3D volume using a centered output-to-input zoom."""
-    inverse_linear = ops.diag(1.0 / scales)
-    return sample_affine_volume(
-        volume, inverse_linear, interpolation, fill_mode, fill_value
-    )
-
-
 class RandomZoom(RandomTransform):
     """Randomly zoom channel-last 2D images or 3D volumes around their center.
 
@@ -117,7 +107,8 @@ class RandomZoom(RandomTransform):
     ``0.2`` samples a factor in ``[-0.2, 0.2]`` independently for each active
     axis, then converts it to a scale of ``1 + factor``. A mapping can provide
     independent factors for Cartesian axes: ``x`` and ``y`` for 2D, or
-    ``z``, ``x``, and ``y`` for 3D. Missing axes remain unchanged.
+    ``z``, ``y``, and ``x`` for 3D. These map to tensor axes ``D``, ``H``, and
+    ``W`` respectively. Missing axes remain unchanged.
 
     Parameters are sampled independently for each batch item and shared across
     all selected keys, preserving image/label alignment.
@@ -132,6 +123,57 @@ class RandomZoom(RandomTransform):
         input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
+
+    Example:
+
+        TensorFlow backend:
+
+        .. code-block:: python
+
+            import tensorflow as tf
+            from medicai.transforms import RandomZoom
+
+            transform = RandomZoom(
+                keys=["image", "label"],
+                factor={"z": 0.1, "y": 0.15, "x": 0.15},
+                interpolation={"image": "trilinear", "label": "nearest"},
+                input_layout="BDHWC",
+                prob=0.5,
+                seed=7,
+            )
+            image = tf.random.normal((2, 32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
+            result = transform({"image": image, "label": label})
+
+        JAX backend:
+
+        .. code-block:: python
+
+            import jax
+            from medicai.transforms import RandomZoom
+
+            transform = RandomZoom(
+                keys=["image"],
+                factor={"y": 0.2, "x": 0.2},
+                input_layout="BHWC",
+                prob=0.5,
+                seed=7,
+            )
+            image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
+            result = transform({"image": image})
+
+        Torch backend:
+
+        .. code-block:: python
+
+            import torch
+            from medicai.transforms import RandomZoom
+
+            transform = RandomZoom(
+                keys=["image"], factor=0.1, input_layout="BHWC", seed=7
+            )
+            image = torch.randn((8, 128, 128, 3))
+            result = transform({"image": image})
     """
 
     def __init__(
@@ -156,17 +198,15 @@ class RandomZoom(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_axis_ranges(
-            factor, self.layout_info.spatial_rank
-        )
+        self.ranges = _resolve_axis_ranges(factor, self.layout_info.spatial_rank)
         self.interpolation = _resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
-                "bilinear" if self.layout_info.spatial_rank == 2 else "trilinear"
-            )
-            if index == 0
-            else "nearest",
+                ("bilinear" if self.layout_info.spatial_rank == 2 else "trilinear")
+                if index == 0
+                else "nearest"
+            ),
             "interpolation",
         )
         self.fill_mode = _resolve_per_key(
@@ -191,17 +231,13 @@ class RandomZoom(RandomTransform):
 
     def _sample_scales(self, batch_size, dtype="float32"):
         apply_mask = ops.cast(
-            self.random_uniform(
-                shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32"
-            )
+            self.random_uniform(shape=(batch_size,), minval=0.0, maxval=1.0, dtype="float32")
             < self.prob,
             dtype,
         )
         factors = {}
         for axis, (low, high) in self.ranges.items():
-            sampled = self.random_uniform(
-                shape=(batch_size,), minval=low, maxval=high, dtype=dtype
-            )
+            sampled = self.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
             factors[axis] = sampled * apply_mask
         scales = {axis: 1.0 + value for axis, value in factors.items()}
         return scales, ops.any(apply_mask > 0)
@@ -226,21 +262,36 @@ class RandomZoom(RandomTransform):
                 fill_value=self.fill_value[key],
             )
         else:
-            scale_tensor = ops.stack(
-                [scales["z"], scales["y"], scales["x"]], axis=-1
-            )
+            scale_tensor = ops.stack([scales["z"], scales["y"], scales["x"]], axis=-1)
 
-            def zoom_one(args):
-                volume, sample_scales = args
-                return _zoom_one_volume(
-                    volume,
-                    sample_scales,
-                    self.interpolation[key],
-                    self.fill_mode[key],
-                    self.fill_value[key],
+            active_axes = {
+                axis for axis, (low, high) in self.ranges.items() if low != 0.0 or high != 0.0
+            }
+            if keras.config.backend() != "torch" and active_axes and active_axes <= {"x", "y"}:
+                matrix = _zoom_matrix_2d(
+                    ops.stack([scales["y"], scales["x"]], axis=-1),
+                    ops.shape(batched)[2:4],
                 )
+                output = apply_plane_affine_3d(
+                    batched,
+                    matrix,
+                    ("y", "x"),
+                    interpolation=self.interpolation[key],
+                    fill_mode=self.fill_mode[key],
+                    fill_value=self.fill_value[key],
+                )
+                return restore_from_batch_axis(output, added_batch)
 
-            output = ops.vectorized_map(zoom_one, (batched, scale_tensor))
+            inverse_matrices = ops.eye(3, dtype=scale_tensor.dtype) / ops.reshape(
+                scale_tensor, (-1, 3, 1)
+            )
+            output = sample_affine_volumes(
+                batched,
+                inverse_matrices,
+                self.interpolation[key],
+                self.fill_mode[key],
+                self.fill_value[key],
+            )
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -273,12 +324,8 @@ class RandomZoom(RandomTransform):
         trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle
-        inverse_scales = {
-            axis: 1.0 / value for axis, value in trace["params"]["scales"].items()
-        }
+        inverse_scales = {axis: 1.0 / value for axis, value in trace["params"]["scales"].items()}
         for key in trace["params"]["keys"]:
             if key in bundle.data:
-                bundle.data[key] = self._scale_tensor(
-                    bundle.data[key], key, inverse_scales
-                )
+                bundle.data[key] = self._scale_tensor(bundle.data[key], key, inverse_scales)
         return bundle
