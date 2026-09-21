@@ -125,6 +125,7 @@ def test_random_translate_uses_plane_path_for_xy_only_3d_translation(monkeypatch
         prob=1.0,
         input_layout="BDHWC",
         seed=7,
+        fill_value={"image": 0.0, "label": 1.0},
     )
 
     monkeypatch.setattr(
