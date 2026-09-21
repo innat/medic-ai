@@ -46,6 +46,13 @@ def _range(value, name):
     return low, high
 
 
+def _scale_range(value, name="scale_factor"):
+    low, high = _range(value, name)
+    if low <= -1.0:
+        raise ValueError("Scale factors must keep the sampled scale above zero.")
+    return low, high
+
+
 def _sample(transform, ranges, batch_size, dtype, gate):
     values = {
         name: transform.random_uniform(shape=(batch_size,), minval=low, maxval=high, dtype=dtype)
@@ -360,7 +367,9 @@ class RandomAffine(RandomTransform):
             )
             axes = ("z", "y", "x")
             shear_axes = ("zy", "zx", "yz", "yx", "xz", "xy")
-        self.scale_ranges = resolve_axis_ranges(scale_factor, axes, "scale_factor", _range)
+        self.scale_ranges = resolve_axis_ranges(
+            scale_factor, axes, "scale_factor", _scale_range
+        )
         self.translation_ranges = resolve_axis_ranges(
             translation_factor, axes, "translation_factor", _range
         )

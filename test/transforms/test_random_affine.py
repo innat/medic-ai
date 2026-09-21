@@ -378,6 +378,25 @@ def test_random_affine_rejects_wrong_rank_interpolation():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "scale_factor, message",
+    [
+        (-0.1, "non-negative"),
+        ((0.2, -0.1), "ordered"),
+        ((-1.0, 0.0), "above zero"),
+        ({"z": (-1.0, 0.0)}, "above zero"),
+    ],
+)
+def test_random_affine_rejects_invalid_scale_factors(scale_factor, message):
+    with pytest.raises(ValueError, match=message):
+        RandomAffine(
+            keys=["image"],
+            scale_factor=scale_factor,
+            input_layout="DHWC",
+        )
+
+
+@pytest.mark.unit
 def test_random_affine_resolves_per_key_interpolation_and_fill_options():
     transform = RandomAffine(
         keys=["image", "label"],
