@@ -6,7 +6,6 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
-from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -14,6 +13,12 @@ from ..utils import (
     resolve_input_layout,
     restore_from_batch_axis,
     validate_tensor_matches_layout,
+)
+from .affine import (
+    apply_plane_affine_3d,
+    resolve_axis_ranges,
+    resolve_per_key,
+    sample_affine_volumes,
 )
 
 _DEFAULT_PROB = 0.5
@@ -43,36 +48,6 @@ def _factor_range(value: float | Sequence[float]) -> tuple[float, float]:
     if low > high:
         raise ValueError("Shear factor ranges must be ordered as (min, max).")
     return low, high
-
-
-def _resolve_shear_ranges(factor, spatial_rank):
-    axes = _AXES_2D if spatial_rank == 2 else _AXES_3D
-    if isinstance(factor, dict):
-        unknown = set(factor) - set(axes)
-        if unknown:
-            raise ValueError(
-                f"Shear factor axes must be drawn from {axes}; " f"received {sorted(unknown)}."
-            )
-        return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
-        }
-    value_range = _factor_range(factor)
-    return {axis: value_range for axis in axes}
-
-
-def _resolve_per_key(keys, value, default_fn, name):
-    if value is None:
-        return {key: default_fn(key, index) for index, key in enumerate(keys)}
-    if isinstance(value, dict):
-        missing = [key for key in keys if key not in value]
-        if missing:
-            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
-        return {key: value[key] for key in keys}
-    if isinstance(value, (tuple, list)):
-        if len(value) != len(keys):
-            raise ValueError(f"`{name}` must have one value per key.")
-        return dict(zip(keys, value, strict=True))
-    return {key: value for key in keys}
 
 
 def _inverse_linear_2d(coefficients):
@@ -181,28 +156,52 @@ def _inverse_linear_3d(coefficients, inverse=False):
 class RandomShear(RandomTransform):
     """Randomly shear channel-last 2D images or 3D volumes.
 
-    ``factor`` is a dimensionless matrix coefficient. A scalar samples
-    every supported axis-pair coefficient symmetrically. Mappings can select
-    individual terms: ``xy`` and ``yx`` are supported for 2D; ``zy``, ``zx``,
-    ``yz``, ``yx``, ``xz``, and ``xy`` are supported for 3D. The first letter
-    identifies the output row and the second identifies the input column.
+    Shearing changes the angle between spatial axes while preserving the
+    channel-last image or volume grid. The transform uses the rank-appropriate
+    affine resampling path for 2D and 3D inputs, and samples parameters
+    independently for each batch item while sharing them across selected keys.
+
+    This keeps images, masks, and labels spatially aligned while allowing each
+    batch item to receive a different random shear.
+
+    .. note::
+
+        On the TensorFlow backend, 2D shearing uses the affine image kernel
+        backed by ``tf.raw_ops.ImageProjectiveTransformV3``, which is not
+        currently XLA-compatible. A 3D shear confined to the H-W plane uses
+        the same folded 2D path and has the same limitation. Full 3D shearing
+        uses the general coordinate-sampling path instead. Eager and
+        ``tf.data`` graph execution remain supported. However, for Jax and Torch
+        backends, this limitation does not apply; they are XLA-compatible.
 
     Args:
         keys: Tensor keys to shear together.
-        factor: A scalar, two-value range, or axis-pair mapping.
+        factor: A scalar, a ``(min, max)`` range, or an axis-pair mapping. A
+            scalar or range is applied independently to every supported shear
+            coefficient: ``xy`` and ``yx`` for 2D, or ``zy``, ``zx``, ``yz``,
+            ``yx``, ``xz``, and ``xy`` for 3D. The axis names follow the
+            channel-last ``[D]HWC`` order, where ``z`` maps to ``D``, ``y`` to
+            ``H``, and ``x`` to ``W``. A mapping can enable only selected
+            coefficients; omitted coefficients remain zero. For example,
+            ``{"zy": 0.05}`` shears the 3D ``z`` output relative to ``y``.
         prob: Per-sample probability of applying the shear.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
         fill_value: Constant boundary value when ``fill_mode="constant"``.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
     Example:
 
-        TensorFlow backend:
+        The selected 3D coefficients apply small shears: up to 5% for the
+        depth-related terms and up to 10% for the in-plane terms. Unspecified
+        coefficients remain zero, which avoids introducing unintended planes
+        of deformation::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomShear
@@ -219,23 +218,29 @@ class RandomShear(RandomTransform):
             label = tf.zeros_like(image)
             result = transform({"image": image, "label": label})
 
-        JAX backend:
+        This 2D example uses explicit ``(min, max)`` ranges for both in-plane
+        shear coefficients. Each coefficient can be sampled between -5% and
+        +10%, allowing motion in either cross-axis direction::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
             from medicai.transforms import RandomShear
 
             transform = RandomShear(
-                keys=["image"], factor={"xy": 0.1, "yx": 0.1},
+                keys=["image"],
+                factor={"xy": (-0.05, 0.1), "yx": (-0.05, 0.1)},
                 input_layout="BHWC", seed=7
             )
             image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
             result = transform({"image": image})
 
-        Torch backend:
+        The scalar factor applies a symmetric shear range of up to 10% to all
+        supported 2D shear coefficients::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
             from medicai.transforms import RandomShear
@@ -269,8 +274,11 @@ class RandomShear(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_shear_ranges(factor, self.layout_info.spatial_rank)
-        self.interpolation = _resolve_per_key(
+        axes = _AXES_2D if self.layout_info.spatial_rank == 2 else _AXES_3D
+        self.ranges = resolve_axis_ranges(
+            factor, axes, "Shear factor", lambda value, _: _factor_range(value)
+        )
+        self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
@@ -280,10 +288,10 @@ class RandomShear(RandomTransform):
             ),
             "interpolation",
         )
-        self.fill_mode = _resolve_per_key(
+        self.fill_mode = resolve_per_key(
             self.keys, fill_mode, lambda *_: _DEFAULT_FILL_MODE, "fill_mode"
         )
-        self.fill_value = _resolve_per_key(
+        self.fill_value = resolve_per_key(
             self.keys, fill_value, lambda *_: _DEFAULT_FILL_VALUE, "fill_value"
         )
         for key in self.keys:
@@ -362,6 +370,7 @@ class RandomShear(RandomTransform):
                     fill_mode=self.fill_mode[key],
                     fill_value=self.fill_value[key],
                 )
+                output = ops.cast(output, tensor.dtype)
                 return restore_from_batch_axis(output, added_batch)
 
             output = sample_affine_volumes(
@@ -371,6 +380,7 @@ class RandomShear(RandomTransform):
                 self.fill_mode[key],
                 self.fill_value[key],
             )
+        output = ops.cast(output, tensor.dtype)
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:

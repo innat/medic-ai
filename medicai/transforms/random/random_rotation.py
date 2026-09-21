@@ -285,15 +285,12 @@ def rotate_multi_axis(
 class RandomRotate(RandomTransform):
     """Apply random 2D or 3D rotations to channel-last sample or batch tensors.
 
-    The transform accepts ``HWC``, ``DHWC``, ``BHWC``, and ``BDHWC`` layouts.
-    A scalar or two-value ``factor`` applies the same range independently to
-    every spatial rotation axis. In 2D this means ``z`` only (the H-W plane);
-    in 3D it means ``z``, ``y``, and ``x``. A dictionary can specify independent
-    ranges for ``z``, ``y``, and ``x`` axes, mapping to tensor axes ``D``, ``H``,
-    and ``W`` respectively.
+    Rotation changes the orientation of image structures around the spatial
+    center. The transform supports channel-last 2D images and 3D volumes and
+    uses a rank-aware resampling path for each case.
 
-    ``prob`` is sampled independently for each batch item. A skipped item gets
-    zero angles and is therefore an exact identity. Selected keys share the
+    Rotation probability and angles are sampled independently for each batch
+    item. A skipped item is an exact identity, while selected keys share the
     same sampled angles so images, masks, and labels remain aligned.
 
     The forward operation is a resampling transform. ``inverse()`` reuses the
@@ -309,19 +306,27 @@ class RandomRotate(RandomTransform):
 
     .. note::
 
-        On the TensorFlow backend, the affine image kernel used by
-        ``RandomRotate`` is not currently XLA-compatible. Regular eager and
-        ``tf.data`` graph execution remain supported, including GPU execution
-        when TensorFlow places the kernel there. When using RandomRotate within
-        a compiled model graph, set jit_compile=False to disable XLA compilation.
+        On the TensorFlow backend, the 2D affine image kernel used by
+        ``RandomRotate`` calls ``tf.raw_ops.ImageProjectiveTransformV3``,
+        which is not currently XLA-compatible. Regular eager and ``tf.data``
+        graph execution remain supported, including GPU execution when
+        TensorFlow places the kernel there. For 3D inputs, a rotation that
+        selects only one axis uses the same folded 2D kernel and therefore has
+        the same TensorFlow XLA limitation. A scalar factor, or a mapping that
+        provides all ``z``, ``y``, and ``x`` axes, uses the general 3D
+        coordinate-sampling path instead and does not hit this specific
+        ``ImageProjectiveTransformV3`` limitation. However, for Jax and Torch
+        backends, this limitation does not apply; they are XLA-compatible.
 
     Args:
         keys: Tensor keys to rotate together.
         factor: A non-negative maximum angle, a ``(min, max)`` range, or a
             mapping from ``z``, ``y``, and ``x`` to either form. A scalar or
-            two-value range applies to every valid spatial rotation axis.
-            These map to tensor axes ``D``, ``H``, and ``W`` respectively.
-            Angles are in radians.
+            range applies to the ``z`` rotation axis for 2D inputs and to all
+            ``z``, ``y``, and ``x`` axes for 3D inputs. These public axes map
+            to channel-last tensor axes ``[D]HWC``: ``z`` to ``D``, ``y`` to
+            ``H``, and ``x`` to ``W``. A mapping can select a subset of axes;
+            omitted axes are not rotated. Angles are in radians.
         prob: Per-sample probability of applying the rotation.
         spacing: Optional 3D voxel spacing used for physical-space correction.
         anisotropy_threshold: If the largest spacing divided by the smallest
@@ -333,15 +338,15 @@ class RandomRotate(RandomTransform):
         fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
             ``"wrap"``, ``"mirror"``, or ``"reflect"``.
         fill_value: One value, one value per key, or a key-to-value mapping.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
     Example:
 
-        TensorFlow backend:
-
-        .. code-block:: python
+        A factor of ``0.1`` means that the 2D image is rotated by a random
+        angle between -0.1 and 0.1 radians, approximately +/-5.7 degrees::
 
             import os
             os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -359,9 +364,9 @@ class RandomRotate(RandomTransform):
             result = transform({"image": image})
             print(result["image"].shape)
 
-        JAX backend:
-
-        .. code-block:: python
+        The mapping uses explicit ``(min, max)`` ranges to apply independent
+        rotations between -0.1 and +0.05 radians around ``y`` and between
+        -0.05 and +0.1 radians around ``x``::
 
             import os
             os.environ["KERAS_BACKEND"] = "jax"
@@ -371,7 +376,7 @@ class RandomRotate(RandomTransform):
 
             transform = RandomRotate(
                 keys=["image"],
-                factor={"y": 0.1, "x": 0.1},
+                factor={"y": (-0.1, 0.05), "x": (-0.05, 0.1)},
                 prob=0.5,
                 input_layout="DHWC",
             )
@@ -381,9 +386,8 @@ class RandomRotate(RandomTransform):
             result = transform({"image": image})
             print(result["image"].shape)
 
-        Torch backend:
-
-        .. code-block:: python
+        For this 2D batch, the scalar factor gives every sample its own random
+        angle in the range of approximately +/-5.7 degrees::
 
             import os
             os.environ["KERAS_BACKEND"] = "torch"

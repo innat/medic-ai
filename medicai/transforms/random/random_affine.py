@@ -1,6 +1,6 @@
 """Single-pass random affine transforms for channel-last medical tensors."""
 
-from typing import Any, Sequence
+from typing import Sequence
 
 import keras
 from keras import ops
@@ -19,6 +19,8 @@ from .affine import (
     centered_affine_matrix,
     compose_affine_matrices,
     invert_affine_matrix,
+    resolve_per_key,
+    resolve_axis_ranges,
     sample_affine_volumes,
 )
 
@@ -42,33 +44,6 @@ def _range(value, name):
     if low > high:
         raise ValueError(f"{name} ranges must be ordered as (min, max).")
     return low, high
-
-
-def _axis_ranges(value, axes, name):
-    if value is None:
-        return {axis: (0.0, 0.0) for axis in axes}
-    if isinstance(value, dict):
-        unknown = set(value) - set(axes)
-        if unknown:
-            raise ValueError(f"{name} axes must be drawn from {axes}.")
-        return {axis: _range(value[axis], name) if axis in value else (0.0, 0.0) for axis in axes}
-    value_range = _range(value, name)
-    return {axis: value_range for axis in axes}
-
-
-def _per_key(keys, value, default, name):
-    if value is None:
-        return {key: default(key, index) for index, key in enumerate(keys)}
-    if isinstance(value, dict):
-        missing = [key for key in keys if key not in value]
-        if missing:
-            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
-        return {key: value[key] for key in keys}
-    if isinstance(value, (tuple, list)):
-        if len(value) != len(keys):
-            raise ValueError(f"`{name}` must have one value per key.")
-        return dict(zip(keys, value, strict=True))
-    return {key: value for key in keys}
 
 
 def _sample(transform, ranges, batch_size, dtype, gate):
@@ -166,33 +141,70 @@ def _matrix_to_keras_2d(matrix):
 
 
 class RandomAffine(RandomTransform):
-    """Apply rotation, zoom, translation, and shear in one resampling pass.
+    """Apply rotation, scaling, translation, and shear in one resampling pass.
+
+    The transform supports channel-last 2D images and 3D volumes through the
+    corresponding rank-aware affine resampling path. It samples the affine
+    components independently for each batch item, composes them into one
+    transform, and shares the realized matrix across selected image and label
+    keys to preserve spatial alignment.
 
     The forward matrix is composed as ``translation @ rotation @ shear @
     scale``. Its inverse is used for sampling, and the realized matrices are
-    recorded for inverse execution. Parameters are sampled independently per
-    batch item and shared across selected image and label keys.
+    recorded for inverse execution.
+
+    .. note::
+
+        On the TensorFlow backend, 2D affine resampling uses the kernel backed
+        by ``tf.raw_ops.ImageProjectiveTransformV3``, which is not currently
+        XLA-compatible. A 3D affine configuration that leaves depth unchanged
+        can use the same folded 2D H-W path and has the same limitation. A
+        full 3D affine configuration uses the general coordinate-sampling
+        path instead. Eager and ``tf.data`` graph execution remain supported.
+        However, for Jax and Torch backends, this limitation does not apply;
+        they are XLA-compatible.
 
     Args:
         keys: Tensor keys to transform together.
-        rotation_factor: Rotation range or axis mapping using ``z``, ``y``,
-            and ``x`` axes.
-        scale_factor: Relative scale range or axis mapping.
-        translation_factor: Relative translation range or axis mapping.
-        shear_factor: Dimensionless shear range or axis-pair mapping.
+        rotation_factor: A scalar, a ``(min, max)`` angle range in radians, or
+            an axis mapping. Scalars and ranges apply independently to every
+            spatial axis: ``(y, x)`` for 2D and ``(z, y, x)`` for 3D. The
+            public names follow channel-last ``[D]HWC`` order: ``z`` maps to
+            ``D``, ``y`` to ``H``, and ``x`` to ``W``. Mappings can restrict
+            rotation to selected axes; omitted axes are zero.
+        scale_factor: A scalar, a ``(min, max)`` relative scale range, or an
+            axis mapping. Scalars and ranges apply independently to all
+            spatial axes; ``0.1`` samples scales in ``[0.9, 1.1]``. Omitted
+            mapping axes keep scale ``1``.
+        translation_factor: A scalar, a ``(min, max)`` relative translation
+            range, or an axis mapping. Scalars and ranges apply independently
+            to all spatial axes, with values measured relative to each axis
+            length. Omitted mapping axes remain unchanged.
+        shear_factor: A scalar, a ``(min, max)`` dimensionless shear range, or
+            an axis-pair mapping. Scalars and ranges apply to every supported
+            coefficient; mappings can enable selected coefficients only.
+            Axis names follow ``[D]HWC`` order: ``z``/``y``/``x`` correspond to
+            ``D``/``H``/``W``.
         prob: Per-sample probability of applying the affine transform.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
         fill_value: Constant boundary value when ``fill_mode="constant"``.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
+
     Example:
 
-        TensorFlow backend:
+        This anatomy-oriented 3D example combines small rotations (about 5.7
+        degrees around ``z`` and 2.9 degrees around ``x``), depth scaling up to
+        10%, in-plane scaling up to 15%, translations up to 5% through depth
+        and 10% in-plane, and modest shear coefficients. Image interpolation
+        remains smooth while nearest interpolation keeps label classes intact::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomAffine
@@ -212,43 +224,59 @@ class RandomAffine(RandomTransform):
             label = tf.zeros_like(image)
             result = transform({"image": image, "label": label})
 
-        JAX backend:
+        This 2D example uses explicit ranges for each affine component: it
+        samples rotation between -0.1 and +0.1 radians, scaling between -5%
+        and +10%, and translation between -5% and +10% along each configured
+        axis::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
             from medicai.transforms import RandomAffine
 
             transform = RandomAffine(
                 keys=["image"],
-                rotation_factor={"z": 0.1},
-                scale_factor={"y": 0.1, "x": 0.1},
-                translation_factor={"y": 0.1, "x": 0.1},
+                rotation_factor={"z": (-0.1, 0.1)},
+                scale_factor={"y": (-0.05, 0.1), "x": (-0.05, 0.1)},
+                translation_factor={"y": (-0.05, 0.1), "x": (-0.05, 0.1)},
                 input_layout="BHWC",
                 seed=7,
             )
             image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
             result = transform({"image": image})
 
-        Torch backend:
+        Scalar component factors apply the same ranges to every supported 2D
+        axis: about +/-5.7 degrees of rotation, +/-10% scaling and translation,
+        and a +/-5% shear range::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
             from medicai.transforms import RandomAffine
 
             transform = RandomAffine(
-                keys=["image"], rotation_factor=0.1,
-                scale_factor=0.1, translation_factor=0.1,
-                shear_factor=0.05, input_layout="BHWC", seed=7
+                keys=["image"],
+                rotation_factor=0.1,
+                scale_factor=0.1,
+                translation_factor=0.1,
+                shear_factor=0.05,
+                input_layout="BHWC",
+                seed=7
             )
             image = torch.randn((8, 128, 128, 3))
             result = transform({"image": image})
 
-        Conservative 3D augmentation for anatomy-sensitive segmentation:
+        For anatomy-sensitive 3D segmentation, this conservative configuration
+        limits every component to the depth direction. It uses roughly +/-3
+        degrees of rotation, +/-3% scaling and translation, and a small ``zy``
+        shear, while using nearest interpolation for the label mask::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
+            import tensorflow as tf
             from medicai.transforms import RandomAffine
 
             transform = RandomAffine(
@@ -264,12 +292,20 @@ class RandomAffine(RandomTransform):
                 prob=0.3,
                 seed=7,
             )
+            image = tf.random.normal((32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
             result = transform({"image": image, "label": label})
 
         For in-plane-only augmentation, keep the depth axis unchanged and
-        configure the H-W plane explicitly:
+        configure the H-W plane explicitly. This example rotates in the H-W
+        plane by up to about 5.7 degrees, scales height and width by up to 5%,
+        and applies small in-plane translations and shears::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
+
+            import tensorflow as tf
+            from medicai.transforms import RandomAffine
 
             transform = RandomAffine(
                 keys=["image", "label"],
@@ -282,6 +318,9 @@ class RandomAffine(RandomTransform):
                 prob=0.5,
                 seed=7,
             )
+            image = tf.random.normal((32, 64, 64, 1), seed=7)
+            label = tf.zeros_like(image)
+            result = transform({"image": image, "label": label})
     """
 
     def __init__(
@@ -310,21 +349,23 @@ class RandomAffine(RandomTransform):
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
         if self.layout_info.spatial_rank == 2:
-            self.rotation_ranges = (
-                {"z": _range(rotation_factor, "rotation_factor")}
-                if rotation_factor is not None
-                else {"z": (0.0, 0.0)}
+            self.rotation_ranges = resolve_axis_ranges(
+                rotation_factor, ("z",), "rotation_factor", _range
             )
             axes = ("y", "x")
             shear_axes = ("xy", "yx")
         else:
-            self.rotation_ranges = _axis_ranges(rotation_factor, ("z", "y", "x"), "rotation_factor")
+            self.rotation_ranges = resolve_axis_ranges(
+                rotation_factor, ("z", "y", "x"), "rotation_factor", _range
+            )
             axes = ("z", "y", "x")
             shear_axes = ("zy", "zx", "yz", "yx", "xz", "xy")
-        self.scale_ranges = _axis_ranges(scale_factor, axes, "scale_factor")
-        self.translation_ranges = _axis_ranges(translation_factor, axes, "translation_factor")
-        self.shear_ranges = _axis_ranges(shear_factor, shear_axes, "shear_factor")
-        self.interpolation = _per_key(
+        self.scale_ranges = resolve_axis_ranges(scale_factor, axes, "scale_factor", _range)
+        self.translation_ranges = resolve_axis_ranges(
+            translation_factor, axes, "translation_factor", _range
+        )
+        self.shear_ranges = resolve_axis_ranges(shear_factor, shear_axes, "shear_factor", _range)
+        self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
@@ -334,8 +375,8 @@ class RandomAffine(RandomTransform):
             ),
             "interpolation",
         )
-        self.fill_mode = _per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
-        self.fill_value = _per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
+        self.fill_mode = resolve_per_key(self.keys, fill_mode, lambda *_: "constant", "fill_mode")
+        self.fill_value = resolve_per_key(self.keys, fill_value, lambda *_: 0.0, "fill_value")
         for key in self.keys:
             self.interpolation[key] = str(self.interpolation[key]).lower()
             self.fill_mode[key] = str(self.fill_mode[key]).lower()
@@ -425,6 +466,7 @@ class RandomAffine(RandomTransform):
                     fill_mode=self.fill_mode[key],
                     fill_value=self.fill_value[key],
                 )
+                output = ops.cast(output, tensor.dtype)
                 return restore_from_batch_axis(output, added_batch)
 
             output = sample_affine_volumes(
@@ -434,6 +476,7 @@ class RandomAffine(RandomTransform):
                 self.fill_mode[key],
                 self.fill_value[key],
             )
+        output = ops.cast(output, tensor.dtype)
         return restore_from_batch_axis(output, added_batch)
 
     def _is_hw_separable(self):

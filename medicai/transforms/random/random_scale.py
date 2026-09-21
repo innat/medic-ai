@@ -6,7 +6,6 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
-from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -15,9 +14,15 @@ from ..utils import (
     restore_from_batch_axis,
     validate_tensor_matches_layout,
 )
+from .affine import (
+    apply_plane_affine_3d,
+    resolve_axis_ranges,
+    resolve_per_key,
+    sample_affine_volumes,
+)
 
 _DEFAULT_PROB = 0.5
-_DEFAULT_ZOOM_FACTOR = 0.0
+_DEFAULT_SCALE_FACTOR = 0.0
 _DEFAULT_INTERPOLATION = None
 _DEFAULT_FILL_MODE = "constant"
 _DEFAULT_FILL_VALUE = 0.0
@@ -31,52 +36,22 @@ _FILL_MODES = {"constant", "nearest", "reflect", "wrap", "mirror"}
 def _factor_range(value: float | Sequence[float]) -> tuple[float, float]:
     if isinstance(value, (tuple, list)):
         if len(value) != 2:
-            raise ValueError("Each zoom factor range must contain two values.")
+            raise ValueError("Each scale factor range must contain two values.")
         low, high = float(value[0]), float(value[1])
     else:
         value = float(value)
         if value < 0.0:
-            raise ValueError(f"Zoom factors must be non-negative. Received {value}.")
+            raise ValueError(f"Scale factors must be non-negative. Received {value}.")
         low, high = -value, value
     if low > high:
-        raise ValueError("Zoom factor ranges must be ordered as (min, max).")
+        raise ValueError("Scale factor ranges must be ordered as (min, max).")
     if low <= -1.0:
-        raise ValueError("Zoom factors must keep the sampled scale above zero.")
+        raise ValueError("Scale factors must keep the sampled scale above zero.")
     return low, high
 
 
-def _resolve_axis_ranges(factor, spatial_rank):
-    axes = ("x", "y") if spatial_rank == 2 else ("z", "x", "y")
-    if isinstance(factor, dict):
-        unknown = set(factor) - set(axes)
-        if unknown:
-            raise ValueError(
-                f"Zoom factor axes must be drawn from {axes}; " f"received {sorted(unknown)}."
-            )
-        return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
-        }
-    value_range = _factor_range(factor)
-    return {axis: value_range for axis in axes}
-
-
-def _resolve_per_key(keys, value, default_fn, name):
-    if value is None:
-        return {key: default_fn(key, index) for index, key in enumerate(keys)}
-    if isinstance(value, dict):
-        missing = [key for key in keys if key not in value]
-        if missing:
-            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
-        return {key: value[key] for key in keys}
-    if isinstance(value, (tuple, list)):
-        if len(value) != len(keys):
-            raise ValueError(f"`{name}` must have one value per key.")
-        return dict(zip(keys, value, strict=True))
-    return {key: value for key in keys}
-
-
-def _zoom_matrix_2d(scales, spatial_shape):
-    """Build output-to-input matrices for centered 2D zooms."""
+def _scale_matrix_2d(scales, spatial_shape):
+    """Build output-to-input matrices for centered 2D scaling."""
     scale_y = 1.0 / scales[:, 0]
     scale_x = 1.0 / scales[:, 1]
     center = ops.cast(
@@ -101,34 +76,54 @@ def _zoom_matrix_2d(scales, spatial_shape):
 
 
 class RandomScale(RandomTransform):
-    """Randomly zoom channel-last 2D images or 3D volumes around their center.
+    """Randomly scale channel-last 2D images or 3D volumes around their center.
 
-    ``factor`` follows the Keras-style relative convention. A scalar
-    ``0.2`` samples a factor in ``[-0.2, 0.2]`` independently for each active
-    axis, then converts it to a scale of ``1 + factor``. A mapping can provide
-    independent factors for Cartesian axes: ``x`` and ``y`` for 2D, or
-    ``z``, ``y``, and ``x`` for 3D. These map to tensor axes ``D``, ``H``, and
-    ``W`` respectively. Missing axes remain unchanged.
+    Scaling changes the spatial size of image structures relative to the
+    image or volume center. The transform uses the rank-appropriate affine
+    resampling path for 2D and 3D inputs, and samples parameters independently
+    for each batch item while sharing them across selected keys.
 
-    Parameters are sampled independently for each batch item and shared across
-    all selected keys, preserving image/label alignment.
+    This keeps images, masks, and labels spatially aligned while allowing each
+    batch item to receive a different random scale.
+
+    .. note::
+
+        On the TensorFlow backend, 2D scaling uses the affine image kernel
+        backed by ``tf.raw_ops.ImageProjectiveTransformV3``, which is not
+        currently XLA-compatible. A 3D scale that changes only the H-W plane
+        uses the same folded 2D path and has the same limitation. Full 3D
+        scaling uses the general coordinate-sampling path instead. Eager and
+        ``tf.data`` graph execution remain supported. However, for Jax and Torch
+        backends, this limitation does not apply, they are XLA-compatible.
 
     Args:
-        keys: Tensor keys to zoom together.
-        factor: A scalar or two-value factor range, or an axis mapping.
-        prob: Per-sample probability of applying the zoom.
+        keys: Tensor keys to scale together.
+        factor: A scalar, a ``(min, max)`` range, or an axis mapping. A
+            scalar or range is applied independently to every spatial axis:
+            ``(y, x)`` for 2D inputs and ``(z, y, x)`` for 3D inputs. The
+            public axis names follow the channel-last ``[D]HWC`` order, so
+            ``z`` maps to ``D``, ``y`` to ``H``, and ``x`` to ``W``. A scalar
+            ``0.2`` samples relative scale factors from ``[-0.2, 0.2]`` and
+            uses scales in ``[0.8, 1.2]``. A mapping can restrict scaling to
+            selected axes; omitted axes keep scale ``1``. For example,
+            ``{"x": 0.1, "y": 0.0}`` scales only the 2D image width.
+        prob: Per-sample probability of applying the scaling.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
         fill_value: Constant boundary value when ``fill_mode="constant"``.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
     Example:
 
-        TensorFlow backend:
+        The 3D example permits a smaller depth scaling (about +/-10%) and
+        slightly stronger in-plane scaling (about +/-15%). The label uses
+        nearest-neighbor interpolation so its class values are preserved::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomScale
@@ -145,16 +140,20 @@ class RandomScale(RandomTransform):
             label = tf.zeros_like(image)
             result = transform({"image": image, "label": label})
 
-        JAX backend:
 
-        .. code-block:: python
+        This 2D example uses explicit ``(min, max)`` ranges: height is scaled
+        between -10% and +20%, while width is scaled between -5% and +15%.
+        The batch and channel dimensions are not scaled::
+
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
             from medicai.transforms import RandomScale
 
             transform = RandomScale(
                 keys=["image"],
-                factor={"y": 0.2, "x": 0.2},
+                factor={"y": (-0.1, 0.2), "x": (-0.05, 0.15)},
                 input_layout="BHWC",
                 prob=0.5,
                 seed=7,
@@ -162,9 +161,11 @@ class RandomScale(RandomTransform):
             image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
             result = transform({"image": image})
 
-        Torch backend:
+        A scalar factor applies the same +/-10% relative scaling range to both
+        spatial axes of this 2D batch::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
             from medicai.transforms import RandomScale
@@ -179,7 +180,7 @@ class RandomScale(RandomTransform):
     def __init__(
         self,
         keys: Sequence[str],
-        factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_ZOOM_FACTOR,
+        factor: float | Sequence[float] | dict[str, Any] = _DEFAULT_SCALE_FACTOR,
         prob: float = _DEFAULT_PROB,
         interpolation=_DEFAULT_INTERPOLATION,
         fill_mode=_DEFAULT_FILL_MODE,
@@ -198,8 +199,11 @@ class RandomScale(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_axis_ranges(factor, self.layout_info.spatial_rank)
-        self.interpolation = _resolve_per_key(
+        axes = ("y", "x") if self.layout_info.spatial_rank == 2 else ("z", "y", "x")
+        self.ranges = resolve_axis_ranges(
+            factor, axes, "Scale factor", lambda value, _: _factor_range(value)
+        )
+        self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
@@ -209,10 +213,10 @@ class RandomScale(RandomTransform):
             ),
             "interpolation",
         )
-        self.fill_mode = _resolve_per_key(
+        self.fill_mode = resolve_per_key(
             self.keys, fill_mode, lambda *_: _DEFAULT_FILL_MODE, "fill_mode"
         )
-        self.fill_value = _resolve_per_key(
+        self.fill_value = resolve_per_key(
             self.keys, fill_value, lambda *_: _DEFAULT_FILL_VALUE, "fill_value"
         )
         for key in self.keys:
@@ -253,7 +257,7 @@ class RandomScale(RandomTransform):
         )
         if self.layout_info.spatial_rank == 2:
             scale_tensor = ops.stack([scales["y"], scales["x"]], axis=-1)
-            matrix = _zoom_matrix_2d(scale_tensor, ops.shape(batched)[1:-1])
+            matrix = _scale_matrix_2d(scale_tensor, ops.shape(batched)[1:-1])
             output = ops.image.affine_transform(
                 ops.cast(batched, "float32"),
                 matrix,
@@ -268,7 +272,7 @@ class RandomScale(RandomTransform):
                 axis for axis, (low, high) in self.ranges.items() if low != 0.0 or high != 0.0
             }
             if keras.config.backend() != "torch" and active_axes and active_axes <= {"x", "y"}:
-                matrix = _zoom_matrix_2d(
+                matrix = _scale_matrix_2d(
                     ops.stack([scales["y"], scales["x"]], axis=-1),
                     ops.shape(batched)[2:4],
                 )
@@ -280,6 +284,7 @@ class RandomScale(RandomTransform):
                     fill_mode=self.fill_mode[key],
                     fill_value=self.fill_value[key],
                 )
+                output = ops.cast(output, tensor.dtype)
                 return restore_from_batch_axis(output, added_batch)
 
             inverse_matrices = ops.eye(3, dtype=scale_tensor.dtype) / ops.reshape(
@@ -292,6 +297,7 @@ class RandomScale(RandomTransform):
                 self.fill_mode[key],
                 self.fill_value[key],
             )
+        output = ops.cast(output, tensor.dtype)
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:

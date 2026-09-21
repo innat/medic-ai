@@ -18,8 +18,8 @@ def as_tensor(array, dtype=None):
 
 @pytest.mark.unit
 def test_affine_axis_contract_matches_channel_last_medical_layouts():
-    assert AFFINE_AXES_2D == ("x", "y")
-    assert AFFINE_AXES_3D == ("z", "x", "y")
+    assert AFFINE_AXES_2D == ("y", "x")
+    assert AFFINE_AXES_3D == ("z", "y", "x")
 
 
 @pytest.mark.unit
@@ -37,6 +37,57 @@ def test_centered_affine_identity_and_known_scale():
     )
     np.testing.assert_allclose(
         ops.convert_to_numpy(centered_affine_matrix(scale, (5, 7))),
+        expected,
+    )
+
+
+@pytest.mark.unit
+def test_centered_affine_preserves_known_translation():
+    identity = as_tensor(np.eye(2, dtype=np.float32))
+    translation = as_tensor([2.0, -3.0])
+    expected = np.array(
+        [[1.0, 0.0, 2.0], [0.0, 1.0, -3.0], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(centered_affine_matrix(identity, (5, 7), translation)),
+        expected,
+    )
+
+
+@pytest.mark.unit
+def test_centered_affine_preserves_known_3d_scale_and_translation():
+    linear = as_tensor(
+        np.diag([2.0, 0.5, 1.5]).astype(np.float32),
+    )
+    translation = as_tensor([1.0, -2.0, 3.0])
+    expected = np.array(
+        [
+            [2.0, 0.0, 0.0, -1.0],
+            [0.0, 0.5, 0.0, -0.5],
+            [0.0, 0.0, 1.5, 1.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(centered_affine_matrix(linear, (5, 7, 9), translation)),
+        expected,
+    )
+
+
+@pytest.mark.unit
+def test_centered_affine_preserves_known_2d_shear():
+    shear = as_tensor([[1.0, 0.2], [-0.1, 1.0]])
+    expected = np.array(
+        [[1.0, 0.2, -0.6], [-0.1, 1.0, 0.2], [0.0, 0.0, 1.0]],
+        dtype=np.float32,
+    )
+
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(centered_affine_matrix(shear, (5, 7))),
         expected,
     )
 

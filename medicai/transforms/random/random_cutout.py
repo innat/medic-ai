@@ -3,10 +3,12 @@
 Sample layouts are handled directly, while batch layouts are processed per
 sample: each item receives an independent apply decision and cutout mask. The
 mask rank follows the input layout, using a 2D rectangle for ``HWC``/``BHWC``
-and a full ``D``-``H``-``W`` cuboid for ``DHWC``/``BDHWC``. The mask is
-broadcast across channels and filled with either a constant or image-range
-Gaussian noise. CutOut modifies one image key and is non-invertible because
-the masked values are discarded.
+and a full ``z``-``y``-``x`` cuboid for ``DHWC``/``BDHWC``. Public spatial
+axes follow the channel-last ``[D]HWC`` convention: ``z`` maps to ``D``,
+``y`` maps to ``H``, and ``x`` maps to ``W``. The mask is broadcast across
+channels and filled with either a constant or image-range Gaussian noise.
+CutOut modifies one image key and is non-invertible because the masked values
+are discarded.
 """
 
 from numbers import Integral
@@ -37,13 +39,17 @@ class RandomCutOut(RandomTransform):
     ``RandomCutOut`` samples one or more rectangular masks and replaces the
     corresponding image regions with either a constant value or Gaussian
     noise. For 2D inputs, each mask removes pixels. For 3D inputs, each mask
-    removes a bounded D-H-W cuboid; no individual slice mode is used.
+    removes a bounded ``z``-``y``-``x`` cuboid; no individual slice mode is
+    used.
 
     Args:
         keys: A single key containing the image tensor to modify. The key may
             be provided as a one-element sequence or a string.
-        mask_size: Spatial mask size for each cutout window. Use ``(H, W)``
-            for 2D layouts and ``(D, H, W)`` for 3D layouts.
+        mask_size: Spatial mask size for each cutout window. Use ``(y, x)``
+            for 2D layouts and ``(z, y, x)`` for 3D layouts. These public axis
+            names map to tensor dimensions ``(H, W)`` and ``(D, H, W)``;
+            therefore ``mask_size=(8, 16, 16)`` masks 8 depth slices and a
+            16-by-16 in-plane region.
         num_cuts: Number of cutout windows to sample.
         prob: Probability of applying cutout.
         fill_mode: Either ``"constant"`` or ``"gaussian"``. Gaussian fill
@@ -180,7 +186,7 @@ class RandomCutOut(RandomTransform):
         """Validate a spatial mask size against the configured input layout."""
         spatial_rank = self.layout_info.spatial_rank
         if not isinstance(mask_size, (list, tuple)) or len(mask_size) != spatial_rank:
-            expected = "(H, W)" if spatial_rank == 2 else "(D, H, W)"
+            expected = "(y, x)" if spatial_rank == 2 else "(z, y, x)"
             raise ValueError(
                 f"`mask_size` must be a sequence of {spatial_rank} integers: {expected}."
             )

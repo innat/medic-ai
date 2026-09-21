@@ -68,7 +68,7 @@ def test_random_scale_rejects_wrong_rank_interpolation_and_unknown_axis():
     with pytest.raises(ValueError, match="Unsupported interpolation"):
         RandomScale(keys=["image"], factor=0.1, interpolation="bilinear", input_layout="DHWC")
 
-    with pytest.raises(ValueError, match="Zoom factor axes"):
+    with pytest.raises(ValueError, match="Scale factor axes"):
         RandomScale(keys=["image"], factor={"invalid": 0.1}, input_layout="HWC")
 
 

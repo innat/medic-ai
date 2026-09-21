@@ -6,7 +6,6 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _pop_last_transform_trace
-from .affine import apply_plane_affine_3d, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -14,6 +13,12 @@ from ..utils import (
     resolve_input_layout,
     restore_from_batch_axis,
     validate_tensor_matches_layout,
+)
+from .affine import (
+    apply_plane_affine_3d,
+    resolve_axis_ranges,
+    resolve_per_key,
+    sample_affine_volumes,
 )
 
 _DEFAULT_PROB = 0.5
@@ -43,39 +48,6 @@ def _factor_range(value: float | Sequence[float]) -> tuple[float, float]:
     return low, high
 
 
-def _resolve_per_key(keys, value, default_fn, name):
-    if value is None:
-        return {key: default_fn(key, index) for index, key in enumerate(keys)}
-    if isinstance(value, dict):
-        missing = [key for key in keys if key not in value]
-        if missing:
-            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
-        return {key: value[key] for key in keys}
-    if isinstance(value, (tuple, list)):
-        if len(value) != len(keys):
-            raise ValueError(f"`{name}` must have one value per key.")
-        return dict(zip(keys, value, strict=True))
-    return {key: value for key in keys}
-
-
-def _resolve_factor_ranges(factor, spatial_rank):
-    """Normalize scalar or Cartesian-axis translation factors."""
-    axes = ("x", "y") if spatial_rank == 2 else ("z", "x", "y")
-    if isinstance(factor, dict):
-        unknown = set(factor) - set(axes)
-        if unknown:
-            raise ValueError(
-                f"Translation factor axes must be drawn from {axes}; "
-                f"received {sorted(unknown)}."
-            )
-        return {
-            axis: _factor_range(factor[axis]) if axis in factor else (0.0, 0.0) for axis in axes
-        }
-
-    value_range = _factor_range(factor)
-    return {axis: value_range for axis in axes}
-
-
 def _translation_matrix_2d(offsets: Any) -> Any:
     """Build Keras image-kernel matrices from ``(y, x)`` offsets."""
     zeros = ops.zeros_like(offsets[:, 0])
@@ -100,35 +72,52 @@ def _translation_matrix_3d(offsets: Any) -> Any:
 class RandomTranslate(RandomTransform):
     """Randomly translate channel-last 2D images or 3D volumes.
 
-    Factors are relative to the corresponding spatial dimension. A scalar
-    factor samples symmetrically, so ``0.1`` permits offsets in ``[-0.1, 0.1]``
-    of the dimension size. Parameters are sampled independently per batch item
-    and shared across all selected keys.
+    Translation moves image content along one or more spatial axes without
+    changing its scale or orientation. The transform uses the rank-appropriate
+    affine resampling path for 2D and 3D inputs, and samples parameters
+    independently for each batch item while sharing them across selected keys.
 
-    Public axis names are ``x`` and ``y`` for 2D, and ``z``, ``y``, and ``x``
-    for 3D. They map to channel-last tensor axes ``D``, ``H``, and ``W``
-    as ``x -> W``, ``y -> H``, and ``z -> D``; the internal sampler uses
-    tensor order ``(D, H, W)``.
+    This preserves image, mask, and label alignment while allowing each batch
+    item to receive a different random displacement.
+
+    .. note::
+
+        On the TensorFlow backend, 2D translation uses the affine image kernel
+        backed by ``tf.raw_ops.ImageProjectiveTransformV3``, which is not
+        currently XLA-compatible. A 3D translation confined to the H-W plane
+        uses the same folded 2D path and has the same limitation. Full 3D
+        translation uses the general coordinate-sampling path instead. Eager
+        and ``tf.data`` graph execution remain supported. However, for Jax and
+        Torch backends, this limitation does not apply; they are XLA-compatible.
 
     Args:
         keys: Tensor keys to translate together.
-        factor: A scalar or two-value relative translation range applied to all
-            spatial axes, or a mapping with ``x``/``y`` entries for 2D and
-            ``z``/``x``/``y`` entries for 3D. Missing mapping entries are
-            treated as identity translations.
+        factor: A scalar, a ``(min, max)`` relative translation range, or an
+            axis mapping. A scalar or range is applied independently to every
+            spatial axis: ``(y, x)`` for 2D inputs and ``(z, y, x)`` for 3D
+            inputs. The public axis names follow the channel-last ``[D]HWC``
+            order, so ``z`` maps to ``D``, ``y`` to ``H``, and ``x`` to ``W``.
+            The sampled value is relative to that axis length; for example,
+            ``0.1`` permits a displacement in ``[-0.1 * size, 0.1 * size]``.
+            A mapping can restrict translation to selected axes, while omitted
+            axes remain unchanged.
         prob: Per-sample probability of applying the translation.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
         fill_mode: Boundary behavior for newly exposed values.
         fill_value: Constant boundary value when ``fill_mode="constant"``.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
     Example:
 
-        TensorFlow backend:
+        This 3D example allows up to 5% relative translation through depth and
+        up to 10% through height and width. The same displacement is used for
+        the image and label, while nearest interpolation protects label IDs::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "tensorflow"
 
             import tensorflow as tf
             from medicai.transforms import RandomTranslate
@@ -145,23 +134,29 @@ class RandomTranslate(RandomTransform):
             label = tf.zeros_like(image)
             result = transform({"image": image, "label": label})
 
-        JAX backend:
+        This 2D example uses explicit ``(min, max)`` ranges: height can move
+        between -10% and +5% of its size, while width can move between -5% and
+        +10% of its size::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "jax"
 
             import jax
             from medicai.transforms import RandomTranslate
 
             transform = RandomTranslate(
-                keys=["image"], factor={"y": 0.1, "x": 0.1},
+                keys=["image"],
+                factor={"y": (-0.1, 0.05), "x": (-0.05, 0.1)},
                 input_layout="BHWC", seed=7
             )
             image = jax.random.normal(jax.random.PRNGKey(7), (8, 128, 128, 3))
             result = transform({"image": image})
 
-        Torch backend:
+        The scalar factor permits a symmetric translation range of up to 10%
+        along both spatial axes::
 
-        .. code-block:: python
+            import os
+            os.environ["KERAS_BACKEND"] = "torch"
 
             import torch
             from medicai.transforms import RandomTranslate
@@ -197,9 +192,12 @@ class RandomTranslate(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_factor_ranges(factor, self.layout_info.spatial_rank)
+        axes = ("y", "x") if self.layout_info.spatial_rank == 2 else ("z", "y", "x")
+        self.ranges = resolve_axis_ranges(
+            factor, axes, "Translation factor", lambda value, _: _factor_range(value)
+        )
 
-        self.interpolation = _resolve_per_key(
+        self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
             lambda _, index: (
@@ -209,13 +207,13 @@ class RandomTranslate(RandomTransform):
             ),
             "interpolation",
         )
-        self.fill_mode = _resolve_per_key(
+        self.fill_mode = resolve_per_key(
             self.keys,
             fill_mode,
             lambda *_: _DEFAULT_FILL_MODE,
             "fill_mode",
         )
-        self.fill_value = _resolve_per_key(
+        self.fill_value = resolve_per_key(
             self.keys,
             fill_value,
             lambda *_: _DEFAULT_FILL_VALUE,
@@ -293,6 +291,7 @@ class RandomTranslate(RandomTransform):
                     fill_mode=self.fill_mode[key],
                     fill_value=self.fill_value[key],
                 )
+                output = ops.cast(output, tensor.dtype)
                 return restore_from_batch_axis(output, added_batch)
 
             output = sample_affine_volumes(
@@ -302,6 +301,7 @@ class RandomTranslate(RandomTransform):
                 self.fill_mode[key],
                 self.fill_value[key],
             )
+        output = ops.cast(output, tensor.dtype)
         return restore_from_batch_axis(output, added_batch)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:

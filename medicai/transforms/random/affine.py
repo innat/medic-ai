@@ -12,8 +12,38 @@ from typing import Any
 
 from keras import ops
 
-AFFINE_AXES_2D = ("x", "y")
-AFFINE_AXES_3D = ("z", "x", "y")
+AFFINE_AXES_2D = ("y", "x")
+AFFINE_AXES_3D = ("z", "y", "x")
+
+
+def resolve_per_key(keys, value, default_fn, name):
+    """Resolve one scalar, sequence, or mapping value for each transform key."""
+    if value is None:
+        return {key: default_fn(key, index) for index, key in enumerate(keys)}
+    if isinstance(value, dict):
+        missing = [key for key in keys if key not in value]
+        if missing:
+            raise ValueError(f"`{name}` is missing entries for keys: {missing}.")
+        return {key: value[key] for key in keys}
+    if isinstance(value, (tuple, list)):
+        if len(value) != len(keys):
+            raise ValueError(f"`{name}` must have one value per key.")
+        return dict(zip(keys, value, strict=True))
+    return {key: value for key in keys}
+
+
+def resolve_axis_ranges(value, axes, name, range_fn):
+    """Resolve a scalar or axis mapping into ordered factor ranges."""
+    axes = tuple(axes)
+    if value is None:
+        return {axis: (0.0, 0.0) for axis in axes}
+    if isinstance(value, dict):
+        unknown = set(value) - set(axes)
+        if unknown:
+            raise ValueError(f"{name} axes must be drawn from {axes}; received {sorted(unknown)}.")
+        return {axis: range_fn(value[axis], name) if axis in value else (0.0, 0.0) for axis in axes}
+    value_range = range_fn(value, name)
+    return {axis: value_range for axis in axes}
 
 
 def compose_affine_matrices(*matrices: Any) -> Any:

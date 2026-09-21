@@ -65,6 +65,188 @@ def test_random_affine_records_one_composed_geometry():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "layout, spatial_shape, batch_size, matrix_size",
+    [
+        ("HWC", (5, 6), 1, 3),
+        ("DHWC", (3, 5, 6), 1, 4),
+        ("BHWC", (5, 6), 2, 3),
+        ("BDHWC", (3, 5, 6), 2, 4),
+    ],
+)
+def test_random_affine_composed_matrix_inverse_restores_identity(
+    layout, spatial_shape, batch_size, matrix_size
+):
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor=0.1,
+        scale_factor=0.1,
+        translation_factor=0.1,
+        shear_factor=0.05,
+        input_layout=layout,
+        prob=1.0,
+        seed=17,
+    )
+
+    forward, inverse, _ = transform._matrices(spatial_shape, batch_size)
+    product = ops.matmul(forward, inverse)
+    expected = np.broadcast_to(
+        np.eye(matrix_size, dtype=np.float32),
+        (batch_size, matrix_size, matrix_size),
+    )
+
+    np.testing.assert_allclose(ops.convert_to_numpy(product), expected, atol=1e-5)
+
+
+@pytest.mark.unit
+def test_random_affine_probability_can_skip_individual_batch_items(monkeypatch):
+    image = as_tensor(np.arange(2 * 6 * 6, dtype=np.float32).reshape(2, 6, 6, 1))
+    transform = RandomAffine(
+        keys=["image"],
+        translation_factor=0.1,
+        input_layout="BHWC",
+        interpolation="nearest",
+        fill_mode="wrap",
+        prob=0.5,
+    )
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        if minval == 0.0 and maxval == 1.0:
+            values = [0.0, 0.9]
+        else:
+            values = [minval, minval]
+        return as_tensor(values[: shape[0]], dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    output = transform(TensorBundle({"image": image}))
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(output["image"])[1],
+        ops.convert_to_numpy(image)[1],
+    )
+
+
+@pytest.mark.unit
+def test_random_affine_samples_distinct_composed_matrices_per_batch_item():
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor=0.2,
+        scale_factor=0.2,
+        translation_factor=0.2,
+        shear_factor=0.1,
+        input_layout="BHWC",
+        prob=1.0,
+        seed=17,
+    )
+
+    forward, _, _ = transform._matrices((6, 6), 2)
+
+    assert not np.allclose(
+        ops.convert_to_numpy(forward)[0],
+        ops.convert_to_numpy(forward)[1],
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        (
+            {"translation_factor": 0.1},
+            [[1.0, 0.0, -0.5], [0.0, 1.0, -0.7], [0.0, 0.0, 1.0]],
+        ),
+        (
+            {"scale_factor": 0.1},
+            [[0.9, 0.0, 0.2], [0.0, 0.9, 0.3], [0.0, 0.0, 1.0]],
+        ),
+        (
+            {"shear_factor": 0.1},
+            [[1.0, -0.1, 0.3], [-0.1, 1.0, 0.2], [0.0, 0.0, 1.0]],
+        ),
+    ],
+    ids=["translation", "scale", "shear"],
+)
+def test_random_affine_records_expected_single_component_geometry(monkeypatch, kwargs, expected):
+    transform = RandomAffine(
+        keys=["image"],
+        input_layout="HWC",
+        prob=1.0,
+        **kwargs,
+    )
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        value = 0.5 if (minval == 0.0 and maxval == 1.0) else minval
+        return as_tensor(np.full(tuple(shape), value, dtype=np.float32), dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    forward, _, applied = transform._matrices((5, 7), 1)
+
+    assert bool(ops.convert_to_numpy(applied))
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward[0]),
+        np.asarray(expected, dtype=np.float32),
+        atol=1e-6,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        (
+            {"translation_factor": {"z": 0.1}},
+            [
+                [1.0, 0.0, 0.0, -0.3],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        ),
+        (
+            {"scale_factor": {"z": 0.1}},
+            [
+                [0.9, 0.0, 0.0, 0.1],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        ),
+        (
+            {"shear_factor": {"zy": 0.1}},
+            [
+                [1.0, -0.1, 0.0, 0.2],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+        ),
+    ],
+    ids=["translation-z", "scale-z", "shear-zy"],
+)
+def test_random_affine_records_expected_3d_single_axis_geometry(monkeypatch, kwargs, expected):
+    transform = RandomAffine(
+        keys=["image"],
+        input_layout="DHWC",
+        prob=1.0,
+        **kwargs,
+    )
+
+    def sample_uniform(*, shape, minval=0.0, maxval=1.0, dtype="float32"):
+        value = 0.5 if (minval == 0.0 and maxval == 1.0) else minval
+        return as_tensor(np.full(tuple(shape), value, dtype=np.float32), dtype=dtype)
+
+    monkeypatch.setattr(transform, "random_uniform", sample_uniform)
+    forward, _, applied = transform._matrices((3, 5, 7), 1)
+
+    assert bool(ops.convert_to_numpy(applied))
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward[0]),
+        np.asarray(expected, dtype=np.float32),
+        atol=1e-6,
+    )
+
+
+@pytest.mark.unit
 def test_random_affine_inverse_reuses_recorded_matrix():
     image = as_tensor(np.arange(2 * 7 * 7, dtype=np.float32).reshape(2, 7, 7, 1))
     transform = RandomAffine(
@@ -105,6 +287,40 @@ def test_random_affine_uses_rank_aware_default_interpolation():
 
     assert image_2d.interpolation == {"image": "bilinear", "label": "nearest"}
     assert image_3d.interpolation == {"image": "trilinear", "label": "nearest"}
+
+
+@pytest.mark.unit
+def test_random_affine_accepts_explicit_2d_z_rotation_mapping():
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor={"z": 0.1},
+        input_layout="HWC",
+    )
+
+    assert transform.rotation_ranges == {"z": (-0.1, 0.1)}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "transform_type",
+    [RandomAffine],
+)
+def test_random_affine_restores_integer_label_dtype(transform_type):
+    label = as_tensor(np.arange(4 * 5, dtype=np.int32).reshape(4, 5, 1))
+    transform = transform_type(
+        keys=["label"],
+        rotation_factor=0.0,
+        scale_factor=0.0,
+        translation_factor=0.0,
+        shear_factor=0.0,
+        interpolation="nearest",
+        input_layout="HWC",
+        prob=1.0,
+    )
+
+    output = transform(TensorBundle({"label": label}))
+
+    assert output["label"].dtype == label.dtype
 
 
 @pytest.mark.unit

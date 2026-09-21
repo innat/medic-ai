@@ -208,7 +208,10 @@ def test_random_cutout_validates_arguments():
     with pytest.raises(ValueError, match="supports only input_layout values"):
         RandomCutOut(keys=["image"], mask_size=(2, 2), num_cuts=1, input_layout="CHW")
 
-    with pytest.raises(ValueError, match="`mask_size` must be a sequence of 3 integers"):
+    with pytest.raises(
+        ValueError,
+        match=r"`mask_size` must be a sequence of 3 integers: \(z, y, x\)",
+    ):
         RandomCutOut(
             keys=["image"],
             mask_size=(2, 2),
