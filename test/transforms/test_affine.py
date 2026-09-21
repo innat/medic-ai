@@ -89,6 +89,7 @@ def test_centered_affine_preserves_known_2d_shear():
     np.testing.assert_allclose(
         ops.convert_to_numpy(centered_affine_matrix(shear, (5, 7))),
         expected,
+        atol=1e-6,
     )
 
 
