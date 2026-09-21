@@ -73,6 +73,20 @@ def test_random_scale_rejects_wrong_rank_interpolation_and_unknown_axis():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "factor, message",
+    [
+        (-0.1, "non-negative"),
+        ((0.2, -0.1), "ordered"),
+        ((-1.0, 0.0), "above zero"),
+    ],
+)
+def test_random_scale_rejects_invalid_factor_ranges(factor, message):
+    with pytest.raises(ValueError, match=message):
+        RandomScale(keys=["image"], factor=factor, input_layout="HWC")
+
+
+@pytest.mark.unit
 def test_random_scale_allows_missing_keys():
     transform = RandomScale(
         keys=["image", "label"],

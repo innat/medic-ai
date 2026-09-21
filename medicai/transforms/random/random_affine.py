@@ -168,10 +168,10 @@ class RandomAffine(RandomTransform):
         keys: Tensor keys to transform together.
         rotation_factor: A scalar, a ``(min, max)`` angle range in radians, or
             an axis mapping. Scalars and ranges apply independently to every
-            spatial axis: ``(y, x)`` for 2D and ``(z, y, x)`` for 3D. The
+            rotation axis: ``z`` for 2D and ``(z, y, x)`` for 3D. The
             public names follow channel-last ``[D]HWC`` order: ``z`` maps to
             ``D``, ``y`` to ``H``, and ``x`` to ``W``. Mappings can restrict
-            rotation to selected axes; omitted axes are zero.
+            rotation to selected axes; 2D mappings accept only ``z``.
         scale_factor: A scalar, a ``(min, max)`` relative scale range, or an
             axis mapping. Scalars and ranges apply independently to all
             spatial axes; ``0.1`` samples scales in ``[0.9, 1.1]``. Omitted
