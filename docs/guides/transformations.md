@@ -39,6 +39,9 @@ for backend-specific compilation limitations and measurements.
 
 | Transform | Supported Layout | CPU | GPU |
 | :--- | :--- | :---: | :---: |
+| `CropForeground` | `HWC`, `DHWC` | ✓ | ✓ |
+| `Orientation` | `DHWC` | ✓ | ✓ |
+| `Spacing` | `DHWC` | ✓ | ✓ |
 | `NormalizeIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `ScaleIntensityRange` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `ShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
@@ -47,19 +50,16 @@ for backend-specific compilation limitations and measurements.
 | `Rotate90` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `Resize` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `SpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
-| `CropForeground` | `HWC`, `DHWC` | ✓ | ✓ |
-| `Orientation` | `DHWC` | ✓ | ✓ |
-| `Spacing` | `DHWC` | ✓ | ✓ |
+| `RandomCropByPosNegLabel` | `HWC`, `DHWC` | ✓ | ✓ |
 | `RandomFlip` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomRotate90` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomRotate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomShiftIntensity` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomSpatialCrop` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
-| `RandomTranslate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
-| `RandomScale` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
-| `RandomShear` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
-| `RandomAffine` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | Limited |
-| `RandomCropByPosNegLabel` | `HWC`, `DHWC` | ✓ | ✓ |
+| `RandomTranslate` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomScale` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomShear` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
+| `RandomAffine` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomCutOut` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 | `RandomElasticTransform` | `HWC`, `DHWC`, `BHWC`, `BDHWC` | ✓ | ✓ |
 

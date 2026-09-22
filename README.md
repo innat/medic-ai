@@ -161,7 +161,6 @@ backend-specific XLA limitations are documented by the individual transform.
 | SpatialCrop | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | Resize | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | Rotate90 | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
-| RandomCropByPosNegLabel | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomCutOut | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
 | RandomRotate | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
 | RandomRotate90 | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
@@ -173,9 +172,10 @@ backend-specific XLA limitations are documented by the individual transform.
 | RandomFlip | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
 | RandomShiftIntensity | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Yes |
 | RandomSpatialCrop | `HWC`, `DHWC`, `BHWC`, `BDHWC` | Yes | Limited |
-| CropForeground | `HWC`, `DHWC` | No | No |
-| Orientation | `DHWC` | No | No |
-| Spacing | `DHWC` | No | No |
+| RandomCropByPosNegLabel | `HWC`, `DHWC` | Yes | Limited |
+| CropForeground | `HWC`, `DHWC` | Yes | Limited |
+| Orientation | `DHWC` | Yes | Limited |
+| Spacing | `DHWC` | Yes | Limited |
 
 > **Note**: `Limited` means compiled execution depends on the active backend and runtime
 > configuration (i.e., `jit_compile : bool`). `No` indicates that the current implementation is not included
