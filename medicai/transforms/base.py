@@ -134,6 +134,24 @@ def _pop_last_transform_trace(
     return None
 
 
+def _validate_last_transform_keys(
+    bundle: TensorBundle,
+    transform_name: str,
+    allow_missing_keys: bool,
+) -> None:
+    """Validate keys recorded by the latest matching transform trace."""
+    if allow_missing_keys:
+        return
+
+    for entry in reversed(bundle.get_applied_transforms()):
+        if entry.get("name") != transform_name:
+            continue
+        missing = [key for key in entry.get("params", {}).get("keys", []) if key not in bundle.data]
+        if missing:
+            raise KeyError(f"Keys not found in input data during inverse: {missing}.")
+        return
+
+
 def _normalize_keys(keys: Sequence[str] | str, name: str = "keys") -> tuple[str, ...]:
     """Normalize transform keys to a validated tuple of strings."""
     normalized = (keys,) if isinstance(keys, str) else tuple(keys)

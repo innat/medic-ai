@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from keras import ops
 
-from medicai.transforms import RandomScale, RandomShear, RandomTranslate, TensorBundle
+from medicai.transforms import RandomAffine, RandomScale, RandomShear, RandomTranslate, TensorBundle
 
 
 def as_tensor(array, dtype=None):
@@ -213,6 +213,43 @@ def test_affine_components_allow_missing_keys_when_requested():
         output = transform(TensorBundle({"image": as_tensor(np.zeros((4, 5, 1)))}))
 
         assert "image" in output.data
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "transform_type", [RandomAffine, RandomTranslate, RandomScale, RandomShear]
+)
+def test_affine_inverse_validates_missing_recorded_keys_before_consuming_trace(transform_type):
+    kwargs = {
+        "keys": ["image", "label"],
+        "factor": 0.0,
+        "prob": 1.0,
+        "input_layout": "HWC",
+    }
+    if transform_type is RandomAffine:
+        kwargs = {
+            "keys": ["image", "label"],
+            "rotation_factor": 0.0,
+            "scale_factor": 0.0,
+            "translation_factor": 0.0,
+            "shear_factor": 0.0,
+            "prob": 1.0,
+            "input_layout": "HWC",
+        }
+    transform = transform_type(**kwargs)
+    bundle = TensorBundle(
+        {
+            "image": as_tensor(np.zeros((4, 5, 1), dtype=np.float32)),
+            "label": as_tensor(np.zeros((4, 5, 1), dtype=np.float32)),
+        }
+    )
+    transform(bundle)
+    bundle.data.pop("label")
+
+    with pytest.raises(KeyError, match="inverse"):
+        transform.inverse(bundle)
+
+    assert len(bundle.get_applied_transforms()) == 1
 
 
 @pytest.mark.unit

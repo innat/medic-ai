@@ -5,7 +5,7 @@ from typing import Any, Sequence
 import keras
 from keras import ops
 
-from ..base import RandomTransform, _pop_last_transform_trace
+from ..base import RandomTransform, _pop_last_transform_trace, _validate_last_transform_keys
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -343,6 +343,7 @@ class RandomTranslate(RandomTransform):
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        _validate_last_transform_keys(bundle, type(self).__name__, self.allow_missing_keys)
         trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle

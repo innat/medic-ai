@@ -3,7 +3,7 @@ import pytest
 import keras
 from keras import ops
 
-from medicai.transforms import RandomShear, TensorBundle
+from medicai.transforms import RandomAffine, RandomShear, TensorBundle
 
 
 def as_tensor(array, dtype=None):
@@ -74,6 +74,25 @@ def test_random_shear_rejects_wrong_rank_interpolation_and_unknown_axis():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("transform", [RandomShear, RandomAffine])
+def test_shear_rejects_fixed_singular_2d_matrix(transform):
+    kwargs = {
+        "keys": ["image"],
+        "factor": {"xy": (1.0, 1.0), "yx": (1.0, 1.0)},
+        "input_layout": "HWC",
+    }
+    if transform is RandomAffine:
+        kwargs = {
+            "keys": ["image"],
+            "shear_factor": {"xy": (1.0, 1.0), "yx": (1.0, 1.0)},
+            "input_layout": "HWC",
+        }
+
+    with pytest.raises(ValueError, match="singular"):
+        transform(**kwargs)
+
+
+@pytest.mark.unit
 def test_random_shear_allows_missing_keys():
     transform = RandomShear(
         keys=["image", "label"],
@@ -96,6 +115,8 @@ def test_random_shear_uses_plane_path_for_xy_only_3d_shear(monkeypatch):
     transform = RandomShear(
         keys=["image", "label"],
         factor={"xy": 0.1, "yx": 0.1},
+        fill_mode={"image": "constant", "label": "constant"},
+        fill_value={"image": 0.0, "label": 1.0},
         prob=1.0,
         input_layout="BDHWC",
         seed=7,

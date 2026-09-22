@@ -5,7 +5,12 @@ from typing import Any, Sequence
 import keras
 from keras import ops
 
-from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
+from ..base import (
+    RandomTransform,
+    _normalize_keys,
+    _pop_last_transform_trace,
+    _validate_last_transform_keys,
+)
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -20,6 +25,7 @@ from .affine import (
     resolve_axis_ranges,
     resolve_per_key,
     sample_affine_volumes,
+    validate_fixed_shear_ranges,
 )
 
 _DEFAULT_PROB = 0.5
@@ -285,6 +291,7 @@ class RandomShear(RandomTransform):
         self.ranges = resolve_axis_ranges(
             factor, axes, "Shear factor", lambda value, _: _factor_range(value)
         )
+        validate_fixed_shear_ranges(self.ranges)
         self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
@@ -420,6 +427,7 @@ class RandomShear(RandomTransform):
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        _validate_last_transform_keys(bundle, type(self).__name__, self.allow_missing_keys)
         trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle

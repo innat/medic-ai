@@ -109,6 +109,8 @@ def test_random_scale_uses_plane_path_for_xy_only_3d_scale(monkeypatch):
     transform = RandomScale(
         keys=["image", "label"],
         factor={"x": 0.1, "y": 0.1},
+        fill_mode={"image": "constant", "label": "constant"},
+        fill_value={"image": 0.0, "label": 1.0},
         prob=1.0,
         input_layout="BDHWC",
         seed=7,

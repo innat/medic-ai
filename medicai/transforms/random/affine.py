@@ -67,6 +67,30 @@ def normalize_resampling_options(
     return interpolation, fill_mode
 
 
+def validate_fixed_shear_ranges(ranges):
+    """Reject fixed shear coefficients whose linear matrix is singular."""
+    if not ranges or any(low != high for low, high in ranges.values()):
+        return
+
+    values = {name: low for name, (low, _) in ranges.items()}
+    if set(values) == {"xy", "yx"}:
+        determinant = 1.0 - values["xy"] * values["yx"]
+    elif set(values) == {"zy", "zx", "yz", "yx", "xz", "xy"}:
+        determinant = (
+            1.0
+            - values["zy"] * values["yz"]
+            - values["zx"] * values["xz"]
+            - values["yx"] * values["xy"]
+            + values["zy"] * values["yx"] * values["xz"]
+            + values["zx"] * values["yz"] * values["xy"]
+        )
+    else:
+        return
+
+    if abs(determinant) < 1e-7:
+        raise ValueError("Fixed shear factors produce a singular affine matrix.")
+
+
 def compose_affine_matrices(*matrices: Any) -> Any:
     """Compose homogeneous affine matrices from left to right.
 

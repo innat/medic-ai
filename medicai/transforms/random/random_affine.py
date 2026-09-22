@@ -5,7 +5,12 @@ from typing import Sequence
 import keras
 from keras import ops
 
-from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
+from ..base import (
+    RandomTransform,
+    _normalize_keys,
+    _pop_last_transform_trace,
+    _validate_last_transform_keys,
+)
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -23,6 +28,7 @@ from .affine import (
     resolve_per_key,
     resolve_axis_ranges,
     sample_affine_volumes,
+    validate_fixed_shear_ranges,
 )
 
 _INTERPOLATION_MODES = {
@@ -295,9 +301,9 @@ class RandomAffine(RandomTransform):
 
             transform = RandomAffine(
                 keys=["image", "label"],
-                rotation_factor={"z": 0.05},       # approximately +/-3 degrees
-                scale_factor={"z": 0.03},           # approximately +/-3 percent
-                translation_factor={"z": 0.03},    # approximately +/-3 percent
+                rotation_factor={"z": 0.05},
+                scale_factor={"z": 0.03},
+                translation_factor={"z": 0.03},
                 shear_factor={"zy": 0.03},
                 interpolation={"image": "trilinear", "label": "nearest"},
                 fill_mode={"image": "constant", "label": "constant"},
@@ -379,6 +385,7 @@ class RandomAffine(RandomTransform):
             translation_factor, axes, "translation_factor", _range
         )
         self.shear_ranges = resolve_axis_ranges(shear_factor, shear_axes, "shear_factor", _range)
+        validate_fixed_shear_ranges(self.shear_ranges)
         self.interpolation = resolve_per_key(
             self.keys,
             interpolation,
@@ -416,6 +423,7 @@ class RandomAffine(RandomTransform):
         shear = _sample(self, self.shear_ranges, batch_size, "float32", gate)
         applied = ops.any(gate > 0)
         rank = self.layout_info.spatial_rank
+
         if rank == 2:
             linear_rotation = _rotation_2d(rotation["z"])
             linear_shear = _shear_2d(ops.stack([shear["xy"], shear["yx"]], -1))
@@ -463,6 +471,7 @@ class RandomAffine(RandomTransform):
         batched, added_batch = ensure_batch_axis_for_layout(
             tensor, input_layout=self.input_layout, allowed_spatial_ranks=(2, 3)
         )
+
         if self.layout_info.spatial_rank == 2:
             output = ops.image.affine_transform(
                 ops.cast(batched, "float32"),
@@ -527,6 +536,7 @@ class RandomAffine(RandomTransform):
             )
         if not present:
             return bundle
+
         reference = bundle.data[present[0]]
         validate_tensor_matches_layout(
             reference, self.input_layout, transform_name=type(self).__name__
@@ -537,8 +547,10 @@ class RandomAffine(RandomTransform):
             allowed_spatial_ranks=(2, 3),
         )
         forward, inverse, applied = self._matrices(ops.shape(batched)[1:-1], ops.shape(batched)[0])
+
         for key in present:
             bundle.data[key] = self._apply_tensor(bundle.data[key], key, inverse)
+
         self.record_random_transform(
             bundle,
             params={
@@ -553,9 +565,11 @@ class RandomAffine(RandomTransform):
         return bundle
 
     def inverse(self, bundle: TensorBundle) -> TensorBundle:
+        _validate_last_transform_keys(bundle, type(self).__name__, self.allow_missing_keys)
         trace = _pop_last_transform_trace(bundle, type(self).__name__)
         if trace is None:
             return bundle
+
         for key in trace["params"]["keys"]:
             if key in bundle.data:
                 bundle.data[key] = self._apply_tensor(
