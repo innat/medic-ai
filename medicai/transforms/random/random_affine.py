@@ -173,12 +173,6 @@ class RandomAffine(RandomTransform):
     preserved; use nearest interpolation for discrete labels. Integer images
     with linear interpolation may lose fractional values when cast back.
 
-    .. warning::
-
-        Extreme scale or shear ranges can produce poorly conditioned affine
-        matrices, causing severe artifacts or unstable inverse sampling. Use
-        moderate ranges, especially when combining scale and shear.
-
     .. note::
 
         On the TensorFlow backend, 2D affine resampling uses the kernel backed
@@ -222,6 +216,11 @@ class RandomAffine(RandomTransform):
         seed: Optional integer or Keras seed generator.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
+    .. warning::
+
+            Extreme scale or shear ranges can produce poorly conditioned affine
+            matrices, causing severe artifacts or unstable inverse sampling. Use
+            moderate ranges, especially when combining scale and shear.
 
     Example:
 
