@@ -3,6 +3,7 @@ import pytest
 import keras
 from keras import ops
 
+from medicai.transforms.random import random_affine as random_affine_module
 from medicai.transforms import RandomAffine, TensorBundle
 
 
@@ -472,3 +473,73 @@ def test_random_affine_general_3d_path_does_not_use_vectorized_map(monkeypatch):
     output = transform(TensorBundle({"image": image}))
 
     assert tuple(ops.shape(output["image"])) == (2, 3, 5, 6, 1)
+
+
+@pytest.mark.unit
+def test_random_affine_composes_components_in_documented_order_and_resamples_once(
+    monkeypatch,
+):
+    spatial_shape = (3, 4, 5)
+    image = as_tensor(np.zeros((*spatial_shape, 1), dtype=np.float32))
+    transform = RandomAffine(
+        keys=["image"],
+        rotation_factor={"z": 0.2, "y": 0.1, "x": 0.15},
+        scale_factor={"z": 0.1, "y": 0.1, "x": 0.2},
+        translation_factor={"z": 0.02, "y": 0.03, "x": 0.04},
+        shear_factor={"zy": 0.05, "zx": 0.06, "yz": 0.07, "yx": 0.08, "xz": 0.09, "xy": 0.1},
+        interpolation="trilinear",
+        input_layout="DHWC",
+        prob=1.0,
+    )
+
+    samples = [
+        {"z": [0.2], "y": [0.1], "x": [-0.15]},
+        {"z": [0.1], "y": [-0.1], "x": [0.2]},
+        {"z": [0.02], "y": [-0.03], "x": [0.04]},
+        {"zy": [0.05], "zx": [0.06], "yz": [-0.07], "yx": [0.08], "xz": [0.09], "xy": [-0.1]},
+    ]
+    sample_index = [0]
+
+    def fixed_sample(*args, **kwargs):
+        sample = samples[sample_index[0] % len(samples)]
+        sample_index[0] += 1
+        return {key: as_tensor(value, dtype="float32") for key, value in sample.items()}
+
+    monkeypatch.setattr(random_affine_module, "_sample", fixed_sample)
+    monkeypatch.setattr(
+        transform,
+        "random_uniform",
+        lambda **kwargs: as_tensor(np.ones(kwargs["shape"], dtype=np.float32)),
+    )
+
+    forward, _, _ = transform._matrices(spatial_shape, 1)
+    identity = ops.broadcast_to(ops.eye(3, dtype="float32"), (1, 3, 3))
+    rotation = random_affine_module._rotation_3d(as_tensor([[0.2, 0.1, -0.15]], dtype="float32"))
+    shear = random_affine_module._shear_3d(
+        as_tensor([[0.05, 0.06, -0.07, 0.08, 0.09, -0.1]], dtype="float32")
+    )
+    scale = ops.eye(3, dtype="float32") * ops.reshape(
+        as_tensor([[1.1, 0.9, 1.2]], dtype="float32"), (-1, 3, 1)
+    )
+    translation = as_tensor([[0.02 * 3, -0.03 * 4, 0.04 * 5]], dtype="float32")
+    expected = random_affine_module.compose_affine_matrices(
+        random_affine_module.centered_affine_matrix(identity, spatial_shape, translation),
+        random_affine_module.centered_affine_matrix(rotation, spatial_shape),
+        random_affine_module.centered_affine_matrix(shear, spatial_shape),
+        random_affine_module.centered_affine_matrix(scale, spatial_shape),
+    )
+    np.testing.assert_allclose(
+        ops.convert_to_numpy(forward), ops.convert_to_numpy(expected), atol=1e-6
+    )
+
+    calls = []
+
+    def capture_sampler(volumes, matrix, interpolation, fill_mode, fill_value):
+        calls.append((matrix, interpolation, fill_mode, fill_value))
+        return volumes
+
+    monkeypatch.setattr(random_affine_module, "sample_affine_volumes", capture_sampler)
+    output = transform(TensorBundle({"image": image}))
+
+    assert len(calls) == 1
+    assert tuple(ops.shape(output["image"])) == (1, *spatial_shape, 1)

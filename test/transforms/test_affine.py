@@ -10,6 +10,7 @@ from medicai.transforms.random.affine import (
     invert_affine_matrix,
     normalize_resampling_options,
     resample_affine_keys,
+    _sample_batched_coordinates,
 )
 
 
@@ -174,3 +175,75 @@ def test_normalize_resampling_options_rejects_invalid_values(option, value, mess
             interpolation_modes={2: {"bilinear", "nearest"}},
             fill_modes={"constant", "reflect"},
         )
+
+
+def _numpy_boundary_reference(volume, coordinates, fill_mode, fill_value):
+    result = np.empty(coordinates.shape[:-1] + (volume.shape[-1],), dtype=np.float32)
+    spatial_shape = volume.shape[1:-1]
+    for batch in range(volume.shape[0]):
+        for output_index in np.ndindex(coordinates.shape[1:-1]):
+            coordinate = coordinates[(batch,) + output_index]
+            indices = []
+            valid = True
+            for axis, size in enumerate(spatial_shape):
+                value = coordinate[axis]
+                if fill_mode == "constant":
+                    valid &= 0 <= value <= size - 1
+                    index = np.clip(value, 0, size - 1)
+                elif fill_mode == "wrap":
+                    index = np.mod(value, size)
+                elif fill_mode == "reflect":
+                    period = 2 * size
+                    reflected = np.mod(value, period)
+                    index = reflected if reflected < size else period - 1 - reflected
+                elif fill_mode == "mirror":
+                    if size == 1:
+                        index = 0
+                    else:
+                        period = 2 * (size - 1)
+                        reflected = np.mod(abs(value), period)
+                        index = reflected if reflected <= size - 1 else period - reflected
+                else:
+                    index = np.clip(value, 0, size - 1)
+                indices.append(int(np.rint(index)))
+            result[(batch,) + output_index] = (
+                fill_value if fill_mode == "constant" and not valid else volume[(batch, *indices)]
+            )
+    return result
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("spatial_shape", "coordinates"),
+    [
+        ((3, 4), np.array([[[[-1, -1], [-1, 1]], [[1, 4], [3, 2]]]], dtype=np.float32)),
+        (
+            (2, 3, 4),
+            np.array(
+                [
+                    [
+                        [[[-1, -1, -1], [-1, 1, 2]], [[0, 3, 1], [2, 1, 4]]],
+                        [[[2, 0, 0], [1, -1, 2]], [[0, 1, 1], [1, 2, 2]]],
+                    ]
+                ],
+                dtype=np.float32,
+            ),
+        ),
+    ],
+    ids=["2d", "3d"],
+)
+@pytest.mark.parametrize("fill_mode", ["nearest", "constant", "reflect", "mirror", "wrap"])
+def test_batched_affine_sampler_boundary_modes_match_numpy(spatial_shape, coordinates, fill_mode):
+    volume = np.arange(np.prod((1, *spatial_shape, 1)), dtype=np.float32).reshape(
+        (1, *spatial_shape, 1)
+    )
+    fill_value = -7.5
+    actual = _sample_batched_coordinates(
+        as_tensor(volume),
+        as_tensor(coordinates),
+        interpolation="nearest",
+        fill_mode=fill_mode,
+        fill_value=fill_value,
+    )
+    expected = _numpy_boundary_reference(volume, coordinates, fill_mode, fill_value)
+    np.testing.assert_allclose(ops.convert_to_numpy(actual), expected)

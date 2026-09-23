@@ -173,6 +173,12 @@ class RandomAffine(RandomTransform):
     preserved; use nearest interpolation for discrete labels. Integer images
     with linear interpolation may lose fractional values when cast back.
 
+    .. warning::
+
+        Extreme scale or shear ranges can produce poorly conditioned affine
+        matrices, causing severe artifacts or unstable inverse sampling. Use
+        moderate ranges, especially when combining scale and shear.
+
     .. note::
 
         On the TensorFlow backend, 2D affine resampling uses the kernel backed
@@ -181,8 +187,10 @@ class RandomAffine(RandomTransform):
         can use the same folded 2D H-W path and has the same limitation. A
         full 3D affine configuration uses the general coordinate-sampling
         path instead. Eager and ``tf.data`` graph execution remain supported.
-        However, for Jax and Torch backends, this limitation does not apply;
-        they are XLA-compatible.
+        Compiled support depends on the backend, spatial rank, interpolation,
+        and selected affine path. JAX compilation uses XLA, while Torch
+        compilation uses ``torch.compile`` with Inductor; neither should be
+        assumed to support every configuration without benchmarking.
 
     Args:
         keys: Tensor keys to transform together.

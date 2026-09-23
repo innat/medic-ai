@@ -98,6 +98,11 @@ class RandomScale(RandomTransform):
     for discrete labels. Integer images with linear interpolation may lose
     fractional values when cast back.
 
+    .. warning::
+
+        Ranges that allow scales very close to zero can make inverse affine
+        sampling numerically unstable. Use moderate positive scale ranges.
+
     .. note::
 
         On the TensorFlow backend, 2D scaling uses the affine image kernel
