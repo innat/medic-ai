@@ -542,4 +542,4 @@ def test_random_affine_composes_components_in_documented_order_and_resamples_onc
     output = transform(TensorBundle({"image": image}))
 
     assert len(calls) == 1
-    assert tuple(ops.shape(output["image"])) == (1, *spatial_shape, 1)
+    assert tuple(ops.shape(output["image"])) == (*spatial_shape, 1)
