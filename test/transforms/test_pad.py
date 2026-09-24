@@ -181,3 +181,30 @@ def test_pad_rejects_missing_keys_by_default():
 
     with pytest.raises(KeyError, match="label"):
         transform({"image": image})
+
+
+@pytest.mark.unit
+def test_pad_rejects_reflect_padding_that_reaches_input_size():
+    image = as_tensor(np.ones((2, 3, 1), dtype=np.float32))
+
+    with pytest.raises(ValueError, match="reflect.*input size"):
+        Pad(
+            keys=["image"],
+            padding=((2, 0), (0, 0)),
+            fill_mode="reflect",
+            input_layout="HWC",
+        )({"image": image})
+
+
+@pytest.mark.unit
+def test_pad_if_needed_rejects_mismatched_key_spatial_shapes():
+    image = as_tensor(np.ones((5, 6, 1), dtype=np.float32))
+    label = as_tensor(np.ones((5, 7, 1), dtype=np.int32))
+    transform = PadIfNeeded(
+        keys=["image", "label"],
+        min_target_shape=(8, 8),
+        input_layout="HWC",
+    )
+
+    with pytest.raises(ValueError, match="share a spatial shape"):
+        transform({"image": image, "label": label})

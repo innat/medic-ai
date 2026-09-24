@@ -190,7 +190,9 @@ class Pad(KeyedTransform, InvertibleTransform):
         padding: Any | None = None,
     ) -> Any:
         mode = self.fill_mode[key]
-        paddings = self._full_paddings(self.padding if padding is None else padding)
+        padding = self.padding if padding is None else padding
+        self._validate_static_padding_limits(tensor, mode, padding)
+        paddings = self._full_paddings(padding)
         if mode == "constant":
             return ops.pad(
                 tensor,
@@ -229,6 +231,28 @@ class Pad(KeyedTransform, InvertibleTransform):
             )
 
         return ops.slice(tensor, start_indices=starts, shape=size)
+
+    def _validate_static_padding_limits(self, tensor: Any, mode: str, padding: Any) -> None:
+        if mode not in {"reflect", "symmetric"}:
+            return
+
+        spatial_shape = tuple(tensor.shape[axis] for axis in self.layout_info.spatial_axes)
+        if any(dimension is None for dimension in spatial_shape):
+            return
+        if not isinstance(padding, (tuple, list)):
+            return
+        padding_values = tuple(tuple(int(side) for side in pair) for pair in padding)
+
+        for axis, (dimension, (front, back)) in enumerate(
+            zip(spatial_shape, padding_values, strict=True)
+        ):
+            limit = int(dimension) - (1 if mode == "reflect" else 0)
+            if front > limit or back > limit:
+                relation = "less than" if mode == "reflect" else "less than or equal to"
+                raise ValueError(
+                    f"`{mode}` padding on spatial axis {axis} must be {relation} "
+                    f"the input size ({dimension}); received ({front}, {back})."
+                )
 
     def _full_paddings(self, padding: Any) -> Any:
         spatial_padding = ops.convert_to_tensor(padding, dtype="int32")
@@ -395,8 +419,10 @@ class PadIfNeeded(Pad):
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         original_shapes: dict[str, Any] = {}
         padding: Any | None = None
+        reference_spatial_shape: tuple[int | None, ...] | None = None
 
         def apply_required_padding(tensor: Any, key: str) -> Any:
+            nonlocal reference_spatial_shape
             nonlocal padding
             validate_tensor_matches_layout(
                 tensor,
@@ -407,8 +433,23 @@ class PadIfNeeded(Pad):
                 tensor,
                 input_layout=self.input_layout,
             )
+            static_spatial_shape = tuple(
+                tensor.shape[axis] for axis in self.layout_info.spatial_axes
+            )
             if padding is None:
                 padding = self._compute_padding(tensor)
+                reference_spatial_shape = static_spatial_shape
+            elif (
+                reference_spatial_shape is not None
+                and None not in static_spatial_shape
+                and None not in reference_spatial_shape
+                and static_spatial_shape != reference_spatial_shape
+            ):
+                raise ValueError(
+                    f"{type(self).__name__} requires all keys to share a spatial shape; "
+                    f"got {static_spatial_shape} for '{key}' and "
+                    f"{reference_spatial_shape} for the first key."
+                )
             return self._pad_tensor(tensor, key, padding)
 
         present_keys = self.apply_to_present_keys(bundle, apply_required_padding)
