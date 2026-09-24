@@ -5,7 +5,7 @@ batch inputs, probability gates and rotation angles are sampled independently
 for every item, while all selected keys share the same per-item parameters.
 Two 3D paths are used: single-axis rotations fold the batch and untouched
 spatial axis into one 2D affine-transform batch, while multi-axis rotations
-build one 3x3 matrix per item and use vectorized coordinate sampling for
+build one 3x3 matrix per item and use broadcasted coordinate sampling for
 genuine 3D interpolation. The 2D path uses Keras' affine image operation.
 All paths preserve channel-last layouts and record the sampled geometry for
 inverse transformation.
@@ -17,6 +17,7 @@ import keras
 from keras import ops
 
 from ..base import RandomTransform, _normalize_keys, _pop_last_transform_trace
+from .affine import compose_affine_matrices, sample_affine_volumes
 from ..tensor_bundle import TensorBundle
 from ..utils import (
     ensure_batch_axis_for_layout,
@@ -26,7 +27,7 @@ from ..utils import (
     validate_tensor_matches_layout,
 )
 
-_AXES = ("D", "H", "W")
+_AXES = ("z", "y", "x")
 _FILL_MODES = ("constant", "nearest", "wrap", "mirror", "reflect")
 _DEFAULT_FACTOR = 0.1
 _DEFAULT_PROB = 0.8
@@ -36,9 +37,13 @@ _DEFAULT_INTERPOLATION = None
 _DEFAULT_FILL_MODE = "constant"
 _DEFAULT_FILL_VALUE = None
 _DEFAULT_IMAGE_INTERPOLATION = "bilinear"
+_DEFAULT_3D_IMAGE_INTERPOLATION = "trilinear"
 _DEFAULT_LABEL_INTERPOLATION = "nearest"
 _DEFAULT_FILL_VALUE_RESOLVED = 0.0
-_INTERPOLATION_MODES = {"bilinear", "nearest"}
+_INTERPOLATION_MODES = {
+    2: {"bilinear", "nearest"},
+    3: {"trilinear", "nearest"},
+}
 
 
 def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
@@ -51,16 +56,20 @@ def _as_range(value: float | Sequence[float]) -> tuple[float, float]:
     return -float(value), float(value)
 
 
-def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any]):
+def _resolve_axis_ranges(factor: float | Sequence[float] | dict[str, Any], spatial_rank: int):
     if isinstance(factor, dict):
         ranges = {}
         for axis, value in factor.items():
-            axis = str(axis).upper()
+            axis = str(axis).lower()
             if axis not in _AXES:
                 raise ValueError(f"Rotation axes must be drawn from {_AXES}. Received {axis!r}.")
             ranges[axis] = _as_range(value)
         return ranges
-    return {"D": _as_range(factor)}
+    value_range = _as_range(factor)
+    if spatial_rank == 2:
+        # A 2D image rotates in the H-W plane, represented by the z axis.
+        return {"z": value_range}
+    return {axis: value_range for axis in _AXES}
 
 
 def _apply_anisotropy_policy(ranges, spacing, threshold):
@@ -142,11 +151,11 @@ def rotate_2d(
 
 def _plane_dims(shape, axis):
     _, depth, height, width, _ = shape
-    if axis == "D":
+    if axis == "z":
         return (height, width), depth
-    if axis == "H":
+    if axis == "y":
         return (depth, width), height
-    if axis == "W":
+    if axis == "x":
         return (depth, height), width
     raise ValueError(axis)
 
@@ -171,9 +180,9 @@ def rotate_single_axis(
         raise ValueError("RandomRotate requires a statically known channel dimension.")
     (dim0, dim1), folded = _plane_dims((batch, depth, height, width, channels), axis)
 
-    if axis == "D":
+    if axis == "z":
         transposed = volumes
-    elif axis == "H":
+    elif axis == "y":
         transposed = ops.transpose(volumes, (0, 2, 1, 3, 4))
     else:
         transposed = ops.transpose(volumes, (0, 3, 1, 2, 4))
@@ -181,18 +190,23 @@ def rotate_single_axis(
     merged = ops.reshape(transposed, (-1, dim0, dim1, channels))
     repeated_angles = ops.repeat(angles, folded, axis=0)
     matrices = _rotation_matrix_2d(repeated_angles, dim0, dim1)
+
+    # A single-axis 3D rotation is a stack of 2D plane rotations. The
+    # unchanged axis does not require interpolation, so 3D trilinear
+    # interpolation is exactly bilinear interpolation on each plane.
+    kernel_interpolation = "bilinear" if interpolation.lower() == "trilinear" else interpolation
     rotated = ops.image.affine_transform(
         merged,
         matrices,
-        interpolation=interpolation.lower(),
+        interpolation=kernel_interpolation.lower(),
         fill_mode=fill_mode,
         fill_value=fill_value,
     )
     rotated = ops.reshape(rotated, (-1, folded, dim0, dim1, channels))
 
-    if axis == "H":
+    if axis == "y":
         rotated = ops.transpose(rotated, (0, 2, 1, 3, 4))
-    elif axis == "W":
+    elif axis == "x":
         rotated = ops.transpose(rotated, (0, 2, 3, 1, 4))
     return ops.cast(rotated, original_dtype)
 
@@ -227,7 +241,7 @@ def _rotation_matrix_3d(angle_d, angle_h, angle_w):
         ],
         axis=-2,
     )
-    return rotation_w @ rotation_h @ rotation_d
+    return compose_affine_matrices(rotation_w, rotation_h, rotation_d)
 
 
 def _spacing_scale_matrix(spacing, dtype):
@@ -236,62 +250,13 @@ def _spacing_scale_matrix(spacing, dtype):
     return ops.outer(1.0 / spacing, spacing)
 
 
-def _rotate_one_volume(volume, inverse_matrix, interpolation, fill_mode, fill_value):
-    """Sample one volume using an output-to-input 3D coordinate matrix.
-
-    ``interpolation="bilinear"`` is the public Keras image vocabulary; with
-    three coordinate axes this corresponds to order-1, commonly called
-    trilinear interpolation. ``nearest`` uses order 0 for discrete labels.
-    """
-    depth, height, width, channels = volume.shape
-    if channels is None:
-        raise ValueError("RandomRotate requires a statically known channel dimension.")
-    z, y, x = ops.meshgrid(
-        ops.arange(depth),
-        ops.arange(height),
-        ops.arange(width),
-        indexing="ij",
-    )
-    coordinates = ops.stack(
-        [
-            ops.cast(z, inverse_matrix.dtype),
-            ops.cast(y, inverse_matrix.dtype),
-            ops.cast(x, inverse_matrix.dtype),
-        ],
-        axis=0,
-    )
-    center = (
-        ops.cast(
-            ops.convert_to_tensor([depth - 1, height - 1, width - 1]),
-            inverse_matrix.dtype,
-        )
-        / 2.0
-    )
-    centered = coordinates - ops.reshape(center, (3, 1, 1, 1))
-    input_coordinates = ops.einsum("ij,jdhw->idhw", inverse_matrix, centered)
-    input_coordinates = input_coordinates + ops.reshape(center, (3, 1, 1, 1))
-    channels_out = []
-    order = 1 if interpolation.lower() == "bilinear" else 0
-    for channel in range(channels):
-        channels_out.append(
-            ops.image.map_coordinates(
-                volume[..., channel],
-                input_coordinates,
-                order=order,
-                fill_mode=fill_mode,
-                fill_value=fill_value,
-            )
-        )
-    return ops.stack(channels_out, axis=-1)
-
-
 def rotate_multi_axis(
     volumes,
     angle_d,
     angle_h,
     angle_w,
     spacing=_DEFAULT_SPACING,
-    interpolation=_DEFAULT_IMAGE_INTERPOLATION,
+    interpolation=_DEFAULT_3D_IMAGE_INTERPOLATION,
     fill_mode=_DEFAULT_FILL_MODE,
     fill_value=_DEFAULT_FILL_VALUE_RESOLVED,
     precomputed_matrix=None,
@@ -313,24 +278,19 @@ def rotate_multi_axis(
         scale_matrix = _spacing_scale_matrix(spacing, inverse_matrix.dtype)
         inverse_matrix = inverse_matrix * scale_matrix[None, :, :]
 
-    def rotate_one(args):
-        volume, matrix_one = args
-        return _rotate_one_volume(volume, matrix_one, interpolation, fill_mode, fill_value)
-
-    rotated = ops.vectorized_map(rotate_one, (volumes, inverse_matrix))
+    rotated = sample_affine_volumes(volumes, inverse_matrix, interpolation, fill_mode, fill_value)
     return ops.cast(rotated, original_dtype)
 
 
 class RandomRotate(RandomTransform):
     """Apply random 2D or 3D rotations to channel-last sample or batch tensors.
 
-    The transform accepts ``HWC``, ``DHWC``, ``BHWC``, and ``BDHWC`` layouts.
-    A scalar or two-value ``factor`` rotates around the depth axis (the H-W
-    plane). A dictionary can specify independent ranges for ``D``, ``H``, and
-    ``W`` axes. In 2D, only the ``D`` rotation axis is valid.
+    Rotation changes the orientation of image structures around the spatial
+    center. The transform supports channel-last 2D images and 3D volumes and
+    uses a rank-aware resampling path for each case.
 
-    ``prob`` is sampled independently for each batch item. A skipped item gets
-    zero angles and is therefore an exact identity. Selected keys share the
+    Rotation probability and angles are sampled independently for each batch
+    item. A skipped item is an exact identity, while selected keys share the
     same sampled angles so images, masks, and labels remain aligned.
 
     The forward operation is a resampling transform. ``inverse()`` reuses the
@@ -346,36 +306,47 @@ class RandomRotate(RandomTransform):
 
     .. note::
 
-        On the TensorFlow backend, the affine image kernel used by
-        ``RandomRotate`` is not currently XLA-compatible. Regular eager and
-        ``tf.data`` graph execution remain supported, including GPU execution
-        when TensorFlow places the kernel there. When using RandomRotate within
-        a compiled model graph, set jit_compile=False to disable XLA compilation.
+        On the TensorFlow backend, the 2D affine image kernel used by
+        ``RandomRotate`` calls ``tf.raw_ops.ImageProjectiveTransformV3``,
+        which is not currently XLA-compatible. Regular eager and ``tf.data``
+        graph execution remain supported, including GPU execution when
+        TensorFlow places the kernel there. For 3D inputs, a rotation that
+        selects only one axis uses the same folded 2D kernel and therefore has
+        the same TensorFlow XLA limitation. A scalar factor, or a mapping that
+        provides all ``z``, ``y``, and ``x`` axes, uses the general 3D
+        coordinate-sampling path instead and does not hit this specific
+        ``ImageProjectiveTransformV3`` limitation. However, for Jax and Torch
+        backends, this limitation does not apply; they are XLA-compatible.
 
     Args:
         keys: Tensor keys to rotate together.
         factor: A non-negative maximum angle, a ``(min, max)`` range, or a
-            mapping from ``D``, ``H``, and ``W`` to either form. Angles are in
-            radians.
+            mapping from ``z``, ``y``, and ``x`` to either form. A scalar or
+            range applies to the ``z`` rotation axis for 2D inputs and to all
+            ``z``, ``y``, and ``x`` axes for 3D inputs. These public axes map
+            to channel-last tensor axes ``[D]HWC``: ``z`` to ``D``, ``y`` to
+            ``H``, and ``x`` to ``W``. A mapping can select a subset of axes;
+            omitted axes are not rotated. Angles are in radians.
         prob: Per-sample probability of applying the rotation.
         spacing: Optional 3D voxel spacing used for physical-space correction.
         anisotropy_threshold: If the largest spacing divided by the smallest
             spacing exceeds this value, restrict rotation to the coarsest
             physical axis. This applies only when ``spacing`` is provided.
         interpolation: One mode, one mode per key, or a key-to-mode mapping.
-            Supported modes are ``"bilinear"`` and ``"nearest"``.
+            Supported modes are ``"bilinear"`` or ``"nearest"`` for 2D and
+            ``"trilinear"`` or ``"nearest"`` for 3D.
         fill_mode: One Keras image fill mode: ``"constant"``, ``"nearest"`,
             ``"wrap"``, ``"mirror"``, or ``"reflect"``.
         fill_value: One value, one value per key, or a key-to-value mapping.
-        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``.
+        input_layout: One of ``HWC``, ``DHWC``, ``BHWC``, or ``BDHWC``. The
+            optional batch and depth dimensions follow ``B[D]HWC``.
         seed: Optional integer or ``keras.random.SeedGenerator``.
         allow_missing_keys: If ``True``, missing requested keys are skipped.
 
     Example:
 
-        TensorFlow backend:
-
-        .. code-block:: python
+        A factor of ``0.1`` means that the 2D image is rotated by a random
+        angle between -0.1 and 0.1 radians, approximately +/-5.7 degrees::
 
             import os
             os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -393,9 +364,9 @@ class RandomRotate(RandomTransform):
             result = transform({"image": image})
             print(result["image"].shape)
 
-        JAX backend:
-
-        .. code-block:: python
+        The mapping uses explicit ``(min, max)`` ranges to apply independent
+        rotations between -0.1 and +0.05 radians around ``y`` and between
+        -0.05 and +0.1 radians around ``x``::
 
             import os
             os.environ["KERAS_BACKEND"] = "jax"
@@ -405,7 +376,7 @@ class RandomRotate(RandomTransform):
 
             transform = RandomRotate(
                 keys=["image"],
-                factor={"H": 0.1, "W": 0.1},
+                factor={"y": (-0.1, 0.05), "x": (-0.05, 0.1)},
                 prob=0.5,
                 input_layout="DHWC",
             )
@@ -415,9 +386,8 @@ class RandomRotate(RandomTransform):
             result = transform({"image": image})
             print(result["image"].shape)
 
-        Torch backend:
-
-        .. code-block:: python
+        For this 2D batch, the scalar factor gives every sample its own random
+        angle in the range of approximately +/-5.7 degrees::
 
             import os
             os.environ["KERAS_BACKEND"] = "torch"
@@ -462,13 +432,13 @@ class RandomRotate(RandomTransform):
         )
         self.layout_info = get_input_layout_info(self.input_layout)
         self.allow_missing_keys = allow_missing_keys
-        self.ranges = _resolve_axis_ranges(factor)
+        self.ranges = _resolve_axis_ranges(factor, self.layout_info.spatial_rank)
 
         if any(low > high for low, high in self.ranges.values()):
             raise ValueError("Each rotation range must have lower bound <= upper bound.")
 
-        if self.layout_info.spatial_rank == 2 and set(self.ranges) != {"D"}:
-            raise ValueError("2D RandomRotate supports only the `D` rotation axis.")
+        if self.layout_info.spatial_rank == 2 and set(self.ranges) != {"z"}:
+            raise ValueError("2D RandomRotate supports only the `z` rotation axis.")
 
         if spacing is not None:
             if self.layout_info.spatial_rank != 3 or len(spacing) != 3:
@@ -491,7 +461,13 @@ class RandomRotate(RandomTransform):
             self.keys,
             interpolation,
             lambda _, index: (
-                _DEFAULT_IMAGE_INTERPOLATION if index == 0 else _DEFAULT_LABEL_INTERPOLATION
+                (
+                    _DEFAULT_IMAGE_INTERPOLATION
+                    if self.layout_info.spatial_rank == 2
+                    else _DEFAULT_3D_IMAGE_INTERPOLATION
+                )
+                if index == 0
+                else _DEFAULT_LABEL_INTERPOLATION
             ),
             "interpolation",
         )
@@ -510,7 +486,7 @@ class RandomRotate(RandomTransform):
 
         for key in self.keys:
             mode = str(self.interpolation[key]).lower()
-            if mode not in _INTERPOLATION_MODES:
+            if mode not in _INTERPOLATION_MODES[self.layout_info.spatial_rank]:
                 raise ValueError(f"Unsupported interpolation for key {key!r}.")
             fill_mode_key = str(self.fill_mode[key]).lower()
             if fill_mode_key not in _FILL_MODES:
@@ -560,7 +536,7 @@ class RandomRotate(RandomTransform):
             transform_name=type(self).__name__,
         )
         batch_size = ops.shape(batched)[0]
-        angle_d = angles.get("D")
+        angle_d = angles.get("z")
         if angle_d is None:
             angle_d = ops.zeros((batch_size,), dtype="float32")
         zero = ops.zeros_like(angle_d)
@@ -589,8 +565,8 @@ class RandomRotate(RandomTransform):
                 rotated = rotate_multi_axis(
                     batched,
                     angle_d,
-                    angles.get("H", zero),
-                    angles.get("W", zero),
+                    angles.get("y", zero),
+                    angles.get("x", zero),
                     spacing=self.spacing,
                     interpolation=self.interpolation[key],
                     fill_mode=self.fill_mode[key],
@@ -658,9 +634,9 @@ class RandomRotate(RandomTransform):
                 # Skipped batch items are represented by zero angles in the trace;
                 # rebuilding the matrix therefore preserves identity for them.
                 forward_matrix = _rotation_matrix_3d(
-                    angles.get("D", zero),
-                    angles.get("H", zero),
-                    angles.get("W", zero),
+                    angles.get("z", zero),
+                    angles.get("y", zero),
+                    angles.get("x", zero),
                 )
                 inverse_matrix = ops.transpose(forward_matrix, (0, 2, 1))
                 restored = rotate_multi_axis(
