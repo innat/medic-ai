@@ -449,7 +449,7 @@ configuration. The fastest available result in each row is shown in
 
 #### CPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **26.81** | -- | 32.79 | **8.94** | 38.20 | **2.47** |
 | BHWC | (8, 224, 224, 1) | **31.28** | -- | 60.56 | **14.58** | 47.25 | **4.70** |
@@ -467,7 +467,7 @@ configuration. The fastest available result in each row is shown in
 
 #### GPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **39.06** | -- | 16.99 | **8.94** | 86.96 | **1.34** |
 | BHWC | (8, 224, 224, 1) | **42.70** | -- | 26.18 | **9.16** | 91.29 | **2.14** |
@@ -485,7 +485,7 @@ configuration. The fastest available result in each row is shown in
 
 #### CPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **9.97** | -- | 30.47 | **5.64** | 28.19 | **2.37** |
 | BHWC | (8, 224, 224, 1) | **13.76** | -- | 58.86 | **11.36** | 34.68 | **4.64** |
@@ -503,7 +503,7 @@ configuration. The fastest available result in each row is shown in
 
 #### GPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **10.98** | -- | 12.62 | **3.16** | 45.95 | **1.36** |
 | BHWC | (8, 224, 224, 1) | **11.89** | -- | 22.00 | **4.20** | 46.80 | **1.94** |
@@ -557,7 +557,7 @@ configuration. The fastest available result in each row is shown in
 
 #### CPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **15.18** | -- | 31.06 | **6.46** | 33.02 | **2.54** |
 | BHWC | (8, 224, 224, 1) | **19.46** | -- | 60.80 | **10.11** | 42.02 | **4.83** |
@@ -575,7 +575,7 @@ configuration. The fastest available result in each row is shown in
 
 #### GPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **20.03** | -- | 13.72 | **4.52** | 62.87 | **1.31** |
 | BHWC | (8, 224, 224, 1) | **20.63** | -- | 22.94 | **5.47** | 63.09 | **2.03** |
@@ -593,7 +593,7 @@ configuration. The fastest available result in each row is shown in
 
 #### CPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **11.24** | -- | 30.72 | **6.12** | 29.42 | **2.46** |
 | BHWC | (8, 224, 224, 1) | **15.53** | -- | 60.04 | **12.64** | 37.08 | **4.65** |
@@ -611,7 +611,7 @@ configuration. The fastest available result in each row is shown in
 
 #### GPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **14.02** | -- | 12.73 | **3.76** | 48.57 | **1.31** |
 | BHWC | (8, 224, 224, 1) | **14.83** | -- | 22.21 | **4.74** | 48.35 | **1.99** |
@@ -629,7 +629,7 @@ configuration. The fastest available result in each row is shown in
 
 #### CPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **12.63** | -- | 31.02 | **6.01** | 30.38 | **2.41** |
 | BHWC | (8, 224, 224, 1) | **16.80** | -- | 59.81 | **12.29** | 38.28 | **4.42** |
@@ -647,7 +647,7 @@ configuration. The fastest available result in each row is shown in
 
 #### GPU
 
-| Layout | Shape | TensorFlow (ms) | TensorFlow-XLA (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-XLA (ms) |
+| Layout | Shape | TF (ms) | TF-xla (ms) | Torch (ms) | Torch-compiled (ms) | JAX (ms) | JAX-xla (ms) |
 | :--- | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | BHWC | (4, 224, 224, 1) | **16.02** | -- | 13.14 | **3.66** | 53.33 | **1.17** |
 | BHWC | (8, 224, 224, 1) | **16.72** | -- | 22.31 | **4.77** | 51.84 | **1.92** |
