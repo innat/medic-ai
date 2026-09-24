@@ -3,6 +3,7 @@ from __future__ import annotations
 from numbers import Number
 from typing import Any, Mapping, Sequence
 
+import keras
 from keras import ops
 
 from ..base import InvertibleTransform, KeyedTransform, _pop_last_transform_trace
@@ -200,7 +201,29 @@ class Pad(KeyedTransform, InvertibleTransform):
                 mode=mode,
                 constant_values=self.fill_value[key],
             )
+        if keras.config.backend() == "torch":
+            # Torch requires non-constant padding on trailing spatial axes.
+            return self._pad_nonconstant_channel_last(tensor, mode, padding)
         return ops.pad(tensor, paddings, mode=mode)
+
+    def _pad_nonconstant_channel_last(self, tensor: Any, mode: str, padding: Any) -> Any:
+        """Pad spatial axes through a channel-first view for Torch compatibility."""
+        spatial_axes = self.layout_info.spatial_axes
+        if self.layout_info.batched:
+            permutation = (0, self.layout_info.channel_axis, *spatial_axes)
+        else:
+            permutation = (self.layout_info.channel_axis, *spatial_axes)
+        inverse_permutation = tuple(permutation.index(axis) for axis in range(len(permutation)))
+
+        channel_first = ops.transpose(tensor, axes=permutation)
+        prefix = 2 if self.layout_info.batched else 1
+        spatial_padding = ops.convert_to_tensor(padding, dtype="int32")
+        paddings = ops.concatenate(
+            [ops.zeros((prefix, 2), dtype="int32"), spatial_padding],
+            axis=0,
+        )
+        padded = ops.pad(channel_first, paddings, mode=mode)
+        return ops.transpose(padded, axes=inverse_permutation)
 
     def _unpad_tensor(self, tensor: Any, original_shape: Any, padding: Any) -> Any:
         spatial_padding = ops.convert_to_tensor(padding, dtype="int32")
