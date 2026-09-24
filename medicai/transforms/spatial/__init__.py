@@ -1,6 +1,7 @@
 from medicai.transforms.spatial.crop_foreground import CropForeground
 from medicai.transforms.spatial.flip import Flip
 from medicai.transforms.spatial.orientation import Orientation
+from medicai.transforms.spatial.pad import Pad, PadIfNeeded
 from medicai.transforms.spatial.resize import Resize
 from medicai.transforms.spatial.rotate90 import Rotate90
 from medicai.transforms.spatial.spacing import Spacing

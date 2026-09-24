@@ -94,6 +94,10 @@ contexts:
 .. autoclass:: medicai.transforms.Orientation
 
 .. autoclass:: medicai.transforms.CropForeground
+
+.. autoclass:: medicai.transforms.Pad
+
+.. autoclass:: medicai.transforms.PadIfNeeded
 ```
 
 ## Intensity
