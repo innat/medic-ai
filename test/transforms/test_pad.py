@@ -208,3 +208,21 @@ def test_pad_if_needed_rejects_mismatched_key_spatial_shapes():
 
     with pytest.raises(ValueError, match="share a spatial shape"):
         transform({"image": image, "label": label})
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("fill_mode", ["reflect", "symmetric"])
+def test_pad_inverse_exactly_restores_nonconstant_modes(fill_mode):
+    image = as_tensor(np.arange(3 * 4, dtype=np.float32).reshape(3, 4, 1))
+    transform = Pad(
+        keys=["image"],
+        padding=((1, 1), (1, 1)),
+        fill_mode=fill_mode,
+        input_layout="HWC",
+    )
+    forward = transform({"image": image})
+    restored = transform.inverse(forward)
+
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image)
+    )
