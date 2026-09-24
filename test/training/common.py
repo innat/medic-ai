@@ -11,6 +11,7 @@ from medicai.transforms import (
     Flip,
     NormalizeIntensity,
     Orientation,
+    RandomAffine,
     RandomChoice,
     RandomCropByPosNegLabel,
     RandomCutOut,
@@ -18,7 +19,10 @@ from medicai.transforms import (
     RandomFlip,
     RandomRotate,
     RandomRotate90,
+    RandomScale,
+    RandomShear,
     RandomShiftIntensity,
+    RandomTranslate,
     RandomSpatialCrop,
     Resize,
     Rotate90,
@@ -287,6 +291,15 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
     )
     crop_size = (24, 24) if is_2d else (6, 12, 12)
     crop_start = (4, 4) if is_2d else (1, 2, 2)
+    affine_interpolation = (
+        {"image": "bilinear", "label": "nearest"}
+        if is_2d and segmentation
+        else (
+            {"image": "trilinear", "label": "nearest"}
+            if segmentation
+            else "bilinear" if is_2d else "trilinear"
+        )
+    )
     pipelines = [
         Compose(
             [
@@ -387,6 +400,57 @@ def build_transform_pipelines(input_layout: str, *, segmentation: bool):
                         offset=0.1,
                         prob=1.0,
                         seed=13,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomAffine(
+                        keys=keys,
+                        rotation_factor=0.05,
+                        scale_factor=0.05,
+                        translation_factor=0.05,
+                        shear_factor=0.03,
+                        interpolation=affine_interpolation,
+                        prob=1.0,
+                        seed=37,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomTranslate(
+                        keys=keys,
+                        factor=0.05,
+                        interpolation=affine_interpolation,
+                        prob=1.0,
+                        seed=41,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomShear(
+                        keys=keys,
+                        factor=0.03,
+                        interpolation=affine_interpolation,
+                        prob=1.0,
+                        seed=43,
+                        input_layout=input_layout,
+                    )
+                ]
+            ),
+            Compose(
+                [
+                    RandomScale(
+                        keys=keys,
+                        factor=0.05,
+                        interpolation=affine_interpolation,
+                        prob=1.0,
+                        seed=47,
                         input_layout=input_layout,
                     )
                 ]
