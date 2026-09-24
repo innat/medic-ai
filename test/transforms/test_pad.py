@@ -100,3 +100,84 @@ def test_pad_if_needed_is_noop_when_shape_is_already_valid():
     np.testing.assert_array_equal(
         ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image)
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("fill_mode", ["reflect", "symmetric"])
+def test_pad_supports_portable_nonconstant_fill_modes(fill_mode):
+    image = as_tensor(np.arange(2 * 3, dtype=np.float32).reshape(2, 3, 1))
+    result = Pad(
+        keys=["image"],
+        padding=1,
+        fill_mode=fill_mode,
+        input_layout="HWC",
+    )({"image": image})
+
+    assert tuple(ops.shape(result["image"])) == (4, 5, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result["image"])[1:3, 1:4],
+        ops.convert_to_numpy(image),
+    )
+
+
+@pytest.mark.unit
+def test_pad_supports_per_key_fill_mode_mapping():
+    image = as_tensor(np.arange(4, dtype=np.float32).reshape(2, 2, 1))
+    label = as_tensor(np.ones((2, 2, 1), dtype=np.int32))
+    result = Pad(
+        keys=["image", "label"],
+        padding=1,
+        fill_mode={"image": "reflect", "label": "constant"},
+        fill_value={"image": -1.0, "label": 5},
+        input_layout="HWC",
+    )({"image": image, "label": label})
+
+    assert tuple(ops.shape(result["image"])) == (4, 4, 1)
+    assert tuple(ops.shape(result["label"])) == (4, 4, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(result["image"])[1:3, 1:3],
+        ops.convert_to_numpy(image),
+    )
+    np.testing.assert_array_equal(ops.convert_to_numpy(result["label"])[0, :, 0], 5)
+
+
+@pytest.mark.unit
+def test_pad_if_needed_supports_3d_sample_and_inverse():
+    image = as_tensor(np.arange(3 * 5 * 7, dtype=np.float32).reshape(3, 5, 7, 1))
+    transform = PadIfNeeded(
+        keys=["image"],
+        min_target_shape=(4, 8, 8),
+        divisible_by=(2, 4, 4),
+        input_layout="DHWC",
+    )
+    forward = transform({"image": image})
+
+    assert tuple(ops.shape(forward["image"])) == (4, 8, 8, 1)
+    restored = transform.inverse(forward)
+    assert tuple(ops.shape(restored["image"])) == (3, 5, 7, 1)
+    np.testing.assert_array_equal(
+        ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image)
+    )
+
+
+@pytest.mark.unit
+def test_pad_allow_missing_keys_skips_absent_data():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = Pad(
+        keys=["image", "label"],
+        padding=1,
+        input_layout="HWC",
+        allow_missing_keys=True,
+    )
+    result = transform({"image": image})
+
+    assert tuple(ops.shape(result["image"])) == (4, 4, 1)
+
+
+@pytest.mark.unit
+def test_pad_rejects_missing_keys_by_default():
+    image = as_tensor(np.ones((2, 2, 1), dtype=np.float32))
+    transform = Pad(keys=["image", "label"], padding=1, input_layout="HWC")
+
+    with pytest.raises(KeyError, match="label"):
+        transform({"image": image})
