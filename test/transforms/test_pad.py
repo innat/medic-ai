@@ -226,3 +226,48 @@ def test_pad_inverse_exactly_restores_nonconstant_modes(fill_mode):
     np.testing.assert_array_equal(
         ops.convert_to_numpy(restored["image"]), ops.convert_to_numpy(image)
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("min_target_shape", "divisible_by", "expected_shape"),
+    [
+        ((None, 8, 8), (None, 4, 4), (3, 8, 8)),
+        ((None, None, 8), (None, None, 4), (3, 5, 8)),
+        ((None, 8, None), (None, None, 4), (3, 8, 8)),
+        ((None, 128, None), (None, 16, None), (3, 128, 7)),
+    ],
+)
+def test_pad_if_needed_supports_per_axis_none_constraints(
+    min_target_shape, divisible_by, expected_shape
+):
+    image = as_tensor(np.ones((3, 5, 7, 1), dtype=np.float32))
+    transform = PadIfNeeded(
+        keys=["image"],
+        min_target_shape=min_target_shape,
+        divisible_by=divisible_by,
+        input_layout="DHWC",
+    )
+    result = transform({"image": image})
+
+    assert tuple(ops.shape(result["image"])) == (*expected_shape, 1)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("min_target_shape", "divisible_by"),
+    [
+        ((None, 128), (None, 16, 16)),
+        ((None, -1, 128), (None, None, 16)),
+        ((None, None, None), (None, None, None)),
+        ((None, 128, None), (None, 0, None)),
+    ],
+)
+def test_pad_if_needed_rejects_invalid_per_axis_none_constraints(min_target_shape, divisible_by):
+    with pytest.raises(ValueError):
+        PadIfNeeded(
+            keys=["image"],
+            min_target_shape=min_target_shape,
+            divisible_by=divisible_by,
+            input_layout="DHWC",
+        )
