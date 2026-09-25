@@ -105,6 +105,23 @@ class Pad(KeyedTransform, InvertibleTransform):
             batch = torch.zeros((2, 16, 32, 32, 1))
             result = transform({"image": batch})
 
+        Pad only the H/W plane of a 3D sample while preserving depth:
+
+        .. code-block:: python
+
+            from keras import ops
+            from medicai.transforms import Pad
+
+            image = ops.zeros((32, 64, 64, 1))
+            label = ops.zeros((32, 64, 64, 1), dtype="int32")
+            pad = Pad(
+                keys=["image", "label"],
+                padding=((0, 0), (8, 8), (8, 8)),  # D, H, W
+                fill_value={"image": 0.0, "label": 0},
+                input_layout="DHWC",
+            )
+            result = pad({"image": image, "label": label})
+
     Returns:
         ``TensorBundle``: The padded tensors with an invertible transform trace.
 
@@ -408,6 +425,24 @@ class PadIfNeeded(Pad):
             )
             batch = torch.zeros((4, 197, 211, 3))
             result = pad({"image": batch})
+
+        Preserve depth while enforcing only H/W constraints on a 3D sample:
+
+        .. code-block:: python
+
+            from keras import ops
+            from medicai.transforms import PadIfNeeded
+
+            image = ops.zeros((96, 112, 120, 1))
+            label = ops.zeros((96, 112, 120, 1), dtype="int32")
+            pad = PadIfNeeded(
+                keys=["image", "label"],
+                min_target_shape=(None, 128, 128),
+                divisible_by=(None, 16, 16),
+                fill_value={"image": 0.0, "label": 0},
+                input_layout="DHWC",
+            )
+            result = pad({"image": image, "label": label})
 
     Returns:
         ``TensorBundle``: The padded tensors with an invertible transform trace.
