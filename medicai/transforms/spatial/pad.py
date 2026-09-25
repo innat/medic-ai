@@ -105,6 +105,23 @@ class Pad(KeyedTransform, InvertibleTransform):
             batch = torch.zeros((2, 16, 32, 32, 1))
             result = transform({"image": batch})
 
+        Pad only the H/W plane of a 3D sample while preserving depth:
+
+        .. code-block:: python
+
+            from keras import ops
+            from medicai.transforms import Pad
+
+            image = ops.zeros((32, 64, 64, 1))
+            label = ops.zeros((32, 64, 64, 1), dtype="int32")
+            pad = Pad(
+                keys=["image", "label"],
+                padding=((0, 0), (8, 8), (8, 8)),  # D, H, W
+                fill_value={"image": 0.0, "label": 0},
+                input_layout="DHWC",
+            )
+            result = pad({"image": image, "label": label})
+
     Returns:
         ``TensorBundle``: The padded tensors with an invertible transform trace.
 
@@ -337,15 +354,21 @@ class PadIfNeeded(Pad):
     Args:
         keys: Keys of tensors to pad.
         min_target_shape: Minimum spatial shape in ``(H, W)`` or ``(D, H, W)``
-            order. The output is never smaller than this shape.
+            order. The output is never smaller than this shape. Use ``None``
+            for an unconstrained axis.
         divisible_by: Optional positive divisor per spatial axis. The output
-            shape is padded to be divisible by these values.
+            shape is padded to be divisible by these values. Use ``None`` for
+            an unconstrained axis.
         fill_mode: Padding mode or a key-to-mode mapping. The portable modes
             are ``"constant"``, ``"reflect"``, and ``"symmetric"``.
         fill_value: Constant padding value or a key-to-value mapping.
         input_layout: Channel-last tensor layout: ``HWC``, ``DHWC``, ``BHWC``,
             or ``BDHWC``.
         allow_missing_keys: If ``True``, missing keys are skipped.
+
+    For example, ``min_target_shape=(None, 128, 128)`` and
+    ``divisible_by=(None, 16, 16)`` constrain only the H/W axes of a 3D
+    tensor. An unconstrained axis is preserved exactly.
 
     If the input already satisfies all constraints, the tensors are unchanged
     apart from an invertible no-op trace entry. ``inverse()`` restores the
@@ -403,6 +426,24 @@ class PadIfNeeded(Pad):
             batch = torch.zeros((4, 197, 211, 3))
             result = pad({"image": batch})
 
+        Preserve depth while enforcing only H/W constraints on a 3D sample:
+
+        .. code-block:: python
+
+            from keras import ops
+            from medicai.transforms import PadIfNeeded
+
+            image = ops.zeros((96, 112, 120, 1))
+            label = ops.zeros((96, 112, 120, 1), dtype="int32")
+            pad = PadIfNeeded(
+                keys=["image", "label"],
+                min_target_shape=(None, 128, 128),
+                divisible_by=(None, 16, 16),
+                fill_value={"image": 0.0, "label": 0},
+                input_layout="DHWC",
+            )
+            result = pad({"image": image, "label": label})
+
     Returns:
         ``TensorBundle``: The padded tensors with an invertible transform trace.
 
@@ -416,8 +457,8 @@ class PadIfNeeded(Pad):
     def __init__(
         self,
         keys: Sequence[str] | str,
-        min_target_shape: int | Sequence[int] | None = None,
-        divisible_by: int | Sequence[int] | None = None,
+        min_target_shape: int | Sequence[int | None] | None = None,
+        divisible_by: int | Sequence[int | None] | None = None,
         *,
         fill_mode: str | Mapping[str, str] = "constant",
         fill_value: Any | Mapping[str, Any] = 0,
@@ -439,6 +480,13 @@ class PadIfNeeded(Pad):
         self.min_target_shape = self._normalize_target_shape(min_target_shape, rank)
         self.divisible_by = self._normalize_divisible_by(divisible_by, rank)
 
+        if all(
+            value is None for value in (self.min_target_shape or ()) + (self.divisible_by or ())
+        ):
+            raise ValueError(
+                "At least one axis in `min_target_shape` or `divisible_by` must be constrained."
+            )
+
     def apply(self, bundle: TensorBundle) -> TensorBundle:
         original_shapes: dict[str, Any] = {}
         padding: Any | None = None
@@ -459,6 +507,7 @@ class PadIfNeeded(Pad):
             static_spatial_shape = tuple(
                 tensor.shape[axis] for axis in self.layout_info.spatial_axes
             )
+
             if padding is None:
                 padding = self._compute_padding(tensor)
                 reference_spatial_shape = static_spatial_shape
@@ -494,16 +543,21 @@ class PadIfNeeded(Pad):
             input_layout=self.input_layout,
         )
         static_shape = tuple(tensor.shape[axis] for axis in self.layout_info.spatial_axes)
+
         if all(dimension is not None for dimension in static_shape):
             current = [int(dimension) for dimension in static_shape]
             target = [
-                max(value, minimum)
-                for value, minimum in zip(current, self.min_target_shape or (0,) * len(current))
+                value if minimum is None else max(value, minimum)
+                for value, minimum in zip(
+                    current,
+                    self.min_target_shape or (None,) * len(current),
+                    strict=True,
+                )
             ]
             if self.divisible_by is not None:
                 target = [
-                    ((value + divisor - 1) // divisor) * divisor
-                    for value, divisor in zip(target, self.divisible_by)
+                    value if divisor is None else ((value + divisor - 1) // divisor) * divisor
+                    for value, divisor in zip(target, self.divisible_by, strict=True)
                 ]
             return tuple(
                 (total // 2, total - total // 2)
@@ -515,13 +569,19 @@ class PadIfNeeded(Pad):
 
         target = spatial_shape
         if self.min_target_shape is not None:
-            target = ops.maximum(
-                target,
-                ops.convert_to_tensor(self.min_target_shape, dtype="int32"),
+            minimums = ops.convert_to_tensor(
+                tuple(value if value is not None else 0 for value in self.min_target_shape),
+                dtype="int32",
             )
+            target = ops.maximum(target, minimums)
+
         if self.divisible_by is not None:
-            divisors = ops.convert_to_tensor(self.divisible_by, dtype="int32")
+            divisors = ops.convert_to_tensor(
+                tuple(value if value is not None else 1 for value in self.divisible_by),
+                dtype="int32",
+            )
             target = ((target + divisors - 1) // divisors) * divisors
+
         total = target - spatial_shape
         front = total // 2
         return ops.stack([front, total - front], axis=1)
@@ -536,10 +596,12 @@ class PadIfNeeded(Pad):
         if isinstance(value, Number):
             values = (int(value),) * rank
         else:
-            values = tuple(int(item) for item in value)
-        if len(values) != rank or any(item <= 0 for item in values):
+            values = tuple(None if item is None else int(item) for item in value)
+
+        if len(values) != rank or any(item is not None and item <= 0 for item in values):
             raise ValueError(
-                f"`min_target_shape` must contain {rank} positive values for {self.input_layout}."
+                f"`min_target_shape` must contain {rank} positive values or None for "
+                f"{self.input_layout}."
             )
         return values
 
@@ -553,9 +615,11 @@ class PadIfNeeded(Pad):
         if isinstance(value, Number):
             values = (int(value),) * rank
         else:
-            values = tuple(int(item) for item in value)
-        if len(values) != rank or any(item <= 0 for item in values):
+            values = tuple(None if item is None else int(item) for item in value)
+
+        if len(values) != rank or any(item is not None and item <= 0 for item in values):
             raise ValueError(
-                f"`divisible_by` must contain {rank} positive values for {self.input_layout}."
+                f"`divisible_by` must contain {rank} positive values or None for "
+                f"{self.input_layout}."
             )
         return values
