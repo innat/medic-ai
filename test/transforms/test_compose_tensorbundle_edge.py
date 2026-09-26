@@ -245,10 +245,7 @@ def test_compose_rejects_non_boolean_jit_compile_flag():
 
 
 @pytest.mark.unit
-def test_compose_jit_compile_runs_and_caches_on_jax():
-    if keras.config.backend() != "jax":
-        pytest.skip("JAX compiled Compose coverage requires the JAX backend.")
-
+def test_compose_jit_compile_runs_and_caches():
     image = ops.ones((4, 4, 1), dtype="float32")
     pipeline = Compose(
         [ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")],
