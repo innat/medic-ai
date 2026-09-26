@@ -1539,7 +1539,9 @@ class Compose(Transform):
 
     @property
     def invertible(self) -> bool:
-        """Whether the composed pipeline contains any invertible transforms."""
+        """Whether the composed pipeline can be inverted safely."""
+        if self.jit_compile:
+            return False
         return any(getattr(transform, "invertible", False) for transform in self.transforms)
 
     def apply(self, bundle: TensorBundle) -> TensorBundle:
@@ -1570,7 +1572,19 @@ class Compose(Transform):
         Returns:
             TensorBundle: The bundle after inverse execution of invertible
             transforms in reverse order.
+
+        Raises:
+            ValueError: If this pipeline was configured with
+                ``jit_compile=True`` because compiled forward execution does
+                not retain the Python metadata required for inversion.
         """
+        if self.jit_compile:
+            raise ValueError(
+                "`Compose(jit_compile=True)` cannot be inverted because compiled "
+                "forward execution does not retain transform traces. Use an "
+                "eager Compose pipeline when inverse execution is required."
+            )
+
         bundle = ensure_tensor_bundle(inputs, meta)
         for transform in reversed(self.transforms):
             if getattr(transform, "invertible", False):

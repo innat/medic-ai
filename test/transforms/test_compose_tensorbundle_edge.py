@@ -245,6 +245,15 @@ def test_compose_rejects_non_boolean_jit_compile_flag():
 
 
 @pytest.mark.unit
+def test_compose_jit_compile_inverse_is_not_supported():
+    pipeline = Compose([], jit_compile=True)
+
+    assert pipeline.invertible is False
+    with pytest.raises(ValueError, match="cannot be inverted.*transform traces"):
+        pipeline.inverse({"image": ops.ones((4, 4, 1), dtype="float32")})
+
+
+@pytest.mark.unit
 def test_compose_warmup_requires_jit_compile():
     pipeline = Compose([])
 
