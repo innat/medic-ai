@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+
+import keras
 from keras import ops
 
 from medicai.transforms import (
@@ -234,3 +236,54 @@ def test_random_choice_weights_can_force_selection():
 
     np.testing.assert_allclose(as_numpy(forward["image"]), 6.0)
     assert trace["params"]["selected_indices"] == [0]
+
+
+@pytest.mark.unit
+def test_compose_rejects_non_boolean_jit_compile_flag():
+    with pytest.raises(TypeError, match="jit_compile.*boolean"):
+        Compose([], jit_compile="auto")
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_inverse_is_not_supported():
+    pipeline = Compose([], jit_compile=True)
+
+    assert pipeline.invertible is False
+    with pytest.raises(ValueError, match="cannot be inverted.*transform traces"):
+        pipeline.inverse({"image": ops.ones((4, 4, 1), dtype="float32")})
+
+
+@pytest.mark.unit
+def test_compose_warmup_requires_jit_compile():
+    pipeline = Compose([])
+
+    with pytest.raises(ValueError, match="warmup.*jit_compile=True"):
+        pipeline.warmup({"image": ops.ones((4, 4, 1), dtype="float32")})
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_runs_and_caches():
+    image = ops.ones((4, 4, 1), dtype="float32")
+    pipeline = Compose(
+        [ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")],
+        jit_compile=True,
+    )
+
+    output = pipeline.warmup({"image": image})
+
+    np.testing.assert_allclose(as_numpy(output["image"]), 3.0)
+    compiled_forward = pipeline._compiled_forward
+    assert compiled_forward is not None
+
+    second = pipeline({"image": image})
+    assert pipeline._compiled_forward is compiled_forward
+    np.testing.assert_allclose(as_numpy(second["image"]), 3.0)
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_rejects_metadata():
+    image = ops.ones((4, 4, 1), dtype="float32")
+    pipeline = Compose([], jit_compile=True)
+
+    with pytest.raises(ValueError, match="requires empty metadata"):
+        pipeline({"image": image}, {"affine": ops.eye(4)})
