@@ -1510,7 +1510,13 @@ class Compose(Transform):
         Warm-up uses the same cached callable as normal execution. It is useful
         for moving first-call compilation latency outside a measured or training
         loop. The returned bundle is the warm-up result.
+
+        Raises:
+            ValueError: If ``jit_compile`` is ``False``.
         """
+        if not self.jit_compile:
+            raise ValueError("`warmup()` requires `jit_compile=True`.")
+
         result = self(inputs, meta)
         if self.jit_compile and keras.config.backend() == "jax":
             import jax

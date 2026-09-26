@@ -245,6 +245,14 @@ def test_compose_rejects_non_boolean_jit_compile_flag():
 
 
 @pytest.mark.unit
+def test_compose_warmup_requires_jit_compile():
+    pipeline = Compose([])
+
+    with pytest.raises(ValueError, match="warmup.*jit_compile=True"):
+        pipeline.warmup({"image": ops.ones((4, 4, 1), dtype="float32")})
+
+
+@pytest.mark.unit
 def test_compose_jit_compile_runs_and_caches():
     image = ops.ones((4, 4, 1), dtype="float32")
     pipeline = Compose(
