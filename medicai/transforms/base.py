@@ -1368,6 +1368,10 @@ class Compose(Transform):
         transforms (Sequence[callable]): A list or sequence of callable transform objects.
             Each transform in the list should accept a ``TensorBundle`` as input and
             return a modified ``TensorBundle``.
+        jit_compile (bool): Whether to compile the complete forward pipeline.
+            TensorFlow uses XLA, JAX uses ``jax.jit``, and Torch uses Torch
+            Inductor. Compiled execution requires tensor-only inputs with empty
+            metadata; ``inverse()`` remains eager. Defaults to ``False``.
 
     Example:
         .. code-block:: python
@@ -1440,8 +1444,92 @@ class Compose(Transform):
         can be retrieved from the returned bundle using those same keys.
     """
 
-    def __init__(self, transforms):
+    def __init__(self, transforms, jit_compile: bool = False):
+        if not isinstance(jit_compile, bool):
+            raise TypeError("`jit_compile` must be a boolean.")
         self.transforms = transforms
+        self.jit_compile = jit_compile
+        self._compiled_forward = None
+
+    def _get_compiled_forward(self):
+        """Create and cache the backend-compiled forward data callable."""
+        if self._compiled_forward is not None:
+            return self._compiled_forward
+
+        backend = keras.config.backend()
+
+        def compiled_forward(data):
+            bundle = TensorBundle(data)
+            return self.apply(bundle).data
+
+        if backend == "tensorflow":
+            import tensorflow as tf
+
+            self._compiled_forward = tf.function(compiled_forward, jit_compile=True)
+        elif backend == "jax":
+            import jax
+
+            self._compiled_forward = jax.jit(compiled_forward)
+        elif backend == "torch":
+            import torch
+
+            if not hasattr(torch, "compile"):
+                raise NotImplementedError(
+                    "`Compose(jit_compile=True)` requires `torch.compile` for the Torch backend."
+                )
+            self._compiled_forward = torch.compile(compiled_forward, backend="inductor")
+        else:
+            raise NotImplementedError(
+                f"`Compose(jit_compile=True)` is not implemented for the `{backend}` backend."
+            )
+
+        return self._compiled_forward
+
+    def __call__(
+        self, inputs: TensorBundle | Mapping[str, Any], meta: Mapping[str, Any] | None = None
+    ) -> TensorBundle:
+        """Apply the pipeline eagerly or through the cached compiled callable."""
+        bundle = ensure_tensor_bundle(inputs, meta)
+        if not self.jit_compile:
+            return self.apply(bundle)
+
+        if bundle.meta:
+            raise ValueError(
+                "`Compose(jit_compile=True)` requires empty metadata. "
+                "Run metadata-dependent preprocessing in a separate eager Compose."
+            )
+
+        compiled_forward = self._get_compiled_forward()
+        return TensorBundle(compiled_forward(bundle.data))
+
+    def warmup(
+        self, inputs: TensorBundle | Mapping[str, Any], meta: Mapping[str, Any] | None = None
+    ) -> TensorBundle:
+        """Compile and execute the pipeline once before regular iteration.
+
+        Warm-up uses the same cached callable as normal execution. It is useful
+        for moving first-call compilation latency outside a measured or training
+        loop. The returned bundle is the warm-up result.
+        """
+        result = self(inputs, meta)
+        if self.jit_compile and keras.config.backend() == "jax":
+            import jax
+
+            jax.tree_util.tree_map(
+                lambda value: (
+                    value.block_until_ready() if hasattr(value, "block_until_ready") else value
+                ),
+                result.data,
+            )
+        elif self.jit_compile and keras.config.backend() == "tensorflow":
+            for value in result.data.values():
+                if hasattr(value, "numpy"):
+                    value.numpy()
+        elif self.jit_compile and keras.config.backend() == "torch":
+            for value in result.data.values():
+                if hasattr(value, "cpu"):
+                    value.cpu()
+        return result
 
     @property
     def invertible(self) -> bool:
