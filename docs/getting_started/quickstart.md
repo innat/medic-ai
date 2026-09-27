@@ -127,6 +127,29 @@ image = keras.random.normal((64, 64, 1), seed=7)
 result = transform({"image": image})
 ```
 
+### Compiled Transformations
+
+Transforms can also be compiled with JIT to accelerate dataloader-side preprocessing and augmentation. TensorFlow uses XLA, JAX uses ``jax.jit``, and Torch uses Torch Inductor.
+
+```python
+from medicai.transforms import Compose, RandomFlip
+
+transform = Compose(
+    [
+        RandomFlip(
+            keys=["image", "label"],
+            spatial_axis=[1, 2],
+            prob=0.5,
+            input_layout="BHWC",
+            seed=keras.random.SeedGenerator(101),
+        ),
+    ],
+    jit_compile=True,
+)
+```
+
+See the [JIT dataloader example](../examples/others/jit_dataloader.md) for a complete benchmark and usage example.
+
 ## Models
 
 Inspect the registered model zoo:
@@ -484,13 +507,15 @@ predictions = swi(volume)
 
 ### Grad-CAM
 
-`medicai.utils.GradCAM` can be used for model interpretability across:
+`medicai.utils.GradCAM` can be used for model interpretability across the following tasks and backends:
 
-- `2D` classification
-- `3D` classification
-- `2D` segmentation
-- `3D` segmentation
-- all supported Keras backends: `tensorflow`, `torch`, and `jax`
+| Capability | Support |
+| :--- | :--- |
+| 2D classification | ✓ |
+| 3D classification | ✓ |
+| 2D segmentation | ✓ |
+| 3D segmentation | ✓ |
+| Keras backends | `tensorflow`, `torch`, and `jax` |
 
 Grad-CAM works by selecting an intermediate feature-producing layer and
 computing a heatmap that shows which spatial regions contributed most to a
