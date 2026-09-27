@@ -245,6 +245,96 @@ def test_compose_rejects_non_boolean_jit_compile_flag():
 
 
 @pytest.mark.unit
+def test_compose_jit_compile_accepts_new_spatial_shape():
+    pipeline = Compose(
+        [ShiftIntensity(keys=["image"], offset=2.0, input_layout="HWC")],
+        jit_compile=True,
+    )
+
+    first = pipeline.warmup({"image": ops.ones((4, 4, 1), dtype="float32")})
+    second = pipeline({"image": ops.ones((5, 6, 1), dtype="float32")})
+
+    assert tuple(first["image"].shape) == (4, 4, 1)
+    assert tuple(second["image"].shape) == (5, 6, 1)
+    np.testing.assert_allclose(as_numpy(first["image"]), 3.0)
+    np.testing.assert_allclose(as_numpy(second["image"]), 3.0)
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_clears_cache_after_failure():
+    def fail(_bundle):
+        raise RuntimeError("intentional compiled pipeline failure")
+
+    pipeline = Compose([fail], jit_compile=True)
+
+    with pytest.raises(RuntimeError, match="intentional compiled pipeline failure"):
+        pipeline({"image": ops.ones((4, 4, 1), dtype="float32")})
+
+    assert pipeline._compiled_forward is None
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_preserves_multiple_data_keys():
+    pipeline = Compose(
+        [
+            ShiftIntensity(
+                keys=["image", "label"],
+                offset=2.0,
+                input_layout="HWC",
+            )
+        ],
+        jit_compile=True,
+    )
+    output = pipeline(
+        {
+            "image": ops.ones((4, 4, 1), dtype="float32"),
+            "label": ops.zeros((4, 4, 1), dtype="float32"),
+        }
+    )
+
+    np.testing.assert_allclose(as_numpy(output["image"]), 3.0)
+    np.testing.assert_allclose(as_numpy(output["label"]), 2.0)
+    assert tuple(output["image"].shape) == (4, 4, 1)
+    assert tuple(output["label"].shape) == (4, 4, 1)
+
+
+@pytest.mark.unit
+def test_compose_jit_compile_uses_persistent_random_generator():
+    first_pipeline = Compose(
+        [
+            RandomShiftIntensity(
+                keys=["image"],
+                offset=1.0,
+                prob=1.0,
+                input_layout="HWC",
+                seed=keras.random.SeedGenerator(11),
+            )
+        ],
+        jit_compile=True,
+    )
+    second_pipeline = Compose(
+        [
+            RandomShiftIntensity(
+                keys=["image"],
+                offset=1.0,
+                prob=1.0,
+                input_layout="HWC",
+                seed=keras.random.SeedGenerator(11),
+            )
+        ],
+        jit_compile=True,
+    )
+    sample = {"image": ops.zeros((4, 4, 1), dtype="float32")}
+
+    first = first_pipeline.warmup(sample)["image"]
+    second = first_pipeline(sample)["image"]
+    replay = second_pipeline.warmup(sample)["image"]
+
+    assert not np.array_equal(as_numpy(first), as_numpy(second))
+    np.testing.assert_allclose(as_numpy(first), as_numpy(replay))
+
+
+@pytest.mark.unit
 def test_compose_jit_compile_inverse_is_not_supported():
     pipeline = Compose([], jit_compile=True)
 

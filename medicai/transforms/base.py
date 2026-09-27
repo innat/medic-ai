@@ -1443,6 +1443,12 @@ class Compose(Transform):
         Compiled pipelines require empty metadata and cannot be inverted because
         compiled execution does not retain Python transform traces.
 
+        If the pipeline runs inside a model's compiled ``train_step``, keep
+        ``jit_compile=False`` and let the outer model compilation capture the
+        transform operations. Use ``jit_compile=True`` for dataloader-side
+        transforms that execute before the compiled model step, rather than
+        nesting compilation boundaries.
+
         Invert an already-applied pipeline when its transforms support
         ``inverse()``:
 
@@ -1534,7 +1540,14 @@ class Compose(Transform):
             )
 
         compiled_forward = self._get_compiled_forward()
-        return TensorBundle(compiled_forward(bundle.data))
+        try:
+            output = compiled_forward(bundle.data)
+        except Exception:
+            # Backend compilation is lazy; discard a callable whose first
+            # trace or execution failed so a later call can retry cleanly.
+            self._compiled_forward = None
+            raise
+        return TensorBundle(output)
 
     def warmup(
         self, inputs: TensorBundle | Mapping[str, Any], meta: Mapping[str, Any] | None = None
