@@ -148,7 +148,7 @@ transform = Compose(
 )
 ```
 
-See the [JIT dataloader example](../examples/others/jit_dataloader.md) for a complete benchmark and usage example.
+See the [JIT dataloader example](../examples/transformation/jit_dataloader.md) for a complete benchmark and usage example.
 
 ## Models
 
