@@ -1413,6 +1413,36 @@ class Compose(Transform):
             processed_image.shape, processed_label.shape
             # (96, 96, 96, 1), (96, 96, 96, 1)
 
+        Compile a tensor-only augmentation pipeline before training. The
+        backend is selected through ``KERAS_BACKEND``; TensorFlow uses XLA,
+        JAX uses ``jax.jit``, and Torch uses Torch Inductor.
+
+        .. code-block:: python
+
+            import keras
+            from medicai.transforms import Compose, RandomFlip
+
+            augment = Compose(
+                [
+                    RandomFlip(
+                        keys=["image"],
+                        spatial_axis=[0, 1],
+                        input_layout="HWC",
+                        seed=keras.random.SeedGenerator(11),
+                    )
+                ],
+                jit_compile=True,
+            )
+
+            sample = {
+                "image": keras.ops.zeros((224, 224, 3), dtype="float32")
+            }
+            augment.warmup(sample)  # Call once before the training loop.
+            transformed = augment(sample)
+
+        Compiled pipelines require empty metadata and cannot be inverted because
+        compiled execution does not retain Python transform traces.
+
         Invert an already-applied pipeline when its transforms support
         ``inverse()``:
 
@@ -1477,7 +1507,11 @@ class Compose(Transform):
                 raise NotImplementedError(
                     "`Compose(jit_compile=True)` requires `torch.compile` for the Torch backend."
                 )
-            self._compiled_forward = torch.compile(compiled_forward, backend="inductor")
+            self._compiled_forward = torch.compile(
+                compiled_forward,
+                backend="inductor",
+                fullgraph=True,
+            )
         else:
             raise NotImplementedError(
                 f"`Compose(jit_compile=True)` is not implemented for the `{backend}` backend."
