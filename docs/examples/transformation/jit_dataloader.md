@@ -103,7 +103,7 @@ def build_pipeline(jit_compile):
             RandomFlip(
                 keys=["image", "label"],
                 spatial_axis=[1, 2],
-                prob=0.5,
+                prob=1.0,
                 input_layout="BHWC",
                 seed=keras.random.SeedGenerator(11),
             ),
@@ -116,7 +116,7 @@ def build_pipeline(jit_compile):
                 interpolation={"image": "bilinear", "label": "nearest"},
                 fill_mode="constant",
                 fill_value={"image": 0.0, "label": 0.0},
-                prob=0.75,
+                prob=1.0,
                 input_layout="BHWC",
                 seed=keras.random.SeedGenerator(13),
             ),
@@ -128,7 +128,7 @@ def build_pipeline(jit_compile):
                 interpolation={"image": "bilinear", "label": "nearest"},
                 fill_mode="constant",
                 fill_value=0.0,
-                prob=0.5,
+                prob=1.0,
                 input_layout="BHWC",
                 seed=keras.random.SeedGenerator(17),
             ),
@@ -227,12 +227,12 @@ print(f"speedup={eager_ms / jit_ms:.2f}x")
 backend=jax
 batch_shape=(16, 256, 256, 1)
 warmup (eager): 3/3 |████████████| elapsed=00:00 |  6.00it/s
-measure (eager): 20/20 |████████████| elapsed=00:03 |  6.26it/s
-eager_ms_per_batch=159.87
-warmup (jit): 3/3 |████████████| elapsed=00:00 | 130.41it/s
-measure (jit): 20/20 |████████████| elapsed=00:00 | 146.55it/s
-jit_ms_per_batch=6.94
-speedup=23.04x
+measure (eager): 20/20 |████████████| elapsed=00:03 |  5.82it/s
+eager_ms_per_batch=171.88
+warmup (jit): 3/3 |████████████| elapsed=00:00 | 75.26it/s
+measure (jit): 20/20 |████████████| elapsed=00:00 | 74.26it/s
+jit_ms_per_batch=13.59
+speedup=12.65x
 ```
 
-This run shows an approximately `23x` steady-state speedup after compilation.
+This run shows an approximately `13x` steady-state speedup after compilation.
