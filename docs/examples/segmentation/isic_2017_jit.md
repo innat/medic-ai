@@ -9,10 +9,9 @@ In this tutorial, we are going to cover:
 - Build `AttentionUNet` model.
 - Compute **GradCAM** visualizations.
 
-```{eval-rst}
-.. note::
-
+```{note}
 This example uses Tesla T4 GPUs available in the Kaggle environment. You can also run this code example directly on Kaggle; [gpu-notebook](https://www.kaggle.com/code/ipythonx/isic-segmentation-with-jit-compiled-augmentation).
+
 ```
 
 **Setup**
