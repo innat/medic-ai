@@ -56,6 +56,36 @@ The source files can live anywhere and do not need to follow the official nnU-Ne
 }
 ```
 
+### Phase 0 Typed Manifest
+
+New manifests can describe the task and cases explicitly. Array and TIFF
+inputs must declare their source layout; spacing is expressed in that same
+source spatial-axis order and is reordered together with the array into
+channel-last `HWC` or `DHWC` form.
+
+```json
+{
+  "task": {
+    "task_type": "multi_class",
+    "modalities": ["CT"],
+    "labels": {"background": 0, "tumor": 1}
+  },
+  "cases": [
+    {
+      "id": "case_001",
+      "images": {"CT": "/data/case_001.npy"},
+      "label": "/data/case_001_mask.npy",
+      "split": "train",
+      "input_layout": "HWDC",
+      "spacing": [0.7, 0.7, 2.5]
+    }
+  ]
+}
+```
+
+The legacy `meta`/`items` manifest remains readable during migration. Its
+`image_layout` field is treated as the source layout.
+
 ### Layout Fields
 
 - `image_layout` describes raw input tensor layout before MedicAI normalizes it.
@@ -63,15 +93,15 @@ The source files can live anywhere and do not need to follow the official nnU-Ne
 - Supported examples:
   - 2D: `HW`, `HWC`, `CHW`
   - 3D: `DHW`, `DHWC`, `CDHW`, `HWD`, `HWDC`, `CHWD`
-- If layout is omitted, MedicAI falls back to heuristics.
+- `input_layout` is required for array and TIFF image inputs. NIfTI geometry is
+  read from its header and does not use `input_layout`.
 
 ### Spacing Rules
 
 - If `spacing` is present on an item, it is used.
-- If a NIfTI or DICOM file omits manifest spacing, MedicAI tries to read spacing from file metadata.
-- If spacing still cannot be determined, MedicAI falls back to isotropic spacing:
-  - 2D: `[1.0, 1.0]`
-  - 3D: `[1.0, 1.0, 1.0]`
+- NIfTI spacing is read from the file header unless explicitly provided.
+- TIFF/NumPy cases require positive `spacing` or an nnU-Net-style per-case JSON
+  sidecar containing `spacing`; unit-spacing fallback is intentionally rejected.
 
 ## Task Types
 

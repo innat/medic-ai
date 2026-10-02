@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import keras
 from keras import ops
 
-from medicai.transforms import RandFlip, RandRotate
+from medicai.transforms import RandomFlip, RandomRotate
 
 
 @dataclass
@@ -45,12 +45,29 @@ class AugmentationPipeline:
         c = self.config
         keys = ["image", "label"]
 
-        self.flip = RandFlip(keys=keys, prob=c.p_mirror, spatial_axis=[0])
-        self.flip2 = RandFlip(keys=keys, prob=c.p_mirror, spatial_axis=[1])
-        self.flip3 = RandFlip(keys=keys, prob=c.p_mirror, spatial_axis=[2])
+        spatial_rank = len(patch_size) if patch_size is not None else 3
+        if spatial_rank not in (2, 3):
+            raise ValueError("patch_size must describe either a 2D or 3D spatial patch.")
+        self.input_layout = "HWC" if spatial_rank == 2 else "DHWC"
 
-        self.rotate = RandRotate(
-            keys=keys, factor=c.rotation_angle_range, prob=c.p_rotation, fill_mode="constant"
+        self.flip = RandomFlip(
+            keys=keys, prob=c.p_mirror, spatial_axis=0, input_layout=self.input_layout
+        )
+        self.flip2 = RandomFlip(
+            keys=keys, prob=c.p_mirror, spatial_axis=1, input_layout=self.input_layout
+        )
+        self.flip3 = (
+            RandomFlip(keys=keys, prob=c.p_mirror, spatial_axis=2, input_layout="DHWC")
+            if spatial_rank == 3
+            else None
+        )
+
+        self.rotate = RandomRotate(
+            keys=keys,
+            factor=c.rotation_angle_range,
+            prob=c.p_rotation,
+            fill_mode="constant",
+            input_layout=self.input_layout,
         )
 
     def __call__(
@@ -60,10 +77,6 @@ class AugmentationPipeline:
         patch_size=None,
     ):
 
-        # Determine 2D vs 3D based on number of spatial axes.
-        # image shape: [D, H, W, C] (3D) or [H, W, C] (2D)
-        is_3d = len(image.shape) == 4
-
         # Convert to backend tensors
         tensor_dict = {"image": ops.convert_to_tensor(image, dtype="float32")}
         if label is not None:
@@ -72,16 +85,11 @@ class AugmentationPipeline:
         # 2. Random Flips
         tensor_dict = self.flip(tensor_dict).data
         tensor_dict = self.flip2(tensor_dict).data
-        if is_3d:
+        if self.flip3 is not None:
             tensor_dict = self.flip3(tensor_dict).data
 
         # 3. Random Rotation
-        if is_3d:
-            tensor_dict = self.rotate(tensor_dict).data
-        else:
-            # 2D rotation using the same RandRotate with consistent
-            # randomness for both image and label
-            tensor_dict = self.rotate(tensor_dict).data
+        tensor_dict = self.rotate(tensor_dict).data
 
         img_out = tensor_dict["image"]
 

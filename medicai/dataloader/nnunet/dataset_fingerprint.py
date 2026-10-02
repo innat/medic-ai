@@ -12,6 +12,7 @@ from medicai.trainer.nnunet.utils.io import (
     get_spatial_shape,
     infer_spatial_dims,
     load_medical_image,
+    normalize_layout_and_spacing,
     normalize_layout,
 )
 
@@ -169,15 +170,13 @@ def fingerprint_dataset(
             spacing=item.spacing if item.spacing is not None else loaded_spacing,
             is_3d=(manifest.spatial_dims == 3),
         )
-        data_0 = normalize_layout(
+        data_0, spacing = normalize_layout_and_spacing(
             data_0,
             case_spatial_dims,
+            spacing=item.spacing if item.spacing is not None else loaded_spacing,
             layout=image_layout,
         )
-        spacing = ensure_spacing(
-            item.spacing if item.spacing is not None else loaded_spacing,
-            case_spatial_dims,
-        )
+        spacing = ensure_spacing(spacing, case_spatial_dims)
         first_mod = collapse_single_channel(data_0, case_spatial_dims)
         if first_mod.ndim > case_spatial_dims:
             first_mod = first_mod[..., 0]
@@ -276,7 +275,12 @@ def fingerprint_dataset(
             image_dims = infer_spatial_dims(
                 image, spacing=image_spacing, is_3d=(manifest.spatial_dims == 3)
             )
-            image = normalize_layout(image, image_dims, layout=image_layout)
+            image, _ = normalize_layout_and_spacing(
+                image,
+                image_dims,
+                spacing=image_spacing,
+                layout=image_layout,
+            )
             image = collapse_single_channel(image, image_dims)
             if image.ndim > image_dims:
                 image = image[..., 0]

@@ -20,6 +20,7 @@ from medicai.trainer.nnunet.utils.io import (
     get_spatial_shape,
     infer_spatial_dims,
     load_medical_image,
+    normalize_layout_and_spacing,
     normalize_layout,
     save_npz,
 )
@@ -177,9 +178,10 @@ def _load_image_channels(
         image_dims = infer_spatial_dims(img, spacing=candidate_spacing)
         if spatial_dims is None:
             spatial_dims = image_dims
-        img = normalize_layout(
+        img, candidate_spacing = normalize_layout_and_spacing(
             img,
             spatial_dims,
+            spacing=candidate_spacing,
             layout=image_layout,
         )
         img = collapse_single_channel(img, spatial_dims)

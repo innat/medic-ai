@@ -70,6 +70,7 @@ def list_medical_images(directory):
     extensions = (
         "*.nii.gz",
         "*.nii",
+        "*.npy",
         "*.png",
         "*.jpg",
         "*.jpeg",
@@ -103,6 +104,7 @@ def get_case_id(path):
     for suffix in (
         ".nii.gz",
         ".nii",
+        ".npy",
         ".npz",
         ".png",
         ".jpg",
@@ -200,6 +202,56 @@ def normalize_layout(data, spatial_dims, layout=None):
     return data
 
 
+def normalize_layout_and_spacing(data, spatial_dims, spacing=None, layout=None):
+    """Normalize a source array and its spacing with the same axis permutation.
+
+    Args:
+        data: Spatial array with an optional channel axis.
+        spatial_dims: Number of spatial axes (2 or 3).
+        spacing: Spacing ordered like the source layout's spatial axes.
+        layout: Explicit source axes, such as ``HWDC`` or ``DHW``.
+
+    Returns:
+        A pair ``(data, spacing)`` with canonical ``HWC``/``DHWC`` data and
+        spacing ordered as ``HW``/``DHW``. Without an explicit layout, retain
+        the existing layout heuristic and leave spacing order unchanged.
+    """
+    if layout is None:
+        return normalize_layout(data, spatial_dims), spacing
+    if spatial_dims not in (2, 3):
+        raise ValueError(f"spatial_dims must be 2 or 3, got {spatial_dims}.")
+
+    source_layout = _normalize_layout_name(layout)
+    target_spatial = "HW" if spatial_dims == 2 else "DHW"
+    if len(source_layout) != data.ndim or len(set(source_layout)) != len(source_layout):
+        raise ValueError(
+            f"Layout {layout!r} must contain one axis per array dimension without duplicates."
+        )
+    source_spatial = source_layout.replace("C", "")
+    if (
+        source_layout.count("C") > 1
+        or len(source_spatial) != spatial_dims
+        or set(source_spatial) != set(target_spatial)
+    ):
+        raise ValueError(
+            f"Layout {layout!r} must be a permutation of {target_spatial} "
+            f"with an optional channel axis 'C'."
+        )
+
+    target_layout = target_spatial + ("C" if "C" in source_layout else "")
+    normalized = _transpose_to_layout(data, source_layout, target_layout)
+    if spacing is None:
+        return normalized, spacing
+
+    spacing = tuple(float(value) for value in spacing)
+    if len(spacing) != spatial_dims:
+        raise ValueError(
+            f"Spacing has {len(spacing)} values, expected {spatial_dims} for layout {layout!r}."
+        )
+    normalized_spacing = tuple(spacing[source_spatial.index(axis)] for axis in target_spatial)
+    return normalized, normalized_spacing
+
+
 def collapse_single_channel(data, spatial_dims):
     if data.ndim == spatial_dims + 1:
         if data.shape[-1] == 1:
@@ -238,6 +290,12 @@ def load_medical_image(path):
     if path_str.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
         data = skio.imread(str(path)).astype(np.float32)
         return data, np.eye(4), None, None
+
+    if path_str.endswith(".npy"):
+        data = np.load(path, allow_pickle=False)
+        if not np.issubdtype(data.dtype, np.number):
+            raise ValueError(f"NumPy image {path} must contain numeric values.")
+        return data.astype(np.float32, copy=False), np.eye(4), None, None
 
     raise ValueError(f"Unsupported file format: {path}")
 
