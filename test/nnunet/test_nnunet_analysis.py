@@ -134,15 +134,15 @@ def test_region_analysis_preserves_public_task_type_and_overlap_prevalence(tmp_p
     np.save(image_path, np.ones((4, 4, 4), dtype=np.float32))
     labels = np.zeros((4, 4, 4), dtype=np.int16)
     labels[0:2] = 1
-    labels[1:3] = 2
+    labels[1:3] = 4
     np.save(label_path, labels)
     manifest = DatasetManifest(
         task=TaskSpec(
             "region_based",
             ["MR"],
-            {"background": 0, "core": 1, "enhancing": 2},
-            regions={"whole": [1, 2], "core": [1]},
-            regions_class_order=[1, 2],
+            {"background": 0, "core": 1, "enhancing": 4},
+            regions={"whole": [1, 4], "core": [1]},
+            regions_class_order=[1, 4],
         ),
         cases=[
             CaseRecord(

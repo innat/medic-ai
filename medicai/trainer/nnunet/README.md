@@ -58,7 +58,7 @@ and `DatasetManifest` below.
 | --- | --- |
 | `"binary"` | One categorical map with background ID `0` and foreground ID `1`. |
 | `"multi_class"` | One categorical map with consecutive IDs starting at background `0`. |
-| `"region_based"` | One fine-grained categorical map plus named regions, which may overlap. |
+| `"region_based"` | One fine-grained categorical map plus named regions, which may overlap; declared label IDs may be sparse. |
 
 ### `TaskSpec` Arguments
 

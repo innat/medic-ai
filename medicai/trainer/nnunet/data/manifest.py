@@ -115,7 +115,8 @@ class TaskSpec:
         task_type: ``binary``, ``multi_class``, or ``region_based``.
         modalities: Ordered modality/channel names, matching every case's image map.
         labels: Ordered label-name to integer-ID mapping. Categorical labels
-            must include background ID 0.
+            must include background ID 0. Multi-class IDs must be consecutive;
+            region-based tasks may use sparse IDs such as BraTS' 1, 2, and 4.
         regions: Optional named region to categorical label-ID mapping.
         regions_class_order: Integer labels used to collapse region probabilities
             to one map, in region order. Keep probabilities for overlapping output.
@@ -156,8 +157,10 @@ class TaskSpec:
         ids = sorted(self.labels.values())
         if self.labels.get("background") != 0:
             raise ValueError("Categorical/region labels must define 'background' as ID 0.")
-        if ids != list(range(len(ids))):
-            raise ValueError("Categorical label IDs must be consecutive integers beginning at 0.")
+        if any(label_id < 0 for label_id in ids):
+            raise ValueError("TaskSpec label IDs must be non-negative integers.")
+        if self.task_type == "multi_class" and ids != list(range(len(ids))):
+            raise ValueError("Multi-class label IDs must be consecutive integers beginning at 0.")
 
         if self.task_type == "binary" and ids != [0, 1]:
             raise ValueError("Binary tasks require exactly background=0 and foreground=1.")

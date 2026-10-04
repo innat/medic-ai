@@ -265,6 +265,28 @@ def test_region_based_remains_the_public_task_type():
     assert manifest.items[0].task_type == "multi-label"  # Internal legacy region-channel mode.
 
 
+def test_region_based_task_accepts_sparse_categorical_label_ids():
+    task = TaskSpec(
+        "region_based",
+        ["T1", "T1ce", "T2", "FLAIR"],
+        {"background": 0, "necrotic_core": 1, "edema": 2, "enhancing_tumor": 4},
+        regions={"whole_tumor": [1, 2, 4], "tumor_core": [1, 4], "enhancing": [4]},
+        regions_class_order=[2, 1, 4],
+    )
+
+    assert task.labels["enhancing_tumor"] == 4
+    assert task.regions["whole_tumor"] == [1, 2, 4]
+
+
+def test_multi_class_task_still_requires_consecutive_label_ids():
+    with pytest.raises(ValueError, match="Multi-class label IDs must be consecutive"):
+        TaskSpec(
+            "multi_class",
+            ["image"],
+            {"background": 0, "class_a": 1, "class_b": 4},
+        )
+
+
 def test_multilabel_task_type_is_not_supported():
     with pytest.raises(ValueError, match="Unsupported task_type"):
         TaskSpec("multi_label", ["image"], {"background": 0, "organ": 1})
