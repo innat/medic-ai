@@ -23,8 +23,14 @@ class _EpochCheckpoint(keras.callbacks.Callback):
 
 
 class nnUNetTrainer:
-    """
-    Manages the full nnU-Net training loop.
+    """Manage nnU-Net compilation and the Keras training loop.
+
+    Subclass this trainer to customize the defaults used by
+    :meth:`nnUNetPipeline.compile`. The supported extension hooks are
+    ``_build_loss()``, ``_build_metrics()``, and ``_build_optimizer()``. Call
+    the parent hook when extending a default; direct ``loss``, ``metrics``, or
+    ``optimizer`` arguments passed to ``pipeline.compile`` replace the result
+    of the corresponding hook.
 
     Parameters
     ----------
@@ -116,7 +122,7 @@ class nnUNetTrainer:
         return f"val_{metric_name}"
 
     def _build_optimizer(self):
-        """Resolve and returns the Keras optimizer."""
+        """Build the default Keras optimizer; override to customize it."""
         cfg = self.cfg
         optimizer_kwargs = {
             "learning_rate": cfg.lr,
@@ -136,7 +142,7 @@ class nnUNetTrainer:
         return keras.optimizers.SGD(**optimizer_kwargs)
 
     def _build_loss(self):
-        """Resolve and returns the loss and optional loss_weights."""
+        """Build default loss(s) and weights; override to customize them."""
         cfg = self.cfg
 
         # Custom loss
@@ -188,7 +194,7 @@ class nnUNetTrainer:
         return base_loss, None
 
     def _build_metrics(self):
-        """Resolve and returns the list of metrics."""
+        """Build default metrics; override to customize or extend them."""
         if self.custom_metrics is not None:
             if isinstance(self.custom_metrics, (list, tuple)):
                 return list(self.custom_metrics)
@@ -218,6 +224,32 @@ class nnUNetTrainer:
             )
         ]
 
+    def _metrics_for_model_outputs(self, metrics):
+        """Route flat metric lists to the final deep-supervision output only."""
+        use_deep_supervision = (
+            self.cfg.deep_supervision
+            and self.net_cfg is not None
+            and self.net_cfg.deep_supervision
+        )
+        if not use_deep_supervision or metrics is None:
+            return metrics
+
+        output_names = [
+            "final",
+            *(f"aux_{index}" for index in range(self.net_cfg.n_pooling - 1)),
+        ]
+        if isinstance(metrics, dict):
+            unexpected_outputs = set(metrics) - set(output_names)
+            if unexpected_outputs:
+                raise ValueError(
+                    "Metric mapping contains unknown model output(s): "
+                    f"{sorted(unexpected_outputs)}. Expected keys from {output_names}."
+                )
+            return {name: metrics.get(name, []) for name in output_names}
+
+        metric_list = list(metrics) if isinstance(metrics, (list, tuple)) else [metrics]
+        return {name: metric_list if name == "final" else [] for name in output_names}
+
     def _compile_model(self):
         """Compile the Keras model using resolved components."""
         default_loss, default_loss_weights = self._build_loss()
@@ -229,6 +261,9 @@ class nnUNetTrainer:
             "metrics": default_metrics,
         }
         compile_args.update(self.compile_kwargs)
+        compile_args["metrics"] = self._metrics_for_model_outputs(
+            compile_args.get("metrics")
+        )
         self.model.compile(**compile_args)
         self.optimizer = self.model.optimizer
         self.losses = compile_args["loss"]

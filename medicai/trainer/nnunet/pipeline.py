@@ -81,6 +81,7 @@ class nnUNetPipeline:
         self._compiled_trainer = None
         self._compile_configuration = "auto"
         self._compile_kwargs = {}
+        self._trainer_class = nnUNetTrainer
 
         self.fingerprint_path = self.input_path / "dataset_fingerprint.json"
         self.plan_path = self.input_path / "nnunet_plans.json"
@@ -499,24 +500,40 @@ class nnUNetPipeline:
 
         return case_files, splits, _create_dataset
 
-    def compile(self, configuration: str = "auto", **kwargs: Any) -> None:
+    def compile(
+        self,
+        configuration: str = "auto",
+        trainer_class: type[nnUNetTrainer] | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Build and compile the planned segmentation model.
 
         Args:
             configuration: Planned configuration name, or ``"auto"`` to use
                 the planner's recommended configuration.
+            trainer_class: ``nnUNetTrainer`` subclass that supplies customized
+                default loss, metrics, or optimizer behavior. Subclass hooks are
+                used only when the corresponding compile argument is omitted.
             **kwargs: Arguments forwarded to :meth:`keras.Model.compile`, such
                 as ``optimizer``, ``loss``, ``metrics``, ``jit_compile``, and
-                ``run_eagerly``. Omitted objectives and optimizer use MedicAI's
-                nnU-Net defaults.
+                ``run_eagerly``. Supplied ``optimizer``, ``loss``, and
+                ``metrics`` replace the trainer defaults. Omitted values use
+                the selected trainer class's defaults.
 
         Raises:
             FileNotFoundError: If no saved plan is available.
             ValueError: If the requested configuration is not in the plan.
+            TypeError: If ``trainer_class`` is not an ``nnUNetTrainer`` subclass.
         """
         if not self.plan_path.is_file():
             raise FileNotFoundError(f"Plan not found: {self.plan_path}")
         plan = nnUNetPlan.from_json(self.plan_path)
+        if trainer_class is not None and (
+            not isinstance(trainer_class, type)
+            or not issubclass(trainer_class, nnUNetTrainer)
+        ):
+            raise TypeError("trainer_class must be nnUNetTrainer or one of its subclasses.")
+        selected_trainer_class = trainer_class or self._trainer_class
         self._sync_configuration(plan)
         if configuration != "auto":
             if configuration not in plan.configurations:
@@ -540,7 +557,8 @@ class nnUNetPipeline:
             compile_kwargs.pop("loss", None)
         self._compile_configuration = configuration
         self._compile_kwargs = dict(compile_kwargs)
-        self._compiled_trainer = nnUNetTrainer(
+        self._trainer_class = selected_trainer_class
+        self._compiled_trainer = selected_trainer_class(
             model=model,
             train_dataset=None,
             val_dataset=None,
@@ -680,7 +698,11 @@ class nnUNetPipeline:
         if self._compiled_trainer is None or getattr(
             self._compiled_trainer, "has_run", False
         ):
-            self.compile(configuration=self._compile_configuration, **self._compile_kwargs)
+            self.compile(
+                configuration=self._compile_configuration,
+                trainer_class=self._trainer_class,
+                **self._compile_kwargs,
+            )
         trainer = self._compiled_trainer
         plan = trainer.plan
         configuration = self.configuration
@@ -745,6 +767,9 @@ class nnUNetPipeline:
             fit_kwargs["batch_size"] = planned_batch_size
 
         trainer.fold = fold
+        trainer.run_metadata["trainer_class"] = (
+            f"{type(trainer).__module__}.{type(trainer).__qualname__}"
+        )
         trainer.train_dataset = x
         trainer.val_dataset = validation_data
         trainer.output_dir = (

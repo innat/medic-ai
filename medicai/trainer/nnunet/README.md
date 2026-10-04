@@ -441,10 +441,48 @@ pipeline.compile(
 
 `configuration` selects the MedicAI model; other keyword arguments are passed
 to Keras compilation, including `optimizer`, `loss`, `metrics`, `run_eagerly`,
-`steps_per_execution`, and `jit_compile`. Omitted objectives use the defaults
-for the task's categorical or region-based label contract. The default
-optimizer and polynomial learning-rate schedule follow the nnU-Net training
-recipe; a custom optimizer disables that default schedule.
+`steps_per_execution`, and `jit_compile`. Supplying `loss`, `metrics`, or
+`optimizer` replaces that nnU-Net default. Omitted values use the defaults for
+the task's label contract. A custom optimizer also disables the default
+polynomial learning-rate schedule.
+For deep-supervision output dictionaries, a flat metrics list is applied to
+the `final` output only. Pass an output-keyed mapping to assign metrics to
+auxiliary outputs too.
+
+To combine a custom loss with the built-in Dice+CE loss, or extend the default
+metrics, subclass `nnUNetTrainer` and override `_build_loss()` or
+`_build_metrics()`. Use `super()` to obtain the nnU-Net defaults and compose
+them in the subclass. The same extension mechanism can customize the default
+optimizer, but an optimizer passed directly to `compile()` always replaces it;
+optimizers are not combined.
+
+```python
+from medicai.trainer.nnunet import nnUNetTrainer
+
+class ProjectTrainer(nnUNetTrainer):
+    def _build_loss(self):
+        default_losses, loss_weights = super()._build_loss()
+        # Implement this project helper to wrap every output loss with the
+        # custom objective while preserving the deep-supervision mapping.
+        combined_losses = project_compose_losses(default_losses, project_loss)
+        return combined_losses, loss_weights
+
+    def _build_metrics(self):
+        default_metrics = super()._build_metrics()
+        # Implement this project helper to add metrics to the final output or
+        # to an output-keyed mapping.
+        return project_add_metrics(default_metrics, project_metric)
+
+pipeline.compile(
+    configuration="3d_fullres",
+    trainer_class=ProjectTrainer,
+)
+```
+
+For deep-supervision models, the trainer routes a flat metric list to `final`.
+An output-keyed custom metric mapping can target named outputs such as `final`
+and `aux_0` directly. Project helpers in the subclass example are placeholders
+for the combination policy appropriate to the project's losses and metrics.
 
 `train()` follows the Keras fit pattern with `epochs`, `callbacks`, `x`,
 `validation_data`, and additional Keras `Model.fit()` keyword arguments. The
