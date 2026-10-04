@@ -367,8 +367,8 @@ cache_file = (
     "/experiments/my_dataset/preprocessed/3d_fullres/case_001.npz"
 )
 with np.load(cache_file, allow_pickle=False) as case:
-    image = case["data"]       # DHWC
-    label = case["seg"]        # categorical or region target, when present
+    image = case["image"]      # DHWC
+    label = case["label"]      # categorical or region target, when present
     spacing = case["spacing"]
 ```
 
@@ -381,7 +381,7 @@ train_data = pipeline.dataset(
     fold=0,
     configuration="3d_fullres",
 )
-images, targets = next(iter(train_data))
+images, labels = next(iter(train_data))
 ```
 
 `dataset()` arguments: `split` selects the fold partition (`"train"` or

@@ -6,20 +6,23 @@ from typing import Any
 
 import numpy as np
 
-from medicai.trainer.nnunet.data.augmentations import (
+from medicai.trainer.nnunet.data.augmentation.transforms import (
     AugmentationConfig,
     AugmentationPipeline,
 )
-from medicai.trainer.nnunet.data.dataset import nnUNetDataset
-from medicai.trainer.nnunet.data.dataset_fingerprint import fingerprint_dataset
-from medicai.trainer.nnunet.data.manifest import DatasetManifest
-from medicai.trainer.nnunet.data.preprocessing import (
+from medicai.trainer.nnunet.data.sampling.dataset import (
+    build_pygrain_dataset,
+    nnUNetDataset,
+)
+from medicai.trainer.nnunet.data.metadata.fingerprint import fingerprint_dataset
+from medicai.trainer.nnunet.data.metadata.manifest import DatasetManifest
+from medicai.trainer.nnunet.data.preprocessing.pipeline import (
     _load_image_channels,
     _validate_label_alignment,
     preprocess_dataset,
 )
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
-from medicai.trainer.nnunet.data.cross_validation import (
+from medicai.trainer.nnunet.data.splits.cross_validation import (
     generate_custom_splits,
     generate_splits,
     load_splits,
@@ -458,22 +461,30 @@ class nnUNetPipeline:
             raise ValueError("num_threads must be positive.")
 
         augmentor = AugmentationPipeline(
-            AugmentationConfig(),
+            AugmentationConfig(
+                label_fill_value=(
+                    min(plan.ignore_class_ids) if plan.ignore_class_ids else 0
+                )
+            ),
             patch_size=patch_size,
+            spacing=getattr(net_cfg, "target_spacing", None),
         )
 
         def _create_dataset(file_list, augment=True):
-            sampler = nnUNetDataset(
+            patch_dataset = nnUNetDataset(
                 case_files=list(file_list),
                 batch_size=batch_size,
-                patch_size=patch_size,
+                patch_size=augmentor.initial_patch_size,
                 augmentor=augmentor,
                 train_cfg=train_cfg,
                 net_cfg=net_cfg,
                 task_type=plan.task_type,
                 augment=augment,
+                final_patch_size=patch_size,
+                ignore_class_ids=plan.ignore_class_ids,
             )
-            return sampler.to_pygrain(
+            return build_pygrain_dataset(
+                patch_dataset,
                 shuffle=augment,
                 seed=seed,
                 num_threads=num_threads,
@@ -567,7 +578,7 @@ class nnUNetPipeline:
             seed: Seed used to shuffle training batches.
 
         Returns:
-            PyGrain iterator yielding ``(image_batch, target_batch)`` pairs.
+            PyGrain iterator yielding ``(image_batch, label_batch)`` pairs.
 
         Raises:
             FileNotFoundError: If no plan or preprocessed cache is available.

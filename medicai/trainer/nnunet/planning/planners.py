@@ -313,7 +313,7 @@ from pathlib import Path
 
 import numpy as np
 
-from medicai.trainer.nnunet.data.resampling import compute_zoom_factors
+from medicai.trainer.nnunet.data.preprocessing.resampling import compute_zoom_factors
 from medicai.trainer.nnunet.utils.config import DatasetFingerprint, NetworkConfig, nnUNetPlan
 
 # nnU-Net heuristic constants

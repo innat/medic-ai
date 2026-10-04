@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data import preprocessing
+from medicai.trainer.nnunet.data.preprocessing import pipeline as preprocessing
+from medicai.trainer.nnunet.data.preprocessing.pipeline import (
+    _collect_class_locations,
+    _load_labels,
+)
 
 
 def _loaded(data, affine=None, spacing=(1.0, 1.0, 1.0)):
@@ -88,6 +92,40 @@ def test_image_loader_returns_source_nifti_affine(monkeypatch):
     )
 
     np.testing.assert_array_equal(source_affine, affine)
+
+
+@pytest.mark.parametrize(
+    ("task_type", "expected"),
+    [
+        ("multi_class", np.asarray([0, 1, 2, 0, 1, 2, 0, 1], dtype=np.int64)),
+        ("binary", np.asarray([0, 1, 2, 0, 1, 2, 0, 1], dtype=np.int64)),
+    ],
+)
+def test_preprocessing_preserves_configured_ignore_label_id(monkeypatch, task_type, expected):
+    labels = np.asarray([0, 1, 2, 0, 1, 2, 0, 1], dtype=np.int16).reshape(2, 2, 2)
+    monkeypatch.setattr(
+        "medicai.trainer.nnunet.data.preprocessing.pipeline.load_medical_image",
+        lambda _: _loaded(labels),
+    )
+
+    result = _load_labels(
+        "label.npy",
+        spatial_dims=3,
+        task_type=task_type,
+        ignore_class_ids=[2],
+        target_class_ids=[1],
+        label_layout="DHW",
+    )
+
+    np.testing.assert_array_equal(result.reshape(-1), expected)
+
+
+def test_foreground_locations_exclude_configured_ignore_label_id():
+    labels = np.asarray([0, 1, 2, 0, 1, 2, 0, 1], dtype=np.int16).reshape(2, 2, 2)
+
+    locations = _collect_class_locations(labels, ignore_class_ids=[2])
+
+    assert set(locations) == {"1"}
 
 
 def test_label_must_match_image_shape_and_nifti_affine(monkeypatch):

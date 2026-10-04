@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.manifest import (
+from medicai.trainer.nnunet.data.metadata.manifest import (
     CaseRecord,
     DatasetManifest,
     TaskSpec,

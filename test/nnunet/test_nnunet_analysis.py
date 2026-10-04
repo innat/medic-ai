@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.manifest import CaseRecord, DatasetManifest, TaskSpec
+from medicai.trainer.nnunet.data.metadata.manifest import CaseRecord, DatasetManifest, TaskSpec
 from medicai.trainer.nnunet import AnalysisReport, nnUNetPipeline
 
 
@@ -167,7 +167,7 @@ def test_analyze_excludes_ignore_id_from_prevalence_denominator(tmp_path):
     image_path = tmp_path / "ignore_image.npy"
     label_path = tmp_path / "ignore_label.npy"
     np.save(image_path, np.ones((4, 4, 4), dtype=np.float32))
-    labels = np.full((4, 4, 4), -1, dtype=np.int16)
+    labels = np.full((4, 4, 4), 2, dtype=np.int16)
     labels[:2] = 0
     labels[2:3] = 1
     np.save(label_path, labels)
@@ -185,7 +185,7 @@ def test_analyze_excludes_ignore_id_from_prevalence_denominator(tmp_path):
             "binary",
             ["CT"],
             {"background": 0, "foreground": 1},
-            ignore_class_ids=[-1],
+            ignore_class_ids=[2],
         ),
     )
     manifest.to_json(tmp_path / "manifest.json")

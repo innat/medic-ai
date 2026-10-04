@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.cross_validation import (
+from medicai.trainer.nnunet.data.splits.cross_validation import (
     generate_custom_splits,
     generate_splits,
     validate_splits,

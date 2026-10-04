@@ -120,7 +120,7 @@ class TaskSpec:
         regions: Optional named region to categorical label-ID mapping.
         regions_class_order: Integer labels used to collapse region probabilities
             to one map, in region order. Keep probabilities for overlapping output.
-        ignore_class_ids: Optional label sentinels excluded from loss and metrics.
+        ignore_class_ids: Optional integer label IDs excluded from loss and metrics.
         target_class_ids: Optional declared foreground labels included in targets.
     """
 
