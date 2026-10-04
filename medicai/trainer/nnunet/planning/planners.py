@@ -313,7 +313,7 @@ from pathlib import Path
 
 import numpy as np
 
-from medicai.dataloader.nnunet.resampling import compute_zoom_factors
+from medicai.trainer.nnunet.data.resampling import compute_zoom_factors
 from medicai.trainer.nnunet.utils.config import DatasetFingerprint, NetworkConfig, nnUNetPlan
 
 # nnU-Net heuristic constants
@@ -441,6 +441,7 @@ def _plan_3d(
         n_classes=fingerprint.output_channels,
         n_modalities=len(fingerprint.modalities),
         output_activation=_resolve_output_activation(fingerprint.task_type),
+        target_spacing=list(target_spacing),
     )
 
 
@@ -505,6 +506,7 @@ def _plan_2d(
         n_classes=fingerprint.output_channels,
         n_modalities=len(fingerprint.modalities),
         output_activation=_resolve_output_activation(fingerprint.task_type),
+        target_spacing=list(target_spacing_2d),
     )
 
 
@@ -549,6 +551,34 @@ class nnUNetPlanner:
         gpu_memory_gb: float = DEFAULT_GPU_GB,
         mixed_precision: bool = True,
     ) -> None:
+        try:
+            gpu_memory_gb = float(gpu_memory_gb)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("gpu_memory_gb must be a positive finite number.") from exc
+        if not math.isfinite(gpu_memory_gb) or gpu_memory_gb <= 0:
+            raise ValueError("gpu_memory_gb must be a positive finite number.")
+        if fingerprint.spatial_dims not in (2, 3):
+            raise ValueError("Fingerprint spatial_dims must be either 2 or 3.")
+        if not fingerprint.spacings:
+            raise ValueError("Fingerprint must contain per-case spacings before planning.")
+        for case_idx, spacing in enumerate(fingerprint.spacings):
+            if len(spacing) != fingerprint.spatial_dims or any(
+                not math.isfinite(float(value)) or float(value) <= 0 for value in spacing
+            ):
+                raise ValueError(
+                    f"Fingerprint spacing for case index {case_idx} must contain "
+                    f"{fingerprint.spatial_dims} positive finite values."
+                )
+        if len(fingerprint.median_size) != fingerprint.spatial_dims or any(
+            int(value) <= 0 for value in fingerprint.median_size
+        ):
+            raise ValueError(
+                "Fingerprint median_size must contain positive dimensions matching spatial_dims."
+            )
+        if not fingerprint.modalities:
+            raise ValueError("Fingerprint must declare at least one image modality.")
+        if fingerprint.output_channels is None or fingerprint.output_channels < 1:
+            raise ValueError("Fingerprint output_channels must be a positive integer.")
         self.fp = fingerprint
         self.gpu_gb = gpu_memory_gb
         self.mixed_precision = mixed_precision

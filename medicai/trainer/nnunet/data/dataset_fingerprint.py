@@ -3,8 +3,8 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from medicai.dataloader.nnunet.normalization import compute_intensity_stats
-from medicai.dataloader.nnunet.preprocessing import compute_nonzero_bbox
+from medicai.trainer.nnunet.data.normalization import compute_intensity_stats
+from medicai.trainer.nnunet.data.preprocessing import compute_nonzero_bbox
 from medicai.trainer.nnunet.utils.config import DatasetFingerprint
 from medicai.trainer.nnunet.utils.io import (
     collapse_single_channel,
@@ -31,13 +31,13 @@ def _resolve_output_channels(task_type, class_names, target_class_ids):
     return len(class_names)
 
 
-def _resolve_multilabel_regions(item, manifest):
+def _resolve_regions(item, manifest):
     return item.regions or manifest.regions
 
 
 def _resolve_multilabel_output_channels(item, manifest):
     if (item.label_output or manifest.label_output) == "regions":
-        return len(_resolve_multilabel_regions(item, manifest))
+        return len(_resolve_regions(item, manifest))
     target_class_ids = manifest.target_class_ids
     if target_class_ids:
         return len(target_class_ids)
@@ -67,7 +67,7 @@ def _collect_multilabel_class_stats(item, manifest, spatial_dims, target_class_i
             layout=label_layout,
         )
         label_data = collapse_single_channel(label_data, label_dims)
-        regions = _resolve_multilabel_regions(item, manifest)
+        regions = _resolve_regions(item, manifest)
         for region_idx, class_ids in enumerate(regions, start=1):
             region_mask = np.isin(label_data.astype(np.int64), class_ids)
             counts[region_idx] = int(region_mask.sum())
@@ -132,28 +132,45 @@ def fingerprint_dataset(
 
     modalities = manifest.modalities
     class_names = manifest.class_names
-    task_type = manifest.task_type
+    manifest_task_type = manifest.task_type
     ignore_class_ids = manifest.ignore_class_ids
     target_class_ids = manifest.target_class_ids
 
+    items = manifest.items
     if max_cases is not None:
-        items = manifest.items[:max_cases]
-    else:
-        items = manifest.items
+        items = items[:max_cases]
 
     if not items:
-        raise FileNotFoundError("No cases resolved inside manifest.")
+        raise FileNotFoundError("No labeled training cases resolved inside manifest.")
+
+    # Keep the declared public task type in the fingerprint. Region targets are
+    # represented as channels downstream, but are not independent multilabel data.
+    task_type = (
+        manifest_task_type
+        if manifest_task_type == "region_based"
+        else items[0].task_type or manifest_task_type
+    )
 
     dataset_name = dataset_name or manifest.dataset_name
     n_classes = len(class_names)
     if task_type == "multi-label":
         output_channels = _resolve_multilabel_output_channels(items[0], manifest)
+    elif task_type == "region_based":
+        region_definitions = _resolve_regions(items[0], manifest)
+        if not region_definitions:
+            raise ValueError("Region-based tasks require at least one region definition.")
+        output_channels = len(region_definitions)
     else:
         output_channels = _resolve_output_channels(task_type, class_names, target_class_ids)
 
     spacings = []
     sizes = []
     median_relative_sizes = []
+    spatial_dims = None
+    class_voxel_counts = {class_id: 0 for class_id in range(n_classes)}
+    total_voxels = 0
+    all_images_per_modality = {modality_idx: [] for modality_idx in range(len(modalities))}
+    rng = np.random.default_rng(0)
 
     for item in tqdm(items, desc="Fingerprinting"):
         case_files = [Path(p) for p in item.images]
@@ -255,7 +272,7 @@ def fingerprint_dataset(
                 pixels = img.ravel()
 
             if pixels.size > 10_000:
-                return np.random.choice(pixels, 10_000, replace=False)
+                return rng.choice(pixels, 10_000, replace=False)
             return pixels
 
         is_ct_modality = [_is_ct_modality(name) for name in modalities]

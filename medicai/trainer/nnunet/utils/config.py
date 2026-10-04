@@ -130,6 +130,7 @@ class NetworkConfig:
         n_classes=2,
         n_modalities=1,
         output_activation="softmax",
+        target_spacing=None,
     ):
         self.spatial_dims = spatial_dims
         self.patch_size = patch_size if patch_size is not None else [128, 128, 128]
@@ -144,6 +145,7 @@ class NetworkConfig:
         self.n_classes = n_classes
         self.n_modalities = n_modalities
         self.output_activation = output_activation
+        self.target_spacing = target_spacing
 
     def to_dict(self):
         return vars(self)
@@ -170,6 +172,11 @@ class PreprocessedCaseProperties:
         class_locations=None,
         item_type="multi-class",
         spatial_dims=3,
+        source_affine=None,
+        source_layout=None,
+        source_spacing=None,
+        source_hashes=None,
+        cache_signature=None,
     ):
         self.case_id = case_id
         self.original_spacing = original_spacing
@@ -185,6 +192,11 @@ class PreprocessedCaseProperties:
         self.class_locations = class_locations if class_locations is not None else {}
         self.item_type = item_type
         self.spatial_dims = spatial_dims
+        self.source_affine = source_affine
+        self.source_layout = source_layout
+        self.source_spacing = source_spacing
+        self.source_hashes = source_hashes if source_hashes is not None else {}
+        self.cache_signature = cache_signature
 
     def to_dict(self):
         return vars(self)
@@ -199,8 +211,11 @@ class PreprocessedCaseProperties:
 
 
 class nnUNetPlan:
-    """
-    Complete experiment plan produced by the planner.
+    """Serializable data-driven plan with configuration alternatives.
+
+    ``configurations`` maps names such as ``"2d"`` and ``"3d_fullres"`` to
+    their network settings. ``selected_configuration`` is the choice used by
+    subsequent pipeline stages; alternatives remain available for comparison.
     """
 
     def __init__(
@@ -219,6 +234,9 @@ class nnUNetPlan:
         ignore_class_ids=None,
         target_class_ids=None,
         output_channels=None,
+        selected_configuration=None,
+        regions=None,
+        regions_class_order=None,
     ):
         self.dataset_name = dataset_name
         self.network_type = network_type
@@ -238,6 +256,32 @@ class nnUNetPlan:
         self.ignore_class_ids = ignore_class_ids if ignore_class_ids is not None else []
         self.target_class_ids = target_class_ids if target_class_ids is not None else []
         self.output_channels = output_channels
+        self.selected_configuration = selected_configuration
+        self.regions = regions if regions is not None else {}
+        self.regions_class_order = regions_class_order
+
+    @property
+    def configurations(self) -> dict[str, NetworkConfig]:
+        """Available network configurations keyed by their stable names."""
+        return {
+            name: config
+            for name, config in {
+                "2d": self.plan_2d,
+                "3d_fullres": self.plan_3d_fullres,
+                "3d_lowres": self.plan_3d_lowres,
+            }.items()
+            if config is not None
+        }
+
+    def get_configuration(self, name: str) -> NetworkConfig:
+        """Return one planned configuration or raise with available choices."""
+        try:
+            return self.configurations[name]
+        except KeyError as exc:
+            available = ", ".join(self.configurations) or "none"
+            raise ValueError(
+                f"Unknown configuration {name!r}; available configurations: {available}."
+            ) from exc
 
     def to_dict(self):
         d = vars(self).copy()

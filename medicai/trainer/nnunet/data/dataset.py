@@ -2,16 +2,18 @@ import json
 import random
 from pathlib import Path
 
-import keras
 import numpy as np
 from scipy.ndimage import zoom as ndimage_zoom
 
 from medicai.trainer.nnunet.utils.io import load_npz
 
 
-class nnUNetDataset(keras.utils.PyDataset):
+class nnUNetDataset:
     """
-    Keras 3 PyDataset for loading and augmenting nnU-Net batches on the fly.
+    Random patch-batch sampler over cached nnU-Net cases.
+
+    PyGrain is imported lazily by :meth:`to_pygrain`, keeping it optional for
+    users who only analyze or preprocess datasets.
     """
 
     def __init__(
@@ -24,9 +26,7 @@ class nnUNetDataset(keras.utils.PyDataset):
         net_cfg,
         task_type="multi-class",
         augment=True,
-        **kwargs,
     ):
-        super().__init__(**kwargs)
         self.case_files = case_files
         self.batch_size = batch_size
         self.patch_size = patch_size
@@ -35,6 +35,8 @@ class nnUNetDataset(keras.utils.PyDataset):
         self.net_cfg = net_cfg
         self.task_type = task_type
         self.augment = augment
+        if not self.case_files:
+            raise ValueError("Cannot sample nnU-Net batches from an empty case list.")
 
         self.properties_map = {}
         for cf in self.case_files:
@@ -50,6 +52,42 @@ class nnUNetDataset(keras.utils.PyDataset):
     def __len__(self):
         # nnU-Net defines epoch length directly in config, independent of actual dataset size
         return self.train_cfg.iters_per_epoch
+
+    def to_pygrain(self, *, shuffle: bool = False, seed: int = 0, num_threads: int = 4):
+        """Wrap sampled batches in a PyGrain iterator.
+
+        Each random-access element is already a complete batch so the sampler
+        can retain nnU-Net's patch-level foreground oversampling behavior.
+
+        Raises:
+            ImportError: If the optional ``grain`` package is not installed.
+            ValueError: If ``num_threads`` is not positive.
+        """
+        if num_threads < 1:
+            raise ValueError("num_threads must be positive.")
+        try:
+            import grain.python as pygrain
+        except ImportError as exc:
+            raise ImportError(
+                "PyGrain is required for nnU-Net training inputs. Install it with "
+                "`pip install 'medicai[nnunet]'` or `pip install grain`."
+            ) from exc
+
+        sampler = self
+
+        class _BatchSource(pygrain.RandomAccessDataSource):
+            def __len__(self):
+                return len(sampler)
+
+            def __getitem__(self, index):
+                return sampler[index]
+
+        dataset = pygrain.MapDataset.source(_BatchSource())
+        if shuffle:
+            dataset = dataset.shuffle(seed=seed)
+        return dataset.to_iter_dataset(
+            read_options=pygrain.ReadOptions(num_threads=num_threads)
+        )
 
     def __getitem__(self, index):
         # We sample randomly from the entire dataset for `batch_size` items
@@ -84,6 +122,23 @@ class nnUNetDataset(keras.utils.PyDataset):
                     locations = props["class_locations"][chosen_class]
                     if locations:
                         patch_center = random.choice(locations)
+
+            if len(self.patch_size) == 2 and len(spatial_shape) == 3:
+                # 2D configurations sample a slice from the 3D case, then crop
+                # an in-plane patch. Foreground sampling keeps its source slice.
+                if patch_center is None:
+                    slice_index = random.randint(0, spatial_shape[0] - 1)
+                else:
+                    slice_index, *patch_center = patch_center
+                image_cl = image_cl[slice_index]
+                if label_cl is not None:
+                    label_cl = label_cl[slice_index]
+                spatial_shape = image_cl.shape[:-1]
+            elif len(self.patch_size) != len(spatial_shape):
+                raise ValueError(
+                    f"patch_size has {len(self.patch_size)} axes, but cached case has "
+                    f"{len(spatial_shape)} spatial axes."
+                )
 
             if patch_center is None:
                 patch_center = []
@@ -135,7 +190,7 @@ class nnUNetDataset(keras.utils.PyDataset):
             if self.augment:
                 if (
                     label_cl is not None
-                    and self.task_type != "multi-label"
+                    and self.task_type not in {"multi-label", "region_based"}
                     and label_cl.ndim == len(image_cl.shape) - 1
                 ):
                     label_cl = label_cl[..., np.newaxis]
@@ -144,11 +199,12 @@ class nnUNetDataset(keras.utils.PyDataset):
                     image_cl,
                     label_cl,
                     patch_size=self.patch_size,
+                    label_is_regions=self.task_type == "region_based",
                 )
 
                 if (
                     label_cl is not None
-                    and self.task_type != "multi-label"
+                    and self.task_type not in {"multi-label", "region_based"}
                     and label_cl.ndim == image_cl.ndim
                 ):
                     label_cl = np.squeeze(label_cl, axis=-1)
@@ -159,7 +215,11 @@ class nnUNetDataset(keras.utils.PyDataset):
                 shape = batch_images[-1].shape[:-1] if hasattr(batch_images[-1], "shape") else []
                 batch_labels.append(np.zeros(shape, dtype=np.int64))
             else:
-                label_dtype = np.float32 if self.task_type == "multi-label" else np.int64
+                label_dtype = (
+                    np.float32
+                    if self.task_type in {"multi-label", "region_based"}
+                    else np.int64
+                )
                 batch_labels.append(np.asarray(label_cl, dtype=label_dtype))
 
         image_batch = np.stack(batch_images, axis=0)
@@ -185,6 +245,9 @@ class nnUNetDataset(keras.utils.PyDataset):
                     # Fallback: isotropic 2x downsampling per level
                     scale = 0.5 ** (i + 1)
                     zoom_factors = [1.0] + [scale] * len(self.patch_size)
+
+                if self.task_type in {"multi-label", "region_based"}:
+                    zoom_factors.append(1.0)
 
                 # Downsample the label batch using nearest-neighbor
                 ds_label = ndimage_zoom(

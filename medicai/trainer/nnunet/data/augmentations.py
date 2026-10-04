@@ -11,6 +11,7 @@ class AugmentationConfig:
     """Probability gates and parameters for transforms."""
 
     p_rotation: float = 0.2
+    # TODO: Wire the following configured augmentations into AugmentationPipeline.
     p_scale: float = 0.2
     p_elastic: float = 0.2
     p_gamma: float = 0.3
@@ -22,6 +23,8 @@ class AugmentationConfig:
     elastic_sigma: float = 14.0
     gamma_range = (0.7, 1.5)
     noise_variance = (0.0, 0.1)
+    # TODO: Wire spatial scaling/elastic deformation and add intensity scaling,
+    # gamma, Gaussian noise/blur, contrast, and simulated low-resolution transforms.
     mirror_axes = (0, 1, 2)
 
 
@@ -75,6 +78,7 @@ class AugmentationPipeline:
         image,
         label=None,
         patch_size=None,
+        label_is_regions=False,
     ):
 
         # Convert to backend tensors
@@ -95,7 +99,8 @@ class AugmentationPipeline:
 
         if label is not None:
             # Nearest neighbor cast backward
-            lbl_out = ops.cast(ops.round(tensor_dict["label"]), "int64")
+            label_dtype = "float32" if label_is_regions else "int64"
+            lbl_out = ops.cast(ops.round(tensor_dict["label"]), label_dtype)
             return img_out, lbl_out
 
         return img_out, None

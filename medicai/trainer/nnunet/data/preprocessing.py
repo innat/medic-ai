@@ -1,18 +1,18 @@
 import concurrent.futures
+import hashlib
+import json
 import multiprocessing
 from functools import partial
 from pathlib import Path
 
+from keras import ops
 import numpy as np
 from tqdm import tqdm
 
-from medicai.dataloader.nnunet.manifest import DatasetManifest
-from medicai.dataloader.nnunet.normalization import get_normalizer
-from medicai.dataloader.nnunet.resampling import (
-    resample_image,
-    resample_image_2d,
-    resample_label,
-)
+from medicai.trainer.nnunet.data.manifest import DatasetManifest
+from medicai.trainer.nnunet.data.normalization import get_normalizer
+from medicai.trainer.nnunet.data.resampling import compute_zoom_factors
+from medicai.transforms import Resize
 from medicai.trainer.nnunet.utils.config import PreprocessedCaseProperties
 from medicai.trainer.nnunet.utils.io import (
     collapse_single_channel,
@@ -65,9 +65,13 @@ def _collect_class_locations(
     target_class_ids = target_class_ids if target_class_ids is not None else []
     class_locations: dict[str, list[list[int]]] = {}
 
-    if task_type == "multi-label" and label.ndim >= 3:
+    if task_type in {"multi-label", "region_based"} and label.ndim >= 3:
         n_channels = label.shape[-1]
-        class_ids = target_class_ids if target_class_ids else list(range(1, n_channels + 1))
+        class_ids = (
+            list(range(1, n_channels + 1))
+            if task_type == "region_based"
+            else target_class_ids or list(range(1, n_channels + 1))
+        )
         for chan_idx in range(n_channels):
             coords = np.argwhere(label[..., chan_idx] > 0)
             if coords.size == 0:
@@ -135,26 +139,63 @@ def crop_to_nonzero(
 
 
 def _resample_channels(images, original_spacing, target_spacing, configuration):
+    if len(images[0].shape) != 3 or len(original_spacing) != 3:
+        raise ValueError("nnU-Net preprocessing currently expects 3D input volumes and spacing.")
+    spatial_shape = images[0].shape
     if configuration == "2d":
-        image_spacing_2d = original_spacing[-2:]
-        target_spacing_2d = target_spacing[-2:]
-        return [
-            resample_image_2d(img, image_spacing_2d, target_spacing_2d, order=3) for img in images
-        ]
-    return [resample_image(img, original_spacing, target_spacing, order=3) for img in images]
+        # A 2D network configuration still consumes 3D cases; preserve depth
+        # and resample only the in-plane dimensions.
+        zoom = compute_zoom_factors(original_spacing[-2:], target_spacing[-2:])
+        target_shape = (spatial_shape[0],) + tuple(
+            max(1, int(round(size * factor)))
+            for size, factor in zip(spatial_shape[-2:], zoom, strict=True)
+        )
+    else:
+        zoom = compute_zoom_factors(original_spacing, target_spacing)
+        target_shape = tuple(
+            max(1, int(round(size * factor)))
+            for size, factor in zip(spatial_shape, zoom, strict=True)
+        )
+
+    result = []
+    for image in images:
+        image_tensor = ops.convert_to_tensor(image[..., np.newaxis], dtype="float32")
+        resized = Resize(
+            keys=["image"],
+            interpolation="trilinear",
+            target_shape=target_shape,
+            input_layout="DHWC",
+        )({"image": image_tensor})
+        # TODO: Add cubic interpolation to Resize for closer nnU-Net parity.
+        result.append(ops.convert_to_numpy(resized["image"])[..., 0])
+    return result
 
 
 def _resample_label_map(label, original_spacing, target_spacing, configuration):
+    if label.ndim != 3 or len(original_spacing) != 3:
+        raise ValueError("nnU-Net preprocessing currently expects 3D label volumes and spacing.")
+    spatial_shape = label.shape
     if configuration == "2d":
-        return resample_image_2d(
-            label.astype(np.float32),
-            original_spacing[-2:],
-            target_spacing[-2:],
-            order=0,
-        ).astype(np.int64)
-    return resample_label(label.astype(np.float32), original_spacing, target_spacing).astype(
-        np.int64
-    )
+        zoom = compute_zoom_factors(original_spacing[-2:], target_spacing[-2:])
+        target_shape = (spatial_shape[0],) + tuple(
+            max(1, int(round(size * factor)))
+            for size, factor in zip(spatial_shape[-2:], zoom, strict=True)
+        )
+    else:
+        zoom = compute_zoom_factors(original_spacing, target_spacing)
+        target_shape = tuple(
+            max(1, int(round(size * factor)))
+            for size, factor in zip(spatial_shape, zoom, strict=True)
+        )
+
+    label_tensor = ops.convert_to_tensor(label[..., np.newaxis], dtype="float32")
+    resized = Resize(
+        keys=["label"],
+        interpolation="nearest",
+        target_shape=target_shape,
+        input_layout="DHWC",
+    )({"label": label_tensor})
+    return ops.convert_to_numpy(resized["label"])[..., 0].astype(np.int64)
 
 
 def _load_image_channels(
@@ -166,12 +207,20 @@ def _load_image_channels(
     images = []
     original_spacing = None
     original_shape = None
+    source_affine = None
+    source_affine_path = None
     spatial_dims = expected_spatial_dims
 
     for img_path in image_paths:
-        img, _, _, loaded_spacing = load_medical_image(
+        img, affine, _, loaded_spacing = load_medical_image(
             img_path,
         )
+        if (
+            not np.issubdtype(img.dtype, np.number)
+            or np.iscomplexobj(img)
+            or not np.all(np.isfinite(img))
+        ):
+            raise ValueError(f"Image {img_path} must contain finite numeric values.")
         candidate_spacing = (
             original_spacing_override if original_spacing_override is not None else loaded_spacing
         )
@@ -185,10 +234,41 @@ def _load_image_channels(
             layout=image_layout,
         )
         img = collapse_single_channel(img, spatial_dims)
+        image_shape = get_spatial_shape(img, spatial_dims)
+        is_nifti = str(img_path).lower().endswith((".nii", ".nii.gz"))
+
+        if original_shape is not None and image_shape != original_shape:
+            raise ValueError(
+                f"Image modality {img_path} has spatial shape {image_shape}; "
+                f"expected {original_shape} to match the other modalities."
+            )
+        if is_nifti:
+            affine = np.asarray(affine, dtype=np.float64)
+            if source_affine is None:
+                source_affine = affine
+                source_affine_path = img_path
+            elif not np.allclose(affine, source_affine, rtol=1e-5, atol=1e-5):
+                raise ValueError(
+                    f"NIfTI modality {img_path} has an affine that does not match "
+                    f"{source_affine_path}. Register/resample modalities to a common geometry "
+                    "first."
+                )
 
         if original_spacing is None:
             original_spacing = ensure_spacing(candidate_spacing, spatial_dims)
-            original_shape = get_spatial_shape(img, spatial_dims)
+            original_shape = image_shape
+        else:
+            modality_spacing = ensure_spacing(candidate_spacing, spatial_dims)
+            if not np.allclose(
+                modality_spacing,
+                original_spacing,
+                rtol=1e-5,
+                atol=1e-5,
+            ):
+                raise ValueError(
+                    f"Image modality {img_path} has spacing {modality_spacing}; "
+                    f"expected {original_spacing} to match the other modalities."
+                )
 
         if img.ndim > spatial_dims:
             n_channels = img.shape[-1]
@@ -197,7 +277,72 @@ def _load_image_channels(
         else:
             images.append(img.astype(np.float32))
 
-    return images, original_spacing, original_shape, spatial_dims
+    return images, original_spacing, original_shape, spatial_dims, source_affine
+
+
+def _validate_label_alignment(
+    label_paths,
+    image_shape,
+    image_affine,
+    spatial_dims,
+    original_spacing,
+    original_spacing_override=None,
+    label_layout=None,
+):
+    """Fail early when a label map is not aligned with its image volume."""
+    if label_paths is None:
+        return
+    label_path = label_paths[0] if isinstance(label_paths, list) else label_paths
+    label, affine, _, label_spacing = load_medical_image(label_path)
+    expected_label_spacing = original_spacing
+    if label_layout is not None:
+        target_axes = "HW" if spatial_dims == 2 else "DHW"
+        label_axes = label_layout.upper().replace("C", "")
+        if len(label_axes) == spatial_dims and set(label_axes) == set(target_axes):
+            expected_label_spacing = tuple(
+                original_spacing[target_axes.index(axis)] for axis in label_axes
+            )
+    candidate_spacing = (
+        expected_label_spacing
+        if original_spacing_override is not None or label_spacing is None
+        else label_spacing
+    )
+    label_dims = infer_spatial_dims(
+        label, spacing=candidate_spacing, is_3d=spatial_dims == 3
+    )
+    label, candidate_spacing = normalize_layout_and_spacing(
+        label,
+        label_dims,
+        spacing=candidate_spacing,
+        layout=label_layout,
+    )
+    label = collapse_single_channel(label, label_dims)
+    label_shape = get_spatial_shape(label, label_dims)
+    if label_dims != spatial_dims or label_shape != image_shape:
+        raise ValueError(
+            f"Label {label_path} has spatial shape {label_shape} ({label_dims}D); "
+            f"expected {image_shape} ({spatial_dims}D) to match its image."
+        )
+
+    is_nifti = str(label_path).lower().endswith((".nii", ".nii.gz"))
+    if image_affine is not None:
+        if not is_nifti or not np.allclose(
+            np.asarray(affine, dtype=np.float64), image_affine, rtol=1e-5, atol=1e-5
+        ):
+            raise ValueError(
+                f"Label {label_path} does not share the image NIfTI affine. "
+                "Register/resample the label to the image geometry first."
+            )
+    if candidate_spacing is not None and not np.allclose(
+        ensure_spacing(candidate_spacing, spatial_dims),
+        original_spacing,
+        rtol=1e-5,
+        atol=1e-5,
+    ):
+        raise ValueError(
+            f"Label {label_path} spacing {candidate_spacing} does not match "
+            f"image spacing {original_spacing}."
+        )
 
 
 def _load_labels(
@@ -324,6 +469,19 @@ def _load_labels(
     for ignored_id in ignore_class_ids:
         label_data[label_data == ignored_id] = -1
 
+    if task_type == "region_based":
+        region_definitions = (
+            list(regions.values()) if isinstance(regions, dict) else list(regions or [])
+        )
+        if not region_definitions:
+            raise ValueError("Region-based preprocessing requires at least one region definition.")
+        region_targets = np.stack(
+            [np.isin(label_data, region_ids).astype(np.int64) for region_ids in region_definitions],
+            axis=-1,
+        )
+        region_targets[label_data < 0, :] = -1
+        return region_targets
+
     if task_type == "binary":
         positive_ids = target_class_ids if target_class_ids else [1]
         binary_mask = np.zeros_like(label_data, dtype=np.int64)
@@ -355,6 +513,8 @@ def preprocess_case(
     label_output=None,
     regions=None,
     use_mask_for_norm=None,
+    source_hashes=None,
+    cache_signature=None,
 ):
     output_path = Path(output_path)
     properties_output_path = (
@@ -363,13 +523,23 @@ def preprocess_case(
         else output_path.with_suffix(".json")
     )
 
-    images, original_spacing, original_shape, spatial_dims = _load_image_channels(
+    images, original_spacing, original_shape, spatial_dims, source_affine = _load_image_channels(
         image_paths=image_paths,
         original_spacing_override=original_spacing_override,
         image_layout=image_layout,
     )
     if not images:
         raise ValueError("No image channels found for case preprocessing.")
+
+    _validate_label_alignment(
+        label_paths=label_paths,
+        image_shape=original_shape,
+        image_affine=source_affine,
+        spatial_dims=spatial_dims,
+        original_spacing=original_spacing,
+        original_spacing_override=original_spacing_override,
+        label_layout=label_layout,
+    )
 
     target_spacing = ensure_spacing(target_spacing, spatial_dims)
     label = _load_labels(
@@ -392,7 +562,7 @@ def preprocess_case(
     shape_before_cropping = get_spatial_shape(image_stack, spatial_dims)
 
     # 2. Crop to nonzero region
-    if do_crop and configuration != "2d":
+    if do_crop:
         image_stack, label, bbox = crop_to_nonzero(
             image_stack,
             label,
@@ -438,7 +608,7 @@ def preprocess_case(
     )
 
     if label is not None:
-        if item_type == "multi-label" and label.ndim > spatial_dims:
+        if item_type in {"multi-label", "region_based"} and label.ndim > spatial_dims:
             n_channels = label.shape[-1]
             label_channels = []
             for chan_idx in range(n_channels):
@@ -461,8 +631,14 @@ def preprocess_case(
 
     image_stack = np.stack(resampled_images, axis=-1).astype(np.float32)
     shape_after_resampling = get_spatial_shape(image_stack, spatial_dims)
+    metadata_target_spacing = list(target_spacing)
+    if configuration == "2d" and spatial_dims == 3:
+        metadata_target_spacing = [original_spacing[0], *target_spacing[-2:]]
 
-    save_dict = {"data": image_stack, "spacing": np.asarray(target_spacing, dtype=np.float32)}
+    save_dict = {
+        "data": image_stack,
+        "spacing": np.asarray(metadata_target_spacing, dtype=np.float32),
+    }
     if label is not None:
         save_dict["seg"] = label.astype(np.int64)
     save_npz(save_dict, output_path)
@@ -470,13 +646,10 @@ def preprocess_case(
     properties = PreprocessedCaseProperties(
         case_id=output_path.stem,
         original_spacing=[float(s) for s in original_spacing],
-        target_spacing=[float(s) for s in target_spacing],
+        target_spacing=[float(s) for s in metadata_target_spacing],
         original_shape=[int(s) for s in original_shape],
         shape_after_resampling=[int(s) for s in shape_after_resampling],
-        shape_after_cropping=get_spatial_shape(
-            image_stack,
-            spatial_dims,
-        ),
+        shape_after_cropping=[int(s) for s in shape_after_cropping],
         bbox=bbox_list,
         modalities=list(modalities),
         normalization_schemes=list(normalization_schemes),
@@ -497,15 +670,32 @@ def preprocess_case(
         ),
         item_type=item_type,
         spatial_dims=spatial_dims,
+        source_affine=source_affine.tolist() if source_affine is not None else None,
+        source_layout=image_layout,
+        source_spacing=(
+            [float(value) for value in original_spacing_override]
+            if original_spacing_override is not None
+            else None
+        ),
+        source_hashes=source_hashes,
+        cache_signature=cache_signature,
     )
     properties.to_json(properties_output_path)
 
     return {
         "data": image_stack,
         "seg": label,
-        "spacing": target_spacing,
+        "spacing": metadata_target_spacing,
         "properties": properties,
     }
+
+
+def _hash_source_file(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _process_item_helper(
@@ -517,16 +707,46 @@ def _process_item_helper(
     plan,
     fingerprint,
     configuration,
+    incremental,
 ):
     output_path = output_dir / f"{item.case_id}.npz"
     properties_output_path = properties_dir / f"{item.case_id}.json"
-
-    if output_path.exists() and properties_output_path.exists():
-        return None
-
     image_layout = item.image_layout or manifest.image_layout
     label_layout = item.label_layout or manifest.label_layout
     label_output = item.label_output or manifest.label_output
+    label_paths = item.labels if isinstance(item.labels, list) else [item.labels]
+    source_paths = [*item.images, *(path for path in label_paths if path is not None)]
+    source_hashes = {str(path): _hash_source_file(path) for path in source_paths}
+    signature_data = {
+        "cache_version": 1,
+        "source_hashes": source_hashes,
+        "configuration": configuration,
+        "target_spacing": list(target_spacing),
+        "normalization_schemes": list(plan.normalization_schemes),
+        "intensity_stats": fingerprint.intensity_stats,
+        "use_mask_for_norm": fingerprint.use_mask_for_norm,
+        "modalities": list(fingerprint.modalities),
+        "task_type": item.task_type or manifest.task_type,
+        "ignore_class_ids": manifest.ignore_class_ids,
+        "target_class_ids": manifest.target_class_ids,
+        "label_output": label_output,
+        "regions": item.regions or manifest.regions,
+        "spacing": item.spacing,
+        "image_layout": image_layout,
+        "label_layout": label_layout,
+    }
+    cache_signature = hashlib.sha256(
+        json.dumps(signature_data, sort_keys=True, default=str, separators=(",", ":")).encode()
+    ).hexdigest()
+    if incremental and output_path.exists() and properties_output_path.exists():
+        try:
+            cached = PreprocessedCaseProperties.from_json(properties_output_path)
+            with np.load(output_path, allow_pickle=False) as cache:
+                valid_cache = "data" in cache and "spacing" in cache
+            if cached.cache_signature == cache_signature and valid_cache:
+                return {"case_id": item.case_id, "status": "skipped"}
+        except Exception:
+            pass
     preprocess_case(
         image_paths=[Path(p) for p in item.images],
         label_paths=item.labels,
@@ -547,8 +767,10 @@ def _process_item_helper(
         label_output=label_output,
         regions=item.regions or manifest.regions,
         use_mask_for_norm=fingerprint.use_mask_for_norm,
+        source_hashes=source_hashes,
+        cache_signature=cache_signature,
     )
-    return item.case_id
+    return {"case_id": item.case_id, "status": "processed"}
 
 
 def preprocess_dataset(
@@ -559,6 +781,7 @@ def preprocess_dataset(
     max_cases=None,
     manifest_file=None,
     num_workers=None,
+    incremental=True,
 ):
 
     output_dir = Path(output_dir) / configuration
@@ -578,10 +801,7 @@ def preprocess_dataset(
             f"Available: {[k for k, v in net_cfg_map.items() if v is not None]}"
         )
 
-    if configuration == "2d" and getattr(fingerprint, "spatial_dims", 3) == 3:
-        target_spacing = plan.target_spacing[1:]
-    else:
-        target_spacing = plan.target_spacing
+    target_spacing = net_cfg.target_spacing or plan.target_spacing
 
     if manifest_file is None or not Path(manifest_file).exists():
         raise ValueError(
@@ -590,7 +810,11 @@ def preprocess_dataset(
         )
 
     manifest = DatasetManifest.from_json(manifest_file)
-    items = manifest.items[:max_cases] if max_cases else manifest.items
+    if max_cases is not None and max_cases < 0:
+        raise ValueError("max_cases must be non-negative or None.")
+    if num_workers is not None and num_workers < 1:
+        raise ValueError("num_workers must be a positive integer or None.")
+    items = manifest.items if max_cases is None else manifest.items[:max_cases]
 
     worker_fn = partial(
         _process_item_helper,
@@ -601,12 +825,13 @@ def preprocess_dataset(
         plan=plan,
         fingerprint=fingerprint,
         configuration=configuration,
+        incremental=incremental,
     )
 
     workers = num_workers if num_workers is not None else max(1, multiprocessing.cpu_count() - 1)
     if workers > 1:
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
-            list(
+            results = list(
                 tqdm(
                     executor.map(worker_fn, items),
                     total=len(items),
@@ -614,5 +839,17 @@ def preprocess_dataset(
                 )
             )
     else:
-        for item in tqdm(items, desc=f"Preprocessing ({configuration})"):
-            worker_fn(item)
+        results = [
+            worker_fn(item) for item in tqdm(items, desc=f"Preprocessing ({configuration})")
+        ]
+
+    return {
+        "configuration": configuration,
+        "output_dir": str(output_dir),
+        "processed_cases": [
+            result["case_id"] for result in results if result["status"] == "processed"
+        ],
+        "skipped_cases": [
+            result["case_id"] for result in results if result["status"] == "skipped"
+        ],
+    }

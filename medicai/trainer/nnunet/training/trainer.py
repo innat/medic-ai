@@ -6,6 +6,19 @@ import keras
 from medicai.losses import BinaryDiceCELoss, SparseDiceCELoss
 from medicai.metrics.dice import BinaryDiceMetric, SparseDiceMetric
 
+
+class _EpochCheckpoint(keras.callbacks.Callback):
+    """Save weights at a fixed epoch interval (not a batch interval)."""
+
+    def __init__(self, filepath, every_n_epochs):
+        super().__init__()
+        self.filepath = str(filepath)
+        self.every_n_epochs = every_n_epochs
+
+    def on_epoch_end(self, epoch, logs=None):
+        if (epoch + 1) % self.every_n_epochs == 0:
+            self.model.save_weights(self.filepath)
+
 # Trainer
 
 
@@ -38,6 +51,8 @@ class nnUNetTrainer:
         configuration="3d_fullres",
         loss=None,
         metrics=None,
+        run_metadata=None,
+        compile_kwargs=None,
     ):
         self.model = model
         self.train_dataset = train_dataset
@@ -46,6 +61,7 @@ class nnUNetTrainer:
         self.cfg = train_config
         self.fold = fold
         self.configuration = configuration
+        self.run_metadata = run_metadata or {}
 
         # Resolve network config for this configuration
         net_cfg_map = {
@@ -65,10 +81,10 @@ class nnUNetTrainer:
             / configuration
             / f"fold_{fold}"
         )
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
         self.custom_loss_fn = loss
         self.custom_metrics = metrics
+        self.compile_kwargs = dict(compile_kwargs or {})
+        self.use_default_lr_schedule = "optimizer" not in self.compile_kwargs
 
         # Compile model (builds optimizer, loss, and metrics internally)
         self._compile_model()
@@ -79,8 +95,17 @@ class nnUNetTrainer:
 
     def _metric_monitor_name(self):
         """Return the correct monitor name depending on deep supervision."""
-        if self.metrics and hasattr(self.metrics[0], "name"):
-            metric_name = self.metrics[0].name
+        metrics = self.metrics
+        if isinstance(metrics, dict):
+            metrics = [
+                metric
+                for values in metrics.values()
+                for metric in (values if isinstance(values, (list, tuple)) else [values])
+            ]
+        elif not isinstance(metrics, (list, tuple)):
+            metrics = [metrics] if metrics else []
+        if metrics and hasattr(metrics[0], "name"):
+            metric_name = metrics[0].name
         else:
             metric_name = "loss"
         use_ds = (
@@ -93,36 +118,16 @@ class nnUNetTrainer:
     def _build_optimizer(self):
         """Resolve and returns the Keras optimizer."""
         cfg = self.cfg
-        total_steps = cfg.n_epochs * cfg.iters_per_epoch
-
-        # Resolve Learning Rate Schedule
-        if isinstance(cfg.lr_schedule, str):
-            if cfg.lr_schedule == "poly":
-                lr = keras.optimizers.schedules.PolynomialDecay(
-                    initial_learning_rate=cfg.lr,
-                    decay_steps=total_steps,
-                    end_learning_rate=0.0,
-                    power=cfg.poly_exp,
-                )
-            else:
-                lr = cfg.lr
-        else:
-            lr = cfg.lr_schedule
-
-        # Resolve Optimizer
-        if isinstance(cfg.optimizer, str):
-            if cfg.optimizer == "sgd":
-                return keras.optimizers.SGD(
-                    learning_rate=lr,
-                    momentum=cfg.momentum,
-                    nesterov=cfg.nesterov,
-                    weight_decay=cfg.weight_decay,
-                    gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-                    global_clipnorm=12.0,
-                    use_ema=cfg.use_ema,
-                    ema_momentum=cfg.ema_momentum,
-                )
-        return cfg.optimizer
+        return keras.optimizers.SGD(
+            learning_rate=cfg.lr,
+            momentum=cfg.momentum,
+            nesterov=cfg.nesterov,
+            weight_decay=cfg.weight_decay,
+            gradient_accumulation_steps=cfg.gradient_accumulation_steps,
+            global_clipnorm=12.0,
+            use_ema=cfg.use_ema,
+            ema_momentum=cfg.ema_momentum,
+        )
 
     def _build_loss(self):
         """Resolve and returns the loss and optional loss_weights."""
@@ -132,12 +137,16 @@ class nnUNetTrainer:
         if self.custom_loss_fn is not None:
             base_loss = self.custom_loss_fn
         else:
-            if self.task_type in {"binary", "multi-label"}:
+            if self.task_type in {"binary", "multi-label", "region_based"}:
                 loss_ignore_ids = self.plan.ignore_class_ids if self.task_type == "binary" else None
                 base_loss = BinaryDiceCELoss(
                     from_logits=False,
                     num_classes=self.n_classes,
-                    target_class_ids=self.plan.target_class_ids or None,
+                    target_class_ids=(
+                        None
+                        if self.task_type == "region_based"
+                        else self.plan.target_class_ids or None
+                    ),
                     ignore_class_ids=loss_ignore_ids,
                 )
             else:
@@ -179,13 +188,17 @@ class nnUNetTrainer:
                 return list(self.custom_metrics)
             return [self.custom_metrics]
 
-        if self.task_type in {"binary", "multi-label"}:
+        if self.task_type in {"binary", "multi-label", "region_based"}:
             metric_ignore_ids = self.plan.ignore_class_ids if self.task_type == "binary" else None
             return [
                 BinaryDiceMetric(
                     from_logits=False,
                     num_classes=self.n_classes,
-                    target_class_ids=self.plan.target_class_ids or None,
+                    target_class_ids=(
+                        None
+                        if self.task_type == "region_based"
+                        else self.plan.target_class_ids or None
+                    ),
                     ignore_class_ids=metric_ignore_ids,
                 )
             ]
@@ -201,18 +214,64 @@ class nnUNetTrainer:
 
     def _compile_model(self):
         """Compile the Keras model using resolved components."""
-        self.optimizer = self._build_optimizer()
-        self.losses, self.loss_weights = self._build_loss()
-        self.metrics = self._build_metrics()
+        default_loss, default_loss_weights = self._build_loss()
+        default_metrics = self._build_metrics()
+        compile_args = {
+            "optimizer": self._build_optimizer(),
+            "loss": default_loss,
+            "loss_weights": default_loss_weights,
+            "metrics": default_metrics,
+        }
+        compile_args.update(self.compile_kwargs)
+        self.model.compile(**compile_args)
+        self.optimizer = self.model.optimizer
+        self.losses = compile_args["loss"]
+        self.loss_weights = compile_args.get("loss_weights")
+        self.metrics = compile_args.get("metrics") or []
 
-        self.model.compile(
-            optimizer=self.optimizer,
-            loss=self.losses,
-            loss_weights=self.loss_weights,
-            metrics=self.metrics,
+    @staticmethod
+    def _json_safe(value):
+        """Convert common configuration values to stable JSON-compatible data."""
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (list, tuple)):
+            return [nnUNetTrainer._json_safe(item) for item in value]
+        if isinstance(value, dict):
+            return {str(key): nnUNetTrainer._json_safe(item) for key, item in value.items()}
+        if hasattr(value, "get_config"):
+            return {
+                "class": f"{type(value).__module__}.{type(value).__qualname__}",
+                "config": nnUNetTrainer._json_safe(value.get_config()),
+            }
+        return {"class": f"{type(value).__module__}.{type(value).__qualname__}", "repr": repr(value)}
+
+    def _run_signature(self):
+        cfg = self.cfg.to_dict()
+        cfg.pop("checkpoint_dir", None)
+        return self._json_safe(
+            {
+                "dataset": self.plan.dataset_name,
+                "network": self.plan.network_type,
+                "configuration": self.configuration,
+                "fold": self.fold,
+                "network_config": self.net_cfg.to_dict() if self.net_cfg else None,
+                "task_type": self.task_type,
+                "target_class_ids": self.plan.target_class_ids,
+                "ignore_class_ids": self.plan.ignore_class_ids,
+                "training_config": cfg,
+                "run_metadata": self.run_metadata,
+                "compile_config": self._json_safe(
+                    {
+                        "optimizer": self.optimizer,
+                        "loss": self.losses,
+                        "metrics": self.metrics,
+                        "compile_kwargs": self.compile_kwargs,
+                    }
+                ),
+            }
         )
 
-    def run(self, callbacks=None):
+    def run(self, callbacks=None, resume=False, fit_kwargs=None):
         """
         Execute the full training loop using model.fit().
 
@@ -223,16 +282,51 @@ class nnUNetTrainer:
         cfg = self.cfg
         if callbacks is None:
             callbacks = []
-
-        # Enforce no duplicate checkpoints passed by user to prevent IO issues
-        has_checkpoint = any(isinstance(c, keras.callbacks.ModelCheckpoint) for c in callbacks)
-        if has_checkpoint:
-            raise ValueError(
-                "A ModelCheckpoint callback was found in your custom callbacks list. "
-                "nnUNetTrainer injects its own checkpoint logic. Please remove it from your list."
+        else:
+            callbacks = list(callbacks)
+        fit_kwargs = dict(fit_kwargs or {})
+        callback_signature = []
+        for callback in callbacks:
+            try:
+                config = callback.get_config()
+            except (AttributeError, NotImplementedError):
+                config = None
+            callback_signature.append(
+                {
+                    "class": f"{type(callback).__module__}.{type(callback).__qualname__}",
+                    "config": self._json_safe(config),
+                }
             )
+        self.run_metadata["fit_kwargs"] = self._json_safe(fit_kwargs)
+        self.run_metadata["callbacks"] = callback_signature
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
         monitor_name = self._metric_monitor_name()
+        backup_dir = self.output_dir / "training_backup"
+        run_config_path = self.output_dir / "training_run.json"
+        run_signature = self._run_signature()
+
+        if not resume and backup_dir.exists() and any(backup_dir.iterdir()):
+            raise ValueError(
+                "An interrupted training backup already exists. Pass resume=True to restore it, "
+                "or choose a new output directory for a fresh run."
+            )
+        if resume and run_config_path.exists():
+            with run_config_path.open(encoding="utf-8") as stream:
+                previous_signature = json.load(stream)
+            if previous_signature != run_signature:
+                raise ValueError(
+                    "Cannot resume because training settings differ from the interrupted run. "
+                    "Keep epochs, steps_per_epoch, batch size, patch size, optimizer, learning "
+                    "rate schedule, and dataset split unchanged."
+                )
+        elif resume and backup_dir.exists() and any(backup_dir.iterdir()):
+            raise ValueError(
+                "A training backup exists without its run configuration; refusing to resume "
+                "with an unverifiable schedule."
+            )
+        with run_config_path.open("w", encoding="utf-8") as stream:
+            json.dump(run_signature, stream, indent=2, sort_keys=True)
 
         # Internally required callbacks
         internal_callbacks = [
@@ -244,17 +338,40 @@ class nnUNetTrainer:
                 save_weights_only=True,
                 verbose=1,
             ),
-            keras.callbacks.ModelCheckpoint(
-                filepath=str(self.output_dir / "checkpoint_latest.weights.h5"),
-                save_freq=cfg.save_every_n_epochs,
-                save_weights_only=True,
-                verbose=0,
+            _EpochCheckpoint(
+                filepath=self.output_dir / "checkpoint_latest.weights.h5",
+                every_n_epochs=cfg.save_every_n_epochs,
             ),
-            keras.callbacks.CSVLogger(str(self.output_dir / "training_log.csv")),
+            keras.callbacks.CSVLogger(
+                str(self.output_dir / "training_log.csv"), append=resume
+            ),
         ]
+
+        if resume:
+            internal_callbacks.append(
+                keras.callbacks.BackupAndRestore(
+                    backup_dir=str(backup_dir),
+                    save_freq="epoch",
+                )
+            )
 
         if cfg.use_ema:
             internal_callbacks.append(keras.callbacks.SwapEMAWeights(swap_on_epoch=True))
+
+        custom_lr_schedule = any(
+            isinstance(
+                callback,
+                (keras.callbacks.LearningRateScheduler, keras.callbacks.ReduceLROnPlateau),
+            )
+            for callback in callbacks
+        )
+        if self.use_default_lr_schedule and cfg.lr_schedule == "poly" and not custom_lr_schedule:
+            internal_callbacks.append(
+                keras.callbacks.LearningRateScheduler(
+                    lambda epoch, _lr: cfg.lr
+                    * max(0.0, 1.0 - epoch / max(cfg.n_epochs, 1)) ** cfg.poly_exp
+                )
+            )
 
         all_callbacks = internal_callbacks + callbacks
 
@@ -265,7 +382,8 @@ class nnUNetTrainer:
             epochs=cfg.n_epochs,
             steps_per_epoch=cfg.iters_per_epoch,
             callbacks=all_callbacks,
-            verbose=1,
+            verbose=fit_kwargs.pop("verbose", 1),
+            **fit_kwargs,
         )
 
         self.history = fit_history.history
