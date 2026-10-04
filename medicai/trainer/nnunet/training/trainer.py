@@ -118,16 +118,22 @@ class nnUNetTrainer:
     def _build_optimizer(self):
         """Resolve and returns the Keras optimizer."""
         cfg = self.cfg
-        return keras.optimizers.SGD(
-            learning_rate=cfg.lr,
-            momentum=cfg.momentum,
-            nesterov=cfg.nesterov,
-            weight_decay=cfg.weight_decay,
-            gradient_accumulation_steps=cfg.gradient_accumulation_steps,
-            global_clipnorm=12.0,
-            use_ema=cfg.use_ema,
-            ema_momentum=cfg.ema_momentum,
-        )
+        optimizer_kwargs = {
+            "learning_rate": cfg.lr,
+            "momentum": cfg.momentum,
+            "nesterov": cfg.nesterov,
+            "weight_decay": cfg.weight_decay,
+            "global_clipnorm": 12.0,
+            "use_ema": cfg.use_ema,
+            "ema_momentum": cfg.ema_momentum,
+        }
+        # Keras treats gradient accumulation as disabled by default; when set,
+        # gradient_accumulation_steps must be at least 2.
+        if cfg.gradient_accumulation_steps > 1:
+            optimizer_kwargs["gradient_accumulation_steps"] = cfg.gradient_accumulation_steps
+        elif cfg.gradient_accumulation_steps != 1:
+            raise ValueError("gradient_accumulation_steps must be 1 (disabled) or an integer >= 2.")
+        return keras.optimizers.SGD(**optimizer_kwargs)
 
     def _build_loss(self):
         """Resolve and returns the loss and optional loss_weights."""
