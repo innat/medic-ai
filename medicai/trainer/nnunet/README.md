@@ -384,11 +384,12 @@ train_data = pipeline.dataset(
 images, targets = next(iter(train_data))
 ```
 
-`dataset()` arguments: `split` selects the generated fold partition (`"train"`
-or `"validation"`), `fold` (default `0`), `n_folds` (default `5`),
-`configuration` (default saved selection), `num_threads` (default `4`), and
-`seed` (default `12345`). Batch size and epoch iteration count come from the
-plan/sampler, not user arguments.
+`dataset()` arguments: `split` selects the fold partition (`"train"` or
+`"validation"`), `fold` (default `0`), `n_folds` (five by default for generated
+KFold), optional `splits` or `splitter`/`groups`, `configuration` (default
+saved selection), `num_threads` (default `4`), and `seed` (default `12345`).
+Pass the same split arguments as `train()` to inspect its exact fold. Batch
+size and epoch iteration count come from the plan/sampler, not user arguments.
 
 ## Workflow C: Resume Interrupted Training
 
@@ -448,6 +449,53 @@ pipeline owns patch batch size and steps per epoch; neither can be overridden.
 Internally generated random-patch streams use the nnU-Net iteration-based
 epoch length, not `number_of_cases // batch_size`. Use callbacks to customize
 fit-time behavior such as learning-rate schedules.
+
+### Cross-Validation Strategies
+
+By default, MedicAI creates deterministic five-fold KFold splits using the
+same shuffle seed and fold-generation algorithm as official nnU-Net. Set
+`n_folds` to choose another fold count. You can instead provide explicit
+folds, or pass a scikit-learn-style splitter. For group-aware splitting, map
+every case ID to its patient/site/group ID; MedicAI checks that a group never
+crosses from a fold's training partition into its validation partition.
+
+```python
+from sklearn.model_selection import GroupKFold
+
+group_by_case = {
+    case.id: case.meta["patient_id"]
+    for case in manifest.cases
+}
+
+history = pipeline.train(
+    fold=0,
+    splitter=GroupKFold(n_splits=5),
+    groups=group_by_case,
+    epochs=1000,
+)
+```
+
+Alternatively, supply folds directly as case-ID lists. This works with any
+split-generation library and does not require scikit-learn:
+
+```python
+custom_folds = [
+    {"train": ["case_002", "case_003"], "val": ["case_001"]},
+    {"train": ["case_001", "case_003"], "val": ["case_002"]},
+    {"train": ["case_001", "case_002"], "val": ["case_003"]},
+]
+
+history = pipeline.train(fold=0, splits=custom_folds, epochs=1000)
+```
+
+Explicit folds must partition the same manifest cases in every fold and place
+each case in validation exactly once. To check patient/group separation for
+explicit folds too, pass the same `groups` mapping. Pass the same `splits` or
+`splitter`/`groups` to `pipeline.dataset()` when inspecting the corresponding
+fold's patches. Generated default splits are saved and reused when their case
+set and fold count still match; changing `n_folds` regenerates them. Custom
+splits are used as supplied, and the selected fold assignment is recorded in
+training provenance for resume checks.
 
 ## Current Limitations
 

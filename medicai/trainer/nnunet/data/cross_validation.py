@@ -27,7 +27,7 @@ def generate_splits(
     seed=12345,
 ):
     """
-    Generate stratified k-fold splits.
+    Generate deterministic K-fold splits matching nnU-Net's default splitter.
 
     Parameters
     ----------
@@ -56,26 +56,121 @@ def generate_splits(
     if n_folds > len(case_ids):
         raise ValueError(f"n_folds={n_folds} exceeds number of available cases ({len(case_ids)}).")
 
-    rng = np.random.default_rng(seed)
-    n = len(case_ids)
-
-    # Shuffle once with fixed seed
-    indices = rng.permutation(n).tolist()
-    shuffled = [case_ids[i] for i in indices]
-
-    # Partition into n_folds equal-ish subsets
-    folds_indices = [shuffled[i::n_folds] for i in range(n_folds)]
-
+    indices = np.arange(len(case_ids))
+    np.random.RandomState(seed).shuffle(indices)
+    fold_sizes = np.full(n_folds, len(case_ids) // n_folds, dtype=int)
+    fold_sizes[: len(case_ids) % n_folds] += 1
     splits = []
-    for val_fold_idx in range(n_folds):
-        val_ids = folds_indices[val_fold_idx]
-        train_ids = []
-        for i, fold in enumerate(folds_indices):
-            if i != val_fold_idx:
-                train_ids.extend(fold)
-        splits.append({"train": sorted(train_ids), "val": sorted(val_ids)})
+    current = 0
+    for fold_size in fold_sizes:
+        val_indices = indices[current : current + fold_size]
+        train_indices = np.setdiff1d(np.arange(len(case_ids)), val_indices)
+        splits.append(
+            {
+                "train": [case_ids[index] for index in train_indices],
+                "val": [case_ids[index] for index in val_indices],
+            }
+        )
+        current += fold_size
 
     return splits
+
+
+def validate_splits(splits, case_ids, groups=None):
+    """Validate and normalize complete K-fold assignments by case ID."""
+    case_ids = [normalize_case_id(case_id) for case_id in case_ids]
+    expected = set(case_ids)
+    if not expected or len(expected) != len(case_ids):
+        raise ValueError("Case identifiers must be non-empty and unique after normalization.")
+    if not isinstance(splits, (list, tuple)) or len(splits) < 2:
+        raise ValueError("Custom cross-validation splits must contain at least two folds.")
+
+    normalized = []
+    validation_counts = {case_id: 0 for case_id in expected}
+    for fold_index, fold in enumerate(splits):
+        if not isinstance(fold, dict) or not {"train", "val"} <= set(fold):
+            raise ValueError(f"Fold {fold_index} must contain 'train' and 'val' case IDs.")
+        train_ids = [normalize_case_id(case_id) for case_id in fold["train"]]
+        val_ids = [normalize_case_id(case_id) for case_id in fold["val"]]
+        train, val = set(train_ids), set(val_ids)
+        unknown = (train | val) - expected
+        if unknown:
+            raise ValueError(f"Fold {fold_index} contains unknown case IDs: {sorted(unknown)}.")
+        if len(train) != len(train_ids) or len(val) != len(val_ids):
+            raise ValueError(f"Fold {fold_index} contains duplicate case IDs.")
+        if train & val:
+            raise ValueError(f"Fold {fold_index} has cases in both train and validation.")
+        if train | val != expected or not val:
+            raise ValueError(
+                f"Fold {fold_index} must partition all cases into non-empty validation data."
+            )
+        for case_id in val:
+            validation_counts[case_id] += 1
+        normalized.append({"train": sorted(train), "val": sorted(val)})
+
+    invalid_coverage = sorted(case_id for case_id, count in validation_counts.items() if count != 1)
+    if invalid_coverage:
+        raise ValueError(
+            "K-fold validation partitions must validate each case exactly once; "
+            f"invalid coverage for {invalid_coverage}."
+        )
+    if groups is not None:
+        normalized_groups = {normalize_case_id(case_id): value for case_id, value in groups.items()}
+        if len(normalized_groups) != len(groups) or set(normalized_groups) != expected:
+            raise ValueError("groups must map every case ID exactly once.")
+        try:
+            for fold_index, fold in enumerate(normalized):
+                train_groups = {normalized_groups[case_id] for case_id in fold["train"]}
+                val_groups = {normalized_groups[case_id] for case_id in fold["val"]}
+                leaked_groups = train_groups & val_groups
+                if leaked_groups:
+                    raise ValueError(
+                        f"Fold {fold_index} leaks group(s) across train and validation: "
+                        f"{sorted(leaked_groups, key=str)}."
+                    )
+        except TypeError as exc:
+            raise ValueError("Group identifiers must be hashable scalar values.") from exc
+    return normalized
+
+
+def generate_custom_splits(case_ids, splitter, groups=None):
+    """Generate case-ID folds from a scikit-learn-style splitter object."""
+    case_ids = sorted({normalize_case_id(case_id) for case_id in case_ids})
+    if len(case_ids) < 2:
+        raise ValueError("Custom cross-validation requires at least two cases.")
+    if not callable(getattr(splitter, "split", None)):
+        raise TypeError("splitter must provide a callable split(X, y=None, groups=None) method.")
+
+    group_values = None
+    if groups is not None:
+        normalized_groups = {normalize_case_id(case_id): value for case_id, value in groups.items()}
+        if len(normalized_groups) != len(groups):
+            raise ValueError("groups contains duplicate case IDs after normalization.")
+        missing = sorted(set(case_ids) - set(normalized_groups))
+        extra = sorted(set(normalized_groups) - set(case_ids))
+        if missing or extra:
+            raise ValueError(
+                f"groups must map every case ID exactly once; missing={missing}, extra={extra}."
+            )
+        group_values = [normalized_groups[case_id] for case_id in case_ids]
+
+    try:
+        index_splits = splitter.split(case_ids, groups=group_values)
+        splits = []
+        for train_indices, val_indices in index_splits:
+            train_indices = [int(index) for index in train_indices]
+            val_indices = [int(index) for index in val_indices]
+            if any(index < 0 or index >= len(case_ids) for index in train_indices + val_indices):
+                raise ValueError("splitter returned an out-of-range case index.")
+            splits.append(
+                {
+                    "train": [case_ids[index] for index in train_indices],
+                    "val": [case_ids[index] for index in val_indices],
+                }
+            )
+    except (IndexError, TypeError, ValueError) as exc:
+        raise ValueError(f"Unable to generate cross-validation splits: {exc}") from exc
+    return validate_splits(splits, case_ids, groups=groups)
 
 
 def save_splits(splits, path):

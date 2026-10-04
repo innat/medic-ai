@@ -20,10 +20,12 @@ from medicai.trainer.nnunet.data.preprocessing import (
 )
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
 from medicai.trainer.nnunet.data.cross_validation import (
+    generate_custom_splits,
     generate_splits,
     load_splits,
     normalize_case_id,
     save_splits,
+    validate_splits,
 )
 from medicai.trainer.nnunet.planning.planners import (
     nnUNetPlanner,
@@ -72,7 +74,6 @@ class nnUNetPipeline:
             Path(manifest_file) if manifest_file else self.input_path / "manifest.json"
         )
         self.configuration = "3d_fullres"
-        self.custom_splits = None
         self._compiled_trainer = None
         self._compile_configuration = "auto"
         self._compile_kwargs = {}
@@ -388,6 +389,9 @@ class nnUNetPipeline:
         n_folds,
         *,
         configuration=None,
+        splits=None,
+        splitter=None,
+        groups=None,
         num_threads=_DEFAULT_NUM_THREADS,
         seed=_DEFAULT_SEED,
     ):
@@ -400,14 +404,44 @@ class nnUNetPipeline:
         case_ids = [normalize_case_id(f.stem) for f in case_files]
         splits_path = self.plan_path.parent / plan.splits_file
 
-        if self.custom_splits is not None:
-            splits = self.custom_splits
+        if splits is not None and splitter is not None:
+            raise ValueError("Pass either explicit splits or a splitter, not both.")
+        if groups is not None and splitter is None and splits is None:
+            raise ValueError("groups require explicit splits or a splitter.")
+
+        if splits is not None:
+            splits = validate_splits(splits, case_ids, groups=groups)
+        elif splitter is not None:
+            splits = generate_custom_splits(case_ids, splitter, groups=groups)
         else:
+            requested_n_folds = 5 if n_folds is None else n_folds
+            if isinstance(requested_n_folds, bool) or not isinstance(requested_n_folds, int):
+                raise ValueError("n_folds must be an integer of at least 2.")
+            if requested_n_folds < 2:
+                raise ValueError("n_folds must be an integer of at least 2.")
+            splits = None
             if splits_path.exists():
-                splits = load_splits(splits_path)
-            else:
-                splits = generate_splits(case_ids, n_folds=n_folds)
+                try:
+                    cached_splits = validate_splits(load_splits(splits_path), case_ids)
+                    if len(cached_splits) == requested_n_folds:
+                        splits = cached_splits
+                    else:
+                        logger.info(
+                            "Regenerating saved cross-validation splits: requested %d folds, "
+                            "found %d.",
+                            requested_n_folds,
+                            len(cached_splits),
+                        )
+                except (OSError, TypeError, ValueError) as exc:
+                    logger.warning("Ignoring invalid saved splits at %s: %s", splits_path, exc)
+            if splits is None:
+                splits = generate_splits(case_ids, n_folds=requested_n_folds, seed=seed)
                 save_splits(splits, splits_path)
+
+        if n_folds is not None and len(splits) != n_folds:
+            raise ValueError(
+                f"n_folds={n_folds} does not match the {len(splits)} supplied cross-validation folds."
+            )
 
         net_cfg_map = {
             "3d_fullres": plan.plan_3d_fullres,
@@ -504,7 +538,10 @@ class nnUNetPipeline:
         *,
         split: str = "train",
         fold: int = 0,
-        n_folds: int = 5,
+        n_folds: int | None = None,
+        splits: list[dict[str, list[str]]] | None = None,
+        splitter: Any | None = None,
+        groups: dict[str, Any] | None = None,
         configuration: str | None = None,
         num_threads: int = _DEFAULT_NUM_THREADS,
         seed: int = _DEFAULT_SEED,
@@ -520,6 +557,11 @@ class nnUNetPipeline:
                 unaugmented patches.
             fold: Cross-validation fold index.
             n_folds: Number of folds when splits are generated automatically.
+                Defaults to five for the built-in KFold splitter; inferred from
+                explicit folds or a custom splitter when omitted.
+            splits: Explicit K-fold partitions with ``train`` and ``val`` case-ID lists.
+            splitter: Scikit-learn-style splitter implementing ``split(X, y=None, groups=None)``.
+            groups: Mapping from each case ID to its group, required by group-aware splitters.
             configuration: Planned configuration such as ``"3d_fullres"``.
             num_threads: PyGrain reader threads.
             seed: Seed used to shuffle training batches.
@@ -556,12 +598,16 @@ class nnUNetPipeline:
             train_cfg,
             n_folds,
             configuration=selected_configuration,
+            splits=splits,
+            splitter=splitter,
+            groups=groups,
             num_threads=num_threads,
             seed=seed,
         )
         if fold < 0 or fold >= len(splits):
             raise ValueError(f"Requested fold {fold}, but only {len(splits)} splits exist.")
-        ids = set(splits[fold][split])
+        split_key = "val" if split == "validation" else "train"
+        ids = set(splits[fold][split_key])
         selected_files = [f for f in case_files if normalize_case_id(f.stem) in ids]
         if not selected_files:
             raise ValueError(f"Fold {fold} has no cases in the {split!r} split.")
@@ -570,7 +616,10 @@ class nnUNetPipeline:
     def train(
         self,
         fold: int = 0,
-        n_folds: int = 5,
+        n_folds: int | None = None,
+        splits: list[dict[str, list[str]]] | None = None,
+        splitter: Any | None = None,
+        groups: dict[str, Any] | None = None,
         epochs: int = 1000,
         callbacks=None,
         resume: bool = False,
@@ -588,7 +637,12 @@ class nnUNetPipeline:
 
         Args:
             fold: Generated cross-validation fold to train.
-            n_folds: Number of generated folds, unless a saved fold assignment exists.
+            n_folds: Number of default folds (five by default), or expected number
+                of folds for supplied splits/a custom splitter. Inferred from
+                supplied splits or a splitter when omitted.
+            splits: Explicit K-fold partitions, each with ``train`` and ``val`` case-ID lists.
+            splitter: Scikit-learn-style splitter implementing ``split(X, y=None, groups=None)``.
+            groups: Mapping from each case ID to its group, required by group-aware splitters.
             epochs: Maximum number of training epochs.
             callbacks: Keras callbacks, including learning-rate and user checkpoint callbacks.
             resume: Resume an interrupted run from its latest training-state backup.
@@ -614,8 +668,14 @@ class nnUNetPipeline:
             raise ValueError("epochs must be a positive integer.")
         if isinstance(fold, bool) or not isinstance(fold, int) or fold < 0:
             raise ValueError("fold must be a non-negative integer.")
-        if isinstance(n_folds, bool) or not isinstance(n_folds, int) or n_folds < 2:
+        if n_folds is not None and (
+            isinstance(n_folds, bool) or not isinstance(n_folds, int) or n_folds < 2
+        ):
             raise ValueError("n_folds must be an integer of at least 2.")
+        if splits is not None and splitter is not None:
+            raise ValueError("Pass either splits or splitter, not both.")
+        if groups is not None and splitter is None and splits is None:
+            raise ValueError("groups require explicit splits or a splitter.")
         if not isinstance(resume, bool):
             raise ValueError("resume must be a boolean.")
 
@@ -631,11 +691,20 @@ class nnUNetPipeline:
         train_config.iters_per_epoch = _DEFAULT_STEPS_PER_EPOCH
 
         external_x = x is not None
+        if external_x and (splits is not None or splitter is not None or groups is not None):
+            raise ValueError(
+                "Cross-validation split arguments cannot be combined with custom x; "
+                "provide already-split x and validation_data instead."
+            )
+        fold_split = None
         if x is None:
             case_files, splits, create_dataset = self._build_datasets(
                 plan=plan,
                 train_cfg=train_config,
                 n_folds=n_folds,
+                splits=splits,
+                splitter=splitter,
+                groups=groups,
                 num_threads=_DEFAULT_NUM_THREADS,
                 seed=_DEFAULT_SEED,
             )
@@ -692,11 +761,18 @@ class nnUNetPipeline:
         )
         trainer.run_metadata.update(
             {
-                "n_folds": n_folds,
+                "n_folds": len(splits) if fold_split is not None else None,
                 "steps_per_epoch": train_config.iters_per_epoch,
                 "batch_size": planned_batch_size,
             }
         )
+        if fold_split is not None:
+            trainer.run_metadata.update(
+                {
+                    "fold_train_cases": fold_split["train"],
+                    "fold_validation_cases": fold_split["val"],
+                }
+            )
         history = trainer.run(callbacks=callbacks, resume=resume, fit_kwargs=fit_kwargs)
         trainer.has_run = True
         return history
