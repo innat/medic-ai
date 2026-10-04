@@ -2,8 +2,9 @@
 medicai/trainer/__init__.py
 """
 
-from .nnunet.pipeline import nnUNetPipeline
+from .nnunet import CrossValidationConfig, nnUNetPipeline
 
 __all__ = [
     "nnUNetPipeline",
+    "CrossValidationConfig",
 ]

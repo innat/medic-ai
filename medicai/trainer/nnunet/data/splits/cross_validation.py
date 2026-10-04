@@ -1,8 +1,56 @@
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Mapping, Sequence
 
 import numpy as np
+
+
+@dataclass
+class CrossValidationConfig:
+    """Describe how nnU-Net cases are partitioned into training folds.
+
+    Provide either ``n_folds`` for generated K-fold splits, explicit ``splits``,
+    or a scikit-learn-style ``splitter``. ``groups`` is passed to compatible
+    splitters and can also validate group separation in explicit splits.
+
+    Args:
+        n_folds: Number of generated folds. Defaults to five when no explicit
+            split strategy is supplied; inferred from ``splits`` or
+            ``splitter`` otherwise.
+        splits: Explicit fold dictionaries with ``train`` and ``val`` case IDs.
+        splitter: Object exposing ``split(case_ids, groups=...)``.
+        groups: Mapping from each case ID to its group identifier.
+        seed: Seed for deterministic generated K-fold assignments.
+
+    Raises:
+        ValueError: If incompatible split strategies or invalid fold counts are
+            supplied.
+    """
+
+    n_folds: int | None = None
+    splits: Sequence[Mapping[str, Sequence[str]]] | None = None
+    splitter: Any | None = None
+    groups: Mapping[str, Any] | None = None
+    seed: int = 12345
+
+    def __post_init__(self) -> None:
+        if self.n_folds is not None and (
+            isinstance(self.n_folds, bool)
+            or not isinstance(self.n_folds, int)
+            or self.n_folds < 2
+        ):
+            raise ValueError("n_folds must be an integer of at least 2.")
+        if self.splits is not None and self.splitter is not None:
+            raise ValueError("Pass either explicit splits or a splitter, not both.")
+        if self.groups is not None and self.splits is None and self.splitter is None:
+            raise ValueError("groups require explicit splits or a splitter.")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int):
+            raise ValueError("seed must be an integer.")
+        if self.splits is not None and self.n_folds is not None:
+            if len(self.splits) != self.n_folds:
+                raise ValueError("n_folds must match the number of explicit splits.")
 
 
 def normalize_case_id(case_id):

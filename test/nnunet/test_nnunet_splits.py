@@ -2,10 +2,33 @@ import numpy as np
 import pytest
 
 from medicai.trainer.nnunet.data.splits.cross_validation import (
+    CrossValidationConfig,
     generate_custom_splits,
     generate_splits,
     validate_splits,
 )
+
+
+def test_cross_validation_config_groups_strategy_and_fold_selection_inputs():
+    config = CrossValidationConfig(n_folds=3, seed=17)
+
+    assert config.n_folds == 3
+    assert config.seed == 17
+    assert config.splits is None
+    assert config.splitter is None
+
+
+def test_cross_validation_config_rejects_conflicting_strategies():
+    explicit_splits = [
+        {"train": ["case_b"], "val": ["case_a"]},
+        {"train": ["case_a"], "val": ["case_b"]},
+    ]
+
+    with pytest.raises(ValueError, match="either explicit splits or a splitter"):
+        CrossValidationConfig(splits=explicit_splits, splitter=object())
+
+    with pytest.raises(ValueError, match="n_folds must match"):
+        CrossValidationConfig(splits=explicit_splits, n_folds=3)
 
 
 def test_training_cases_generate_reproducible_cross_validation_folds():

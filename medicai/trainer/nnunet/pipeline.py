@@ -23,6 +23,7 @@ from medicai.trainer.nnunet.data.preprocessing.pipeline import (
 )
 from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
 from medicai.trainer.nnunet.data.splits.cross_validation import (
+    CrossValidationConfig,
     generate_custom_splits,
     generate_splits,
     load_splits,
@@ -389,12 +390,9 @@ class nnUNetPipeline:
         self,
         plan,
         train_cfg,
-        n_folds,
         *,
+        cross_validation=None,
         configuration=None,
-        splits=None,
-        splitter=None,
-        groups=None,
         num_threads=_DEFAULT_NUM_THREADS,
         seed=_DEFAULT_SEED,
     ):
@@ -407,10 +405,17 @@ class nnUNetPipeline:
         case_ids = [normalize_case_id(f.stem) for f in case_files]
         splits_path = self.plan_path.parent / plan.splits_file
 
-        if splits is not None and splitter is not None:
-            raise ValueError("Pass either explicit splits or a splitter, not both.")
-        if groups is not None and splitter is None and splits is None:
-            raise ValueError("groups require explicit splits or a splitter.")
+        if cross_validation is not None and not isinstance(
+            cross_validation, CrossValidationConfig
+        ):
+            raise TypeError("cross_validation must be a CrossValidationConfig.")
+        cv = cross_validation or CrossValidationConfig()
+        n_folds, splits, splitter, groups = (
+            cv.n_folds,
+            cv.splits,
+            cv.splitter,
+            cv.groups,
+        )
 
         if splits is not None:
             splits = validate_splits(splits, case_ids, groups=groups)
@@ -438,7 +443,9 @@ class nnUNetPipeline:
                 except (OSError, TypeError, ValueError) as exc:
                     logger.warning("Ignoring invalid saved splits at %s: %s", splits_path, exc)
             if splits is None:
-                splits = generate_splits(case_ids, n_folds=requested_n_folds, seed=seed)
+                splits = generate_splits(
+                    case_ids, n_folds=requested_n_folds, seed=cv.seed
+                )
                 save_splits(splits, splits_path)
 
         if n_folds is not None and len(splits) != n_folds:
@@ -549,10 +556,7 @@ class nnUNetPipeline:
         *,
         split: str = "train",
         fold: int = 0,
-        n_folds: int | None = None,
-        splits: list[dict[str, list[str]]] | None = None,
-        splitter: Any | None = None,
-        groups: dict[str, Any] | None = None,
+        cross_validation: CrossValidationConfig | None = None,
         configuration: str | None = None,
         num_threads: int = _DEFAULT_NUM_THREADS,
         seed: int = _DEFAULT_SEED,
@@ -567,12 +571,8 @@ class nnUNetPipeline:
             split: ``"train"`` for augmented patches or ``"validation"`` for
                 unaugmented patches.
             fold: Cross-validation fold index.
-            n_folds: Number of folds when splits are generated automatically.
-                Defaults to five for the built-in KFold splitter; inferred from
-                explicit folds or a custom splitter when omitted.
-            splits: Explicit K-fold partitions with ``train`` and ``val`` case-ID lists.
-            splitter: Scikit-learn-style splitter implementing ``split(X, y=None, groups=None)``.
-            groups: Mapping from each case ID to its group, required by group-aware splitters.
+            cross_validation: Shared fold-generation strategy. Reuse the same
+                configuration passed to :meth:`train` to inspect its fold.
             configuration: Planned configuration such as ``"3d_fullres"``.
             num_threads: PyGrain reader threads.
             seed: Seed used to shuffle training batches.
@@ -607,11 +607,8 @@ class nnUNetPipeline:
         case_files, splits, create_dataset = self._build_datasets(
             plan,
             train_cfg,
-            n_folds,
+            cross_validation=cross_validation,
             configuration=selected_configuration,
-            splits=splits,
-            splitter=splitter,
-            groups=groups,
             num_threads=num_threads,
             seed=seed,
         )
@@ -627,10 +624,7 @@ class nnUNetPipeline:
     def train(
         self,
         fold: int = 0,
-        n_folds: int | None = None,
-        splits: list[dict[str, list[str]]] | None = None,
-        splitter: Any | None = None,
-        groups: dict[str, Any] | None = None,
+        cross_validation: CrossValidationConfig | None = None,
         epochs: int = 1000,
         callbacks=None,
         resume: bool = False,
@@ -648,12 +642,9 @@ class nnUNetPipeline:
 
         Args:
             fold: Generated cross-validation fold to train.
-            n_folds: Number of default folds (five by default), or expected number
-                of folds for supplied splits/a custom splitter. Inferred from
-                supplied splits or a splitter when omitted.
-            splits: Explicit K-fold partitions, each with ``train`` and ``val`` case-ID lists.
-            splitter: Scikit-learn-style splitter implementing ``split(X, y=None, groups=None)``.
-            groups: Mapping from each case ID to its group, required by group-aware splitters.
+            cross_validation: Fold-generation strategy. Defaults to deterministic
+                five-fold KFold; use explicit folds or a custom splitter for
+                dataset-specific partitioning.
             epochs: Maximum number of training epochs.
             callbacks: Keras callbacks, including learning-rate and user checkpoint callbacks.
             resume: Resume an interrupted run from its latest training-state backup.
@@ -679,14 +670,10 @@ class nnUNetPipeline:
             raise ValueError("epochs must be a positive integer.")
         if isinstance(fold, bool) or not isinstance(fold, int) or fold < 0:
             raise ValueError("fold must be a non-negative integer.")
-        if n_folds is not None and (
-            isinstance(n_folds, bool) or not isinstance(n_folds, int) or n_folds < 2
+        if cross_validation is not None and not isinstance(
+            cross_validation, CrossValidationConfig
         ):
-            raise ValueError("n_folds must be an integer of at least 2.")
-        if splits is not None and splitter is not None:
-            raise ValueError("Pass either splits or splitter, not both.")
-        if groups is not None and splitter is None and splits is None:
-            raise ValueError("groups require explicit splits or a splitter.")
+            raise TypeError("cross_validation must be a CrossValidationConfig.")
         if not isinstance(resume, bool):
             raise ValueError("resume must be a boolean.")
 
@@ -702,9 +689,9 @@ class nnUNetPipeline:
         train_config.iters_per_epoch = _DEFAULT_STEPS_PER_EPOCH
 
         external_x = x is not None
-        if external_x and (splits is not None or splitter is not None or groups is not None):
+        if external_x and cross_validation is not None:
             raise ValueError(
-                "Cross-validation split arguments cannot be combined with custom x; "
+                "cross_validation cannot be combined with custom x; "
                 "provide already-split x and validation_data instead."
             )
         fold_split = None
@@ -712,10 +699,7 @@ class nnUNetPipeline:
             case_files, splits, create_dataset = self._build_datasets(
                 plan=plan,
                 train_cfg=train_config,
-                n_folds=n_folds,
-                splits=splits,
-                splitter=splitter,
-                groups=groups,
+                cross_validation=cross_validation,
                 num_threads=_DEFAULT_NUM_THREADS,
                 seed=_DEFAULT_SEED,
             )

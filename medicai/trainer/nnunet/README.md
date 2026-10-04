@@ -385,11 +385,12 @@ images, labels = next(iter(train_data))
 ```
 
 `dataset()` arguments: `split` selects the fold partition (`"train"` or
-`"validation"`), `fold` (default `0`), `n_folds` (five by default for generated
-KFold), optional `splits` or `splitter`/`groups`, `configuration` (default
-saved selection), `num_threads` (default `4`), and `seed` (default `12345`).
-Pass the same split arguments as `train()` to inspect its exact fold. Batch
-size and epoch iteration count come from the plan/sampler, not user arguments.
+`"validation"`), `fold` selects its fold (default `0`), `cross_validation`
+supplies the reusable `CrossValidationConfig`, `configuration` selects a
+planned configuration, and `num_threads`/`seed` control the PyGrain stream.
+Pass the same `cross_validation` object and `fold` to `train()` to inspect its
+exact training fold. Batch size and epoch iteration count come from the
+plan/sampler, not user arguments.
 
 ## Workflow C: Resume Interrupted Training
 
@@ -398,9 +399,11 @@ active from the beginning. If training is interrupted, reconstruct the same
 pipeline and repeat the call with the same schedule-critical values:
 
 ```python
+from medicai.trainer.nnunet import CrossValidationConfig
+
 fit_args = dict(
     fold=0,
-    n_folds=5,
+    cross_validation=CrossValidationConfig(n_folds=5),
     epochs=1000,
     resume=True,
 )
@@ -453,13 +456,15 @@ fit-time behavior such as learning-rate schedules.
 ### Cross-Validation Strategies
 
 By default, MedicAI creates deterministic five-fold KFold splits using the
-same shuffle seed and fold-generation algorithm as official nnU-Net. Set
-`n_folds` to choose another fold count. You can instead provide explicit
-folds, or pass a scikit-learn-style splitter. For group-aware splitting, map
-every case ID to its patient/site/group ID; MedicAI checks that a group never
-crosses from a fold's training partition into its validation partition.
+same shuffle seed and fold-generation algorithm as official nnU-Net. Put the
+split strategy in one reusable `CrossValidationConfig`, and use `fold` on
+`train()` or `dataset()` to select the partition. You can choose another fold
+count, provide explicit folds, or pass a scikit-learn-style splitter. For
+group-aware splitting, map every case ID to its patient/site/group ID; MedicAI
+checks that a group never crosses from training into validation.
 
 ```python
+from medicai.trainer.nnunet import CrossValidationConfig
 from sklearn.model_selection import GroupKFold
 
 group_by_case = {
@@ -467,11 +472,22 @@ group_by_case = {
     for case in manifest.cases
 }
 
-history = pipeline.train(
-    fold=0,
+cv = CrossValidationConfig(
     splitter=GroupKFold(n_splits=5),
     groups=group_by_case,
+)
+
+history = pipeline.train(
+    fold=0,
+    cross_validation=cv,
     epochs=1000,
+)
+
+# Inspect patches from the same fold and split strategy.
+train_data = pipeline.dataset(
+    split="train",
+    fold=0,
+    cross_validation=cv,
 )
 ```
 
@@ -479,23 +495,26 @@ Alternatively, supply folds directly as case-ID lists. This works with any
 split-generation library and does not require scikit-learn:
 
 ```python
+from medicai.trainer.nnunet import CrossValidationConfig
+
 custom_folds = [
     {"train": ["case_002", "case_003"], "val": ["case_001"]},
     {"train": ["case_001", "case_003"], "val": ["case_002"]},
     {"train": ["case_001", "case_002"], "val": ["case_003"]},
 ]
 
-history = pipeline.train(fold=0, splits=custom_folds, epochs=1000)
+cv = CrossValidationConfig(splits=custom_folds)
+history = pipeline.train(fold=0, cross_validation=cv, epochs=1000)
 ```
 
 Explicit folds must partition the same manifest cases in every fold and place
 each case in validation exactly once. To check patient/group separation for
-explicit folds too, pass the same `groups` mapping. Pass the same `splits` or
-`splitter`/`groups` to `pipeline.dataset()` when inspecting the corresponding
-fold's patches. Generated default splits are saved and reused when their case
-set and fold count still match; changing `n_folds` regenerates them. Custom
-splits are used as supplied, and the selected fold assignment is recorded in
-training provenance for resume checks.
+explicit folds too, set `groups` on the same `CrossValidationConfig`. Reuse
+that config with `pipeline.dataset()` to inspect the corresponding fold's
+patches. Generated default splits are saved and reused when their case set and
+fold count still match; changing `n_folds` regenerates them. Custom splits are
+used as supplied, and the selected fold assignment is recorded in training
+provenance for resume checks.
 
 ## Current Limitations
 
