@@ -450,6 +450,23 @@ For deep-supervision output dictionaries, a flat metrics list is applied to
 the `final` output only. Pass an output-keyed mapping to assign metrics to
 auxiliary outputs too.
 
+Built-in Keras optimizers, losses, metrics, and callbacks are recreated for
+each fold when Keras serialization supports them. For an unregistered or
+stateful custom object, pass `PerFoldFactory` so every fold receives a fresh
+instance:
+
+```python
+from medicai.trainers.nnunet import PerFoldFactory
+
+pipeline.compile(
+    optimizer=PerFoldFactory(lambda: MyCustomOptimizer()),
+    metrics=PerFoldFactory(lambda: [MyCustomMetric()]),
+)
+```
+
+This prevents optimizer slots, metric variables, and callback counters from
+leaking between folds.
+
 To customize the network, combine a custom loss with the built-in Dice+CE loss,
 or extend the default metrics, subclass `nnUNetTrainer`. Override
 `create_network(network_context)`, `create_loss()`, or `create_metrics()`. Use

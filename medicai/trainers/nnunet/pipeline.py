@@ -38,6 +38,7 @@ from medicai.trainers.nnunet.planning.planners import (
 )
 from medicai.trainers.nnunet.analysis import AnalysisReport
 from medicai.trainers.nnunet.training.trainer import NetworkContext, nnUNetTrainer
+from medicai.trainers.nnunet.training.specs import clone_callbacks, clone_compile_value
 from medicai.trainers.nnunet.utils.config import (
     DatasetFingerprint,
     TrainingConfig,
@@ -653,6 +654,9 @@ class nnUNetPipeline:
         if compile_kwargs.get("loss") is None:
             compile_kwargs.pop("loss", None)
         self._compile_kwargs = dict(compile_kwargs)
+        runtime_compile_kwargs = {
+            key: clone_compile_value(value) for key, value in compile_kwargs.items()
+        }
         self.build()
         # Keep the template uncompiled. Training receives its own model below.
         self._compiled_trainer = self._create_trainer(
@@ -660,7 +664,7 @@ class nnUNetPipeline:
             train_config=train_config,
             fold=0,
         )
-        self._compiled_trainer.compile(**compile_kwargs)
+        self._compiled_trainer.compile(**runtime_compile_kwargs)
 
     def dataset(
         self,
@@ -882,7 +886,11 @@ class nnUNetPipeline:
                     "fold_validation_cases": fold_split["val"],
                 }
             )
-        history = trainer.run(callbacks=callbacks, resume=resume, fit_kwargs=fit_kwargs)
+        history = trainer.run(
+            callbacks=clone_callbacks(callbacks),
+            resume=resume,
+            fit_kwargs=fit_kwargs,
+        )
         trainer.has_run = True
         return history
 
