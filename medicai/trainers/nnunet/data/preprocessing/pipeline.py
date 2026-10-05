@@ -5,6 +5,7 @@ import multiprocessing
 from functools import partial
 from pathlib import Path
 
+import keras
 from keras import ops
 import numpy as np
 from tqdm import tqdm
@@ -166,15 +167,16 @@ def _resample_channels(images, original_spacing, target_spacing, configuration):
 
     result = []
     for image in images:
-        image_tensor = ops.convert_to_tensor(image[..., np.newaxis], dtype="float32")
-        resized = Resize(
-            keys=["image"],
-            interpolation="trilinear",
-            target_shape=target_shape,
-            input_layout="DHWC",
-        )({"image": image_tensor})
-        # TODO: Add cubic interpolation to Resize for closer nnU-Net parity.
-        result.append(ops.convert_to_numpy(resized["image"])[..., 0])
+        with keras.device("cpu"):
+            image_tensor = ops.convert_to_tensor(image[..., np.newaxis], dtype="float32")
+            resized = Resize(
+                keys=["image"],
+                interpolation="trilinear",
+                target_shape=target_shape,
+                input_layout="DHWC",
+            )({"image": image_tensor})
+            # TODO: Add cubic interpolation to Resize for closer nnU-Net parity.
+            result.append(ops.convert_to_numpy(resized["image"])[..., 0])
     return result
 
 
@@ -195,14 +197,15 @@ def _resample_label_map(label, original_spacing, target_spacing, configuration):
             for size, factor in zip(spatial_shape, zoom, strict=True)
         )
 
-    label_tensor = ops.convert_to_tensor(label[..., np.newaxis], dtype="float32")
-    resized = Resize(
-        keys=["label"],
-        interpolation="nearest",
-        target_shape=target_shape,
-        input_layout="DHWC",
-    )({"label": label_tensor})
-    return ops.convert_to_numpy(resized["label"])[..., 0].astype(np.int64)
+    with keras.device("cpu"):
+        label_tensor = ops.convert_to_tensor(label[..., np.newaxis], dtype="float32")
+        resized = Resize(
+            keys=["label"],
+            interpolation="nearest",
+            target_shape=target_shape,
+            input_layout="DHWC",
+        )({"label": label_tensor})
+        return ops.convert_to_numpy(resized["label"])[..., 0].astype(np.int64)
 
 
 def _load_image_channels(

@@ -256,7 +256,9 @@ class nnUNetDataset:
             batch_labels.append(label)
 
         image_batch = np.stack(batch_images, axis=0).astype(np.float32, copy=False)
-        label_dtype = np.float32 if self.task_type == "region_based" else np.int64
+        # Keep categorical targets in int32 for TensorFlow GPU kernels. Region
+        # targets remain float32 because they represent overlapping channels.
+        label_dtype = np.float32 if self.task_type == "region_based" else np.int32
         label_batch = np.stack(batch_labels, axis=0).astype(label_dtype, copy=False)
 
         if self.train_cfg.deep_supervision and self.net_cfg and self.net_cfg.deep_supervision:

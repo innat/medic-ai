@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import math
 
+import keras
 from keras import ops
 
 from medicai.transforms import Compose, RandomAffine, RandomFlip
@@ -178,21 +179,21 @@ class AugmentationPipeline:
         label_is_regions=False,
     ):
 
-        # Convert to backend tensors
-        image_tensor = ops.convert_to_tensor(image, dtype="float32")
-        label_tensor = ops.convert_to_tensor(label, dtype="float32")
-        label_without_channel = len(label_tensor.shape) == len(image_tensor.shape) - 1
-        if label_without_channel:
-            label_tensor = ops.expand_dims(label_tensor, axis=-1)
+        with keras.device("cpu"):
+            image_tensor = ops.convert_to_tensor(image, dtype="float32")
+            label_tensor = ops.convert_to_tensor(label, dtype="float32")
+            label_without_channel = len(label_tensor.shape) == len(image_tensor.shape) - 1
+            if label_without_channel:
+                label_tensor = ops.expand_dims(label_tensor, axis=-1)
 
-        result = self.transform({"image": image_tensor, "label": label_tensor})
-        output_size = tuple(patch_size or self.patch_size)
-        image_result = self._center_crop(result["image"], output_size)
-        label_result = self._center_crop(result["label"], output_size)
-        label_dtype = "float32" if label_is_regions else "int64"
-        transformed_label = ops.cast(ops.round(label_result), label_dtype)
-        if label_without_channel:
-            transformed_label = ops.squeeze(transformed_label, axis=-1)
+            result = self.transform({"image": image_tensor, "label": label_tensor})
+            output_size = tuple(patch_size or self.patch_size)
+            image_result = self._center_crop(result["image"], output_size)
+            label_result = self._center_crop(result["label"], output_size)
+            label_dtype = "float32" if label_is_regions else "int32"
+            transformed_label = ops.cast(ops.round(label_result), label_dtype)
+            if label_without_channel:
+                transformed_label = ops.squeeze(transformed_label, axis=-1)
         return image_result, transformed_label
 
     @staticmethod

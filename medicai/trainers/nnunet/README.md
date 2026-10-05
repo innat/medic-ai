@@ -283,6 +283,20 @@ the model and sampler; changing only patch size may permit reuse of the
 full-volume cache, while changing spacing, normalization, crop, or resampling
 requires preprocessing again.
 
+## Workflow Choices
+
+Choose the workflow that matches how you want to use the persistent cache:
+
+| Workflow | Use it when | Persistent state reused later |
+| --- | --- | --- |
+| **A. One notebook** | You want to create the manifest, preprocess, train, and predict in one session. | The same pipeline owns the manifest, plan, cache, and checkpoints. |
+| **B. Preprocess now, train later** | Preprocessing is expensive or you want to start several training experiments later. | The manifest, fingerprint, plan, and preprocessed cache under `input_path`. |
+| **C. Resume interrupted training** | A fold training run was interrupted or the notebook disconnected. | The fold checkpoint, optimizer state, `training_run.json`, and backup directory. |
+
+All three workflows use the same labeled manifest. Cross-validation creates
+training and validation partitions from those cases; an independent
+validation dataset is not added through `CaseRecord.split`.
+
 ## Workflow A: One Notebook, Start To Prediction
 
 Run Steps 1-5 above in order, then train:
@@ -560,6 +574,42 @@ split strategy in one reusable `CrossValidationConfig`, and use `fold` on
 count, provide explicit folds, or pass a scikit-learn-style splitter. For
 group-aware splitting, map every case ID to its patient/site/group ID; MedicAI
 checks that a group never crosses from training into validation.
+
+### Controlling `n_folds`
+
+`n_folds` belongs to `CrossValidationConfig`, not to `pipeline.train()`.
+`train(fold=...)` selects one fold from that configuration:
+
+```python
+from medicai.trainers.nnunet import CrossValidationConfig
+
+cv = CrossValidationConfig(n_folds=3)
+
+# Train the first fold. Valid fold values are 0, 1, and 2.
+history = pipeline.train(
+    fold=0,
+    cross_validation=cv,
+    epochs=1000,
+)
+```
+
+If `cross_validation` is omitted, MedicAI generates and reuses five folds by
+default. To train every fold, call `train()` once for each fold; one call does
+not silently train all folds:
+
+```python
+for fold in range(cv.n_folds):
+    pipeline.train(
+        fold=fold,
+        cross_validation=cv,
+        epochs=1000,
+    )
+```
+
+`n_folds` must be at least two and cannot exceed the number of labeled cases.
+Changing it creates a different fold assignment and therefore starts a new
+fold-specific training run, while the compatible preprocessed cache can still
+be reused.
 
 ```python
 from medicai.trainers.nnunet import CrossValidationConfig
