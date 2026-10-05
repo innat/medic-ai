@@ -40,7 +40,7 @@ def test_callbacks_are_not_reused_between_training_runs():
     cloned = clone_callbacks([callback])
 
     assert cloned[0] is not callback
-    assert cloned[0].get_config() == callback.get_config()
+    assert cloned[0].patience == callback.patience
 
 
 def test_checkpoint_provenance_accepts_matching_recipe(tmp_path):

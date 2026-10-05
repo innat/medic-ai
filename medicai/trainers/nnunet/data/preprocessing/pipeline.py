@@ -247,7 +247,7 @@ def _load_image_channels(
         if original_shape is not None and image_shape != original_shape:
             raise ValueError(
                 f"Image modality {img_path} has spatial shape {image_shape}; "
-                f"expected {original_shape} to match the other modalities."
+                f"expected {original_shape}; does not match the other modalities."
             )
         if is_nifti:
             affine = np.asarray(affine, dtype=np.float64)

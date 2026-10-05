@@ -99,6 +99,8 @@ def generate_splits(
     case_ids = sorted({normalize_case_id(case_id) for case_id in case_ids})
     if not case_ids:
         raise ValueError("Cannot generate splits for an empty case list.")
+    if len(case_ids) < 2:
+        raise ValueError("Cross-validation requires at least 2 cases.")
     if n_folds < 2:
         raise ValueError("n_folds must be at least 2.")
     if n_folds > len(case_ids):
