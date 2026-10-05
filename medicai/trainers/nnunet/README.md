@@ -524,7 +524,10 @@ for the combination policy appropriate to the project's losses and metrics.
 To inspect or use a trained network without invoking end-to-end inference, use
 `load_model()`. It returns an uncompiled patch-level Keras model rebuilt through
 the selected trainer. It does not load raw files, resample, run sliding-window
-inference, restore source geometry, or apply postprocessing:
+inference, restore source geometry, or apply postprocessing. The checkpoint
+must have its matching `training_run.json`; MedicAI rejects missing or
+incompatible trainer, architecture, output-contract, configuration, and fold
+provenance:
 
 ```python
 model = pipeline.load_model(fold=0, checkpoint="best")
@@ -534,6 +537,12 @@ print(model.nnunet_output_spec)
 
 Use `pipeline.predict()` for preprocessing, sliding-window inference, geometry
 restoration, and segmentation output instead.
+
+At this point, the complete workflow is implemented through the training
+boundary: manifest, analysis, planning, preprocessing, cache loading, network
+construction, compilation, fold setup, and `model.fit()` orchestration. The
+remaining limitations below concern full official training and inference
+parity, not dataset preparation.
 
 `train()` follows the Keras fit pattern with `epochs`, `callbacks`, `x`,
 `validation_data`, and additional Keras `Model.fit()` keyword arguments. The
@@ -609,8 +618,8 @@ provenance for resume checks.
 
 - Planner heuristics and online augmentation are not yet fully at official
   nnU-Net v2 feature parity.
-- Validation evaluation, configuration selection, fold ensembling, and
-  learned postprocessing are not yet one complete public workflow.
+- Validation evaluation, fold ensembling, and learned postprocessing are not
+  yet one complete public workflow.
 - Prediction does not yet apply the full cached preprocessing and inverse
   geometry path and currently exports hard labels rather than region
   probability maps.
