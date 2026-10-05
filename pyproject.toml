@@ -73,6 +73,9 @@ tensorflow = [
 jax = [
   "jax",
 ]
+nnunet = [
+  "grain",
+]
 torch = [
   "torch",
 ]
