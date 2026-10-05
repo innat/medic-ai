@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.preprocessing import pipeline as preprocessing
-from medicai.trainer.nnunet.data.preprocessing.pipeline import (
+from medicai.trainers.nnunet.data.preprocessing import pipeline as preprocessing
+from medicai.trainers.nnunet.data.preprocessing.pipeline import (
     _collect_class_locations,
     _load_labels,
 )
@@ -104,7 +104,7 @@ def test_image_loader_returns_source_nifti_affine(monkeypatch):
 def test_preprocessing_preserves_configured_ignore_label_id(monkeypatch, task_type, expected):
     labels = np.asarray([0, 1, 2, 0, 1, 2, 0, 1], dtype=np.int16).reshape(2, 2, 2)
     monkeypatch.setattr(
-        "medicai.trainer.nnunet.data.preprocessing.pipeline.load_medical_image",
+        "medicai.trainers.nnunet.data.preprocessing.pipeline.load_medical_image",
         lambda _: _loaded(labels),
     )
 

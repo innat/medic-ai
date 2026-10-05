@@ -1,4 +1,4 @@
-from medicai.trainer.nnunet.utils.config import NetworkConfig, nnUNetPlan
+from medicai.trainers.nnunet.utils.config import NetworkConfig, nnUNetPlan
 
 from .unet import UNet
 

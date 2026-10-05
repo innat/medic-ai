@@ -3,12 +3,12 @@ import json
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.metadata.manifest import (
+from medicai.trainers.nnunet.data.metadata.manifest import (
     CaseRecord,
     DatasetManifest,
     TaskSpec,
 )
-from medicai.trainer.nnunet.utils.io import normalize_layout_and_spacing
+from medicai.trainers.nnunet.utils.io import normalize_layout_and_spacing
 
 
 def _task(task_type="multi_class"):

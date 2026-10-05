@@ -9,12 +9,12 @@ from keras import ops
 import numpy as np
 from tqdm import tqdm
 
-from medicai.trainer.nnunet.data.metadata.manifest import DatasetManifest
-from medicai.trainer.nnunet.data.preprocessing.normalization import get_normalizer
-from medicai.trainer.nnunet.data.preprocessing.resampling import compute_zoom_factors
+from medicai.trainers.nnunet.data.metadata.manifest import DatasetManifest
+from medicai.trainers.nnunet.data.preprocessing.normalization import get_normalizer
+from medicai.trainers.nnunet.data.preprocessing.resampling import compute_zoom_factors
 from medicai.transforms import Resize
-from medicai.trainer.nnunet.utils.config import PreprocessedCaseProperties
-from medicai.trainer.nnunet.utils.io import (
+from medicai.trainers.nnunet.utils.config import PreprocessedCaseProperties
+from medicai.trainers.nnunet.utils.io import (
     collapse_single_channel,
     ensure_spacing,
     get_spatial_shape,

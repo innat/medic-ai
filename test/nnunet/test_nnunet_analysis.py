@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from medicai.trainer.nnunet.data.metadata.manifest import CaseRecord, DatasetManifest, TaskSpec
-from medicai.trainer.nnunet import AnalysisReport, nnUNetPipeline
+from medicai.trainers.nnunet.data.metadata.manifest import CaseRecord, DatasetManifest, TaskSpec
+from medicai.trainers.nnunet import AnalysisReport, nnUNetPipeline
 
 
 def _write_dataset(root, label_values):

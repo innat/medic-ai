@@ -8,6 +8,7 @@ __all__ = [
     "metrics",
     "losses",
     "dataloader",
+    "trainers",
     "utils",
 ]
 

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from medicai.trainer.nnunet.training.trainer import nnUNetTrainer
+from medicai.trainers.nnunet.training.trainer import nnUNetTrainer
 
 
 def _make_trainer(*, deep_supervision=True):

@@ -3,10 +3,10 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-from medicai.trainer.nnunet.data.preprocessing.normalization import compute_intensity_stats
-from medicai.trainer.nnunet.data.preprocessing.pipeline import compute_nonzero_bbox
-from medicai.trainer.nnunet.utils.config import DatasetFingerprint
-from medicai.trainer.nnunet.utils.io import (
+from medicai.trainers.nnunet.data.preprocessing.normalization import compute_intensity_stats
+from medicai.trainers.nnunet.data.preprocessing.pipeline import compute_nonzero_bbox
+from medicai.trainers.nnunet.utils.config import DatasetFingerprint
+from medicai.trainers.nnunet.utils.io import (
     collapse_single_channel,
     ensure_spacing,
     get_spatial_shape,

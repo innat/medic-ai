@@ -1,6 +1,6 @@
 # MedicAI nnU-Net Workflow
 
-This guide walks through the current `medicai.trainer.nnunet` API from raw
+This guide walks through the current `medicai.trainers.nnunet` API from raw
 NIfTI files to a trained model and prediction. It is written for a first-time
 user: create a `manifest.json`, validate the data, plan preprocessing, save a
 reusable cache, train, and then predict. The API follows the nnU-Net workflow
@@ -8,7 +8,7 @@ but intentionally does not copy the official command-line/API surface.
 
 The public entry point is `nnUNetPipeline`. Analysis, planning, preprocessing,
 training, prediction, and nnU-Net-specific data support live under
-`medicai.trainer.nnunet`; reusable generic data-loading code remains in
+`medicai.trainers.nnunet`; reusable generic data-loading code remains in
 `medicai.dataloader`.
 
 Install MedicAI and the optional PyGrain dependency used by the training input
@@ -141,7 +141,7 @@ used as provided, not automatically resolved relative to the manifest file.
 ```python
 from pathlib import Path
 
-from medicai.trainer.nnunet import CaseRecord, DatasetManifest, TaskSpec
+from medicai.trainers.nnunet import CaseRecord, DatasetManifest, TaskSpec
 
 root = Path("/data/my_dataset").resolve()
 
@@ -194,7 +194,7 @@ for the manifest (by default), fingerprint, plan, and preprocessed cache.
 and training artifacts.
 
 ```python
-from medicai.trainer.nnunet import nnUNetPipeline
+from medicai.trainers.nnunet import nnUNetPipeline
 
 work_dir = "/experiments/my_dataset"
 pipeline = nnUNetPipeline(
@@ -224,6 +224,7 @@ reviewed for your dataset.
 | `input_path` | Yes | Persistent fingerprint, plan, and preprocessing-cache root; also the default manifest location. |
 | `output_path` | Optional | Model/checkpoint root; defaults to `<input_path>/outputs`. |
 | `manifest_file` | Optional | Manifest path; defaults to `<input_path>/manifest.json`. |
+| `trainer` | Optional | `nnUNetTrainer` subclass or configured recipe instance; defaults to `nnUNetTrainer()`. |
 
 ## 4. Plan Configurations
 
@@ -399,7 +400,7 @@ active from the beginning. If training is interrupted, reconstruct the same
 pipeline and repeat the call with the same schedule-critical values:
 
 ```python
-from medicai.trainer.nnunet import CrossValidationConfig
+from medicai.trainers.nnunet import CrossValidationConfig
 
 fit_args = dict(
     fold=0,
@@ -425,13 +426,13 @@ directory if an interrupted backup exists.
 ## Compile And Fit Controls
 
 Compilation is optional; `train()` compiles with nnU-Net defaults when needed.
-Power users can customize the planned configuration and forward Keras
+Select the planned configuration before compiling, then forward Keras
 `Model.compile()` arguments:
 
 ```python
-pipeline.compile(configuration="auto")
+pipeline.set_configuration("3d_fullres")
+pipeline.build()  # optional: inspect the uncompiled template model
 pipeline.compile(
-    configuration="3d_fullres",
     optimizer=my_optimizer,
     loss=my_loss,
     metrics=[my_metric],
@@ -439,8 +440,8 @@ pipeline.compile(
 )
 ```
 
-`configuration` selects the MedicAI model; other keyword arguments are passed
-to Keras compilation, including `optimizer`, `loss`, `metrics`, `run_eagerly`,
+Configuration selection belongs to `set_configuration()`; compile keyword
+arguments are passed to Keras compilation, including `optimizer`, `loss`, `metrics`, `run_eagerly`,
 `steps_per_execution`, and `jit_compile`. Supplying `loss`, `metrics`, or
 `optimizer` replaces that nnU-Net default. Omitted values use the defaults for
 the task's label contract. A custom optimizer also disables the default
@@ -449,33 +450,52 @@ For deep-supervision output dictionaries, a flat metrics list is applied to
 the `final` output only. Pass an output-keyed mapping to assign metrics to
 auxiliary outputs too.
 
-To combine a custom loss with the built-in Dice+CE loss, or extend the default
-metrics, subclass `nnUNetTrainer` and override `_build_loss()` or
-`_build_metrics()`. Use `super()` to obtain the nnU-Net defaults and compose
-them in the subclass. The same extension mechanism can customize the default
-optimizer, but an optimizer passed directly to `compile()` always replaces it;
-optimizers are not combined.
+To customize the network, combine a custom loss with the built-in Dice+CE loss,
+or extend the default metrics, subclass `nnUNetTrainer`. Override
+`create_network(network_context)`, `create_loss()`, or `create_metrics()`. Use
+`super()` to retain the planner-derived defaults. The network hook receives a
+read-only `NetworkContext`; it must preserve the planned input/output contract
+unless you also provide a compatible planner and preprocessing strategy. There
+is no optimizer-composition hook: an optimizer passed directly to `compile()`
+replaces the internal default.
 
 ```python
-from medicai.trainer.nnunet import nnUNetTrainer
+from medicai.trainers.nnunet import nnUNetTrainer
 
 class ProjectTrainer(nnUNetTrainer):
-    def _build_loss(self):
-        default_losses, loss_weights = super()._build_loss()
+    def __init__(self, bottleneck="residual"):
+        super().__init__()
+        self.bottleneck = bottleneck
+
+    def create_network(self, network_context):
+        return build_project_unet(
+            plan_config=network_context.plan_config,
+            bottleneck=self.bottleneck,
+        )
+
+    def create_loss(self):
+        default_losses, loss_weights = super().create_loss()
         # Implement this project helper to wrap every output loss with the
         # custom objective while preserving the deep-supervision mapping.
         combined_losses = project_compose_losses(default_losses, project_loss)
         return combined_losses, loss_weights
 
-    def _build_metrics(self):
-        default_metrics = super()._build_metrics()
+    def create_metrics(self):
+        default_metrics = super().create_metrics()
         # Implement this project helper to add metrics to the final output or
         # to an output-keyed mapping.
         return project_add_metrics(default_metrics, project_metric)
 
+trainer = ProjectTrainer(bottleneck="residual")
+pipeline = nnUNetPipeline(
+    input_path=work_dir,
+    manifest_file=manifest_file,
+    output_path=output_path,
+    trainer=trainer,
+)
+pipeline.set_configuration("3d_fullres")
 pipeline.compile(
-    configuration="3d_fullres",
-    trainer_class=ProjectTrainer,
+    optimizer=my_optimizer,
 )
 ```
 
@@ -483,6 +503,20 @@ For deep-supervision models, the trainer routes a flat metric list to `final`.
 An output-keyed custom metric mapping can target named outputs such as `final`
 and `aux_0` directly. Project helpers in the subclass example are placeholders
 for the combination policy appropriate to the project's losses and metrics.
+
+To inspect or use a trained network without invoking end-to-end inference, use
+`load_model()`. It returns an uncompiled patch-level Keras model rebuilt through
+the selected trainer. It does not load raw files, resample, run sliding-window
+inference, restore source geometry, or apply postprocessing:
+
+```python
+model = pipeline.load_model(fold=0, checkpoint="best")
+patch_outputs = model(preprocessed_patch_batch, training=False)
+print(model.nnunet_output_spec)
+```
+
+Use `pipeline.predict()` for preprocessing, sliding-window inference, geometry
+restoration, and segmentation output instead.
 
 `train()` follows the Keras fit pattern with `epochs`, `callbacks`, `x`,
 `validation_data`, and additional Keras `Model.fit()` keyword arguments. The
@@ -502,7 +536,7 @@ group-aware splitting, map every case ID to its patient/site/group ID; MedicAI
 checks that a group never crosses from training into validation.
 
 ```python
-from medicai.trainer.nnunet import CrossValidationConfig
+from medicai.trainers.nnunet import CrossValidationConfig
 from sklearn.model_selection import GroupKFold
 
 group_by_case = {
@@ -533,7 +567,7 @@ Alternatively, supply folds directly as case-ID lists. This works with any
 split-generation library and does not require scikit-learn:
 
 ```python
-from medicai.trainer.nnunet import CrossValidationConfig
+from medicai.trainers.nnunet import CrossValidationConfig
 
 custom_folds = [
     {"train": ["case_002", "case_003"], "val": ["case_001"]},

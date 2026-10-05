@@ -6,23 +6,23 @@ from typing import Any
 
 import numpy as np
 
-from medicai.trainer.nnunet.data.augmentation.transforms import (
+from medicai.trainers.nnunet.data.augmentation.transforms import (
     AugmentationConfig,
     AugmentationPipeline,
 )
-from medicai.trainer.nnunet.data.sampling.dataset import (
+from medicai.trainers.nnunet.data.sampling.dataset import (
     build_pygrain_dataset,
     nnUNetDataset,
 )
-from medicai.trainer.nnunet.data.metadata.fingerprint import fingerprint_dataset
-from medicai.trainer.nnunet.data.metadata.manifest import DatasetManifest
-from medicai.trainer.nnunet.data.preprocessing.pipeline import (
+from medicai.trainers.nnunet.data.metadata.fingerprint import fingerprint_dataset
+from medicai.trainers.nnunet.data.metadata.manifest import DatasetManifest
+from medicai.trainers.nnunet.data.preprocessing.pipeline import (
     _load_image_channels,
     _validate_label_alignment,
     preprocess_dataset,
 )
-from medicai.models.nnunet.dynamic_unet import build_unet_from_plan
-from medicai.trainer.nnunet.data.splits.cross_validation import (
+from medicai.trainers.nnunet.models.dynamic_unet import build_unet_from_config
+from medicai.trainers.nnunet.data.splits.cross_validation import (
     CrossValidationConfig,
     generate_custom_splits,
     generate_splits,
@@ -31,19 +31,19 @@ from medicai.trainer.nnunet.data.splits.cross_validation import (
     save_splits,
     validate_splits,
 )
-from medicai.trainer.nnunet.planning.planners import (
+from medicai.trainers.nnunet.planning.planners import (
     nnUNetPlanner,
     nnUNetPlannerResEncL,
     nnUNetPlannerResEncM,
 )
-from medicai.trainer.nnunet.analysis import AnalysisReport
-from medicai.trainer.nnunet.training.trainer import nnUNetTrainer
-from medicai.trainer.nnunet.utils.config import (
+from medicai.trainers.nnunet.analysis import AnalysisReport
+from medicai.trainers.nnunet.training.trainer import NetworkContext, nnUNetTrainer
+from medicai.trainers.nnunet.utils.config import (
     DatasetFingerprint,
     TrainingConfig,
     nnUNetPlan,
 )
-from medicai.trainer.nnunet.utils.io import (
+from medicai.trainers.nnunet.utils.io import (
     collapse_single_channel,
     infer_spatial_dims,
     load_medical_image,
@@ -70,6 +70,7 @@ class nnUNetPipeline:
         input_path,
         output_path=None,
         manifest_file=None,
+        trainer=nnUNetTrainer,
     ):
         self.input_path = Path(input_path)
         self.output_path = Path(output_path) if output_path else self.input_path / "outputs"
@@ -78,14 +79,124 @@ class nnUNetPipeline:
             Path(manifest_file) if manifest_file else self.input_path / "manifest.json"
         )
         self.configuration = "3d_fullres"
+        self._configuration_explicit = False
+        if isinstance(trainer, type):
+            if not issubclass(trainer, nnUNetTrainer):
+                raise TypeError("trainer must be nnUNetTrainer or one of its subclasses.")
+        elif not isinstance(trainer, nnUNetTrainer) or not getattr(
+            trainer, "_recipe_mode", False
+        ):
+            raise TypeError(
+                "trainer must be an nnUNetTrainer subclass or a recipe instance "
+                "created without a model."
+            )
         self._compiled_trainer = None
-        self._compile_configuration = "auto"
         self._compile_kwargs = {}
-        self._trainer_class = nnUNetTrainer
+        self._trainer_class = trainer if isinstance(trainer, type) else type(trainer)
+        self._trainer_recipe = trainer if isinstance(trainer, nnUNetTrainer) else None
+        self.template_model = None
 
         self.fingerprint_path = self.input_path / "dataset_fingerprint.json"
         self.plan_path = self.input_path / "nnunet_plans.json"
         self.preprocessed_dir = self.input_path / "preprocessed"
+
+    def set_configuration(self, configuration: str) -> None:
+        """Select a saved planner configuration and invalidate model state.
+
+        Configuration selection is a pipeline decision, not a Keras compile
+        option. Changing it discards the template and compiled model because
+        their input shape, output structure, and loss contract may change.
+        """
+        if not self.plan_path.is_file():
+            raise FileNotFoundError(f"Plan not found: {self.plan_path}")
+        plan = nnUNetPlan.from_json(self.plan_path)
+        if configuration not in plan.configurations:
+            raise ValueError(
+                f"Configuration {configuration!r} is not in the saved plan; "
+                f"available configurations: {', '.join(plan.configurations)}."
+            )
+        if configuration != self.configuration:
+            self.configuration = configuration
+            self.template_model = None
+            self._compiled_trainer = None
+            self._compile_kwargs = {}
+        self._configuration_explicit = True
+
+    def build(self):
+        """Build and return an uncompiled plan-derived template model.
+
+        The template is intended for inspection, shape validation, and model
+        summaries. It is never used as a fold-training model; ``train``
+        creates a fresh model and trainer state for each fold.
+        """
+        if not self.plan_path.is_file():
+            raise FileNotFoundError(f"Plan not found: {self.plan_path}")
+        plan = nnUNetPlan.from_json(self.plan_path)
+        self._sync_configuration(plan)
+        train_config = TrainingConfig(
+            n_epochs=1000,
+            iters_per_epoch=_DEFAULT_STEPS_PER_EPOCH,
+            checkpoint_dir=str(self.output_path),
+        )
+        template_trainer = self._create_trainer(
+            plan=plan,
+            train_config=train_config,
+            fold=0,
+        )
+        self.template_model = template_trainer.model
+        return self.template_model
+
+    def _create_trainer(
+        self,
+        *,
+        plan,
+        train_config,
+        fold: int,
+    ) -> nnUNetTrainer:
+        """Create a fresh trainer and route network construction through it."""
+        net_cfg_map = {
+            "3d_fullres": plan.plan_3d_fullres,
+            "3d_lowres": plan.plan_3d_lowres,
+            "2d": plan.plan_2d,
+        }
+        plan_config = net_cfg_map.get(self.configuration)
+        if plan_config is None:
+            raise ValueError(
+                f"Configuration {self.configuration!r} is not available in the plan."
+            )
+        default_model = build_unet_from_config(plan_config)
+        if self._trainer_recipe is not None:
+            trainer = self._trainer_recipe.create_runtime(
+                model=default_model,
+                train_dataset=None,
+                val_dataset=None,
+                plan=plan,
+                train_config=train_config,
+                fold=fold,
+                configuration=self.configuration,
+            )
+        else:
+            trainer = self._trainer_class(
+                model=default_model,
+                train_dataset=None,
+                val_dataset=None,
+                plan=plan,
+                train_config=train_config,
+                fold=fold,
+                configuration=self.configuration,
+                compile_kwargs=None,
+                auto_compile=False,
+            )
+        context = NetworkContext(
+            plan=plan,
+            plan_config=plan_config,
+            configuration=self.configuration,
+        )
+        trainer.model = trainer.create_network(context)
+        trainer.network_context = context
+        trainer.architecture = trainer.architecture_config(context)
+        trainer.output_spec = trainer.derive_output_spec()
+        return trainer
 
     def setup(self) -> None:
         report = self.analyze()
@@ -339,7 +450,8 @@ class nnUNetPipeline:
                 f"Plan selects unavailable configuration {selected!r}; "
                 f"available configurations: {', '.join(plan.configurations)}."
             )
-        self.configuration = selected
+        if not self._configuration_explicit:
+            self.configuration = selected
         # Keep subsequent stages aligned with the configuration saved in the plan.
     def preprocess(
         self,
@@ -500,48 +612,34 @@ class nnUNetPipeline:
 
         return case_files, splits, _create_dataset
 
-    def compile(
-        self,
-        configuration: str = "auto",
-        trainer_class: type[nnUNetTrainer] | None = None,
-        **kwargs: Any,
-    ) -> None:
+    def compile(self, **kwargs: Any) -> None:
         """Build and compile the planned segmentation model.
 
         Args:
-            configuration: Planned configuration name, or ``"auto"`` to use
-                the planner's recommended configuration.
-            trainer_class: ``nnUNetTrainer`` subclass that supplies customized
-                default loss, metrics, or optimizer behavior. Subclass hooks are
-                used only when the corresponding compile argument is omitted.
             **kwargs: Arguments forwarded to :meth:`keras.Model.compile`, such
                 as ``optimizer``, ``loss``, ``metrics``, ``jit_compile``, and
                 ``run_eagerly``. Supplied ``optimizer``, ``loss``, and
                 ``metrics`` replace the trainer defaults. Omitted values use
-                the selected trainer class's defaults.
+                the trainer selected when this pipeline was constructed.
 
         Raises:
             FileNotFoundError: If no saved plan is available.
-            ValueError: If the requested configuration is not in the plan.
-            TypeError: If ``trainer_class`` is not an ``nnUNetTrainer`` subclass.
+            ValueError: If an unsupported compile option is supplied.
         """
         if not self.plan_path.is_file():
             raise FileNotFoundError(f"Plan not found: {self.plan_path}")
         plan = nnUNetPlan.from_json(self.plan_path)
-        if trainer_class is not None and (
-            not isinstance(trainer_class, type)
-            or not issubclass(trainer_class, nnUNetTrainer)
-        ):
-            raise TypeError("trainer_class must be nnUNetTrainer or one of its subclasses.")
-        selected_trainer_class = trainer_class or self._trainer_class
         self._sync_configuration(plan)
-        if configuration != "auto":
-            if configuration not in plan.configurations:
-                raise ValueError(
-                    f"Configuration {configuration!r} is not in the saved plan; "
-                    f"available configurations: {', '.join(plan.configurations)}."
-                )
-            self.configuration = configuration
+        if "configuration" in kwargs:
+            raise TypeError(
+                "configuration is selected with pipeline.set_configuration(), "
+                "not pipeline.compile()."
+            )
+        if "trainer_class" in kwargs:
+            raise TypeError(
+                "trainer_class is selected when constructing nnUNetPipeline, "
+                "not pipeline.compile()."
+            )
 
         train_config = TrainingConfig(
             n_epochs=1000,
@@ -549,25 +647,20 @@ class nnUNetPipeline:
             checkpoint_dir=str(self.output_path),
             use_ema="optimizer" not in kwargs or kwargs["optimizer"] is None,
         )
-        model = build_unet_from_plan(plan, configuration=self.configuration)
         compile_kwargs = dict(kwargs)
         if compile_kwargs.get("optimizer") is None:
             compile_kwargs.pop("optimizer", None)
         if compile_kwargs.get("loss") is None:
             compile_kwargs.pop("loss", None)
-        self._compile_configuration = configuration
         self._compile_kwargs = dict(compile_kwargs)
-        self._trainer_class = selected_trainer_class
-        self._compiled_trainer = selected_trainer_class(
-            model=model,
-            train_dataset=None,
-            val_dataset=None,
+        self.build()
+        # Keep the template uncompiled. Training receives its own model below.
+        self._compiled_trainer = self._create_trainer(
             plan=plan,
             train_config=train_config,
             fold=0,
-            configuration=self.configuration,
-            compile_kwargs=compile_kwargs,
         )
+        self._compiled_trainer.compile(**compile_kwargs)
 
     def dataset(
         self,
@@ -695,14 +788,10 @@ class nnUNetPipeline:
         if not isinstance(resume, bool):
             raise ValueError("resume must be a boolean.")
 
-        if self._compiled_trainer is None or getattr(
-            self._compiled_trainer, "has_run", False
-        ):
-            self.compile(
-                configuration=self._compile_configuration,
-                trainer_class=self._trainer_class,
-                **self._compile_kwargs,
-            )
+        # Every fold gets a fresh model and compile-time state. The plan and
+        # preprocessed cache are reusable, but optimizer/loss/metric objects
+        # must not leak state from a previous fold.
+        self.compile(**self._compile_kwargs)
         trainer = self._compiled_trainer
         plan = trainer.plan
         configuration = self.configuration
@@ -797,6 +886,92 @@ class nnUNetPipeline:
         trainer.has_run = True
         return history
 
+    def load_model(self, fold: int = 0, checkpoint: str | Path = "best"):
+        """Load one fold's uncompiled patch-level model.
+
+        This method rebuilds the network through the selected trainer's
+        ``create_network`` hook and loads weights only. It does not perform
+        sliding-window inference, preprocessing, geometry restoration,
+        postprocessing, or fold ensembling; those policies remain in
+        :meth:`predict`.
+
+        Args:
+            fold: Fold whose checkpoint should be loaded.
+            checkpoint: ``"best"``, ``"final"``, or ``"latest"``; a path may
+                also be supplied for an explicit weights file.
+
+        Returns:
+            An uncompiled Keras model. ``model.nnunet_output_spec`` contains
+            basic output names and channel metadata for downstream callers.
+        """
+        if isinstance(fold, bool) or not isinstance(fold, int) or fold < 0:
+            raise ValueError("fold must be a non-negative integer.")
+        if not self.plan_path.is_file():
+            raise FileNotFoundError(f"Plan not found: {self.plan_path}")
+        plan = nnUNetPlan.from_json(self.plan_path)
+        self._sync_configuration(plan)
+        train_config = TrainingConfig(
+            checkpoint_dir=str(self.output_path),
+        )
+        trainer = self._create_trainer(
+            plan=plan,
+            train_config=train_config,
+            fold=fold,
+        )
+        net_cfg = plan.configurations[self.configuration]
+        checkpoint_names = {
+            "best": "best_model.weights.h5",
+            "final": "final_model.weights.h5",
+            "latest": "checkpoint_latest.weights.h5",
+        }
+        checkpoint_path = (
+            Path(checkpoint_names[checkpoint])
+            if isinstance(checkpoint, str) and checkpoint in checkpoint_names
+            else Path(checkpoint)
+        )
+        if not checkpoint_path.is_absolute():
+            checkpoint_path = (
+                self.output_path
+                / plan.dataset_name
+                / plan.network_type
+                / self.configuration
+                / f"fold_{fold}"
+                / checkpoint_path
+            )
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"Weights not found: {checkpoint_path}")
+
+        dummy = np.zeros(
+            [1] + list(net_cfg.patch_size) + [net_cfg.n_modalities],
+            dtype=np.float32,
+        )
+        outputs = trainer.model(dummy, training=False)
+        trainer.model.load_weights(str(checkpoint_path))
+        if isinstance(outputs, dict):
+            output_names = tuple(outputs)
+            output_channels = {
+                name: int(output.shape[-1]) for name, output in outputs.items()
+            }
+        elif isinstance(outputs, (list, tuple)):
+            output_names = tuple(
+                getattr(trainer.model, "output_names", ())
+                or ("final", *(f"aux_{i}" for i in range(len(outputs) - 1)))
+            )
+            output_channels = {
+                name: int(output.shape[-1])
+                for name, output in zip(output_names, outputs, strict=True)
+            }
+        else:
+            output_names = ("final",)
+            output_channels = {"final": int(outputs.shape[-1])}
+        trainer.model.nnunet_output_spec = {
+            "names": output_names,
+            "channels": output_channels,
+            "configuration": self.configuration,
+            "fold": fold,
+        }
+        return trainer.model
+
     def predict(
         self,
         input_path,
@@ -819,20 +994,10 @@ class nnUNetPipeline:
             if configuration not in plan.configurations:
                 raise ValueError(f"Configuration {configuration!r} is not in the saved plan.")
             self.configuration = configuration
-        model = build_unet_from_plan(plan, configuration=self.configuration)
-
-        if not model_weights_path:
-            model_weights_path = (
-                self.output_path
-                / plan.dataset_name
-                / plan.network_type
-                / self.configuration
-                / f"fold_{fold}"
-                / "best_model.weights.h5"
-            )
-
-        if not Path(model_weights_path).exists():
-            raise FileNotFoundError(f"Weights not found: {model_weights_path}")
+        model = self.load_model(
+            fold=fold,
+            checkpoint=model_weights_path or "best",
+        )
 
         manifest = (
             DatasetManifest.from_json(self.manifest_file) if self.manifest_file.exists() else None
@@ -846,12 +1011,7 @@ class nnUNetPipeline:
         }
         net_cfg = net_cfg_map.get(self.configuration)
         patch_size = net_cfg.patch_size if net_cfg else [128, 128, 128]
-        n_mod = net_cfg.n_modalities if net_cfg else 1
         n_outputs = net_cfg.n_classes if net_cfg else 2
-
-        dummy = np.zeros([1] + patch_size + [n_mod], dtype=np.float32)
-        _ = model(dummy, training=False)
-        model.load_weights(str(model_weights_path))
 
         image, affine, header, spacing = load_medical_image(
             input_path,

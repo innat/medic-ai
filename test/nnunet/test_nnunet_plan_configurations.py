@@ -1,7 +1,7 @@
 import pytest
 
-from medicai.trainer.nnunet import nnUNetPipeline
-from medicai.trainer.nnunet.utils.config import NetworkConfig, nnUNetPlan
+from medicai.trainers.nnunet import nnUNetPipeline
+from medicai.trainers.nnunet.utils.config import NetworkConfig, nnUNetPlan
 
 
 def _plan(selected_configuration="2d"):
