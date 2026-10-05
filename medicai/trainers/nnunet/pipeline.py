@@ -1,3 +1,4 @@
+import json
 import logging
 import math
 import random
@@ -948,6 +949,12 @@ class nnUNetPipeline:
             )
         if not checkpoint_path.is_file():
             raise FileNotFoundError(f"Weights not found: {checkpoint_path}")
+        self._validate_checkpoint_provenance(
+            checkpoint_path=checkpoint_path,
+            trainer=trainer,
+            plan=plan,
+            fold=fold,
+        )
 
         dummy = np.zeros(
             [1] + list(net_cfg.patch_size) + [net_cfg.n_modalities],
@@ -979,6 +986,53 @@ class nnUNetPipeline:
             "fold": fold,
         }
         return trainer.model
+
+    @staticmethod
+    def _validate_checkpoint_provenance(*, checkpoint_path, trainer, plan, fold):
+        """Reject weights that cannot be proven compatible with this recipe."""
+        provenance_path = checkpoint_path.parent / "training_run.json"
+        if not provenance_path.is_file():
+            raise ValueError(
+                f"Checkpoint provenance is missing: {provenance_path}. "
+                "Only MedicAI nnU-Net checkpoints with training_run.json can be loaded."
+            )
+        try:
+            with provenance_path.open(encoding="utf-8") as stream:
+                provenance = json.load(stream)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Unable to read checkpoint provenance: {provenance_path}") from exc
+
+        expected_trainer = f"{type(trainer).__module__}.{type(trainer).__qualname__}"
+        saved_trainer = provenance.get("trainer") or provenance.get("run_metadata", {}).get(
+            "trainer_class"
+        )
+        if saved_trainer != expected_trainer:
+            raise ValueError(
+                "Checkpoint trainer identity does not match the current pipeline: "
+                f"saved={saved_trainer!r}, current={expected_trainer!r}."
+            )
+        expected = {
+            "dataset": plan.dataset_name,
+            "network": plan.network_type,
+            "configuration": trainer.configuration,
+            "fold": fold,
+            "architecture": trainer._json_safe(getattr(trainer, "architecture", None)),
+            "output_spec": trainer._json_safe(
+                trainer.output_spec.to_dict()
+                if getattr(trainer, "output_spec", None) is not None
+                else None
+            ),
+        }
+        mismatches = {
+            key: (provenance.get(key), value)
+            for key, value in expected.items()
+            if provenance.get(key) != value
+        }
+        if mismatches:
+            raise ValueError(
+                "Checkpoint provenance is incompatible with the current pipeline: "
+                f"{mismatches}."
+            )
 
     def predict(
         self,

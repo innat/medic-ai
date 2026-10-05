@@ -477,10 +477,16 @@ class nnUNetTrainer:
             {
                 "dataset": self.plan.dataset_name,
                 "network": self.plan.network_type,
+                "trainer": f"{type(self).__module__}.{type(self).__qualname__}",
                 "configuration": self.configuration,
                 "fold": self.fold,
                 "network_config": self.net_cfg.to_dict() if self.net_cfg else None,
                 "architecture": self._json_safe(getattr(self, "architecture", None)),
+                "output_spec": self._json_safe(
+                    getattr(self, "output_spec", None).to_dict()
+                    if getattr(self, "output_spec", None) is not None
+                    else None
+                ),
                 "task_type": self.task_type,
                 "target_class_ids": self.plan.target_class_ids,
                 "ignore_class_ids": self.plan.ignore_class_ids,
